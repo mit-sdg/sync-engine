@@ -52,29 +52,53 @@ Identify a caller.
 
 A session expires.
 
+## Types
+
+\`\`\`types
+external Person
+  The identity associated with a session.
+\`\`\`
+
+## State
+
+\`\`\`state
+a set of Sessions with
+  a session Session
+  a token Session
+  an expiration Time
+  a user Person
+\`\`\`
+
 ## Actions
 
 \`\`\`actions
-start () : return (session: Session, token: Session, expiresAt: Time, user: Person)
+start() : return (session: Session, token: Session, expiresAt: Time, user: Person)
+  where true
   then
     add a new session
-    return session, token, expiresAt, and user
+    return session, token, expiresAt, user
 
-verify (session: Session) : return (user: Person)
+verify(session: Session) : return (user: Person)
   where session is denied
   then
     refuse DENIED "This session lacks permission."
   where session not in sessions
   then
     refuse UNKNOWN_SESSION "This session is not known."
-  where session in sessions
+  where session is known
   then
     return user
 
-end (session: Session) : return (ended: Flag)
+end(session: Session) : return (ended: Flag)
+  where true
   then
     delete session
-    return ended true
+    return ended
+\`\`\`
+
+## Queries
+
+\`\`\`queries
 \`\`\`
 `;
 
@@ -128,7 +152,7 @@ function applicationWith(extra: Record<string, unknown> = {}) {
     { input: { required: ["session"] } },
   );
   return assemble({
-    vocabulary: set.vocabulary,
+    conceptSet: set,
     composition: { Login, Logout, Me, Register, Rotate, Token, ...extra },
   });
 }

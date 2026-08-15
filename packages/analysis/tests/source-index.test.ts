@@ -1,7 +1,7 @@
 import {
   applicationManifestDigest,
   parseConceptSpecification,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
 } from "@mit-sdg/sync-engine/tooling";
 import {
   AnalysisAbortedError,
@@ -23,7 +23,10 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
-const coreDeclarations = `declare module "@mit-sdg/sync-engine/assembly" {
+const coreDeclarations = `declare module "@mit-sdg/sync-engine/advanced" {
+  export function vocabulary<T>(declaration: T): any;
+}
+declare module "@mit-sdg/sync-engine/assembly" {
   export function assemble<T>(options: T): T;
   export function conceptSet<T, U>(registrations: T, computations?: U): {
     vocabulary: unknown;
@@ -36,7 +39,6 @@ declare module "@mit-sdg/sync-engine/boundary" {
   export function endpoint<T>(path: string, declaration: T): T;
 }
 declare module "@mit-sdg/sync-engine/language" {
-  export function vocabulary<T>(declaration: T): any;
   export function reaction<T>(declaration: T): T;
   export function view<T>(name: string, declaration: T): T;
   export function former<T>(name: string, declaration: T): T;
@@ -44,7 +46,7 @@ declare module "@mit-sdg/sync-engine/language" {
 declare module "*.md" { const text: string; export default text; }
 `;
 
-type ManifestSelection = ApplicationManifestV5["conceptImplementations"][number]["selected"];
+type ManifestSelection = ApplicationManifestV1["conceptImplementations"][number]["selected"];
 
 interface ManifestOptions {
   readonly concepts: readonly {
@@ -53,7 +55,7 @@ interface ManifestOptions {
     readonly queries?: readonly string[];
     readonly constructorName?: string;
     readonly selected?: ManifestSelection;
-    readonly specification?: ApplicationManifestV5["concepts"][number]["specification"];
+    readonly specification?: ApplicationManifestV1["concepts"][number]["specification"];
   }[];
   readonly reactions?: readonly string[];
   readonly views?: readonly string[];
@@ -66,11 +68,11 @@ interface ManifestOptions {
   readonly computations?: readonly string[];
 }
 
-function manifestFor(options: ManifestOptions): ApplicationManifestV5 {
+function manifestFor(options: ManifestOptions): ApplicationManifestV1 {
   const endpoints = options.endpoints ?? [];
-  const manifest: ApplicationManifestV5 = {
+  const manifest: ApplicationManifestV1 = {
     format: "sync-engine.application-manifest",
-    version: 5,
+    version: 1,
     generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.6" },
     digest: "pending",
     concepts: [
@@ -84,9 +86,23 @@ function manifestFor(options: ManifestOptions): ApplicationManifestV5 {
       },
       ...options.concepts.map((concept) => ({
         name: concept.name,
-        actions: (concept.actions ?? ["run"]).map((name) => ({ name })),
-        queries: (concept.queries ?? ["_read"]).map((name) => ({ name })),
-        ...(concept.specification === undefined ? {} : { specification: concept.specification }),
+        actions:
+          concept.specification?.actions.map(({ name, refusals }) => ({
+            name,
+            refusals: refusals.map(({ code }) => code).sort(),
+          })) ?? (concept.actions ?? ["run"]).map((name) => ({ name })),
+        queries:
+          concept.specification?.queries.map(({ name, promise }) => ({
+            name,
+            returns: promise,
+          })) ?? (concept.queries ?? ["_read"]).map((name) => ({ name })),
+        ...(concept.specification === undefined
+          ? {}
+          : {
+              purpose: concept.specification.purpose,
+              principle: concept.specification.principle,
+              specification: concept.specification,
+            }),
       })),
     ],
     conceptImplementations: [
@@ -148,6 +164,14 @@ function manifestFor(options: ManifestOptions): ApplicationManifestV5 {
       appWide: [],
     },
     diagnostics: [],
+    design: {
+      version: 1,
+      checked: false,
+      sources: [],
+      declarations: [],
+      concepts: [],
+      computations: [],
+    },
   };
   manifest.digest = applicationManifestDigest(manifest);
   return manifest;
@@ -207,7 +231,7 @@ function programFor(files: Readonly<Record<string, string>>): ts.Program {
 }
 
 function index(
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   files: Readonly<Record<string, string>>,
   options: Partial<Parameters<typeof indexApplicationSources>[0]> = {},
 ): ApplicationSourceIndex {
@@ -236,8 +260,9 @@ describe("symbol-aware application source index", () => {
       endpoints: [{ name: "nested.Route", path: "/same", reactions: ["nested.Route"] }],
     });
     const sourceIndex = index(manifest, {
-      "barrel.ts": `export { assemble } from "@mit-sdg/sync-engine/assembly";
-export { reaction as declareReaction, vocabulary, view } from "@mit-sdg/sync-engine/language";
+      "barrel.ts": `export { vocabulary } from "@mit-sdg/sync-engine/advanced";
+export { assemble } from "@mit-sdg/sync-engine/assembly";
+export { reaction as declareReaction, view } from "@mit-sdg/sync-engine/language";
 export { endpoint } from "@mit-sdg/sync-engine/boundary";
 export * as language from "@mit-sdg/sync-engine/language";
 `,
@@ -278,7 +303,10 @@ export const application = assemble({ vocabulary: words, composition: { nested }
   test("uses exact public imports when resolved module exports omit declarations", () => {
     const manifest = manifestFor({ concepts: [], reactions: ["React"] });
     const sourceIndex = index(manifest, {
-      "core.d.ts": `declare module "@mit-sdg/sync-engine/assembly" {
+      "core.d.ts": `declare module "@mit-sdg/sync-engine/advanced" {
+  export const placeholder: unknown;
+}
+declare module "@mit-sdg/sync-engine/assembly" {
   export const placeholder: unknown;
 }
 declare module "@mit-sdg/sync-engine/language" {
@@ -286,7 +314,8 @@ declare module "@mit-sdg/sync-engine/language" {
 }
 `,
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 const React = reaction(() => null);
 const words = vocabulary({ concepts: {}, computations: {} });
 export const application = assemble({ vocabulary: words, composition: { React } });
@@ -394,7 +423,7 @@ assemble({ vocabulary, composition: {} });
     });
     const sourceIndex = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class Base { run() { return "base"; } }
 class DefaultCanonical extends Base { _read() {} }
 class InitializedCanonical extends Base { constructor(_value: string) { super(); } _read() {} }
@@ -482,7 +511,7 @@ assemble({ vocabulary, instances: set.implementations("production", {}), composi
     });
     const unresolved = index(unresolvedManifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class StorageCanonical { run() {} _read() {} }
 class FloorStorage extends StorageCanonical { run() { return "selected"; } }
 declare const dynamic: Record<string, object>;
@@ -505,7 +534,7 @@ assemble({ vocabulary: words, instances: { Storage: new FloorStorage(), ...dynam
 
   test("uses exact roots, endpoint identities, focus ranking, CRLF ranges, verified reads, and cancellation", async () => {
     const specification =
-      "# Odd\r\n\r\n## Purpose\r\n\r\nKeep an odd value.\r\n\r\n## Principle\r\n\r\nChoosing replaces it.\r\n\r\n## Actions\r\n\r\n```actions\r\nchoose (value: Text) : return (value: Text)\r\n```\r\n\r\n## Queries\r\n\r\n```queries\r\n_read () : optional (value: Text)\r\n```\r\n";
+      "# Odd\r\n\r\n## Purpose\r\n\r\nKeep an odd value.\r\n\r\n## Principle\r\n\r\nChoosing replaces it.\r\n\r\n## Types\r\n\r\n```types\r\nexternal Text\r\n```\r\n\r\n## State\r\n\r\n```state\r\none odd Text\r\n```\r\n\r\n## Actions\r\n\r\n```actions\r\nchoose(value: Text) : return (value: Text)\r\n  where true\r\n  then\r\n    replace the odd value\r\n    return value\r\n```\r\n\r\n## Queries\r\n\r\n```queries\r\n_read() : optional (value: Text)\r\n```\r\n";
     const parsed = parseConceptSpecification(specification.replaceAll("\r\n", "\n"));
     const manifest = manifestFor({
       concepts: [
@@ -527,7 +556,7 @@ assemble({ vocabulary: words, instances: { Storage: new FloorStorage(), ...dynam
       "shared.ts": `import { conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { endpoint } from "@mit-sdg/sync-engine/boundary";
 import { reaction } from "@mit-sdg/sync-engine/language";
-import spec from "./odd.md";
+import spec from "./odd.md" with { type: "text" };
 class OddCanonical { choose() { return "😀"; } _read() {} }
 const odd = registerConcept({ class: OddCanonical, spec });
 export const set = conceptSet({ Odd: odd });
@@ -539,11 +568,11 @@ export function compositionFactory() {
 `,
       "one.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { set, compositionFactory } from "./shared.ts";
-export function buildOne() { return assemble({ vocabulary: set.vocabulary, composition: compositionFactory() }); }
+export function buildOne() { return assemble({ conceptSet: set, composition: compositionFactory() }); }
 `,
       "two.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { set, compositionFactory } from "./shared.ts";
-export function buildTwo() { return assemble({ vocabulary: set.vocabulary, composition: compositionFactory() }); }
+export function buildTwo() { return assemble({ conceptSet: set, composition: compositionFactory() }); }
 `,
       "root.ts": `export { buildTwo as selected } from "./two.ts";`,
     };
@@ -597,7 +626,7 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
     expect(specificationAnchor.range.end.offset).toBeGreaterThan(
       specificationAnchor.focusRange!.end.offset,
     );
-    expect(specificationAnchor.range.end.line).toBe(15);
+    expect(specificationAnchor.range.end.line).toBe(31);
     const specificationRead = await readApplicationSourceDocument(sourceIndex, "odd.md", {
       readFile: () => specification,
     });
@@ -606,7 +635,7 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
         specificationAnchor.range.start.offset,
         specificationAnchor.range.end.offset,
       ),
-    ).toContain("choose (value: Text)");
+    ).toContain("choose(value: Text)");
 
     const shared = files["shared.ts"];
     await expect(
@@ -644,7 +673,8 @@ export function buildTwo() { return assemble({ vocabulary: set.vocabulary, compo
     });
     const files = {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 class LogicalConcept { run() {} _read() {} }
 const words = vocabulary({ concepts: { Logical: LogicalConcept }, computations: {} });
 const React = reaction(() => null);
@@ -673,7 +703,7 @@ assemble({ vocabulary: words, composition: { React } });
     const depthManifest = manifestFor({ concepts: [] });
     const depthFiles = {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({ concepts: {}, computations: {} });
 const one = words;
 const two = one;
@@ -682,16 +712,16 @@ assemble({ vocabulary: three, composition: {} });
 `,
     };
     expect(index(depthManifest, depthFiles).issues).not.toContainEqual(
-      expect.objectContaining({ code: "UNRESOLVED_VOCABULARY_SOURCE" }),
+      expect.objectContaining({ code: "UNRESOLVED_CONCEPT_SET_SOURCE" }),
     );
     expect(
       index(depthManifest, depthFiles, { limits: { maxStaticResolutionDepth: 1 } }).issues,
-    ).toContainEqual(expect.objectContaining({ code: "UNRESOLVED_VOCABULARY_SOURCE" }));
+    ).toContainEqual(expect.objectContaining({ code: "UNRESOLVED_CONCEPT_SET_SOURCE" }));
 
     const alternativesManifest = manifestFor({ concepts: [], computations: ["selected"] });
     const alternativesFiles = {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({
   concepts: {},
   computations: { selected: () => 1, extraA: () => 2, extraB: () => 3 },
@@ -715,7 +745,8 @@ assemble({ vocabulary: words, composition: {} });
   test("strictly validates attribution roots and supports path, export, and offset selection", () => {
     const manifest = manifestFor({ concepts: [], reactions: ["React"] });
     const source = `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 const words = vocabulary({ concepts: {}, computations: {} });
 export const React = reaction(() => null);
 export const application = assemble({ vocabulary: words, composition: { React } });
@@ -760,7 +791,7 @@ export const application = assemble({ vocabulary: words, composition: { React } 
       "app.ts": `import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 const registration = registerConcept();
 const set = conceptSet({ Logical: registration });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
     });
     expect(missingRegistration.issues).toContainEqual(
@@ -773,7 +804,7 @@ assemble({ vocabulary: set.vocabulary, composition: {} });
 
     const missingMembers = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class LogicalCanonical {}
 const words = vocabulary({ concepts: { Logical: LogicalCanonical }, computations: {} });
 assemble({ vocabulary: words, composition: {} });
@@ -825,7 +856,7 @@ assemble({ vocabulary: words, composition: {} });
     });
     const sourceIndex = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class ObjectCanonical { run() {} _read() {} }
 class DefaultCanonical { run() {} _read() {} }
 class ConditionalCanonical { run() {} _read() {} }
@@ -906,7 +937,8 @@ assemble({
     const manifest = manifestFor({ concepts: [], reactions: ["React"] });
     const sourceIndex = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 const words = vocabulary({ concepts: {}, computations: {} });
 const React = reaction(() => null);
 assemble({ vocabulary: words, composition: { React } });
@@ -1077,7 +1109,7 @@ assemble({ vocabulary: words, composition: { React } });
     for (const [label, query] of invalidQueries) expect(query, label).toThrow(TypeError);
   });
 
-  test("emits every declared source issue code from a controlled source shape", () => {
+  test("emits source-discovery issue codes from controlled source shapes", () => {
     interface IssueFixture {
       readonly manifest: ManifestOptions;
       readonly files: Readonly<Record<string, string>>;
@@ -1089,14 +1121,15 @@ import spec from ${JSON.stringify(specifier)};
 class LogicalCanonical { run() {} _read() {} }
 const logical = registerConcept({ class: LogicalCanonical, spec });
 const set = conceptSet({ Logical: logical });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `;
     const scenarios = {
       AMBIGUOUS_DESIGN_SOURCE: {
         manifest: { concepts: [], views: ["shared"] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { view, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { view } from "@mit-sdg/sync-engine/language";
 const words = vocabulary({ concepts: {}, computations: {} });
 const First = view("shared", () => null);
 const Second = view("shared", () => null);
@@ -1108,7 +1141,7 @@ assemble({ vocabulary: words, composition: { First, Second } });
         manifest: { concepts: [], reactions: ["Missing"] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({ concepts: {}, computations: {} });
 assemble({ vocabulary: words, composition: {} });
 `,
@@ -1120,7 +1153,7 @@ assemble({ vocabulary: words, composition: {} });
           "app.ts": `import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
 declare const dynamicRegistration: unknown;
 const set = conceptSet({ Logical: dynamicRegistration });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
         },
       },
@@ -1134,11 +1167,11 @@ const one = registerConcept({ class: One, spec: "# one" });
 const two = registerConcept({ class: Two, spec: "# two" });
 declare const choose: boolean;
 const set = conceptSet({ Logical: choose ? one : two });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
         },
       },
-      UNRESOLVED_VOCABULARY_SOURCE: {
+      UNRESOLVED_CONCEPT_SET_SOURCE: {
         manifest: { concepts: [] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
@@ -1147,11 +1180,11 @@ assemble({ vocabulary: dynamicVocabulary, composition: {} });
 `,
         },
       },
-      AMBIGUOUS_VOCABULARY_SOURCE: {
+      AMBIGUOUS_CONCEPT_SET_SOURCE: {
         manifest: { concepts: [] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const first = vocabulary({ concepts: {}, computations: {} });
 const second = vocabulary({ concepts: {}, computations: {} });
 declare const choose: boolean;
@@ -1184,7 +1217,7 @@ assemble({ vocabulary: {}, composition: {} });
         },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class LogicalCanonical { run() {} _read() {} }
 class Selected extends LogicalCanonical {}
 declare const dynamic: Record<string, object>;
@@ -1202,7 +1235,7 @@ assemble({ vocabulary: words, instances: { Logical: new Selected(), ...dynamic }
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint } from "@mit-sdg/sync-engine/boundary";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 declare const dynamic: Record<string, unknown>;
 const words = vocabulary({ concepts: {}, computations: {} });
 const Route = endpoint("/route", () => null);
@@ -1214,7 +1247,7 @@ assemble({ vocabulary: words, composition: { Route, ...dynamic } });
         manifest: { concepts: [], computations: ["custom"] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({ concepts: {}, computations: {} });
 assemble({ vocabulary: words, composition: {} });
 `,
@@ -1234,14 +1267,16 @@ assemble({ vocabulary: words, composition: {} });
         files: { "app.ts": registeredSpecification("./logical.md") },
         readFile: (path) => (path === resolve("/project/logical.md") ? "# Logical\n" : undefined),
       },
-    } satisfies Record<SourceIndexIssueCode, IssueFixture>;
+    } satisfies Partial<Record<SourceIndexIssueCode, IssueFixture>>;
 
-    for (const code of Object.keys(scenarios).sort() as SourceIndexIssueCode[]) {
-      const scenario: IssueFixture = scenarios[code];
+    for (const [code, scenario] of Object.entries(scenarios).sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      const selected: IssueFixture = scenario;
       const sourceIndex = index(
-        manifestFor(scenario.manifest),
-        scenario.files,
-        scenario.readFile === undefined ? {} : { readFile: scenario.readFile },
+        manifestFor(selected.manifest),
+        selected.files,
+        selected.readFile === undefined ? {} : { readFile: selected.readFile },
       );
       expect(sourceIndex.issues, code).toContainEqual(
         expect.objectContaining({ code, severity: "warning" }),
@@ -1256,7 +1291,7 @@ import spec from ${JSON.stringify(specifier)};
 class LogicalCanonical { choose() {} _read() {} }
 const logical = registerConcept({ class: LogicalCanonical, spec });
 const set = conceptSet({ Logical: logical });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `;
     const dynamicManifest = manifestFor({
       concepts: [{ name: "Logical", constructorName: "LogicalCanonical" }],
@@ -1267,7 +1302,7 @@ class LogicalCanonical { run() {} _read() {} }
 declare const dynamicSpec: unknown;
 const logical = registerConcept({ class: LogicalCanonical, spec: dynamicSpec });
 const set = conceptSet({ Logical: logical });
-assemble({ vocabulary: set.vocabulary, composition: {} });
+assemble({ conceptSet: set, composition: {} });
 `,
     });
     expect(dynamic.issues).toContainEqual(
@@ -1300,16 +1335,32 @@ Keep a logical value.
 
 Choosing replaces it.
 
+## Types
+
+\`\`\`types
+external Text
+\`\`\`
+
+## State
+
+\`\`\`state
+one logical Text
+\`\`\`
+
 ## Actions
 
 \`\`\`actions
-choose (value: Text) : return (value: Text)
+choose(value: Text) : return (value: Text)
+  where true
+  then
+    replace the logical value
+    return value
 \`\`\`
 
 ## Queries
 
 \`\`\`queries
-_read () : optional (value: Text)
+_read() : optional (value: Text)
 \`\`\`
 `;
     const actualSpecification = expectedSpecification.replace(
@@ -1342,7 +1393,7 @@ _read () : optional (value: Text)
     const computationManifest = manifestFor({ concepts: [], computations: ["custom"] });
     const missingComputation = index(computationManifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary();
 assemble({ vocabulary: words, composition: {} });
 `,

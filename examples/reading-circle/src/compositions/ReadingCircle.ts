@@ -1,11 +1,8 @@
 /** Compose generic gathering, selection, and discussion behavior as a reading circle. */
 
-import spec from "@design/compositions/ReadingCircle.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { former, reaction, each, view, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../vocabulary.ts";
-
-export { spec };
+import { concepts } from "../concepts.ts";
 
 const { Discussing, Gathering, Selecting } = concepts;
 
@@ -90,16 +87,15 @@ const GetCirclePage = endpoint("/circles/page", ({ circle }) =>
   receive({ circle }).then(respond({ page: CirclePage({ circle }) })),
 );
 
-export const compositions = {
+export const composition = {
   CircleMembership: { CreateCircle, JoinCircle },
   ReadingDiscussion: {
     SelectedReadingOpensDiscussion,
     ChooseReading,
     AddResponse,
     RejectNonmemberResponse,
+    MemberMayRespond,
+    NonmemberMayNotRespond,
   },
-  CirclePages: { GetCirclePage },
+  CirclePages: { GetCirclePage, CirclePage },
 };
-
-export const views = { MemberMayRespond, NonmemberMayNotRespond };
-export const formers = { CirclePage };

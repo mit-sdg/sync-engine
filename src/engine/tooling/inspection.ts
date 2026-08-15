@@ -10,7 +10,7 @@ import type { ApplicationDiagnostic } from "./diagnostics.ts";
 
 const INTERNAL_BOUNDARY_ACTIONS = new Set(["register", "cancel", "respondFramework"]);
 
-function applicationConcepts(concepts: ConceptInventoryIR[]): ConceptInventoryIR[] {
+function publicConceptInventory(concepts: ConceptInventoryIR[]): ConceptInventoryIR[] {
   return concepts.map((concept) =>
     concept.name === "RequestBoundary"
       ? {
@@ -43,7 +43,7 @@ export function inspectAssembly(
   const assembled = assemblyBehind(assembly);
   const redactor = assembled.engine.Action.redactor;
   const app = assembled.engine.exportReactions();
-  const concepts = applicationConcepts(assembled.engine.exportConcepts());
+  const concepts = publicConceptInventory(assembled.engine.exportConcepts());
   const wire = wireContracts(app, { contracts: assembled.contracts, inventories: concepts });
   return {
     app,

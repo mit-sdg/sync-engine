@@ -2,8 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
-import { applicationManifest, type ApplicationManifestV5 } from "@mit-sdg/sync-engine/tooling";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
+import { applicationManifest, type ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 
 class NotesConcept {
   add({ title }: { title: string }) {
@@ -15,7 +16,7 @@ class NotesConcept {
   }
 }
 
-export function projectManifest(): ApplicationManifestV5 {
+export function projectManifest(): ApplicationManifestV1 {
   const words = vocabulary({ concepts: { Notes: NotesConcept }, computations: {} });
   const { Notes } = words.concepts;
   const RecordNote = reaction(({ title }) =>
@@ -36,7 +37,7 @@ function config(path: string, value: unknown): void {
 export interface ApplicationProjectFixture {
   readonly root: string;
   readonly outside: string;
-  readonly manifest: ApplicationManifestV5;
+  readonly manifest: ApplicationManifestV1;
   cleanup(): void;
 }
 
@@ -65,6 +66,7 @@ export function applicationProjectFixture(
       baseUrl: ".",
       paths: {
         "@domain": ["../domain/src/index.ts"],
+        "@mit-sdg/sync-engine/advanced": ["stubs/core.d.ts"],
         "@mit-sdg/sync-engine/assembly": ["stubs/core.d.ts"],
         "@mit-sdg/sync-engine/language": ["stubs/core.d.ts"],
       },
@@ -89,11 +91,13 @@ export function applicationProjectFixture(
   });
   write(
     join(root, "app/stubs/core.d.ts"),
-    `declare module "@mit-sdg/sync-engine/assembly" {
+    `declare module "@mit-sdg/sync-engine/advanced" {
+  export function vocabulary<T>(options: T): { concepts: any };
+}
+declare module "@mit-sdg/sync-engine/assembly" {
   export function assemble<T>(options: T): T;
 }
 declare module "@mit-sdg/sync-engine/language" {
-  export function vocabulary<T>(options: T): { concepts: any };
   export function reaction<T>(declaration: (input: any) => T): T;
   export function when<T>(trigger: T): { then(value: unknown): T };
 }
@@ -106,7 +110,8 @@ declare module "@mit-sdg/sync-engine/language" {
   write(
     join(root, "app/src/app.ts"),
     `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 import { NotesConcept } from "@domain";
 
 const words = vocabulary({ concepts: { Notes: NotesConcept }, computations: {} });

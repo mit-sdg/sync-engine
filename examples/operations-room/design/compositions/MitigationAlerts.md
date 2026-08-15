@@ -1,12 +1,8 @@
 # Mitigation Alerts
 
 This selectable composition adds notifications without changing room selection
-or the participating concepts.
+or the participating concepts. Selecting a mitigation raises an alert for every
+current responder.[alerts] Assembly may omit the reaction without changing
+selection or discussion.
 
-## Compositions
-
-### SelectedMitigationAlertsResponders
-
-When a mitigation is selected, this reaction raises an alert for every responder
-who currently belongs to the room. Assembly may omit the reaction without
-changing selection or discussion.
+[alerts]: reaction:MitigationAlerts.SelectedMitigationAlertsResponders

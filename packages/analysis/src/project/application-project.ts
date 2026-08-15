@@ -3,7 +3,7 @@ import { Worker } from "node:worker_threads";
 import {
   validateApplicationManifest,
   type ApplicationDiagnostic,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
 } from "@mit-sdg/sync-engine/tooling";
 import ts from "typescript";
 import { indexApplicationWithController } from "../ir/application-impact.ts";
@@ -33,10 +33,12 @@ export interface LoadApplicationProjectOptions extends AnalysisOptions {
   readonly repositoryRoot: string;
   readonly tsconfigPath: string;
   readonly sourceRevision: string;
-  readonly manifest: ApplicationManifestV5;
+  readonly manifest: ApplicationManifestV1;
   readonly manifestSourceRevision: string;
   readonly expectedManifestDigest: string;
   readonly readFile?: (absolutePath: string) => string | undefined;
+  /** Project-relative directory from which manifest design-source paths are resolved. */
+  readonly designSourceBasePath?: string;
   readonly sourceRoots?: readonly SourceAttributionRoot[];
 }
 
@@ -277,6 +279,7 @@ export function loadApplicationProject(
       program: graph.projects.map(({ program }) => program),
       projectRoot: graph.repositoryRoot,
       readFile: graph.readFile,
+      designSourceBasePath: options.designSourceBasePath,
       sourceRoots: options.sourceRoots,
       limits: options.limits,
       signal: options.signal,
@@ -290,7 +293,7 @@ export function loadApplicationProject(
   const sourceDigest = digest(JSON.stringify(files));
   const analysis: ApplicationProjectAnalysis = {
     format: "sync-engine.application-project-analysis",
-    version: 2,
+    version: 3,
     manifestDigest: manifest.digest,
     provenance: {
       ...analysisProvenance(manifest),

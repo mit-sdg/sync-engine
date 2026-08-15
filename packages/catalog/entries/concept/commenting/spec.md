@@ -12,6 +12,15 @@ Ari adds "First reply" to target `topic-7` and Bo adds "Second reply" later. Bot
 comments are listed in chronological order. Bo cannot retract Ari's comment. Ari
 retracts it; a second retraction is refused, and only Bo's comment remains.
 
+## Types
+
+```types
+external Target
+  The object receiving a comment.
+external Author
+  The identity that authored a comment.
+```
+
 ## State
 
 ```state
@@ -56,8 +65,3 @@ _for (target: Target) : many (comment: Comment, author: Author, text: String, ad
 _get (comment: Comment) : optional (target: Target, author: Author, text: String, addedAt: DateTime)
   answers no row for an unknown Comment
 ```
-
-## Types
-
-`Comment` is an identity allocated by Commenting. `Target` and `Author` are opaque
-external identities. `String` is owned text. `DateTime` is an absolute instant.

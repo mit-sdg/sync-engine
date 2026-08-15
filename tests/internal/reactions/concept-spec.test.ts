@@ -1,435 +1,251 @@
-/**
- * The parser retains the authored contract, including structured signatures,
- * member bodies, documentation sections, and source locations. State notation
- * remains outside that value; registration uses a narrower projection.
- */
 import { describe, expect, test } from "vite-plus/test";
-import { parseSpec } from "@sync-engine/internal/reactions/concepts/concept-spec";
+import {
+  parseSpec,
+  specificationsAreCompatible,
+} from "@sync-engine/internal/reactions/concepts/concept-spec";
 
-const SPEC = `# Inviting
+function specification(
+  overrides: Partial<
+    Record<
+      "name" | "purpose" | "principle" | "types" | "state" | "stateProse" | "actions" | "queries",
+      string
+    >
+  > = {},
+): string {
+  const value = {
+    name: "Inviting",
+    purpose: "Let a member invite someone into a workspace.",
+    principle: "Priya invites Sam; one pending invitation exists.",
+    types:
+      "external Person\n  A person who may receive an invitation.\n  Identity is supplied by the application.\n\nexternal Workspace",
+    state: "a set of Invitations\n  with a workspace and guest",
+    stateProse: "Invitation identities are never reused.",
+    actions: `invite(workspace: Workspace, guest: Person) : return (invitation: Invitation)
+  where true
+  then
+    add a pending invitation
+    return invitation
+
+accept(invitation: Invitation) : return (invitation: Invitation, acceptedAt?: Time)
+  where invitation is pending
+  then
+    mark invitation accepted
+    return acceptedAt, invitation
+  where invitation is not pending
+  then
+    refuse NO_LONGER_OPEN "This invitation is no longer open."`,
+    queries: `_pending(workspace: Workspace) : many (invitation: Invitation, guest: Person)
+  Returns pending invitations in creation order.
+_get(invitation: Invitation) : optional (workspace: Workspace)`,
+    ...overrides,
+  };
+  return `# ${value.name}
 
 ## Purpose
 
-Let a member invite someone into a shared workspace.
+${value.purpose}
 
 ## Principle
 
-Priya invites Sam; a pending invitation now exists.
-Sam accepts it, and it becomes accepted.
-
-## State
-
-\`\`\`state
-a set of Invitations
-\`\`\`
-
-## Actions
-
-\`\`\`actions
-invite (workspace: Workspace, guest: Person) : return (invitation: Invitation)
-  then
-    add a new invitation with workspace and guest
-    return invitation
-
-accept (invitation: Invitation) : return (invitation: Invitation)
-  where invitation not in pending
-  then
-    refuse NO_LONGER_OPEN "This invitation is no longer open."
-  where invitation in pending
-  then
-    move invitation to accepted
-    return invitation
-\`\`\`
-
-## Queries
-
-\`\`\`queries
-_pending (workspace: Workspace) : many (invitation: Invitation, guest: Person)
-_get (invitation: Invitation) : optional (workspace: Workspace)
-\`\`\`
-`;
-
-const prose = (body: string): string =>
-  `# X\n\n## Purpose\n\nWhy.\n\n## Principle\n\nHow.\n${body}`;
-const actions = (body: string): string => prose(`\n## Actions\n\n\`\`\`actions\n${body}\n\`\`\`\n`);
-const queries = (body: string): string => prose(`\n## Queries\n\n\`\`\`queries\n${body}\n\`\`\`\n`);
-const registrationData = (markdown: string) => {
-  const spec = parseSpec(markdown);
-  return {
-    purpose: spec.purpose,
-    principle: spec.principle,
-    actions: spec.actions.map(({ name, inputs, refusals }) => ({
-      name,
-      inputs,
-      refusals: refusals.map(({ code, message }) => ({ code, message })),
-    })),
-    queries: spec.queries.map(({ name, inputs, promise }) => ({ name, inputs, promise })),
-  };
-};
-
-describe("the specification's prose", () => {
-  test("extracts purpose and principle, whole", () => {
-    const spec = parseSpec(SPEC);
-    expect(spec.purpose).toBe("Let a member invite someone into a shared workspace.");
-    expect(spec.principle).toBe(
-      "Priya invites Sam; a pending invitation now exists.\nSam accepts it, and it becomes accepted.",
-    );
-  });
-
-  test("a missing section fails by name", () => {
-    expect(() => parseSpec("# X\n\n## Purpose\n\nWhy.\n")).toThrow('"## Principle"');
-  });
-
-  test("an empty section fails by name", () => {
-    expect(() => parseSpec("# X\n\n## Purpose\n\n## Principle\n\nStory.\n")).toThrow(
-      '"## Purpose" section is empty',
-    );
-  });
-
-  test("an indented heading terminates the preceding section consistently", () => {
-    const spec = parseSpec("# X\n\n  ## Purpose\n\nWhy.\n\n  ## Principle\n\nStory.\n");
-    expect(spec).toMatchObject({ purpose: "Why.", principle: "Story." });
-  });
-
-  test("takes markdown text, not a path or nothing", () => {
-    expect(() => parseSpec("")).toThrow("markdown text");
-  });
-
-  test("an optional State section is arbitrary notation and never enters ConceptSpec", () => {
-    const stateSection = `
-## State
-
-\`\`\`state
-a set of Invitations
-\`\`\`
-`;
-    const withoutState = SPEC.replace(stateSection, "");
-    const contradictoryState = SPEC.replace(
-      "a set of Invitations",
-      [
-        "this is not a machine grammar {]",
-        "there are no invitations and accept is not an action",
-        "the class has a field that must equal a PostgreSQL table",
-      ].join("\n"),
-    );
-
-    const parsed = parseSpec(contradictoryState);
-    expect(registrationData(contradictoryState)).toEqual(registrationData(withoutState));
-    expect(Object.keys(parsed)).toEqual([
-      "format",
-      "version",
-      "purpose",
-      "principle",
-      "actions",
-      "queries",
-      "documentation",
-    ]);
-    expect(parsed).not.toHaveProperty("state");
-  });
-});
-
-describe("the specification's actions", () => {
-  test("reads each action's name, inputs, and refusal branches", () => {
-    expect(parseSpec(SPEC).actions).toMatchObject([
-      { name: "invite", inputs: ["workspace", "guest"], refusals: [] },
-      {
-        name: "accept",
-        inputs: ["invitation"],
-        refusals: [{ code: "NO_LONGER_OPEN", message: "This invitation is no longer open." }],
-      },
-    ]);
-  });
-
-  test("a document with no actions fence declares none", () => {
-    expect(parseSpec(prose("")).actions).toEqual([]);
-  });
-
-  test("an action taking nothing has no inputs", () => {
-    expect(parseSpec(actions("reset () : return ()")).actions[0].inputs).toEqual([]);
-  });
-
-  test("one code may refuse from several actions", () => {
-    const spec = parseSpec(
-      actions(
-        [
-          "respond (discussion: Discussion) : return (response: Response)",
-          "  then",
-          '    refuse NOT_OPEN "This discussion is not open."',
-          "",
-          "close (discussion: Discussion) : return ()",
-          "  then",
-          '    refuse NOT_OPEN "This discussion is not open."',
-        ].join("\n"),
-      ),
-    );
-    expect(spec.actions.map(({ name, refusals }) => [name, refusals.map((r) => r.code)])).toEqual([
-      ["respond", ["NOT_OPEN"]],
-      ["close", ["NOT_OPEN"]],
-    ]);
-  });
-
-  test("a query name in the actions fence fails", () => {
-    expect(() => parseSpec(actions("_get (room: Room) : return ()"))).toThrow(
-      "is not an action name",
-    );
-  });
-
-  test("an action resolving with anything but return fails", () => {
-    expect(() => parseSpec(actions("open (name: String) : answer (room: Room)"))).toThrow(
-      "resolves with `: return",
-    );
-  });
-
-  test("a repeated action fails by name", () => {
-    expect(() =>
-      parseSpec(actions("open (name: String) : return ()\nopen (name: String) : return ()")),
-    ).toThrow('the action "open" is declared twice');
-  });
-
-  test("one action refusing a code twice fails", () => {
-    expect(() =>
-      parseSpec(
-        actions(
-          [
-            "open (name: String) : return ()",
-            "  then",
-            '    refuse TAKEN "One."',
-            '    refuse TAKEN "Two."',
-          ].join("\n"),
-        ),
-      ),
-    ).toThrow('open refuses "TAKEN" twice');
-  });
-
-  test("a refusal with an empty sentence fails", () => {
-    expect(() =>
-      parseSpec(
-        actions(["open (name: String) : return ()", "  then", '    refuse TAKEN ""'].join("\n")),
-      ),
-    ).toThrow("needs a sentence");
-  });
-
-  test("a body preceding any signature fails", () => {
-    expect(() => parseSpec(actions("  then\n    return room"))).toThrow(
-      "a declaration body precedes its signature",
-    );
-  });
-
-  test("an unclosed fence fails", () => {
-    expect(() => parseSpec(prose("\n## Actions\n\n```actions\nopen () : return ()\n"))).toThrow(
-      "never closed",
-    );
-  });
-});
-
-describe("the specification's queries", () => {
-  test("reads each query's name, inputs, and promise", () => {
-    expect(parseSpec(SPEC).queries).toMatchObject([
-      { name: "_pending", inputs: ["workspace"], promise: "many" },
-      { name: "_get", inputs: ["invitation"], promise: "optional" },
-    ]);
-  });
-
-  test("a query promising anything else fails", () => {
-    expect(() => parseSpec(queries("_get (room: Room) : some (name: String)"))).toThrow(
-      'a query promises "one", "optional", or "many", not "some"',
-    );
-  });
-
-  test("an action name in the queries fence fails", () => {
-    expect(() => parseSpec(queries("get (room: Room) : one (name: String)"))).toThrow(
-      "is not a query name",
-    );
-  });
-
-  test("query bodies are retained but do not change registration data", () => {
-    const withBodies = queries(
-      [
-        "_items (catalog: Catalog) : many (item: Item, position: Number)",
-        "  answers no rows for an unknown Catalog",
-        "  orders rows by ascending position",
-        "_owner (catalog: Catalog) : one (owner: Person)",
-        "_selected () : optional (catalog: Catalog)",
-        "  returns no row until a Catalog is selected",
-      ].join("\n"),
-    );
-    const withoutBodies = queries(
-      [
-        "_items (catalog: Catalog) : many (item: Item, position: Number)",
-        "_owner (catalog: Catalog) : one (owner: Person)",
-        "_selected () : optional (catalog: Catalog)",
-      ].join("\n"),
-    );
-
-    expect(registrationData(withBodies).queries).toEqual(registrationData(withoutBodies).queries);
-    expect(parseSpec(withBodies).queries.map(({ body }) => body)).toEqual([
-      "answers no rows for an unknown Catalog\norders rows by ascending position",
-      "",
-      "returns no row until a Catalog is selected",
-    ]);
-  });
-
-  test("a query body preceding any signature fails", () => {
-    expect(() => parseSpec(queries("  answers no rows"))).toThrow(
-      "a declaration body precedes its signature",
-    );
-  });
-});
-
-describe("structured signatures", () => {
-  test("retains optional fields, nested generic types, unions, and results", () => {
-    const [action] = parseSpec(
-      actions(
-        "configure (values: Map<Text, Value | undefined>, source?: Box<(Source | null)>) " +
-          ": return (configuration: Configuration, warning?: Text | null)",
-      ),
-    ).actions;
-
-    expect(action.inputs).toEqual(["values", "source"]);
-    expect(action.parameters).toMatchObject([
-      {
-        name: "values",
-        optional: false,
-        type: {
-          kind: "named",
-          name: "Map",
-          arguments: [
-            { kind: "named", name: "Text" },
-            {
-              kind: "union",
-              members: [{ kind: "named", name: "Value" }, { kind: "undefined" }],
-            },
-          ],
-        },
-      },
-      {
-        name: "source",
-        optional: true,
-        type: {
-          kind: "named",
-          name: "Box",
-          arguments: [
-            {
-              kind: "union",
-              members: [{ kind: "named", name: "Source" }, { kind: "null" }],
-            },
-          ],
-        },
-      },
-    ]);
-    expect(action.result).toMatchObject({
-      kind: "fields",
-      fields: [
-        { name: "configuration", optional: false, type: { kind: "named", name: "Configuration" } },
-        {
-          name: "warning",
-          optional: true,
-          type: {
-            kind: "union",
-            members: [{ kind: "named", name: "Text" }, { kind: "null" }],
-          },
-        },
-      ],
-    });
-    expect(action.location).toEqual({ line: 14, column: 1 });
-  });
-
-  test("accepts a named result-row type", () => {
-    const [query] = parseSpec(queries("_report (source?: Source) : one Diagnostic.Row")).queries;
-    expect(query.result).toMatchObject({
-      kind: "type",
-      type: { kind: "named", name: "Diagnostic.Row", arguments: [] },
-    });
-  });
-
-  test("an earlier reserved fence outside its section cannot replace declarations", () => {
-    const markdown = prose(`
-
-\`\`\`actions
-wrong () : return ()
-\`\`\`
-
-## Actions
-
-\`\`\`actions
-right () : return ()
-\`\`\`
-`);
-    expect(parseSpec(markdown).actions.map(({ name }) => name)).toEqual(["right"]);
-  });
-
-  test("escaped refusal quotes are decoded", () => {
-    const [action] = parseSpec(
-      actions('open () : return ()\n  then\n    refuse TAKEN "The name \\"atlas\\" is taken."'),
-    ).actions;
-    expect(action.refusals[0]).toMatchObject({
-      code: "TAKEN",
-      message: 'The name "atlas" is taken.',
-    });
-  });
-
-  test("unsupported trailing signature text gets a migration diagnostic", () => {
-    expect(() => parseSpec(actions("open () : return () ignored"))).toThrow(
-      "unsupported trailing text",
-    );
-  });
-
-  test("duplicate fields and incomplete results fail at their source location", () => {
-    expect(() => parseSpec(actions("open (name: Text, name: Text) : return ()"))).toThrow(
-      /line 14, column .*input parameters declare "name" twice/,
-    );
-    expect(() => parseSpec(actions("open () : return"))).toThrow(
-      /line 14, column .*resolution needs a result declaration/,
-    );
-  });
-
-  test("retains Types and extension sections in authored order", () => {
-    const spec = parseSpec(
-      prose(`
+${value.principle}
 
 ## Types
 
-\`Catalog\` is an opaque identity.
+\`\`\`types
+${value.types}
+\`\`\`
 
+## State
+
+\`\`\`state
+${value.state}
+\`\`\`
+${value.stateProse === "" ? "" : `\n${value.stateProse}\n`}
 ## Actions
 
 \`\`\`actions
-open () : return Catalog
+${value.actions}
 \`\`\`
-
-## Invariants
-
-Catalog identities are never reused.
 
 ## Queries
 
 \`\`\`queries
-_all () : many CatalogRow
+${value.queries}
 \`\`\`
+`;
+}
 
-## Retention
+function indentFences(markdown: string, spaces: number): string {
+  let inFence = false;
+  return markdown
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("```")) inFence = !inFence;
+      return inFence || line.startsWith("```") ? `${" ".repeat(spaces)}${line}` : line;
+    })
+    .join("\n");
+}
 
-Closed catalogs remain visible for audit.
-`),
+describe("concept specification document structure", () => {
+  test("retains the definition identity and requires the exact H1/H2 skeleton", () => {
+    expect(parseSpec(specification()).definitionName).toBe("Inviting");
+    expect(() => parseSpec(specification().replace("# Inviting", "# Invitation concept"))).toThrow(
+      "definition name",
     );
+    expect(() => parseSpec(specification().replace("## Principle", "## Unknown"))).toThrow(
+      'unknown "## Unknown"',
+    );
+    expect(() =>
+      parseSpec(
+        specification()
+          .replace("## Purpose", "## Principle")
+          .replace("## Principle\n\nPriya", "## Purpose\n\nPriya"),
+      ),
+    ).toThrow("must be ordered");
+    expect(() => parseSpec(`${specification()}\n# Again\n`)).toThrow("more than one H1");
+  });
 
-    expect(spec).toMatchObject({
-      format: "sync-engine.concept-specification",
-      version: 1,
-      documentation: [
-        { kind: "types", name: "Types", body: "`Catalog` is an opaque identity." },
-        {
-          kind: "extension",
-          name: "Invariants",
-          body: "Catalog identities are never reused.",
-        },
-        {
-          kind: "extension",
-          name: "Retention",
-          body: "Closed catalogs remain visible for audit.",
-        },
-      ],
-    });
-    expect(spec.documentation.map(({ location }) => location.line)).toEqual([12, 22, 32]);
+  test("recognizes CommonMark structural fences indented by at most three spaces", () => {
+    for (const indentation of [0, 1, 2, 3]) {
+      expect(parseSpec(indentFences(specification(), indentation)).actions[0].name).toBe("invite");
+    }
+    expect(() => parseSpec(indentFences(specification(), 4))).toThrow(
+      "must begin with a types fence",
+    );
+  });
+
+  test("requires nonempty Purpose and Principle prose", () => {
+    expect(() => parseSpec(specification({ purpose: "" }))).toThrow(
+      '"## Purpose" section is empty',
+    );
+    expect(() => parseSpec(specification({ principle: "" }))).toThrow(
+      '"## Principle" section is empty',
+    );
+  });
+});
+
+describe("Types and State", () => {
+  test("parses only external types and retains optional indented explanations", () => {
+    expect(parseSpec(specification()).externalTypes).toMatchObject([
+      {
+        name: "Person",
+        explanation:
+          "A person who may receive an invitation.\nIdentity is supplied by the application.",
+      },
+      { name: "Workspace", explanation: "" },
+    ]);
+    expect(parseSpec(specification({ types: "" })).externalTypes).toEqual([]);
+    expect(() => parseSpec(specification({ types: "external Person\nnot indented" }))).toThrow(
+      "must be `external Name`",
+    );
+    expect(() => parseSpec(specification({ types: "concrete Person" }))).toThrow(
+      "must be `external Name`",
+    );
+    expect(() => parseSpec(specification({ types: "external Person\nexternal Person" }))).toThrow(
+      'external type "Person" is declared twice',
+    );
+  });
+
+  test("retains State without parsing SSF and separately retains following prose", () => {
+    const raw = "not SSF yet {]\n  spacing remains significant  ";
+    const parsed = parseSpec(specification({ state: raw, stateProse: "A cross-row invariant." }));
+    expect(parsed.state).toMatchObject({ body: raw, prose: "A cross-row invariant." });
+  });
+
+  test("allows no Markdown around strict Types, Actions, or Queries fences", () => {
+    for (const section of ["Types", "Actions", "Queries"]) {
+      const markdown = specification().replace(
+        `## ${section}\n\n`,
+        `## ${section}\n\nProse is forbidden.\n\n`,
+      );
+      expect(() => parseSpec(markdown)).toThrow(
+        `must begin with a ${section.toLowerCase() === "types" ? "types" : section.toLowerCase()} fence`,
+      );
+    }
+  });
+});
+
+describe("Actions", () => {
+  test("requires at least one action with explicit branches and matching named returns", () => {
+    const parsed = parseSpec(specification());
+    expect(parsed.actions).toMatchObject([
+      {
+        name: "invite",
+        inputs: ["workspace", "guest"],
+        result: { kind: "fields", fields: [{ name: "invitation" }] },
+      },
+      {
+        name: "accept",
+        refusals: [{ code: "NO_LONGER_OPEN", message: "This invitation is no longer open." }],
+      },
+    ]);
+    expect(() => parseSpec(specification({ actions: "" }))).toThrow("at least one action");
+    expect(() => parseSpec(specification({ actions: "invite() : return ()" }))).toThrow(
+      "explicit where/then branch",
+    );
+    expect(() =>
+      parseSpec(specification({ actions: "invite() : return ()\n  then\n    return" })),
+    ).toThrow("must begin with `where CONDITION`");
+  });
+
+  test("rejects bare result types and nonterminal or incomplete outcomes", () => {
+    expect(() =>
+      parseSpec(
+        specification({
+          actions: "invite() : return Invitation\n  where true\n  then\n    return invitation",
+        }),
+      ),
+    ).toThrow("parenthesized named fields");
+    expect(() =>
+      parseSpec(
+        specification({
+          actions:
+            "invite() : return (invitation: Invitation)\n  where true\n  then\n    return invitation\n    audit it",
+        }),
+      ),
+    ).toThrow("must terminate");
+    expect(() =>
+      parseSpec(
+        specification({
+          actions: "invite() : return (invitation: Invitation)\n  where true\n  then\n    return",
+        }),
+      ),
+    ).toThrow("must return exactly invitation");
+  });
+
+  test("empty successful results use a plain terminal return", () => {
+    expect(
+      parseSpec(
+        specification({
+          actions: "reset() : return ()\n  where true\n  then\n    clear everything\n    return",
+        }),
+      ).actions[0].result.fields,
+    ).toEqual([]);
+    expect(() =>
+      parseSpec(
+        specification({ actions: "reset() : return ()\n  where true\n  then\n    return value" }),
+      ),
+    ).toThrow("must return exactly ()");
+  });
+});
+
+describe("Queries and canonical compatibility", () => {
+  test("allows empty Queries and arbitrary optional indented bodies", () => {
+    expect(parseSpec(specification({ queries: "" })).queries).toEqual([]);
+    expect(parseSpec(specification()).queries.map(({ body }) => body)).toEqual([
+      "Returns pending invitations in creation order.",
+      "",
+    ]);
+    expect(() => parseSpec(specification({ queries: "_get() : optional Invitation" }))).toThrow(
+      "parenthesized named fields",
+    );
+  });
+
+  test("canonical compatibility ignores source locations but not authored contracts", () => {
+    const compact = parseSpec(specification());
+    const shifted = parseSpec(`\n\n${specification()}`);
+    const changed = parseSpec(specification({ state: "a changed, still unparsed state notation" }));
+    expect(specificationsAreCompatible(compact, shifted)).toBe(true);
+    expect(specificationsAreCompatible(compact, changed)).toBe(false);
   });
 });

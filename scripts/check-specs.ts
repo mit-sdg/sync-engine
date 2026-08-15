@@ -1,18 +1,19 @@
-/** Check repository applications and registered catalog concepts through command discovery. */
+/** Check repository applications and catalog concept sources through their owned registrations. */
 
 import { checkCommand } from "../src/command/check.ts";
 import { applicationExamples } from "../examples/register.ts";
+import { validateCatalogConcepts } from "./validate-catalog-concepts.ts";
 
-const checks: readonly (readonly string[])[] = [
-  ...Object.values(applicationExamples).map(({ directory }) => [
-    "--config",
-    `examples/${directory}/generated.config.ts`,
-  ]),
-  ["--vocabulary-module", "packages/catalog/entries/_typecheck/concept-set.ts"],
-  ["--config", "tests/packaging/application/generated.config.ts"],
+const applicationConfigs = [
+  ...Object.values(applicationExamples).map(
+    ({ directory }) => `examples/${directory}/generated.config.ts`,
+  ),
+  "tests/packaging/application/generated.config.ts",
 ];
-
 if (import.meta.main) {
-  for (const arguments_ of checks) await checkCommand(arguments_);
-  console.log(`repository concept checks passed for ${checks.length} registered roots`);
+  for (const config of applicationConfigs) await checkCommand(["--config", config]);
+  const catalogConcepts = await validateCatalogConcepts();
+  console.log(
+    `repository checks passed for ${applicationConfigs.length} configured applications and ${catalogConcepts} catalog concepts`,
+  );
 }

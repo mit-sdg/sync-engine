@@ -9,7 +9,7 @@ export interface WireRenderOptions {
   moduleName?: string;
   /** Replace the default generated-file banner. */
   banner?: string;
-  vocabulary?: { from: string; export: string };
+  conceptSet?: { from: string; export: string };
   strictLeaves?: boolean;
   /** Name of this contract's application-wide error union. */
   appWideErrorName?: string;
@@ -20,7 +20,7 @@ export interface WireRenderOptions {
 }
 
 const WIRE_HELPERS = {
-  ApplicationVocabulary: "",
+  ApplicationConceptSet: "",
   AtPath:
     "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;",
   QueryRow: "type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;",
@@ -40,7 +40,7 @@ export function wireHelperNames(wires: readonly WireContractsIR[]): ReadonlySet<
       helpers.add("Jsonify");
       if (type.allOf.length !== 1) helpers.add("AllOf");
       if (type.allOf.some(({ source }) => source !== "literal" && source !== "number")) {
-        helpers.add("ApplicationVocabulary");
+        helpers.add("ApplicationConceptSet");
         helpers.add("AtPath");
       }
       if (type.allOf.some(({ source }) => source === "query-output")) helpers.add("QueryRow");
@@ -67,15 +67,15 @@ function originType(origin: WireOrigin): string {
       return "number";
     case "action-input":
     case "query-input":
-      return `AtPath<Parameters<(typeof ApplicationVocabulary.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>[0], ${JSON.stringify(origin.path)}>`;
+      return `AtPath<Parameters<(typeof ApplicationConceptSet.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>[0], ${JSON.stringify(origin.path)}>`;
     case "action-output":
-      return `AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>>, ${JSON.stringify(origin.path)}>`;
+      return `AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>>, ${JSON.stringify(origin.path)}>`;
     case "query-output":
-      return `AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>>>, ${JSON.stringify(origin.path)}>`;
+      return `AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)[${JSON.stringify(origin.concept)}][${JSON.stringify(origin.member)}]>>>, ${JSON.stringify(origin.path)}>`;
     case "computation-input":
-      return `AtPath<Parameters<(typeof ApplicationVocabulary.computations)[${JSON.stringify(origin.computation)}]["fn"]>[0], ${JSON.stringify(origin.path)}>`;
+      return `AtPath<Parameters<(typeof ApplicationConceptSet.computations)[${JSON.stringify(origin.computation)}]["fn"]>[0], ${JSON.stringify(origin.path)}>`;
     case "computation-output":
-      return `AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.computations)[${JSON.stringify(origin.computation)}]["fn"]>>, ${JSON.stringify(origin.path)}>`;
+      return `AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.computations)[${JSON.stringify(origin.computation)}]["fn"]>>, ${JSON.stringify(origin.path)}>`;
   }
 }
 
@@ -143,13 +143,13 @@ export function renderWireTypes(
       : moduleNameOrOptions;
   const moduleName = options.moduleName ?? "WireContracts";
   const appWideErrorName = options.appWideErrorName ?? "AppWideError";
-  const anchored = options.vocabulary !== undefined;
+  const anchored = options.conceptSet !== undefined;
   const helpers: ReadonlySet<WireHelperName> = anchored
     ? wireHelperNames([wire, ...(options.sharedWires ?? [])])
     : new Set();
   if (options.strictLeaves === true) {
     if (!anchored) {
-      throw new Error("renderWireTypes: strictLeaves requires a vocabulary type anchor.");
+      throw new Error("renderWireTypes: strictLeaves requires a concept-set type anchor.");
     }
     const unresolved: string[] = [];
     for (const endpoint of wire.endpoints) {
@@ -173,10 +173,10 @@ export function renderWireTypes(
       "",
     );
   }
-  if (options.preamble !== false && options.vocabulary !== undefined && helpers.size > 0) {
-    if (helpers.has("ApplicationVocabulary")) {
+  if (options.preamble !== false && options.conceptSet !== undefined && helpers.size > 0) {
+    if (helpers.has("ApplicationConceptSet")) {
       lines.push(
-        `import type { ${options.vocabulary.export} as ApplicationVocabulary } from ${JSON.stringify(options.vocabulary.from)};`,
+        `import type { ${options.conceptSet.export} as ApplicationConceptSet } from ${JSON.stringify(options.conceptSet.from)};`,
         "",
       );
     }

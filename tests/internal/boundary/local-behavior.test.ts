@@ -2,7 +2,8 @@ import { describe, expect, test } from "vite-plus/test";
 import { custom } from "@sync-engine/advanced";
 import { assemble } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { each, former, reaction, view, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { each, former, reaction, view, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { createLocalClient } from "@sync-engine/client";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { createInvoker, Requesting } from "@sync-engine/internal/boundary/invocation/invoke";

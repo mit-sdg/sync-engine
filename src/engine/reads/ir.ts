@@ -14,6 +14,7 @@
  */
 
 import type { ActionPosture, ChannelPosture } from "@engine/reactions/types";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 
 /** A JSON-safe pattern value: literals, variables, matchers, nested shapes. */
 export type ValueIR =
@@ -160,6 +161,8 @@ export type ViewOpIR =
  */
 export interface ViewIR {
   name: string;
+  /** Selected-composition identity; absent for low-level or imported registrations. */
+  authored?: AuthoredDeclarationIdentity;
   alternatives: ViewOpIR[][];
   ins: string[];
   outs: string[];
@@ -245,6 +248,8 @@ export type FormerNodeIR =
 /** One former: explicit input and free bindings, its promise, and its formed tree. */
 export interface FormerIR {
   name: string;
+  /** Selected-composition identity; absent for low-level or imported registrations. */
+  authored?: AuthoredDeclarationIdentity;
   ins: string[];
   bindings: string[];
   promise: "one" | "optional";
@@ -262,6 +267,8 @@ export interface ConsequenceIR {
 /** One reaction's when / where / then frame, as data. */
 export interface ReactionIR {
   name: string;
+  /** The top-level authored tree this lowered runtime reaction came from. */
+  authored?: AuthoredDeclarationIdentity;
   when: TriggerIR[];
   /**
    * A deferred trigger: qualification waits for a settlement frontier in the
@@ -278,6 +285,8 @@ export interface ReactionIR {
 /** A reaction that could not be lowered to `ReactionIR` — visible, never silent. */
 export interface UnloweredIR {
   name: string;
+  /** The top-level authored tree this local runtime reaction came from. */
+  authored?: AuthoredDeclarationIdentity;
   reason: string;
   /** Inspectable facts retained even though the complete definition is local code. */
   known: {
@@ -358,18 +367,12 @@ export interface SpecificationFieldIR {
   location: SpecificationLocationIR;
 }
 
-/** An inline result row or a result type expression. */
-export type SpecificationResultIR =
-  | {
-      kind: "fields";
-      fields: readonly SpecificationFieldIR[];
-      location: SpecificationLocationIR;
-    }
-  | {
-      kind: "type";
-      type: SpecificationTypeIR;
-      location: SpecificationLocationIR;
-    };
+/** The parenthesized named fields returned by an action or query. */
+export interface SpecificationResultIR {
+  kind: "fields";
+  fields: readonly SpecificationFieldIR[];
+  location: SpecificationLocationIR;
+}
 
 /** One authored refusal branch and its normative decoded sentence. */
 export interface SpecificationRefusalIR {
@@ -402,23 +405,34 @@ export interface SpecificationQueryIR {
   location: SpecificationLocationIR;
 }
 
-/** A reader-facing Types or extension section, retained in authored order. */
-export interface SpecificationDocumentationIR {
-  kind: "types" | "extension";
+/** One opaque type parameter supplied by each application use of the concept. */
+export interface SpecificationExternalTypeIR {
   name: string;
-  body: string;
+  /** Optional reader-facing explanation, normalized from its indented lines. */
+  explanation: string;
   location: SpecificationLocationIR;
 }
 
-/** The JSON-safe authored contract parsed from one concept specification; State is excluded. */
+/** Unparsed Simple State Form and the optional prose that follows its fence. */
+export interface SpecificationStateIR {
+  /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
+  body: string;
+  prose: string;
+  location: SpecificationLocationIR;
+}
+
+/** The JSON-safe authored contract parsed from one concept specification. */
 export interface ConceptSpecificationIR {
   format: "sync-engine.concept-specification";
   version: 1;
+  /** Reusable definition identity from the document's H1, independent of instance names. */
+  definitionName: string;
   purpose: string;
   principle: string;
+  externalTypes: readonly SpecificationExternalTypeIR[];
+  state: SpecificationStateIR;
   actions: readonly SpecificationActionIR[];
   queries: readonly SpecificationQueryIR[];
-  documentation: readonly SpecificationDocumentationIR[];
 }
 
 /** One action as the inventory reports it: its name, observed input roles, declared refusals. */

@@ -1,19 +1,42 @@
 # Concept specification format
 
-A concept specification is Markdown text passed to `registerConcept`. Application
-source conventionally keeps it at `design/concepts/Name.md` and imports it through
-`@design/concepts/Name.md`. The parser produces a TypeScript-independent `ConceptSpec`
-containing purpose, principle, action and query declarations, refusals,
-documentation, and source locations.
+A concept specification is the reusable, concept-local contract passed as
+Markdown text to `registerConcept`. It has a strict section order and a
+TypeScript-independent version-1 representation. The specification defines a
+concept definition; an application may instantiate that definition more than
+once under different concept-set keys.
 
-Registration checks members, recoverable input names, and refusals.
-`sync-engine check` compares declarations with class source. Reactions, views,
-and formers enforce registered query cardinalities. Prose, types, results, and
-State notation are not runtime schemas or executable behavior.
+Application composition, concrete application types, typed design links, and
+computations do not belong in a concept specification. They belong in
+[registered application design](../guide/authoring.md#6-register-explicit-design-urls).
+
+## Document grammar
+
+A specification has exactly one H1 followed by exactly these H2 sections, once
+each and in this order:
+
+```text
+# DefinitionName
+
+## Purpose
+## Principle
+## Types
+## State
+## Actions
+## Queries
+```
+
+The H1 is the concept-definition name, not an application instance name.
+Unknown, missing, reordered, or duplicate H2 sections are rejected. `Purpose`
+and `Principle` must contain nonempty prose.
+
+`Types`, `Actions`, and `Queries` contain only their one matching fence and no
+surrounding Markdown. `State` contains one `state` fence and may have concise
+prose after it for invariants that the notation cannot express. Application
+links and `computations` fences are rejected anywhere in a concept
+specification.
 
 ## Complete example
-
-This document declares two actions, one optional query, and one refusal:
 
 ````md
 # Noting
@@ -24,357 +47,238 @@ Keep short notes for later retrieval.
 
 ## Principle
 
-Ada writes a note and reads it by its identifier. After Ada discards the note,
-another discard is refused because the note no longer exists.
+A person writes a note and reads it by its identifier. After the person
+discards the note, another discard is refused because the note no longer
+exists.
+
+## Types
+
+```types
+external Person
+  The person who authors a note.
+```
+
+## State
+
+```state
+notes: set Note
+  author: Person
+  text: String
+```
 
 ## Actions
 
 ```actions
-write (text: String) : return (note: Note)
+write(author: Person, text: String) : return (note: Note)
+  where true
   then
-    save text
+    add a new note with author and text
     return note
 
-discard (note: Note) : return (note: Note)
-  where note not in notes
+discard(note: Note) : return (note: Note)
+  where note exists
+  then
+    remove note
+    return note
+  where note does not exist
   then
     refuse NOTE_NOT_FOUND "There is no such note."
-  where note in notes
-  then
-    delete note
-    return note
 ```
 
 ## Queries
 
 ```queries
-_get (note: Note) : optional (text: String)
-  answers no row for an unknown Note
+_get(note: Note) : optional (author: Person, text: String)
+  Returns no row when the note does not exist.
 ```
 ````
 
-| Layer                              | Establishes                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------ |
-| Specification parser               | Accepted declaration syntax, descriptions, promises, refusals, and locations   |
-| `registerConcept`                  | Agreement with callable methods, recoverable input names, and refusal mappings |
-| `sync-engine check`                | Agreement with direct class methods and supported TypeScript input shapes      |
-| Engine-evaluated reads             | Query result container and declared cardinality                                |
-| Principle and implementation tests | Behavioral sequence, state changes, returned values, and invariants            |
+## `Types`
 
-## Required sections
+`Types` contains exactly one `types` fence. The fence may be empty. Version 1
+accepts only external declarations:
 
-The document must contain non-empty `Purpose` and `Principle` sections. The
-parser trims each line before comparing it with these exact heading strings, so
-leading whitespace is accepted even when a Markdown renderer would treat that
-line differently:
+```types
+external User
+  The person who authors a comment.
 
-```md
-## Purpose
-
-State why this behavior exists.
-
-## Principle
-
-Describe one concrete sequence that demonstrates the behavior.
+external Target
+  The object receiving the comment.
 ```
 
-The parser includes all text after each heading up to the next second-level
-heading outside fenced code. Heading text, capitalization, and level are
-significant. Duplicate `Purpose`, `Principle`, `Actions`, and `Queries` sections
-are rejected. A duplicate `State` section is not rejected because State is not
-parsed.
-
-An `actions` fence is recognized only within `## Actions`, and a `queries` fence
-only within `## Queries`. Fences may use at least three backticks or tildes; the
-closing fence must use the same character, contain at least as many characters,
-and have no trailing text. A declaration fence in an example, State notation,
-or any other section cannot replace the declaration block. More than one
-matching fence in a section is rejected.
-
-Within each declaration fence, every member name must be unique. An indented
-declaration body must follow a left-aligned signature; a body before the first
-signature is rejected. Blank body lines are retained after outer blank lines
-and common indentation are removed.
-
-## Signature grammar
-
-Action and query signatures use the following independent grammar:
+The declaration grammar is:
 
 ```text
-action       = action-name "(" fields? ")" ":" "return" result
-query        = query-name "(" fields? ")" ":" promise result
-fields       = field ("," field)*
-field        = identifier "?"? ":" type
-result       = "(" fields? ")" | type
-promise      = "one" | "optional" | "many"
-type         = named-type | "null" | "undefined" | "(" type ")" | type "|" type
-named-type   = qualified-name ("<" type ("," type)* ">")?
-identifier   = (ASCII letter | "_") (ASCII letter | digit | "_")*
-action-name  = ASCII letter (ASCII letter | digit | "_")*
-query-name   = "_" (ASCII letter | digit | "_")*
+external Name
+  optional explanation, which may continue on later indented lines
 ```
 
-A qualified type name joins `identifier` values with dots. An action name cannot
-begin with `_`; a query name may be `_` alone. Commas inside generic arguments
-and delimiters inside parenthesized types do not split the surrounding field
-list. The parser retains field names, optionality, type structure, result
-structure, and one-based source locations. It does not resolve a type name against TypeScript or validate values
-at runtime.
+An external type is an opaque parameter supplied by each application that uses
+the concept. The explanation is retained as documentation. The `external`
+keyword is required; concrete types and bindings are application design,
+not concept-local declarations.
 
-## Documentation sections
+## `State`
 
-`## Types` and other non-reserved second-level sections are ordered documentation
-blocks with nonempty Markdown bodies. Their bodies and source locations survive
-in `ConceptSpec`, application manifests, and generated read-back but have no
-registration or runtime semantics. `Purpose`, `Principle`, `State`, `Actions`,
-and `Queries` are reserved; State is excluded.
+`State` contains exactly one `state` fence. The parser normalizes and retains
+the fence contents verbatim in concept-specification IR and application
+manifests. Version 1 does not parse or validate those contents.
 
-## Writing conventions
+The intended notation is Simple State Form (SSF), based on the
+[conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
+Its grammar remains deferred. Version 1 therefore does not implement a partial
+parser, scan type names heuristically, or define a private SSF dialect.
 
-The parser does not enforce these conventions. Apply them during [design
-review](../guide/reviewing-a-design.md#2-review-each-concept). A specification
-must stand alone: declarations state every observable rule, without relying on
-the implementation class or nearby prose.
+Because State is unparsed, tooling does not yet prove:
 
-**Let the notation carry the invariant.** Do not repeat guarantees already stated
-by the state fence, `where` branches, or query bodies.
+- that action and query types are state-owned or external;
+- that every external type is used; or
+- that a qualified type-binding target is introduced by the target concept's
+  State.
 
-| Invariant                       | Where it is already stated                            |
-| ------------------------------- | ----------------------------------------------------- |
-| A limit or accepted format      | The `where` branch that refuses the values outside it |
-| Uniqueness                      | The `where` branch that refuses the duplicate         |
-| Ordering                        | A `seq` in the fence and the query's `answers` line   |
-| Absence for an unknown input    | The query's `answers` line                            |
-| A lifetime, delay, or threshold | The `then` line of the action that sets it            |
-| Permanence or no reversal       | No declared transition removes the entity             |
-| An unrestricted input           | The action declares no `where` branch that rejects it |
+The checker still inventories external declarations and checks every required
+application type binding. State changes affect canonical design digests
+even before SSF parsing is available.
 
-Do not repeat these statements in prose. Use prose only for facts that the
-declarations cannot express.
+## `Actions`
 
-**State the value, not a label for the value.** Write `where content is blank or
-longer than 500 characters`, not `where content is longer than the accepted
-message bound`. Write `expiring 30 minutes from now`, not `with a bounded
-expiry`. A declaration that names but does not state a bound forces the reader
-to find the value elsewhere.
+`Actions` contains exactly one `actions` fence and declares at least one action.
+Each action has this shape:
 
-**Make each refusal sentence match its action condition.** The sentence is the
-caller-visible contract and the registered detail. `"Post content must contain 1
-to 500 non-whitespace characters."` does not match a rule that rejects blank
-content or content longer than 500 characters.
-
-**Declare the row a query actually returns.** The engine checks a query's result
-container and cardinality, but not its fields. An implementation can therefore
-return fields omitted by the declaration. Project the result to the declared
-fields instead of widening the declaration to expose a convenient internal
-record.
-
-**Describe the concept, not one implementation.** Storage choices, process
-lifetime, and qualifications such as "in this small implementation" belong in
-the application documentation.
-
-### Where each statement belongs
-
-| Statement                                                                            | Section                   |
-| ------------------------------------------------------------------------------------ | ------------------------- |
-| Why the concept exists and what its absence would cost                               | `Purpose`                 |
-| One concrete scenario using only this concept's own actions and queries              | `Principle`               |
-| The owned facts themselves                                                           | `State`                   |
-| The precondition, effect, and refusal of each transition                             | `Actions`                 |
-| What a query answers, in what order, and what it answers when nothing matches        | The query's indented body |
-| What each type name is: allocated identity, opaque external identity, or owned value | `Types`                   |
-
-Give each name one classification in `Types`, without restating the
-classification. For example: "`Subject` is an opaque external identity."
-
-Choose a section according to the statement's subject, not according to the
-generated output. The parser discards `State`, so it does not appear in generated
-read-back. `Types` and the other extension blocks do appear. This difference
-does not move state descriptions into another section.
-
-### Notation in prose
-
-Use backticks for identity and domain values: subject `ari`, target `topic-7`.
-Use quotation marks for content the concept owns as a `String`: Ari publishes
-"First post." Use plain text for a person or object outside the concept: Asha
-creates Saturday Workshop. Quotation marks around an opaque identity incorrectly
-present the identity as string content.
-
-## Action declarations
-
-An `actions` fence contains zero or more left-aligned signatures. Indented lines
-below a signature are its prose body.
-
-````md
-```actions
-join (gathering: Gathering, member: Person) : return (membership: Membership)
-  where gathering not in gatherings
+```text
+actionName(input: Type, optional?: Type) : return (result: Type)
+  where condition prose
   then
-    refuse GATHERING_NOT_FOUND "There is no such gathering."
+    effect prose
+    return result
 ```
-````
 
-An action name must not begin with `_`, and the token after its input list must
-be `: return`. The parser retains an inline output field list or a result type
-expression and rejects missing or trailing signature text. It also retains the
-normalized indented body. Registration does not interpret `where`, `then`,
-state changes, operation order, or other prose as executable behavior.
+The exact requirements are:
 
-### Refusal lines
+- the signature has parenthesized named input fields;
+- `: return` is followed by parenthesized named result fields;
+- one or more explicit `where`/`then` branches follow the signature;
+- an unconditional branch uses `where true`;
+- each `then` block ends with exactly one `return ...` or
+  `refuse CODE "Normative sentence."` line; and
+- bare result types are rejected.
 
-The parser recognizes an indented line with this form:
+An empty successful result is written as `()` and terminates with plain
+`return`. For a nonempty result, every successful branch returns exactly the
+signature's result names, irrespective of order.
+
+A refusal code may occur only in the action that declares it. The sentence is
+the normative caller-facing detail and supports JSON string escapes.
+`registerConcept` requires the existing one-to-one mapping between refusal codes
+and distinct `Error` classes and rejects extra mappings.
+
+Conditions and effects are controlled prose. The parser checks branch and
+terminal shape but does not prove their meaning or execute them.
+
+## `Queries`
+
+`Queries` contains exactly one `queries` fence. The fence may be empty. A query
+has this signature:
 
 ```text
-refuse CODE "Normative sentence."
+_query(input: Type) : one (field: Type)
+_query(input: Type) : optional (field: Type)
+_query(input: Type) : many (field: Type)
 ```
 
-The code must occur only once under an action, and the quoted sentence must not
-be empty. The sentence uses JSON string escapes, including `\"` for a literal
-double quote. A body line beginning with the literal text `refuse ` but not
-matching the grammar is rejected. `registerConcept` requires a distinct
-registered `Error` class for every refusal code and rejects extra mappings. The
-decoded sentence supplies the registered detail for direct assembled calls; the
-`Error` instance's message is ignored.
+Input and result fields are parenthesized and named. Bare result types are
+rejected. The optional indented body is arbitrary prose; no word such as
+`answers` or `orders` is required. Omit the body when State and the signature
+already determine the answer.
 
-## Query declarations
+The cardinalities retain their runtime meaning:
 
-A `queries` fence contains left-aligned signatures. Indented prose below a
-signature describes its reader-facing behavior:
+| Choice     | Required evaluated result                     |
+| ---------- | --------------------------------------------- |
+| `one`      | Exactly one non-null, non-array object        |
+| `optional` | An array containing zero or one object row    |
+| `many`     | An array containing any number of object rows |
 
-````md
-```queries
-_members (gathering: Gathering) : many (member: Person)
-  answers no rows for an unknown Gathering
-  orders rows by when each Person joined
-_membership (gathering: Gathering, member: Person) : one (joined: Boolean)
-  answers false when the Person is unknown
+Reactions, views, and formers enforce this container/cardinality contract when
+they evaluate a query. A query body remains a design statement rather than an
+executable assertion.
+
+## Names and type expressions
+
+Action names begin with an ASCII letter. Query names begin with `_`. Field
+names begin with an ASCII letter or `_`; subsequent characters may also be
+digits. Names must be unique in their applicable scope.
+
+Type expressions remain implementation-language-independent references. They
+do not establish runtime schemas or semantic equivalence with TypeScript types.
+In particular, a concept identity commonly erases to `string` in an
+implementation.
+
+## Agreement with TypeScript
+
+Config-based `sync-engine check` compares selected concept declarations with
+resolved TypeScript source. It checks:
+
+- action and query member names;
+- input field names and optionality;
+- action-result field names and optionality;
+- query-row field names and optionality;
+- registered refusal mappings; and
+- query cardinality through the existing runtime read checks.
+
+For optionality, `field?: T` and `field: T | undefined` are equivalent. Static
+checking fails closed when it cannot resolve an input, action-result, or query-row
+shape. It does not claim semantic type-name equivalence or State/storage
+agreement.
+
+Each successful action branch's terminal return names are checked against the
+declared result fields. Conditions, effects, query-body meaning, persistence,
+transactions, and durability remain implementation and test responsibilities.
+
+## Definition and instance identity
+
+One registration can be installed under several application names:
+
+```text
+conceptSet({
+  PostComments: commenting,
+  AnswerComments: commenting,
+})
 ```
-````
 
-A query name must begin with `_`. Its promise is one of:
+Both instances use the `Commenting` definition. Generated design output records
+the definition name and each instance name separately. If selected
+registrations use the same definition name, their canonical specifications must
+be identical. Different implementation classes or floors may implement that
+shared contract; incompatible specifications cannot claim the same definition
+name.
 
-| Promise    | Implementation result                     | Runtime check                                 |
-| ---------- | ----------------------------------------- | --------------------------------------------- |
-| `one`      | one non-null, non-array object            | exactly one object                            |
-| `optional` | an array containing zero or one object    | at most one object                            |
-| `many`     | an array containing any number of objects | every element is a non-null, non-array object |
+## Source provenance
 
-The parser records inputs, promise, row fields or result type, and body.
-Registration does not interpret query bodies; test their claims in the
-implementation. Reactions, views, and formers check result containers and
-cardinality, but not row values. Direct instrumented query calls bypass this
-check.
+`registerConcept` continues to receive imported Markdown text:
 
-An omitted `## Actions` or `## Queries` section, or a section without its
-matching fence, declares no members of that kind. A present declaration fence
-must be closed.
+```text
+import spec from "@design/concepts/Commenting.md" with { type: "text" };
+registerConcept({ class: Commenting, spec });
+```
 
-## State notation
+Strict config-based checking traces the import that supplies `spec`, verifies
+that its file contents match the registered text, and records the source path.
+Dynamic or unresolvable specification construction fails the check. The
+registration API does not accept a duplicate source URL.
 
-A `## State` section is optional and has no dedicated grammar. `parseSpec`
-discards it, and neither `registerConcept` nor `sync-engine check` compares it
-with fields, implementations, database models, or storage. It does not appear in
-metadata, manifests, read-back, wire contracts, input contracts, or validators.
-Headings and declaration fences inside State notation do not create document
-sections or declarations.
+The IR format remains `sync-engine.concept-specification`, version `1`. This is
+an intentional beta redefinition: legacy concept specifications are not parsed
+or auto-detected.
 
-Establish state properties and invariants in principle, implementation, and
-backend constraint tests. Machine state conformance would require an explicit,
-backend-neutral descriptor; State prose is not such a descriptor.
+## Author obligations
 
-## `registerConcept` checks
+Write the concept contract before its implementation. Keep the concept
+independent of application composition, place every local invariant in its
+owning action and State description, and test behavior and storage guarantees
+separately. Then register the imported text, select the registration in a
+`conceptSet`, and run `sync-engine check` against the application's generated
+config.
 
-`registerConcept({ class, spec, ... })` inventories callable prototype methods
-from the registered class and its base classes up to, but not including,
-`Object.prototype`. An inherited method can therefore satisfy a specification
-declaration and is also rejected when the specification does not declare it.
-The function performs these checks against the parsed document:
-
-- action and query names agree in both directions;
-- every declared refusal code has one distinct `Error` class;
-- no extra refusal mapping exists;
-- input names agree when runtime reflection can recover a non-empty,
-  top-level destructured parameter.
-
-Registration also requires nonempty floor names and function-valued floor
-factories, independently of the specification. Runtime reflection cannot recover
-every erased TypeScript signature: a placeholder, plain, absent, empty, or nested
-parameter can skip input-name comparison.
-
-## `sync-engine check` checks
-
-With `--config`, `sync-engine check` discovers application-owned registrations
-from the application returned by the descriptor's `assemble` function; built-in
-engine concepts are excluded. It uses the descriptor's
-`vocabulary.module` only to locate class source. Without a config, the command
-imports the module selected by `--vocabulary-module`, or uses
-`src/concept-set.ts` and `vocabulary` as the no-option compatibility convention.
-The default filename is not part of registration semantics. Direct
-`registerConcept(...)` calls and registrations imported from optional registry
-modules use the same runtime discovery path. Discovery does not depend on a
-Markdown filename, location, or registry module; Markdown elsewhere in the
-project is ignored unless a selected registration loaded it.
-
-Static analysis is used only where runtime reflection is insufficient: locating
-the selected class source and reading erased TypeScript input shapes. For that
-step, the `conceptSet` argument must be an object literal or a local object
-variable. Its properties and object-spread registration maps must resolve to
-direct or imported registrations, and each `class` must be a named import whose
-module specifier resolves directly as a filesystem path. Runtime registration
-checks action/query membership and every input list it can reflect. Source
-analysis checks only input lists erased before registration, resolving inherited
-method declarations when necessary.
-
-Supported method parameter forms are:
-
-- no parameter;
-- one untyped object-destructured parameter with identifier keys and no rest;
-- one parameter whose TypeScript-resolved type has a finite top-level object
-  shape.
-
-The semantic form includes local and imported aliases, interfaces and interface
-extension, qualified names, re-exports, finite alias chains and intersections,
-`Readonly`, `Pick`, `Omit`, equivalent finite mapped types, and finite
-`Record` keys. A union is accepted only when every alternative exposes the same
-input keys. Optional and readonly properties still contribute their names.
-
-The check fails closed for differing union or distributed-intersection keys,
-open index signatures, unresolved or cyclic aliases, unresolved mapped or
-generic shapes, `any`, `unknown`, primitives, arrays, callables, multiple
-parameters, plain untyped parameters, and nested or rest destructuring. A
-failure names the method and parameter type, first unsupported operation,
-declaration location, and alternative key sets when applicable.
-
-Type resolution is limited to an expansion depth of 32 and 64 generated
-alternative key sets. Exceeding either limit fails the check rather than
-accepting an incomplete shape.
-
-The checker loads the nearest `tsconfig.json`, uses its module resolution and
-path mappings, and adds the concept source when the config excludes it. Without
-a config it uses NodeNext resolution for the concept source and its imports.
-
-TypeScript `private` and `protected` modifiers do not hide prototype methods at
-runtime. Runtime registration therefore observes those methods. Use ECMAScript
-`#private` methods or module-level functions for helpers outside the concept
-protocol.
-
-Neither `registerConcept` nor `sync-engine check` validates action output
-fields, query row fields, state notation, class fields, storage layout, or
-runtime endpoint values.
-
-## Caller obligations
-
-Import the Markdown as text and pass it to `registerConcept`, then include that
-registration in the application's `conceptSet`. In a conventional application,
-configure `@design/*` to resolve to `design/*`, import
-`@design/concepts/Name.md` from `src/concepts/Name.registry.ts` or the direct
-registration site, and collect registrations in `src/vocabulary.ts`. Registry
-modules remain optional, and neither these paths nor filenames affect
-registration semantics or discovery.
-
-After signature changes, run `sync-engine check`; after behavior or State
-changes, run the relevant principle, implementation, and backend constraint
-tests.
-
-See [Define one behavior](../guide/authoring.md#define-one-behavior) for a worked example and [CLI
-reference](cli.md#sync-engine-check) for command behavior.
+See [Application authoring](../guide/authoring.md) for the complete workflow and
+[Command-line reference](cli.md#sync-engine-check) for command behavior.

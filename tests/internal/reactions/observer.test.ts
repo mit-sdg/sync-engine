@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { when } from "@sync-engine/language";
 import type { LogEvent } from "@sync-engine/advanced";
 import { quietReacting } from "../../utils/reacting.ts";
 import {

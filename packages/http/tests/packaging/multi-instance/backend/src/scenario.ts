@@ -18,9 +18,9 @@ import {
   Conflict,
   composition,
   createMultiInstanceClient,
+  multiInstanceConcepts,
   multiInstanceHttpPolicy,
   type MultiInstanceWire,
-  vocabulary,
 } from "@sync-engine-fixture/multi-instance-client";
 
 const WAIT_DEADLINE_MS = 2_000;
@@ -293,7 +293,7 @@ interface Runtime {
   application: ReturnType<typeof assemble>;
   gateway: ReturnType<typeof createGateway<MultiInstanceWire>>;
   handler: ReturnType<typeof createHttpHandler>;
-  floor: ConceptFloor<typeof vocabulary>;
+  floor: ConceptFloor<typeof multiInstanceConcepts>;
   scheduler: ControlledScheduler;
   entries: SqliteEntries;
   effects: LocalEffects;
@@ -319,7 +319,7 @@ function createRuntime(
   const effects = new LocalEffects(label);
   let databaseCloseCalls = 0;
   let floorCloseCalls = 0;
-  const floor = conceptFloor(vocabulary, {
+  const floor = conceptFloor(multiInstanceConcepts, {
     name: `sqlite-${label}`,
     instances: { Entries: entries, Effects: effects, Faulting: new LaterFault() },
     resources: [`sqlite-connection:${label}`, `controlled-scheduler:${label}`],
@@ -335,7 +335,7 @@ function createRuntime(
   const applicationEvents: OperationalEvent[] = [];
   const gatewayEvents: OperationalEvent[] = [];
   const application = assemble({
-    vocabulary,
+    conceptSet: multiInstanceConcepts,
     instances: floor.instances,
     composition,
     logSink: applicationLog,

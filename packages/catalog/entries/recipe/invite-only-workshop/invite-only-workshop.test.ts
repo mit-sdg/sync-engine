@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
-import { applicationConcepts, vocabulary } from "@catalog/concepts";
+import { applicationConceptSet } from "@catalog/concepts";
 import { compositions } from "./invite-only-workshop.ts";
 
 const { AcceptWorkshopInvitation, CreateInviteOnlyWorkshop, RepairAcceptedWorkshopInvitation } =
@@ -13,7 +13,7 @@ const {
 } = compositions.InvitationManagement;
 
 type Floor = "memory" | "mongo";
-type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;
+type Instances = ReturnType<(typeof applicationConceptSet)["implementations"]>;
 interface MongoFloorLease {
   database: unknown;
   close(): Promise<void>;
@@ -23,7 +23,7 @@ const openMongoFloor = (
     __catalogMongoFloor?: () => Promise<MongoFloorLease>;
   }
 ).__catalogMongoFloor;
-const implementations = applicationConcepts.implementations as unknown as (
+const implementations = applicationConceptSet.implementations as unknown as (
   floor: Floor,
   context: object,
 ) => Instances;
@@ -90,7 +90,7 @@ for (const floor of ["memory", "mongo"] as const) {
           };
 
           const application = assemble({
-            vocabulary,
+            conceptSet: applicationConceptSet,
             instances: instances as never,
             composition,
           });

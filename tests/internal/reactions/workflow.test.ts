@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { reaction, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { conditionOp, custom } from "@sync-engine/internal/reads/where-ops";

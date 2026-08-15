@@ -8,7 +8,8 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { faulted, Refuse } from "@sync-engine/advanced";
-import { earlier, refused, returned, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { earlier, refused, returned, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { quietReacting } from "../../utils/reacting.ts";
 import type { Empty } from "@sync-engine/internal/reactions/types";

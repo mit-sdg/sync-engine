@@ -15,13 +15,13 @@ generated-assembly compatibility, and format-version rules. The
 | [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and transport binding               |
 | [`@mit-sdg/sync-engine/client`](#client)     | Local and custom clients over a generated contract                   |
 | [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation        |
-| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches               |
+| [`@mit-sdg/sync-engine/advanced`](#advanced) | Low-level declarations, manual engines, and explicit escape hatches  |
 
 ## `language`
 
 <!-- register:language:start -->
 
-`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -29,7 +29,6 @@ generated-assembly compatibility, and format-version rules. The
 
 | API                    | Compact signature                                                                               |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `vocabulary`           | `vocabulary({ concepts, computations? })`                                                       |
 | `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))`                    |
 | `.afterFlowSettles()`  | `when(trigger).afterFlowSettles().then(step)` or `completedStage.afterFlowSettles().then(step)` |
 | `returned` / `refused` | `(pattern?, { by?, except?, exceptBy? }?)`                                                      |
@@ -66,10 +65,8 @@ union-typed query reference is rejected outright so the input argument cannot
 select or mask one possible query; choose one concrete query before calling
 `count`.
 
-Concept entries accepted by `vocabulary` are either a concept class or
-`{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.
 `QueryPromise` is `"one" | "optional" | "many"`.
-When a query promise is available as a TypeScript literal, the vocabulary types
+When a query promise is available as a TypeScript literal, concept-set types
 link `"one"` to a record return and `"optional"` or `"many"` to an array of
 records. Runtime evaluation checks the same container and cardinality contract.
 `Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes.
@@ -86,7 +83,7 @@ Runtime evaluation checks each fragment's declared promise and faults if it
 produces several rows. A fragment must be record-rooted; the host may be a record
 form or an `each(...).form(...)` selection row.
 
-See [Application authoring](../guide/authoring.md#connect-independent-behaviors),
+See [Application design authoring](../guide/authoring.md),
 [reaction semantics](semantics.md#reactions), and [views and
 formers](semantics.md#views-and-formers).
 
@@ -94,30 +91,30 @@ formers](semantics.md#views-and-formers).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
 ### Assembly construction
 
 ```ts
-assemble(options: AssemblyOptions): Assembly
+assemble(options: ConceptSetAssemblyOptions): Assembly
 ```
 
-| `AssemblyOptions` field | Required    | Default / effect                                                                                             |
-| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `vocabulary`            | yes         | Declared application vocabulary                                                                              |
-| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                         |
-| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
-| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                           |
-| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
-| `retention`             | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
-| `queryCache`            | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
-| `logSink`               | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
-| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
-| `observers`             | no          | No operational observers                                                                                     |
-| `rawFaultReporter`      | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
-| `redaction`             | no          | Universal sensitive-field patterns only                                                                      |
+| `ConceptSetAssemblyOptions` field | Required    | Default / effect                                                                                             |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `conceptSet`                      | yes         | Registered application concept set                                                                           |
+| `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                         |
+| `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
+| `instances`                       | no          | Ready implementations by concept name; each overrides `initialize`                                           |
+| `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
+| `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
+| `queryCache`                      | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
+| `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
+| `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
+| `observers`                       | no          | No operational observers                                                                                     |
+| `rawFaultReporter`                | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
+| `redaction`                       | no          | Universal sensitive-field patterns only                                                                      |
 
 `RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
 be a finite, non-negative integer. Window enforcement runs automatically only
@@ -167,11 +164,35 @@ sensitive host sink.
 
 ### Registration and floors
 
+An ordinary application creates one registered concept-set object and passes
+that object—not its `.concepts` property—to assembly:
+
+```typescript
+export const applicationConceptSet = conceptSet({
+  Posting: posting,
+  Commenting: commenting,
+});
+
+export const { concepts } = applicationConceptSet;
+
+assemble({
+  conceptSet: applicationConceptSet,
+  composition,
+});
+```
+
+`applicationConceptSet.concepts` contains typed concept declarations used while
+writing composition. `applicationConceptSet.implementations(...)` constructs
+concrete implementation maps, and `applicationConceptSet.computations` contains
+the named computation references supplied to `conceptSet`. The complete
+`applicationConceptSet` retains all three facets and the internal declaration
+needed by assembly and tooling.
+
 | API               | Compact signature                                                 |
 | ----------------- | ----------------------------------------------------------------- |
 | `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
 | `conceptSet`      | `conceptSet({ ...registeredConcepts }, computations?)`            |
-| `conceptFloor`    | `conceptFloor(vocabulary, { name, instances, resources, close })` |
+| `conceptFloor`    | `conceptFloor(conceptSet, { name, instances, resources, close })` |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
@@ -189,26 +210,23 @@ that type restriction, selection fails at runtime. The zero-argument
 constructed without required arguments; otherwise use a named floor.
 
 The optional second `conceptSet` argument supplies named pure computations.
-The set exposes inferred references under `set.computations` and
-`set.vocabulary.computations`. Compose raw records before constructing one set;
-refs from separate vocabularies cannot be combined.
+The set exposes inferred references under `set.computations`. Compose raw
+records before constructing one set; refs from separate concept sets cannot be
+combined.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
 method. The host owns floor selection and lifecycle.
 
-`RegisteredConcept.specification` is the machine-readable `ConceptSpec`
-extracted from purpose, principle, structured action and query signatures,
-descriptive bodies, refusal declarations, and source locations. Registration
-checks its member names, recoverable input names, and refusal mappings. Query
-promises are retained as metadata and enforced when a reaction, view, or former
-evaluates a query. Parsed type, result, and prose fields are descriptive contract
-data rather than runtime schemas. An optional State section remains
-uninterpreted human notation and produces no `ConceptSpec` field. Registration
-and source checking do not compare State with class fields, floor
-implementations, databases, or storage. State properties belong in principle,
-implementation, and backend constraint tests; future machine conformance
-requires a separately designed backend-neutral descriptor.
+`RegisteredConcept.specification` is the machine-readable version-1
+`ConceptSpec` extracted from the strict ordered Purpose, Principle, Types, State,
+Actions, and Queries sections. It retains external declarations, normalized raw
+State, structured action branches and outcomes, query choices, and source
+locations. Config-based checking compares member, input, action-result, query-row,
+return-name, optionality, and refusal shapes with resolvable TypeScript source.
+Query choices are enforced when a reaction, view, or former evaluates a query.
+State remains unparsed SSF text and is not compared with class fields, floor
+implementations, databases, or storage.
 
 ### Occurrence index and log sinks
 
@@ -279,10 +297,8 @@ receives exactly the value of the authored response's top-level `error` field.
 | `EndpointValidator`  | `(value: unknown) => ValidationResult`                   |
 | `EndpointValidators` | Optional `input`, `output`, and `domainError` validators |
 
-[Receive, ask, respond](../guide/authoring.md#receive-ask-respond) shows endpoint
-authoring. [Execution
-semantics](semantics.md#sibling-paths-and-endpoint-settlement) defines
-settlement. A stage may state `.afterFlowSettles()` to form its response at a
+[Execution semantics](semantics.md#sibling-paths-and-endpoint-settlement)
+defines endpoint settlement. A stage may state `.afterFlowSettles()` to form its response at a
 settlement frontier. Add conditions that identify any terminal state the
 endpoint requires; see [deferred triggers and settlement
 frontiers](semantics.md#deferred-triggers-and-settlement-frontiers).
@@ -388,7 +404,7 @@ transport package.
 
 `WireProjectionFacts` is the immutable route and logical-wire input passed to a
 generated projection. It remains transport-neutral; core owns strict leaf
-checks, vocabulary anchoring, rendering, provenance, and atomic artifact
+checks, concept-set anchoring, rendering, provenance, and atomic artifact
 writes.
 
 ### Framework errors
@@ -460,7 +476,7 @@ generated endpoint input and output types.
 
 <!-- register:tooling:start -->
 
-`ActionTriggerIR`, `AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV5`, `ChannelTriggerIR`, `ComputationInventoryIR`, `ConceptImplementationProvenanceIR`, `ConceptInventoryIR`, `ConceptSpecificationIR`, `ConsequenceIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `FormerNodeIR`, `FormerSourceIR`, `GeneratedApplication`, `ManifestEndpointV5`, `ObservedOccurrence`, `PatternIR`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `QueryRefIR`, `ReactionIR`, `SpecificationActionIR`, `SpecificationDocumentationIR`, `SpecificationFieldIR`, `SpecificationLocationIR`, `SpecificationQueryIR`, `SpecificationRefusalIR`, `SpecificationResultIR`, `SpecificationTypeIR`, `SpliceIR`, `TriggerIR`, `UnloweredIR`, `ValueIR`, `ViewIR`, `ViewOpIR`, `WhereOpIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applicationManifestDigest`, `diagnosticsFail`, `inspectAssembly`, `parseApplicationManifest`, `parseConceptSpecification`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `validateApplicationManifest`, `wireContracts`
+`ActionTriggerIR`, `AppIR`, `ApplicationDiagnostic`, `ApplicationManifestV1`, `ChannelTriggerIR`, `ComputationInventoryIR`, `ConceptImplementationProvenanceIR`, `ConceptInventoryIR`, `ConceptSpecificationIR`, `ConsequenceIR`, `DiagnosticCode`, `DiagnosticSeverity`, `FormerIR`, `FormerNodeIR`, `FormerSourceIR`, `GeneratedApplication`, `ManifestEndpointV1`, `ObservedOccurrence`, `PatternIR`, `PlannedWireProjection`, `ProjectionProvenance`, `ProjectionRenderOptions`, `QueryRefIR`, `ReactionIR`, `SpecificationActionIR`, `SpecificationExternalTypeIR`, `SpecificationFieldIR`, `SpecificationLocationIR`, `SpecificationQueryIR`, `SpecificationRefusalIR`, `SpecificationResultIR`, `SpecificationStateIR`, `SpecificationTypeIR`, `SpliceIR`, `TriggerIR`, `UnloweredIR`, `ValueIR`, `ViewIR`, `ViewOpIR`, `WhereOpIR`, `WireContractsIR`, `WireEndpoint`, `WireOptions`, `WireProjection`, `WireProjectionResult`, `WireRenderOptions`, `WireType`, `applicationDiagnostics`, `applicationManifest`, `applicationManifestDigest`, `diagnosticsFail`, `inspectAssembly`, `parseApplicationManifest`, `parseConceptSpecification`, `renderApp`, `renderApplicationManifest`, `renderInputContracts`, `renderReaction`, `renderWireTypes`, `validateApplicationManifest`, `wireContracts`
 
 <!-- register:tooling:end -->
 
@@ -474,11 +490,11 @@ generated endpoint input and output types.
 | `renderInputContracts`        | `renderInputContracts(contracts): string`                                    |
 | `wireContracts`               | `wireContracts(app, options?: WireOptions): WireContractsIR`                 |
 | `renderWireTypes`             | `renderWireTypes(wire, moduleName? \| options?): string`                     |
-| `applicationManifest`         | `applicationManifest(assembly): ApplicationManifestV5`                       |
+| `applicationManifest`         | `applicationManifest(assembly): ApplicationManifestV1`                       |
 | `applicationManifestDigest`   | `applicationManifestDigest(manifest): string`                                |
-| `parseApplicationManifest`    | `parseApplicationManifest(source): ApplicationManifestV5`                    |
+| `parseApplicationManifest`    | `parseApplicationManifest(source): ApplicationManifestV1`                    |
 | `renderApplicationManifest`   | `renderApplicationManifest(manifest): string`                                |
-| `validateApplicationManifest` | `validateApplicationManifest(value): asserts value is ApplicationManifestV5` |
+| `validateApplicationManifest` | `validateApplicationManifest(value): asserts value is ApplicationManifestV1` |
 | `applicationDiagnostics`      | `applicationDiagnostics(app, endpoints, wire)`                               |
 | `diagnosticsFail`             | `diagnosticsFail(diagnostics, "errors" \| "warnings"?)`                      |
 | `parseConceptSpecification`   | `parseConceptSpecification(markdown): ConceptSpecificationIR`                |
@@ -503,20 +519,18 @@ qualifies or the flow finalizes. When absent, qualification happens where the
 trigger lands. Imported IR with another value is rejected. Standalone deferred
 `ReactionIR` must be consumed by a package version that recognizes the field;
 during beta, use the same package version to produce and consume IR. The
-version-5 manifest protects application IR carried inside a manifest from older
-tooling.
+versioned manifest protects application IR carried inside a manifest from
+incompatible tooling.
 
-`ApplicationManifestV5` has format `sync-engine.application-manifest`, version
-`5`, and is static canonical JSON-round-trippable application data. Its
-`generator` records the exact `@mit-sdg/sync-engine` package version. It
-contains the application IR, concept inventories, computation inventory,
-concept-implementation provenance, declaration-owned `ManifestEndpointV5`
-entries, input contracts, wire IR, validator-presence flags, structured
-diagnostics, and `digest`. The digest covers every other manifest field. It
-excludes runtime functions, constructor arguments, resources, source paths,
-object identity, occurrences, timestamps, other runtime state, and
-uninterpreted concept State sections. State notation likewise contributes
-nothing to the assembled read-back or generated wire.
+The application manifest has format `sync-engine.application-manifest`, version
+`1`, and is canonical JSON-round-trippable application data. This is a hard
+schema reset; earlier manifest versions are rejected without upconversion. It
+contains executable application and wire facts plus structured concept
+contracts, raw State, definition and instance identities, resolved application types,
+computation signatures, registered design source locations, normalized-source
+digests, implementation provenance, validators, and diagnostics. It excludes
+runtime functions, constructor arguments, resources, object identity,
+occurrences, timestamps, and other runtime state.
 
 `ComputationInventoryIR` contains every installed computation, including all
 five standard computations and unused vocabulary computations. `source`
@@ -524,9 +538,9 @@ distinguishes `standard` from `vocabulary`; `inputs` is present only when the
 function's top-level destructuring can be read conservatively. The manifest
 sorts entries by name and never carries the function itself.
 
-`ConceptImplementationProvenanceIR` separates a vocabulary concept's canonical
+`ConceptImplementationProvenanceIR` separates a concept set's canonical
 class from the implementation selected by assembly. RequestBoundary is
-core-owned and selected through `core`, and an application vocabulary cannot
+core-owned and selected through `core`, and an application concept set cannot
 reuse that name. Application concepts report `default`, `initialize`, or
 `instances`. Constructor names are descriptive and omitted for anonymous or
 structural `Object` values; selected constructor names and `floor` can occur only
@@ -534,26 +548,25 @@ with `instances`. A floor is omitted when provenance is ambiguous. Concept
 member roles, query cardinalities, and refusal semantics come from the canonical
 vocabulary declaration rather than a replacement instance.
 `applicationManifestDigest(...)` recomputes the digest while ignoring the
-supplied `digest` field. `validateApplicationManifest(...)` treats its input as
-untrusted data: it checks the complete top-level version-5 shape, the nested IR
-needed by tooling, inventory uniqueness and cross-field consistency, endpoint,
-input-contract, and logical-wire path agreement, plain JSON portability, and
-exact canonical digest equality. Version 4 is rejected without upconversion.
+supplied `digest` field. `validateApplicationManifest(...)` treats its input as untrusted data: it
+checks the complete top-level version-1 shape, the nested IR needed by tooling,
+inventory uniqueness and cross-field consistency, endpoint, input-contract, and
+logical-wire path agreement, plain JSON portability, and exact canonical digest
+equality. Previous versions are rejected without upconversion.
 Failures identify the offending `$` path. `parseApplicationManifest(...)`
 performs the same checks after JSON parsing and returns data in canonical record-key
 order; neither function imports application code or a manifest-producing config.
 `parseConceptSpecification(...)` exposes the same structured, source-located
-contract used by registration. It parses Purpose, Principle, actions, queries,
-refusals, result declarations, and reader-facing extension sections. It does not
-interpret State prose or turn authored types and behavior sentences into runtime
-schemas or guarantees.
+contract used by registration. It enforces the exact section order, parses
+external declarations and structured action/query choices, and retains raw
+State. It does not interpret SSF, prove prose semantics, or turn authored types
+into runtime schemas.
 
-Each concept inventory may carry a
-`sync-engine.concept-specification` version-1 subtree. The subtree includes
-structured action/query declarations, normalized descriptions, refusal
-messages, ordered Types and extension blocks, and source locations. It excludes
-State. The optional subtree does not change the existing inventory names,
-observed roles, cardinalities, or refusal-code lists.
+Each concept inventory may carry a `sync-engine.concept-specification`
+version-1 subtree with the definition name, external types, normalized raw
+State, structured actions and queries, refusals, and source locations. Selected
+application inventories separately retain instance names and concept-set
+bindings.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.
@@ -599,7 +612,7 @@ a separate public name for that aggregate argument type.
 | ------------------------- | ----------------------------------------------------------------------- |
 | `moduleName`              | `"WireContracts"`                                                       |
 | `banner`                  | Two-line core generator banner; a supplied string replaces it           |
-| `vocabulary`              | No type anchor; `{ from, export }` enables signature references         |
+| `conceptSet`              | No type anchor; `{ from, export }` enables signature references         |
 | `strictLeaves`            | `false`; `true` requires an anchor and rejects unresolved `Json` leaves |
 | `appWideErrorName`        | `"AppWideError"`                                                        |
 | `preamble`                | `true`; set `false` when appending another contract to one module       |
@@ -616,20 +629,21 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required | Default                                                    |
-| --------------------- | -------- | ---------------------------------------------------------- |
-| `assemble`            | yes      | Synchronous function that returns the application assembly |
-| `title`               | yes      | Application title used to derive names                     |
-| `close`               | no       | Runs after the generated assembly drains                   |
-| `directory`           | no       | `new URL("./generated/", configUrl)`                       |
-| `specification`       | no       | Slugged title plus `.md`                                   |
-| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance    |
-| `wire`                | no       | `"wire.ts"`                                                |
-| `wireName`            | no       | Pascal-cased title plus `Wire`                             |
-| `wireBanner`          | no       | Exact package/version generator banner                     |
-| `vocabulary.module`   | no       | `new URL("./src/concept-set.ts", configUrl)`               |
-| `vocabulary.export`   | no       | `"vocabulary"`                                             |
-| `projections`         | no       | Ordered transport-specific projections                     |
+| Field                 | Required | Default                                                            |
+| --------------------- | -------- | ------------------------------------------------------------------ |
+| `assemble`            | yes      | Synchronous function that returns the application assembly         |
+| `title`               | yes      | Application title used to derive names                             |
+| `close`               | no       | Runs after the generated assembly drains                           |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                               |
+| `specification`       | no       | Slugged title plus `.md`                                           |
+| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance            |
+| `wire`                | no       | `"wire.ts"`                                                        |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                                     |
+| `wireBanner`          | no       | Exact package/version generator banner                             |
+| `design.version`      | yes      | Must be `1`                                                        |
+| `design.documents`    | yes      | Local design URLs; may contain `types` fences or be empty          |
+| `conceptSet`          | no       | Source anchor; defaults to `src/concepts.ts#applicationConceptSet` |
+| `projections`         | no       | Ordered transport-specific projections                             |
 
 The default specification banner consists of these comments:
 
@@ -642,13 +656,13 @@ A custom specification banner replaces the first comment but still receives
 the mandatory provenance comment. The default wire banner is
 `// Generated by @mit-sdg/sync-engine@<version> from the <title> assembly. Do not edit.`
 A custom wire banner receives a second mandatory generator line. Artifact
-generation always uses the vocabulary anchor with strict leaves. Every
+generation always uses the concept-set anchor with strict leaves. Every
 `WireProjection` receives frozen `WireProjectionFacts` and returns a named
 `WireContractsIR`; core selects the shared preamble, rendering options, ordering,
 strict-leaf checks, and provenance. A projection list can be empty or contain
 multiple transport contracts in one wire module. `projections` must be an array,
 and each entry must provide `project(facts)`. The logical wire name, projected
-wire names, app-wide error names, `Json`, and generated vocabulary-helper names
+wire names, app-wide error names, `Json`, and generated concept-set helper names
 must be distinct TypeScript identifiers. Projection provenance must contain a
 nonblank package name and a valid SemVer version. Projector versions are
 not restricted to 1.x. Artifact planning separately requires the manifest's
@@ -656,7 +670,7 @@ core generator identity to name `@mit-sdg/sync-engine` at a 1.x version;
 generator and projector provenance may use prerelease versions. Core evaluates
 projections in declaration order and rejects any projection or naming failure
 before an artifact command compares or writes files. The
-[application authoring guide](../guide/authoring.md#generate-the-wire-contract)
+[application authoring guide](../guide/authoring.md#7-check-and-generate)
 shows the application-owned command path; [Generated wire](semantics.md#generated-wire)
 defines derivation guarantees.
 
@@ -664,18 +678,28 @@ defines derivation guarantees.
 
 <!-- register:advanced:start -->
 
-`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `createEngine`, `custom`, `faulted`
+`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `VocabularyAssemblyOptions`, `createEngine`, `custom`, `faulted`, `vocabulary`
 
 <!-- register:advanced:end -->
 
-Use `/advanced` only for manual engine construction or explicit escape hatches.
+Use `/advanced` only for low-level declarations, manual engine construction, or explicit escape hatches.
 It follows the same beta compatibility policy as other public subpaths.
 
-| API            | Compact signature / role                         |
-| -------------- | ------------------------------------------------ |
-| `createEngine` | `createEngine(options?: EngineOptions): Engine`  |
-| `custom`       | `custom(fn, inputs, outputs)`                    |
-| `faulted`      | `faulted(pattern, { by?, except?, exceptBy? }?)` |
+| API                         | Compact signature / role                             |
+| --------------------------- | ---------------------------------------------------- |
+| `createEngine`              | `createEngine(options?: EngineOptions): Engine`      |
+| `vocabulary`                | `vocabulary({ concepts, computations? })`            |
+| `VocabularyAssemblyOptions` | Direct-vocabulary option type accepted by `assemble` |
+| `custom`                    | `custom(fn, inputs, outputs)`                        |
+| `faulted`                   | `faulted(pattern, { by?, except?, exceptBy? }?)`     |
+
+`vocabulary` is the low-level declaration API for callers that deliberately do
+not use registered specifications or implementation floors. Concept entries are
+either a concept class or `{ class, spec?, purpose?, principle?, queries?,
+outcomes?, refusals? }`. Ordinary config-based applications use `conceptSet`
+from `/assembly`, which creates the executable declaration internally. A direct
+vocabulary can still be passed to `assemble` through the advanced
+`VocabularyAssemblyOptions` alternative.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

@@ -19,9 +19,9 @@ semantics](../user/reference/semantics.md).
 
 This catalog is exhaustive for `docs/project/`.
 
-| Path                                                                                      | Class        | Scope                                                              |
-| ----------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------ |
-| [`docs/project/index.md`](index.md)                                                       | Index        | Contributor task and document map                                  |
-| [`docs/project/architecture.md`](architecture.md)                                         | Explanation  | Source layout, subsystem ownership, and dependency rules           |
-| [`docs/project/concept-specification-processing.md`](concept-specification-processing.md) | Explanation  | Concept-spec parsing, enforcement, data flow, gaps, and extensions |
-| [`docs/project/releasing.md`](releasing.md)                                               | How-to guide | Release preparation, publication, and bad-release response         |
+| Path                                                                                      | Class        | Scope                                                                            |
+| ----------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------- |
+| [`docs/project/index.md`](index.md)                                                       | Index        | Contributor task and document map                                                |
+| [`docs/project/architecture.md`](architecture.md)                                         | Explanation  | Source layout, subsystem ownership, and dependency rules                         |
+| [`docs/project/concept-specification-processing.md`](concept-specification-processing.md) | Explanation  | Concept, application-type, prose processing, enforcement, and deferred questions |
+| [`docs/project/releasing.md`](releasing.md)                                               | How-to guide | Release preparation, publication, and bad-release response                       |

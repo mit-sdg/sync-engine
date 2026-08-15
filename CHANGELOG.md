@@ -5,6 +5,82 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [Unreleased]
+
+This beta replaces the preliminary authored-design workflow with one strict,
+versioned application-design contract and makes registered concept sets the
+ordinary application assembly abstraction.
+
+### Compatibility
+
+- Concept specifications now use the strict version-1 Purpose, Principle,
+  external Types, raw State, structured Actions, and Queries grammar. Static
+  checking compares registered TypeScript shapes and source provenance with
+  that contract; unsupported or unresolved source shapes fail closed.
+- Every generated config must register `design: { version: 1, documents }`.
+  Ordinary registered Markdown may contain globally combined `types` and
+  `computations` fences plus exact `reaction:`, `view:`, `former:`, and
+  `computation:` links. There is no special application, vocabulary, types, or
+  computations filename.
+- `conceptSet(...)` now returns the complete ordinary assembly value. Pass it as
+  `assemble({ conceptSet, composition })`; `.concepts` contains typed authoring
+  references and `.implementations(...)` constructs implementation maps. The
+  nested `.vocabulary` projection is removed.
+- The conventional concept-set module is `src/concepts.ts`, exporting
+  `applicationConceptSet`. Setup, source discovery, generated wire anchors,
+  examples, and packaging fixtures use that convention.
+- Direct `vocabulary(...)` declarations moved from `/language` to `/advanced`.
+  Their option type moved from `/assembly` and is now
+  `VocabularyAssemblyOptions` under `/advanced`.
+- `sync-engine check` now requires a generated config. The removed
+  `--vocabulary-module`, no-config compatibility mode, `design.vocabulary`, and
+  generated-config `vocabulary` fields fail with migration guidance.
+
+### Migration
+
+1. Rewrite each concept specification into the strict six-section version-1
+   grammar and register its imported Markdown with `registerConcept`.
+2. Rename the conventional executable module to `src/concepts.ts`, export the
+   result of `conceptSet(...)` as `applicationConceptSet`, and pass that whole
+   object to `assemble` as `conceptSet`.
+3. Move application type declarations and bindings into `types` fences in any
+   registered `design.documents` file. Rename a dedicated
+   `design/vocabulary.md` to `design/types.md` only when that topic-based split
+   remains useful.
+4. Add exact typed links for every selected authored reaction or endpoint tree,
+   named view, and named former, and declare every executable computation once.
+5. Replace `--vocabulary-module` and no-config checks with config-based commands,
+   then regenerate manifests, read-back, wire contracts, and analysis artifacts.
+6. Import direct low-level `vocabulary` declarations and
+   `VocabularyAssemblyOptions` from `/advanced`; ordinary applications should
+   migrate to `conceptSet`.
+
+There is no legacy parser, compatibility flag, automatic format detection, or
+old-manifest decoder. Rollback requires restoring the prior authored files,
+config, package version, and generated artifacts together.
+
+### Generated formats
+
+- The canonical application manifest resets from version 5 to version 1 with no
+  compatibility decoder. It carries strict concept specifications, normalized
+  application types, exact declaration coverage, computation signatures, and
+  design-source provenance.
+- Analysis application indexes, impact traces, source indexes, and project
+  snapshots advance from version 2 to version 3. Version-2 artifacts are
+  rejected rather than upgraded.
+- Regenerated read-back labels application type bindings as **Application
+  types**. Generated wire imports anchor to
+  `src/concepts.ts#applicationConceptSet`.
+
+### Runtime and security support
+
+- Supported runtimes, toolchains, and security windows are unchanged. Runtime
+  assembly does not load application design Markdown; the complete authored
+  contract is required by config-based checking and artifact commands.
+- The release adds no transactions, rollback, replay, distributed
+  serialization, accepted-work cancellation, runtime schema validation, or
+  exactly-once execution. Existing operational limits remain in force.
+
 ## [1.0.0-beta.9] - 2026-08-13
 
 This beta makes the curated catalog read-only, discovers checked concepts from

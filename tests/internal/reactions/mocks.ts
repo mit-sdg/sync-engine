@@ -1,7 +1,7 @@
 /* Minimal mock concepts used for testing */
 
 import { Refuse } from "@sync-engine/advanced";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import type { Empty } from "@sync-engine/internal/reactions/types";
 
 export class CounterConcept {

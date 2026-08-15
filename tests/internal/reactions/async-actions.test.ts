@@ -5,7 +5,8 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
-import { vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { quietReacting } from "../../utils/reacting.ts";
 import type { Frames } from "@sync-engine/internal/reads/frames.ts";

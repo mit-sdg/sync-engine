@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { applicationConcepts } from "@catalog/concepts";
+import { applicationConceptSet } from "@catalog/concepts";
 import { exerciseReviewQueue, exerciseReviewQueueRepair } from "./review-queue.behavior.ts";
 import { compositions } from "./review-queue.ts";
 
@@ -11,7 +11,7 @@ const { RequestQueuedReview } = compositions.ReviewRequests;
 
 function memoryInstances() {
   try {
-    return applicationConcepts.implementations("memory" as never, {} as never);
+    return applicationConceptSet.implementations("memory" as never, {} as never);
   } catch (error) {
     if (error instanceof Error && error.message.includes('floor "memory" is missing')) return;
     throw error;

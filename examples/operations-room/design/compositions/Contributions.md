@@ -3,25 +3,16 @@
 The contribution boundary applies one selected permission policy to updates for
 a room's current mitigation.
 
-## Compositions
+The [permitted endpoint](reaction:Contributions.AddContribution) adds an update
+to the open discussion when the selected
+[permission relation holds](view:Contributions.ResponderMayContribute). The
+complementary [denial endpoint](reaction:Contributions.RejectContribution)
+returns the selected policy's response when its
+[denial relation holds](view:Contributions.ResponderMayNotContribute). Assembly
+installs only the responder-based or host-only endpoint and view set, keeping
+the shared route disjoint without relying on declaration order.
 
-### Contributions
-
-The permitted endpoint adds an update to the open discussion. The complementary
-denial endpoint returns the selected policy's response. Assembly installs only
-the responder-based or host-only endpoint pair, keeping the shared route
-disjoint without relying on declaration order.
-
-## Views
-
-### ResponderMayContribute
-
-The responders policy permits a room member; the host policy permits the room
-host. Assembly installs exactly one variant of this view.
-
-### ResponderMayNotContribute
-
-Each policy has a complementary denial relation. The responders variant derives
-it from nonmembership, while the host variant derives it from not owning the
-room. Assembly installs this view from the same selected variant as the
-permission view.
+Under the default responders policy, membership permits a contribution and
+nonmembership denies it. The host-only variant instead derives permission from
+room ownership and denial from not owning the room; both variants retain the
+same authored composition paths because only one is selected.

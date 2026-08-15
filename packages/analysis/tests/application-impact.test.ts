@@ -1,10 +1,11 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   applicationManifestDigest,
   parseConceptSpecification,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
 } from "@mit-sdg/sync-engine/tooling";
 import {
   AnalysisAbortedError,
@@ -24,15 +25,15 @@ import {
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
-function redigest(manifest: ApplicationManifestV5): ApplicationManifestV5 {
+function redigest(manifest: ApplicationManifestV1): ApplicationManifestV1 {
   manifest.digest = applicationManifestDigest(manifest);
   return manifest;
 }
 
-function fixture(): ApplicationManifestV5 {
-  const manifest: ApplicationManifestV5 = {
+function fixture(): ApplicationManifestV1 {
+  const manifest: ApplicationManifestV1 = {
     format: "sync-engine.application-manifest",
-    version: 5,
+    version: 1,
     generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.6" },
     digest: "pending",
     concepts: [
@@ -280,11 +281,186 @@ function fixture(): ApplicationManifestV5 {
         message: "LocalRepair retains only known structure.",
       },
     ],
+    design: {
+      version: 1,
+      checked: false,
+      sources: [],
+      declarations: [],
+      concepts: [],
+      computations: [],
+    },
   };
   return redigest(manifest);
 }
 
 const choose: DesignRef = { kind: "action", concept: "Selecting", action: "choose" };
+
+function designDigest(text: string): string {
+  const normalized = text.endsWith("\n") ? text : `${text}\n`;
+  return `sha256-${createHash("sha256").update(normalized).digest("hex")}`;
+}
+
+function authoredFixture(): {
+  readonly manifest: ApplicationManifestV1;
+  readonly files: Readonly<Record<string, string>>;
+} {
+  const specificationText = `# SharedNotes
+
+## Purpose
+
+Remember a note.
+
+## Principle
+
+Touching records the note.
+
+## Types
+
+\`\`\`types
+\`\`\`
+
+## State
+
+\`\`\`state
+notes
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+touch(note: String) : return ()
+  where true
+  then
+    record note
+    return
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+\`\`\`
+`;
+  const designText = `# Forum design
+
+Touching a note updates the feed.[touch]
+
+[touch]: reaction:Forum.notes.Touch
+`;
+  const specification = parseConceptSpecification(specificationText);
+  const concepts = ["PrimaryNotes", "ArchiveNotes"].map((name) => ({
+    name,
+    purpose: specification.purpose,
+    principle: specification.principle,
+    actions: [{ name: "touch", roles: ["note"] }],
+    queries: [],
+    specification,
+  }));
+  const manifest: ApplicationManifestV1 = {
+    format: "sync-engine.application-manifest",
+    version: 1,
+    generator: { name: "@mit-sdg/sync-engine", version: "1.0.0-beta.9" },
+    digest: "pending",
+    application: {
+      reactions: [
+        {
+          name: "Touch#returned",
+          authored: { kind: "reaction", identity: "Forum.notes.Touch" },
+          when: [
+            {
+              kind: "action",
+              concept: "PrimaryNotes",
+              action: "touch",
+              posture: "returned",
+              input: {},
+              output: {},
+            },
+          ],
+          where: [],
+          then: [],
+        },
+      ],
+      unlowered: [],
+      views: [],
+      formers: [],
+    },
+    concepts: [
+      {
+        name: "RequestBoundary",
+        actions: [
+          { name: "request", roles: ["path", "requestId"] },
+          { name: "respond", roles: ["requestId"] },
+        ],
+        queries: [],
+      },
+      ...concepts,
+    ],
+    computations: ["among", "ge", "gt", "le", "lt"].map((name) => ({
+      name,
+      source: "standard" as const,
+    })),
+    conceptImplementations: [
+      {
+        concept: "RequestBoundary",
+        canonical: { owner: "core", constructorName: "RequestBoundaryConcept" },
+        selected: { via: "core" },
+      },
+      ...concepts.map(({ name }) => ({
+        concept: name,
+        canonical: { owner: "application" as const, constructorName: "SharedNotes" },
+        selected: { via: "default" as const },
+      })),
+    ],
+    endpoints: [],
+    inputContracts: {},
+    wire: { endpoints: [], appWide: [] },
+    diagnostics: [],
+    design: {
+      version: 1,
+      checked: true,
+      sources: [
+        {
+          id: "document-1",
+          kind: "document",
+          path: "../design/forum.md",
+          digest: designDigest(designText),
+          title: "Forum design",
+        },
+        {
+          id: "concept-1",
+          kind: "concept",
+          path: "../design/SharedNotes.md",
+          digest: designDigest(specificationText),
+          definition: "SharedNotes",
+          line: 1,
+        },
+      ],
+      declarations: [
+        {
+          kind: "reaction",
+          identity: "Forum.notes.Touch",
+          runtimeNames: ["Touch#returned"],
+          coverage: [{ source: "document-1", line: 3, column: 34 }],
+        },
+      ],
+      concepts: [
+        {
+          definition: "SharedNotes",
+          source: "concept-1",
+          specification,
+          instances: concepts.map(({ name }) => ({ name, bindings: [] })),
+        },
+      ],
+      computations: [],
+    },
+  };
+  return {
+    manifest: redigest(manifest),
+    files: {
+      [resolve("/project", "design", "forum.md")]: designText,
+      [resolve("/project", "design", "SharedNotes.md")]: specificationText,
+    },
+  };
+}
 
 const selectingSpec = `# Selecting
 
@@ -296,16 +472,32 @@ Keep one current selection.
 
 Choosing an item makes it current.
 
+## Types
+
+\`\`\`types
+external Item
+\`\`\`
+
+## State
+
+\`\`\`state
+one current Item
+\`\`\`
+
 ## Actions
 
 \`\`\`actions
-choose (item: Item) : return (item: Item)
+choose(item: Item) : return (item: Item)
+  where true
+  then
+    make item current
+    return item
 \`\`\`
 
 ## Queries
 
 \`\`\`queries
-_current () : optional (item: Item)
+_current() : optional (item: Item)
 \`\`\`
 `;
 const virtualSpecificationPath = resolve("/project/spec.md");
@@ -473,7 +665,7 @@ import "./diagnostic.ts";
   return root;
 }
 
-function projectManifest(): ApplicationManifestV5 {
+function projectManifest(): ApplicationManifestV1 {
   const manifest = fixture();
   manifest.application.reactions.push({
     name: "ChooseEndpoint",
@@ -490,8 +682,11 @@ function projectManifest(): ApplicationManifestV5 {
       validators: { input: false, output: false },
     },
   ];
-  manifest.concepts.find(({ name }) => name === "Selecting")!.specification =
-    parseConceptSpecification(selectingSpec);
+  const selecting = manifest.concepts.find(({ name }) => name === "Selecting")!;
+  const specification = parseConceptSpecification(selectingSpec);
+  selecting.purpose = specification.purpose;
+  selecting.principle = specification.principle;
+  selecting.specification = specification;
   return redigest(manifest);
 }
 
@@ -509,7 +704,7 @@ export class AlertingConcept { raise({ subject }: { subject: string }) { return 
 export class UnrelatedConcept { touch() { return {}; } }
 
 export const selecting = registerConcept({ class: SelectingConcept, spec });
-const applicationConcepts = conceptSet(
+const applicationConceptSet = conceptSet(
   {
     Alerting: registerConcept({ class: AlertingConcept, spec: "# Alerting" }),
     Discussing: registerConcept({ class: DiscussingConcept, spec: "# Discussing" }),
@@ -518,7 +713,7 @@ const applicationConcepts = conceptSet(
   },
   { "unused vocabulary": ({ value }: { value: unknown }) => value },
 );
-const { concepts, vocabulary } = applicationConcepts;
+const { concepts, vocabulary } = applicationConceptSet;
 const { Selecting, Discussing, Alerting } = concepts;
 
 export const ObserveCurrent = react(() => Selecting._current() && Alerting.raise({ subject: "x" }));
@@ -565,13 +760,13 @@ describe("application impact analysis", () => {
 
     expect(index).toMatchObject({
       format: "sync-engine.application-index",
-      version: 2,
+      version: 3,
       manifestDigest: manifest.digest,
       provenance: {
         analyzer: { name: "@mit-sdg/sync-engine-analysis" },
         manifest: {
           format: "sync-engine.application-manifest",
-          version: 5,
+          version: 1,
           digest: manifest.digest,
           generator: manifest.generator,
         },
@@ -641,7 +836,7 @@ describe("application impact analysis", () => {
     expect(secondIndex.resourceUsage).toEqual(firstIndex.resourceUsage);
   });
 
-  test("separates V5 inventory from exact references reached only through IR", () => {
+  test("separates V1 inventory from exact references reached only through IR", () => {
     const manifest = fixture();
     manifest.application.reactions.push({
       name: "UnknownRead",
@@ -669,6 +864,130 @@ describe("application impact analysis", () => {
 
     const trace = traceApplicationImpact(index, [missing]);
     expect(trace.seeds).toEqual([missing]);
+  });
+
+  test("uses shared concept definitions, authored lowering, and manifest design sources", async () => {
+    const { manifest, files } = authoredFixture();
+    const index = indexApplication(manifest);
+    expect(index.inventory).toEqual(
+      expect.arrayContaining([
+        { kind: "concept", concept: "PrimaryNotes" },
+        { kind: "concept", concept: "ArchiveNotes" },
+        { kind: "reaction", reaction: "Forum.notes.Touch" },
+      ]),
+    );
+    expect(index.inventory).not.toContainEqual({
+      kind: "reaction",
+      reaction: "Touch#returned",
+    });
+
+    const sourceIndex = indexApplicationSources({
+      manifest,
+      program: programFor({ "app.ts": "export {};\n" }),
+      projectRoot: "/project",
+      designSourceBasePath: "generated",
+      readFile: (path) => files[path],
+    });
+    const authored = sourceIndex.entries.find(
+      ({ ref }) => ref.kind === "reaction" && ref.reaction === "Forum.notes.Touch",
+    );
+    expect(authored?.sources).toContainEqual(
+      expect.objectContaining({
+        role: "design-coverage",
+        resolution: "manifest-provenance",
+        range: expect.objectContaining({ path: "design/forum.md" }),
+      }),
+    );
+    for (const concept of ["PrimaryNotes", "ArchiveNotes"]) {
+      expect(
+        sourceIndex.entries.find(({ ref }) => ref.kind === "concept" && ref.concept === concept)
+          ?.sources,
+      ).toContainEqual(
+        expect.objectContaining({
+          role: "specification",
+          resolution: "manifest-provenance",
+          range: expect.objectContaining({ path: "design/SharedNotes.md" }),
+        }),
+      );
+    }
+    expect(sourceIndex.issues).not.toContainEqual(
+      expect.objectContaining({ code: "DESIGN_SOURCE_MISMATCH" }),
+    );
+    const staleSourceIndex = indexApplicationSources({
+      manifest,
+      program: programFor({ "app.ts": "export {};\n" }),
+      projectRoot: "/project",
+      designSourceBasePath: "generated",
+      readFile: (path) =>
+        path === resolve("/project", "design", "forum.md") ? `${files[path]}stale\n` : files[path],
+    });
+    expect(staleSourceIndex.issues).toContainEqual(
+      expect.objectContaining({ code: "DESIGN_SOURCE_MISMATCH" }),
+    );
+
+    const analysis = createApplicationAnalysis({ manifest });
+    const described = await analysis.describe({
+      ref: { kind: "concept", concept: "PrimaryNotes" },
+      detail: "definition",
+    });
+    expect(described.definition).toMatchObject({
+      kind: "concept",
+      design: {
+        definition: "SharedNotes",
+        instances: [{ name: "PrimaryNotes" }, { name: "ArchiveNotes" }],
+      },
+    });
+    const reaction = await analysis.describe({
+      ref: { kind: "reaction", reaction: "Forum.notes.Touch" },
+      detail: "definition",
+    });
+    expect(reaction.definition).toMatchObject({
+      kind: "reaction",
+      identity: "Forum.notes.Touch",
+      declaration: { runtimeNames: ["Touch#returned"] },
+      reactions: [{ name: "Touch#returned" }],
+    });
+  });
+
+  test("groups lowered runtime names under authored declaration identities", () => {
+    const manifest = fixture();
+    manifest.application.reactions[0].authored = {
+      kind: "reaction",
+      identity: "Forum.selection.Select",
+    };
+    manifest.application.reactions[1].authored = {
+      kind: "reaction",
+      identity: "Forum.selection.Select",
+    };
+    manifest.application.views[0].authored = {
+      kind: "view",
+      identity: "Forum.selection.Current",
+    };
+    manifest.application.formers[0].authored = {
+      kind: "former",
+      identity: "Forum.selection.Summary",
+    };
+    redigest(manifest);
+
+    const index = indexApplication(manifest);
+    expect(index.inventory).toContainEqual({
+      kind: "reaction",
+      reaction: "Forum.selection.Select",
+    });
+    expect(index.inventory).not.toContainEqual({ kind: "reaction", reaction: "Select#2" });
+    expect(index.edges).toContainEqual(
+      expect.objectContaining({
+        from: { kind: "reaction", reaction: "Forum.selection.Select" },
+        to: { kind: "endpoint", endpoint: "Select", path: "/selections/choose" },
+        relation: "stage-affects-endpoint",
+      }),
+    );
+    expect(index.edges).toContainEqual(
+      expect.objectContaining({
+        from: { kind: "view", view: "Forum.selection.Current" },
+        to: { kind: "reaction", reaction: "Forum.selection.Select" },
+      }),
+    );
   });
 
   test("owns only listed endpoint stages and generated hash descendants", () => {
@@ -710,7 +1029,12 @@ describe("application impact analysis", () => {
     );
   });
 
-  test("rejects malformed V5 and malformed index provenance", () => {
+  test("rejects old manifests, malformed V1, and malformed index provenance", () => {
+    const old = { ...fixture(), version: 5 };
+    expect(() => indexApplication(old as unknown as ApplicationManifestV1)).toThrow(
+      /version.*expected 1|version 1|version.*unsupported/i,
+    );
+
     const malformed = fixture();
     malformed.digest = "stale";
     expect(() => indexApplication(malformed)).toThrow(/canonical digest/);
@@ -767,7 +1091,7 @@ describe("application impact analysis", () => {
     ]);
     expect(trace).toMatchObject({
       format: "sync-engine.impact-trace",
-      version: 2,
+      version: 3,
       manifestDigest: index.manifestDigest,
       complete: true,
     });
@@ -853,9 +1177,9 @@ describe("application impact analysis", () => {
     expect(action?.sources.every(({ digest }) => /^[a-f0-9]{64}$/.test(digest))).toBe(true);
     expect(sourceIndex).toMatchObject({
       format: "sync-engine.application-source-index",
-      version: 2,
+      version: 3,
       manifestDigest: manifest.digest,
-      provenance: { manifest: { version: 5, digest: manifest.digest } },
+      provenance: { manifest: { version: 1, digest: manifest.digest } },
     });
     expect(sourceIndex.documents).toEqual([
       expect.objectContaining({
@@ -928,15 +1252,20 @@ describe("application impact analysis", () => {
     const manifest = fixture();
     const parsed = parseConceptSpecification(selectingSpec);
     const reordered = {
-      documentation: parsed.documentation,
       queries: parsed.queries,
       actions: parsed.actions,
+      state: parsed.state,
+      externalTypes: parsed.externalTypes,
       principle: parsed.principle,
       purpose: parsed.purpose,
+      definitionName: parsed.definitionName,
       version: parsed.version,
       format: parsed.format,
     } as typeof parsed;
-    manifest.concepts.find(({ name }) => name === "Selecting")!.specification = reordered;
+    const selecting = manifest.concepts.find(({ name }) => name === "Selecting")!;
+    selecting.purpose = reordered.purpose;
+    selecting.principle = reordered.principle;
+    selecting.specification = reordered;
     redigest(manifest);
     const sourceIndex = indexApplicationSources({
       manifest,
@@ -998,13 +1327,13 @@ describe("application impact analysis", () => {
 
     expect(first).toMatchObject({
       format: "sync-engine.application-project-analysis",
-      version: 2,
+      version: 3,
       manifestDigest: manifest.digest,
       provenance: {
         analyzer: { name: "@mit-sdg/sync-engine-analysis" },
         manifest: {
           format: "sync-engine.application-manifest",
-          version: 5,
+          version: 1,
           digest: manifest.digest,
           generator: manifest.generator,
         },
@@ -1014,8 +1343,8 @@ describe("application impact analysis", () => {
         tsconfigPath: "tsconfig.json",
         typescriptVersion: ts.version,
       },
-      applicationIndex: { format: "sync-engine.application-index", version: 2 },
-      sourceIndex: { format: "sync-engine.application-source-index", version: 2 },
+      applicationIndex: { format: "sync-engine.application-index", version: 3 },
+      sourceIndex: { format: "sync-engine.application-source-index", version: 3 },
     });
     expect(first.provenance.files).toEqual(second.provenance.files);
     expect(first.provenance.sourceDigest).toBe(second.provenance.sourceDigest);

@@ -1,7 +1,7 @@
 import {
   validateApplicationManifest,
   type ApplicationDiagnostic,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
   type ConceptSpecificationIR,
   type SpecificationActionIR,
   type SpecificationQueryIR,
@@ -99,7 +99,7 @@ export type SourceAvailability =
   | "not-indexed"
   | "unavailable";
 
-export type ReactionPortability = "portable" | "unlowered";
+export type ReactionPortability = "portable" | "unlowered" | "mixed";
 
 export interface DiagnosticSeverityCounts {
   readonly error: number;
@@ -170,22 +170,25 @@ export interface SearchResult extends OperationResultBase, AnalysisPage<SearchHi
 export type DescriptionDetail = "summary" | "definition";
 export type DesignRefInput = DesignRef | string;
 
-type ConceptInventory = ApplicationManifestV5["concepts"][number];
+type ConceptInventory = ApplicationManifestV1["concepts"][number];
 type ActionInventory = ConceptInventory["actions"][number];
 type QueryInventory = ConceptInventory["queries"][number];
-type ReactionDefinition = ApplicationManifestV5["application"]["reactions"][number];
-type UnloweredDefinition = ApplicationManifestV5["application"]["unlowered"][number];
-type ViewDefinition = ApplicationManifestV5["application"]["views"][number];
-type FormerDefinition = ApplicationManifestV5["application"]["formers"][number];
-type ComputationDefinition = ApplicationManifestV5["computations"][number];
-type EndpointDefinition = ApplicationManifestV5["endpoints"][number];
-type WireEndpointDefinition = ApplicationManifestV5["wire"]["endpoints"][number];
+type ReactionDefinition = ApplicationManifestV1["application"]["reactions"][number];
+type UnloweredDefinition = ApplicationManifestV1["application"]["unlowered"][number];
+type ViewDefinition = ApplicationManifestV1["application"]["views"][number];
+type FormerDefinition = ApplicationManifestV1["application"]["formers"][number];
+type ComputationDefinition = ApplicationManifestV1["computations"][number];
+type EndpointDefinition = ApplicationManifestV1["endpoints"][number];
+type WireEndpointDefinition = ApplicationManifestV1["wire"]["endpoints"][number];
+type AuthoredDeclaration = ApplicationManifestV1["design"]["declarations"][number];
 
 export type DesignDefinition =
   | {
       readonly kind: "concept";
       readonly concept: ConceptInventory;
-      readonly implementation?: ApplicationManifestV5["conceptImplementations"][number];
+      /** Shared authored definition and all selected application instances. */
+      readonly design?: ApplicationManifestV1["design"]["concepts"][number];
+      readonly implementation?: ApplicationManifestV1["conceptImplementations"][number];
     }
   | {
       readonly kind: "action";
@@ -201,21 +204,28 @@ export type DesignDefinition =
     }
   | {
       readonly kind: "reaction";
-      readonly portability: "portable";
-      readonly reaction: ReactionDefinition;
+      readonly identity: string;
+      readonly declaration?: AuthoredDeclaration;
+      readonly reactions: readonly ReactionDefinition[];
+      readonly unlowered: readonly UnloweredDefinition[];
     }
   | {
-      readonly kind: "reaction";
-      readonly portability: "unlowered";
-      readonly reaction: UnloweredDefinition;
+      readonly kind: "view";
+      readonly identity: string;
+      readonly declaration?: AuthoredDeclaration;
+      readonly runtime: readonly ViewDefinition[];
     }
-  | { readonly kind: "view"; readonly view: ViewDefinition }
-  | { readonly kind: "former"; readonly former: FormerDefinition }
+  | {
+      readonly kind: "former";
+      readonly identity: string;
+      readonly declaration?: AuthoredDeclaration;
+      readonly runtime: readonly FormerDefinition[];
+    }
   | { readonly kind: "computation"; readonly computation: ComputationDefinition }
   | {
       readonly kind: "endpoint";
       readonly endpoint: EndpointDefinition;
-      readonly inputContract: ApplicationManifestV5["inputContracts"][string];
+      readonly inputContract: ApplicationManifestV1["inputContracts"][string];
       readonly wire: {
         readonly endpoints: readonly WireEndpointDefinition[];
         readonly appWide: readonly string[];
@@ -329,7 +339,7 @@ export interface ContractFilters {
 export interface ContractDeclaration {
   readonly endpoint: EndpointDefinition;
   /** Raw logical input contract from the manifest, falling back to the endpoint declaration. */
-  readonly inputContract: ApplicationManifestV5["inputContracts"][string];
+  readonly inputContract: ApplicationManifestV1["inputContracts"][string];
   /** Raw logical wire endpoints for this exact path. */
   readonly wireEndpoints: readonly WireEndpointDefinition[];
 }
@@ -368,7 +378,7 @@ export interface ProvenanceResult
 }
 
 export interface ApplicationAnalysis {
-  readonly manifest: Readonly<ApplicationManifestV5>;
+  readonly manifest: Readonly<ApplicationManifestV1>;
   readonly project?: Readonly<ApplicationProjectAnalysis>;
   readonly index: Readonly<ApplicationIndex>;
   readonly sourceIndex?: Readonly<ApplicationSourceIndex>;
@@ -385,7 +395,7 @@ export interface ApplicationAnalysis {
 }
 
 interface CreateApplicationAnalysisBaseOptions {
-  readonly manifest: ApplicationManifestV5;
+  readonly manifest: ApplicationManifestV1;
   /** Limits used only for canonical manifest-index recomputation. */
   readonly limits?: AnalysisLimits;
 }
@@ -437,6 +447,7 @@ const SOURCE_ROLES: readonly SourceRole[] = [
   "selection",
   "registration",
   "specification",
+  "design-coverage",
 ];
 const SOURCE_RESOLUTIONS: readonly SourceResolution[] = [
   "symbol",
@@ -484,18 +495,19 @@ const EMPTY_USAGE: AnalysisResourceUsage = {
 const AMBIGUOUS_SOURCE_CODES = new Set<SourceIndexIssue["code"]>([
   "AMBIGUOUS_DESIGN_SOURCE",
   "AMBIGUOUS_CONCEPT_REGISTRATION",
-  "AMBIGUOUS_VOCABULARY_SOURCE",
+  "AMBIGUOUS_CONCEPT_SET_SOURCE",
   "AMBIGUOUS_ASSEMBLY_SOURCE",
   "AMBIGUOUS_ENDPOINT_SOURCE",
 ]);
 const UNRESOLVED_SOURCE_CODES = new Set<SourceIndexIssue["code"]>([
   "UNRESOLVED_DESIGN_SOURCE",
   "MISSING_CONCEPT_REGISTRATION",
-  "UNRESOLVED_VOCABULARY_SOURCE",
+  "UNRESOLVED_CONCEPT_SET_SOURCE",
   "UNRESOLVED_ASSEMBLY_SOURCE",
   "UNRESOLVED_IMPLEMENTATION_SELECTION",
   "UNRESOLVED_COMPUTATION_SOURCE",
   "SPECIFICATION_UNREADABLE",
+  "DESIGN_SOURCE_UNREADABLE",
 ]);
 
 type MutableResourceUsage = { -readonly [Key in keyof AnalysisResourceUsage]: number };
@@ -1028,7 +1040,7 @@ function refsForLocations(
 }
 
 function unifiedDiagnostics(
-  manifest: ApplicationManifestV5,
+  manifest: ApplicationManifestV1,
   project: ApplicationProjectAnalysis | undefined,
   index: ApplicationIndex,
   sourceIndex: ApplicationSourceIndex | undefined,
@@ -1118,7 +1130,7 @@ function unifiedDiagnostics(
 }
 
 interface FacadeState {
-  readonly manifest: ApplicationManifestV5;
+  readonly manifest: ApplicationManifestV1;
   readonly project?: ApplicationProjectAnalysis;
   readonly index: ApplicationIndex;
   readonly sourceIndex?: ApplicationSourceIndex;
@@ -1132,14 +1144,16 @@ interface FacadeState {
   readonly summaries: readonly DesignSummary[];
   readonly summariesByRef: ReadonlyMap<string, DesignSummary>;
   readonly concepts: ReadonlyMap<string, ConceptInventory>;
+  readonly conceptDesigns: ReadonlyMap<string, ApplicationManifestV1["design"]["concepts"][number]>;
   readonly implementations: ReadonlyMap<
     string,
-    ApplicationManifestV5["conceptImplementations"][number]
+    ApplicationManifestV1["conceptImplementations"][number]
   >;
-  readonly reactions: ReadonlyMap<string, ReactionDefinition>;
-  readonly unlowered: ReadonlyMap<string, UnloweredDefinition>;
-  readonly views: ReadonlyMap<string, ViewDefinition>;
-  readonly formers: ReadonlyMap<string, FormerDefinition>;
+  readonly declarations: ReadonlyMap<string, AuthoredDeclaration>;
+  readonly reactions: ReadonlyMap<string, readonly ReactionDefinition[]>;
+  readonly unlowered: ReadonlyMap<string, readonly UnloweredDefinition[]>;
+  readonly views: ReadonlyMap<string, readonly ViewDefinition[]>;
+  readonly formers: ReadonlyMap<string, readonly FormerDefinition[]>;
   readonly computations: ReadonlyMap<string, ComputationDefinition>;
   readonly endpoints: ReadonlyMap<string, EndpointDefinition>;
   readonly incoming: ReadonlyMap<string, readonly ImpactEdge[]>;
@@ -1194,17 +1208,22 @@ function specificationForConcept(
   state: FacadeState,
   conceptName: string,
 ): ConceptSpecificationIR | undefined {
-  return state.concepts.get(conceptName)?.specification;
+  return (
+    state.conceptDesigns.get(conceptName)?.specification ??
+    state.concepts.get(conceptName)?.specification
+  );
 }
 
 function definitionFor(state: FacadeState, ref: DesignRef): DesignDefinition {
   switch (ref.kind) {
     case "concept": {
       const concept = state.concepts.get(ref.concept)!;
+      const design = state.conceptDesigns.get(ref.concept);
       const implementation = state.implementations.get(ref.concept);
       return {
         kind: "concept",
         concept,
+        ...(design === undefined ? {} : { design }),
         ...(implementation === undefined ? {} : { implementation }),
       };
     }
@@ -1237,23 +1256,33 @@ function definitionFor(state: FacadeState, ref: DesignRef): DesignDefinition {
       };
     }
     case "reaction": {
-      const reaction = state.reactions.get(ref.reaction);
-      return reaction === undefined
-        ? {
-            kind: "reaction",
-            portability: "unlowered",
-            reaction: state.unlowered.get(ref.reaction)!,
-          }
-        : {
-            kind: "reaction",
-            portability: "portable",
-            reaction,
-          };
+      const declaration = state.declarations.get(declarationKey("reaction", ref.reaction));
+      return {
+        kind: "reaction",
+        identity: ref.reaction,
+        ...(declaration === undefined ? {} : { declaration }),
+        reactions: state.reactions.get(ref.reaction) ?? [],
+        unlowered: state.unlowered.get(ref.reaction) ?? [],
+      };
     }
-    case "view":
-      return { kind: "view", view: state.views.get(ref.view)! };
-    case "former":
-      return { kind: "former", former: state.formers.get(ref.former)! };
+    case "view": {
+      const declaration = state.declarations.get(declarationKey("view", ref.view));
+      return {
+        kind: "view",
+        identity: ref.view,
+        ...(declaration === undefined ? {} : { declaration }),
+        runtime: state.views.get(ref.view) ?? [],
+      };
+    }
+    case "former": {
+      const declaration = state.declarations.get(declarationKey("former", ref.former));
+      return {
+        kind: "former",
+        identity: ref.former,
+        ...(declaration === undefined ? {} : { declaration }),
+        runtime: state.formers.get(ref.former) ?? [],
+      };
+    }
     case "computation":
       return { kind: "computation", computation: state.computations.get(ref.computation)! };
     case "endpoint": {
@@ -1304,7 +1333,8 @@ function contractSearchFact(state: FacadeState, ref: DesignRef): unknown {
       return {
         purpose: concept.purpose,
         principle: concept.principle,
-        specification: concept.specification,
+        specification: specificationForConcept(state, ref.concept),
+        design: state.conceptDesigns.get(ref.concept),
       };
     }
     case "action":
@@ -1315,7 +1345,7 @@ function contractSearchFact(state: FacadeState, ref: DesignRef): unknown {
     case "endpoint":
       return definitionFor(state, ref);
     case "reaction":
-      return state.reactions.get(ref.reaction) ?? state.unlowered.get(ref.reaction);
+      return definitionFor(state, ref);
   }
 }
 
@@ -1443,7 +1473,7 @@ function catalogOperation(
     const concepts = stringSet(filter.concepts, "filters.concepts");
     const portability = enumSet(
       filter.portability,
-      ["portable", "unlowered"] as const,
+      ["portable", "unlowered", "mixed"] as const,
       "filters.portability",
     );
     const availability = enumSet(
@@ -1826,6 +1856,26 @@ function mapByName<Value extends { readonly name: string }>(
   return new Map(values.map((value) => [value.name, value]));
 }
 
+function mapByAuthoredIdentity<
+  Value extends { readonly name: string; readonly authored?: { readonly identity: string } },
+>(values: readonly Value[]): Map<string, readonly Value[]> {
+  const grouped = new Map<string, Value[]>();
+  for (const value of values) {
+    const identity = value.authored?.identity ?? value.name;
+    grouped.set(identity, [...(grouped.get(identity) ?? []), value]);
+  }
+  return new Map(
+    [...grouped].map(([identity, runtime]) => [
+      identity,
+      runtime.sort((left, right) => ordinal(left.name, right.name)),
+    ]),
+  );
+}
+
+function declarationKey(kind: "reaction" | "view" | "former", identity: string): string {
+  return `${kind}\0${identity}`;
+}
+
 function sourceAvailabilityFor(
   sourceIndex: ApplicationSourceIndex | undefined,
   entry: SourceIndexEntry | undefined,
@@ -1892,14 +1942,14 @@ export function createApplicationAnalysis(
       format: String(manifestRecord.format),
     });
   }
-  if (manifestRecord.version !== 5) {
-    error("UNSUPPORTED_VERSION", "manifest must be version 5", { version: manifestRecord.version });
+  if (manifestRecord.version !== 1) {
+    error("UNSUPPORTED_VERSION", "manifest must be version 1", { version: manifestRecord.version });
   }
-  const manifest = detached(options.manifest, "manifest") as ApplicationManifestV5;
+  const manifest = detached(options.manifest, "manifest") as ApplicationManifestV1;
   try {
     validateApplicationManifest(manifest);
   } catch (cause) {
-    error("INVALID_FORMAT", "manifest is not a canonical V5 application manifest", {
+    error("INVALID_FORMAT", "manifest is not a canonical V1 application manifest", {
       cause: cause instanceof Error ? cause.message : String(cause),
     });
   }
@@ -1982,7 +2032,8 @@ export function createApplicationAnalysis(
       diagnosticsByRef.set(key, [...(diagnosticsByRef.get(key) ?? []), diagnostic]);
     }
   }
-  const reactions = mapByName(manifest.application.reactions);
+  const reactions = mapByAuthoredIdentity(manifest.application.reactions);
+  const unlowered = mapByAuthoredIdentity(manifest.application.unlowered);
   const summaries = index.inventory.map((ref): DesignSummary => {
     const key = designRefKey(ref);
     const entry = sourceEntries.get(key);
@@ -1990,7 +2041,13 @@ export function createApplicationAnalysis(
     for (const diagnostic of diagnosticsByRef.get(key) ?? []) counts[diagnostic.severity] += 1;
     const parent = parentConcept(ref);
     const portability: ReactionPortability | undefined =
-      ref.kind !== "reaction" ? undefined : reactions.has(ref.reaction) ? "portable" : "unlowered";
+      ref.kind !== "reaction"
+        ? undefined
+        : reactions.has(ref.reaction) && unlowered.has(ref.reaction)
+          ? "mixed"
+          : reactions.has(ref.reaction)
+            ? "portable"
+            : "unlowered";
     return {
       ref,
       key,
@@ -2038,16 +2095,27 @@ export function createApplicationAnalysis(
     summaries,
     summariesByRef: new Map(summaries.map((summary) => [summary.key, summary])),
     concepts: mapByName(manifest.concepts),
+    conceptDesigns: new Map(
+      manifest.design.concepts.flatMap((definition) =>
+        definition.instances.map((instance) => [instance.name, definition] as const),
+      ),
+    ),
     implementations: new Map(
       manifest.conceptImplementations.map((implementation) => [
         implementation.concept,
         implementation,
       ]),
     ),
+    declarations: new Map(
+      manifest.design.declarations.map((declaration) => [
+        declarationKey(declaration.kind, declaration.identity),
+        declaration,
+      ]),
+    ),
     reactions,
-    unlowered: mapByName(manifest.application.unlowered),
-    views: mapByName(manifest.application.views),
-    formers: mapByName(manifest.application.formers),
+    unlowered,
+    views: mapByAuthoredIdentity(manifest.application.views),
+    formers: mapByAuthoredIdentity(manifest.application.formers),
     computations: mapByName(manifest.computations),
     endpoints: new Map(
       manifest.endpoints.map((endpoint) => [

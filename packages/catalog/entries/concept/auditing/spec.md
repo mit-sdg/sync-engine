@@ -16,6 +16,19 @@ entries ending at position 2. Replaying `evt-1` returns the entry already at pos
 1 instead of adding a third, and replaying `evt-1` against another target is
 refused.
 
+## Types
+
+```types
+external Trail
+  The record to which entries belong.
+external Event
+  The idempotency identity of a recorded event.
+external Actor
+  The identity attributed with an action.
+external Target
+  The object affected by an action.
+```
+
 ## State
 
 ```state
@@ -45,14 +58,15 @@ record (trail: Trail, event: Event, actor: Actor, action: String, detail: String
     refuse INVALID_ENTRY_DETAIL "An entry detail must be at most 500 characters."
   where an Entry in trail has event with the same actor, action, detail, and target
   then
-    return that entry and its position
+    bind entry and position to that Entry and its position
+    return entry, position
   where an Entry in trail has event with a different actor, action, detail, or target
   then
     refuse ENTRY_EVENT_CONFLICT "This event is already recorded in this trail with different facts."
   where action and detail are accepted and no Entry in trail has event
   then
     add a new Entry with trail, event, actor, action, detail, target, and recordedAt at, taking the position after the last Entry in trail and 1 in an empty trail
-    return entry and position
+    return entry, position
 ```
 
 ## Queries
@@ -73,10 +87,3 @@ _forTarget (trail: Trail, target: Target) : many (entry: Entry, position: Positi
 _extent (trail: Trail) : one (entries: Count, last: Position)
   answers entries 0 and last 0 for a Trail with no Entries
 ```
-
-## Types
-
-`Entry` is an identity allocated by Auditing. `Position` is a place within one Trail
-allocated by Auditing. `Trail`, `Event`, `Actor`, and `Target` are opaque external
-identities. `String` is owned text. `Count` is a whole number. `DateTime` is an
-absolute instant.

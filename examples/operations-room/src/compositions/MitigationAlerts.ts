@@ -1,8 +1,5 @@
-import spec from "@design/compositions/MitigationAlerts.md" with { type: "text" };
 import { reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../vocabulary.ts";
-
-export { spec };
+import { concepts } from "../concepts.ts";
 
 const { Alerting, Gathering, Selecting } = concepts;
 
@@ -13,4 +10,4 @@ const SelectedMitigationAlertsResponders = reaction(({ room, selection, responde
     .then(Alerting.raise({ recipient: responder, subject: selection })),
 );
 
-export const compositions = { SelectedMitigationAlertsResponders };
+export const composition = { SelectedMitigationAlertsResponders };

@@ -6,6 +6,7 @@ import { contributedKeys, useFormer } from "@sync-engine/internal/reads/former-n
  */
 import { describe, expect, test } from "vite-plus/test";
 import { faulted } from "@sync-engine/advanced";
+import { vocabulary } from "@sync-engine/advanced";
 import {
   earlier,
   each,
@@ -13,7 +14,6 @@ import {
   former,
   reaction,
   view,
-  vocabulary,
   when,
   where,
   whether,

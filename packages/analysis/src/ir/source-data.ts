@@ -27,7 +27,8 @@ export type SourceRole =
   | "selected-implementation"
   | "selection"
   | "registration"
-  | "specification";
+  | "specification"
+  | "design-coverage";
 
 export type SourceResolution =
   | "symbol"
@@ -59,8 +60,8 @@ export type SourceIndexIssueCode =
   | "UNRESOLVED_DESIGN_SOURCE"
   | "MISSING_CONCEPT_REGISTRATION"
   | "AMBIGUOUS_CONCEPT_REGISTRATION"
-  | "UNRESOLVED_VOCABULARY_SOURCE"
-  | "AMBIGUOUS_VOCABULARY_SOURCE"
+  | "UNRESOLVED_CONCEPT_SET_SOURCE"
+  | "AMBIGUOUS_CONCEPT_SET_SOURCE"
   | "AMBIGUOUS_ASSEMBLY_SOURCE"
   | "UNRESOLVED_ASSEMBLY_SOURCE"
   | "UNRESOLVED_IMPLEMENTATION_SELECTION"
@@ -68,7 +69,9 @@ export type SourceIndexIssueCode =
   | "UNRESOLVED_COMPUTATION_SOURCE"
   | "SOURCE_OUTSIDE_PROJECT"
   | "SPECIFICATION_UNREADABLE"
-  | "SPECIFICATION_MISMATCH";
+  | "SPECIFICATION_MISMATCH"
+  | "DESIGN_SOURCE_UNREADABLE"
+  | "DESIGN_SOURCE_MISMATCH";
 
 export interface SourceIndexIssue {
   readonly code: SourceIndexIssueCode;
@@ -92,7 +95,7 @@ export interface IndexedSourceDocument {
 /** Checkout-specific source attribution over one portable application manifest. */
 export interface ApplicationSourceIndex {
   readonly format: "sync-engine.application-source-index";
-  readonly version: 2;
+  readonly version: 3;
   readonly provenance: AnalysisProvenance;
   readonly manifestDigest: string;
   readonly typescriptVersion: string;
@@ -184,6 +187,7 @@ const SOURCE_ROLES: readonly SourceRole[] = [
   "selection",
   "registration",
   "specification",
+  "design-coverage",
 ];
 const SOURCE_RESOLUTIONS: readonly SourceResolution[] = [
   "symbol",

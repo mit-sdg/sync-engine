@@ -5,7 +5,8 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
  * absence, promise enforcement, and repeated bindings.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { is, no, reaction, whether, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { is, no, reaction, whether, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";

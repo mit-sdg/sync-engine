@@ -104,25 +104,24 @@ describe("documented inventories", () => {
     }
   });
 
-  test("the consumer agent index uses absolute GitHub links to consumer documents", async () => {
+  test("the consumer agent index uses package-local links to consumer documents", async () => {
     const agentIndex = await text("docs/user/llms.txt");
-    const base = "https://raw.githubusercontent.com/mit-sdg/sync-engine/main/";
     const links = [...agentIndex.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((match) => match[1]);
 
     expect(links.length).toBeGreaterThan(0);
-    expect(links.every((link) => link.startsWith(base) && link.endsWith(".md"))).toBe(true);
+    expect(links.every((link) => !/^[a-z]+:/i.test(link) && link.endsWith(".md"))).toBe(true);
     for (const path of [
-      "SUPPORT.md",
-      "docs/user/index.md",
-      "docs/user/overview.md",
-      "docs/user/reference/public-api.md",
-      "docs/user/reference/semantics.md",
-      "docs/user/reference/operations.md",
+      "../../SUPPORT.md",
+      "index.md",
+      "overview.md",
+      "reference/public-api.md",
+      "reference/semantics.md",
+      "reference/operations.md",
     ]) {
-      expect(links).toContain(`${base}${path}`);
+      expect(links).toContain(path);
     }
-    expect(links.some((link) => /\/(?:AGENTS|CONTRIBUTING)\.md$/.test(link))).toBe(false);
-    expect(links.some((link) => link.includes("/docs/project/"))).toBe(false);
+    expect(links.some((link) => /(?:^|\/)(?:AGENTS|CONTRIBUTING)\.md$/.test(link))).toBe(false);
+    expect(links.some((link) => link.includes("docs/project/"))).toBe(false);
   });
 
   test("exact source paths in the architecture map exist", async () => {

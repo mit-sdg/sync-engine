@@ -39,19 +39,21 @@ Generated Markdown and TypeScript wire files record the core generator and each
 projector version that produced them. Regenerate and review generated files
 after changing a package version, then typecheck their consumers.
 
-`sync-engine.application-manifest` version 5 is a versioned core format. It
-contains the computation inventory and canonical and selected concept
-implementation provenance. It does not contain computation functions,
-constructor arguments, resources, source paths, object identity, concept state,
-or other runtime state.
+`sync-engine.application-manifest` version 1 is the versioned core format. This
+schema reset records the registered authored-design contract, including concept
+external types and raw State, application type bindings, declaration
+coverage, and computation signatures. It also contains executable application
+and wire facts, implementation provenance, validators, and diagnostics. It does
+not contain functions, constructor arguments, resources, object identity,
+occurrences, timestamps, or other runtime state.
 
-An incompatible structural or semantic change requires a new integer format
-version and new public type names. A package release does not change the format
-version when the existing structure and meaning remain compatible.
-`sync-engine.application-manifest` version 4 is rejected rather than upgraded.
-The artifact planner accepts 1.x core generator identities and projector
-provenance with a nonblank package name and valid SemVer version, including
-prereleases.
+Earlier application-manifest versions are rejected rather than upgraded and
+must be regenerated. An incompatible structural or semantic change requires a
+new integer format version and new public type names. A package release does not
+change the format version when the existing structure and meaning remain
+compatible. The artifact planner accepts 1.x core generator identities and
+projector provenance with a nonblank package name and valid SemVer version,
+including prereleases.
 
 ## Runtime and toolchain
 

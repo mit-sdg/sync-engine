@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { expect } from "vite-plus/test";
-import { applicationConcepts, vocabulary } from "@catalog/concepts";
+import { applicationConceptSet } from "@catalog/concepts";
 import { compositions } from "./review-queue.ts";
 
 const { ApproveQueuedReview, RejectQueuedReview, WithdrawQueuedReview } =
@@ -9,7 +9,7 @@ const { GetReviewQueue } = compositions.ReviewQueues;
 const { RepairReviewAlert } = compositions.ReviewRepair;
 const { RequestQueuedReview } = compositions.ReviewRequests;
 
-export type CatalogInstances = ReturnType<typeof applicationConcepts.implementations>;
+export type CatalogInstances = ReturnType<typeof applicationConceptSet.implementations>;
 
 type ReviewQueueApplication = ReturnType<typeof assembleReviewQueue>;
 
@@ -23,7 +23,12 @@ const composition = {
 };
 
 export function assembleReviewQueue(instances: CatalogInstances) {
-  return assemble({ vocabulary, instances, composition, queryCache: "none" });
+  return assemble({
+    conceptSet: applicationConceptSet,
+    instances,
+    composition,
+    queryCache: "none",
+  });
 }
 
 async function invoke(
@@ -51,6 +56,9 @@ function observedTiming(instances: CatalogInstances) {
   return {
     observed,
     timing: {
+      read(input: Record<string, never>) {
+        return delegate.read(input);
+      },
       async _now() {
         const answer = await delegate._now();
         observed.push(new Date(answer.time.getTime()));

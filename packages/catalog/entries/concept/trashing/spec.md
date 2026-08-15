@@ -11,6 +11,13 @@ Item `post-8` is trashed at `t1` and appears among trashed items. It is restored
 longer appears there. The item is trashed again and then purged. A later restore and a
 later trash are refused because purge is permanent.
 
+## Types
+
+```types
+external Item
+  The object whose removal disposition is tracked.
+```
+
 ## State
 
 ```state
@@ -71,8 +78,3 @@ _state (item: Item) : one (status: DispositionStatus)
 _trashed () : many (item: Item, trashedAt: DateTime)
   orders rows by trashedAt and then Item identity
 ```
-
-## Types
-
-`Item` is an opaque external identity. `DispositionStatus` is `active`, `trashed`, or
-`purged`. `DateTime` is an absolute instant.

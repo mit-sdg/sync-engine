@@ -14,12 +14,18 @@ import {
   callableConceptMember,
   conceptProtocolOf,
 } from "@engine/reactions/concepts/concept-metadata";
-import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
+import {
+  parseSpec,
+  specificationsAreCompatible,
+  type ConceptSpec,
+} from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { CheckedComputationFns, ComputationFn } from "@engine/reads/computations";
 import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { setOwn } from "@engine/utils/own-property";
 import { rememberImplementations } from "./implementation-registry.ts";
+
+const conceptSetVocabularies = new WeakMap<object, object>();
 
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result
   ? (...args: Args) => Result | PromiseLike<Awaited<Result>>
@@ -31,34 +37,48 @@ export type ConceptImplementation<C extends ConceptClass> = object & {
     : never]: ImplementationMember<InstanceType<C>[Name]>;
 };
 
-export type Implementations<
-  V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>,
-> =
-  V extends DeclaredVocabulary<infer Entries, Record<string, ComputationFn>>
-    ? {
-        [Name in keyof ConceptClassesOf<Entries>]: ConceptImplementation<
-          ConceptClassesOf<Entries>[Name]
-        >;
-      }
-    : never;
+type AnyConceptSelection =
+  | DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>
+  | RegisteredConceptSet<Record<string, AnyRegistration>, Record<string, ComputationFn>>;
 
-export type ImplementationOverrides<
-  V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>,
-> = Partial<Implementations<V>>;
+type EntriesOfSelection<V extends AnyConceptSelection> =
+  V extends RegisteredConceptSet<infer Registrations, Record<string, ComputationFn>>
+    ? EntriesOf<Registrations>
+    : V extends DeclaredVocabulary<infer Entries, Record<string, ComputationFn>>
+      ? Entries
+      : never;
 
-export interface ConceptFloor<
-  V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>,
-> {
+export type Implementations<V extends AnyConceptSelection> = {
+  [Name in keyof ConceptClassesOf<EntriesOfSelection<V>>]: ConceptImplementation<
+    ConceptClassesOf<EntriesOfSelection<V>>[Name]
+  >;
+};
+
+export type ImplementationOverrides<V extends AnyConceptSelection> = Partial<Implementations<V>>;
+
+export interface ConceptFloor<V extends AnyConceptSelection> {
   name: string;
   instances: Implementations<V>;
   resources: readonly string[];
   close(): Promise<void>;
 }
 
-export function conceptFloor<
-  V extends DeclaredVocabulary<Record<string, ConceptEntry>, Record<string, ComputationFn>>,
->(vocabularyDeclaration: V, floor: ConceptFloor<V>): ConceptFloor<V> {
+export function conceptFloor<V extends AnyConceptSelection>(
+  selection: V,
+  floor: ConceptFloor<V>,
+): ConceptFloor<V> {
   if (floor.name.trim() === "") throw new Error("conceptFloor: name must not be empty.");
+  const vocabularyDeclaration = conceptSetVocabularies.has(selection)
+    ? conceptSetVocabulary(
+        selection as RegisteredConceptSet<
+          Record<string, AnyRegistration>,
+          Record<string, ComputationFn>
+        >,
+      )
+    : (selection as DeclaredVocabulary<
+        Record<string, ConceptEntry>,
+        Record<string, ComputationFn>
+      >);
   const expected = Object.keys(vocabularyDeclaration.concepts).sort();
   const actual = Object.keys(floor.instances as object).sort();
   const missing = expected.filter((name) => !actual.includes(name));
@@ -245,6 +265,7 @@ export function registerConcept<
 }
 
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
+export type AnyRegisteredConcept = AnyRegistration;
 type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: {
@@ -260,6 +281,10 @@ type VocabularyOf<
   S extends Record<string, AnyRegistration>,
   Computations extends Record<string, ComputationFn> = Record<never, never>,
 > = DeclaredVocabulary<EntriesOf<S>, Computations>;
+
+export type ConceptClassesOfSet<S extends Record<string, AnyRegistration>> = ConceptClassesOf<
+  EntriesOf<S>
+>;
 type DeclaredFloorNames<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? keyof F : never;
 }[keyof S] &
@@ -313,7 +338,6 @@ export interface RegisteredConceptSet<
   S extends Record<string, AnyRegistration>,
   Computations extends Record<string, ComputationFn> = Record<never, never>,
 > {
-  vocabulary: VocabularyOf<S, Computations>;
   concepts: VocabularyOf<S, Computations>["concepts"];
   computations: VocabularyOf<S, Computations>["computations"];
   implementations(
@@ -325,6 +349,17 @@ export interface RegisteredConceptSet<
   ): Implementations<VocabularyOf<S, Computations>>;
 }
 
+/** Internal bridge from the application-facing concept set to its runtime declaration. */
+export function conceptSetVocabulary<
+  S extends Record<string, AnyRegistration>,
+  Computations extends Record<string, ComputationFn>,
+>(set: RegisteredConceptSet<S, Computations>): VocabularyOf<S, Computations> {
+  const declared = conceptSetVocabularies.get(set);
+  if (declared === undefined)
+    throw new Error("conceptSetVocabulary: expected a registered concept set.");
+  return declared as VocabularyOf<S, Computations>;
+}
+
 export function conceptSet<
   const S extends Record<string, AnyRegistration>,
   const Computations extends Record<string, ComputationFn> = Record<never, never>,
@@ -333,6 +368,22 @@ export function conceptSet<
   computations: Computations & CheckedComputationFns<Computations> = {} as Computations &
     CheckedComputationFns<Computations>,
 ): RegisteredConceptSet<S, Computations> {
+  const definitions = new Map<string, { instance: string; specification: ConceptSpec }>();
+  for (const [instance, registration] of Object.entries(registrations)) {
+    const { definitionName } = registration.specification;
+    const prior = definitions.get(definitionName);
+    if (
+      prior !== undefined &&
+      !specificationsAreCompatible(prior.specification, registration.specification)
+    ) {
+      throw new Error(
+        `conceptSet: instances "${prior.instance}" and "${instance}" use incompatible ` +
+          `specifications for definition "${definitionName}".`,
+      );
+    }
+    definitions.set(definitionName, { instance, specification: registration.specification });
+  }
+
   const entries: Record<string, ConceptEntry> = {};
   for (const [conceptName, registration] of Object.entries(registrations)) {
     const { purpose, principle, actions, queries } = registration.specification;
@@ -414,10 +465,11 @@ export function conceptSet<
     return result;
   };
 
-  return {
-    vocabulary: declared as unknown as VocabularyOf<S, Computations>,
+  const set = {
     concepts: declared.concepts as VocabularyOf<S, Computations>["concepts"],
     computations: declared.computations as unknown as VocabularyOf<S, Computations>["computations"],
     implementations,
   } as RegisteredConceptSet<S, Computations>;
+  conceptSetVocabularies.set(set, declared);
+  return set;
 }

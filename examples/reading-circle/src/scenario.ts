@@ -3,13 +3,13 @@
  *
  * The application is built in:
  *   design/                    — authored concept and application design
- *   src/vocabulary.ts          — vocabulary and implementations
+ *   src/concepts.ts          — concept set and implementations
  *   src/compositions/          — reactions, views, formers, and endpoints
  *   src/assembly.ts            — the assemble() call
  *   src/edge.ts                — local gateway construction
  */
 import { createLocalClient } from "@mit-sdg/sync-engine/client";
-import { deterministicImplementations } from "./vocabulary.ts";
+import { deterministicImplementations } from "./concepts.ts";
 import { buildReadingCircle } from "./edge.ts";
 import type { ReadingCircleWire } from "../generated/wire.ts";
 

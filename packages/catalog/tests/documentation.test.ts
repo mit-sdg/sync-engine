@@ -26,7 +26,7 @@ describe("catalog documentation", () => {
       const source = await readFile(new URL(`${name}/${name}.ts`, root), "utf8");
       const spec = await readFile(new URL(`${name}/spec.md`, root), "utf8");
 
-      expect(source).toContain('import spec from "./spec.md";');
+      expect(source).toContain('import spec from "./spec.md" with { type: "text" };');
       expect(source).toContain("export { spec };");
       expect(source).not.toMatch(/export \{ design \}|export const (?!compositions|views|formers)/);
       expect(spec).toContain("## Compositions");

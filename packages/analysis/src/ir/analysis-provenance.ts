@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   validateApplicationManifest,
-  type ApplicationManifestV5,
+  type ApplicationManifestV1,
 } from "@mit-sdg/sync-engine/tooling";
 import { ANALYSIS_PACKAGE_NAME, ANALYSIS_PACKAGE_VERSION } from "../package-version.ts";
 
@@ -12,9 +12,9 @@ export interface AnalysisAnalyzerIdentity {
 
 export interface AnalysisManifestProvenance {
   readonly format: "sync-engine.application-manifest";
-  readonly version: 5;
+  readonly version: 1;
   readonly digest: string;
-  readonly generator: Readonly<ApplicationManifestV5["generator"]>;
+  readonly generator: Readonly<ApplicationManifestV1["generator"]>;
 }
 
 /** Analyzer and exact canonical-manifest identity carried by every persisted result. */
@@ -35,7 +35,7 @@ function record(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export function analysisProvenance(manifest: ApplicationManifestV5): AnalysisProvenance {
+export function analysisProvenance(manifest: ApplicationManifestV1): AnalysisProvenance {
   validateApplicationManifest(manifest);
   return {
     analyzer: {
@@ -64,7 +64,7 @@ function assertProvenance(value: unknown, label: string): asserts value is Analy
   const manifest = record(provenance.manifest, `${label}.provenance.manifest`);
   if (
     manifest.format !== "sync-engine.application-manifest" ||
-    manifest.version !== 5 ||
+    manifest.version !== 1 ||
     typeof manifest.digest !== "string" ||
     manifest.digest === ""
   ) {
@@ -84,7 +84,7 @@ function assertProvenance(value: unknown, label: string): asserts value is Analy
 export function assertArtifactProvenance(
   value: unknown,
   label: string,
-  manifest?: ApplicationManifestV5,
+  manifest?: ApplicationManifestV1,
 ): asserts value is ProvenancedArtifact {
   const artifact = record(value, label);
   assertProvenance(artifact.provenance, label);

@@ -21,7 +21,7 @@ import {
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { inspectAssembly } from "@mit-sdg/sync-engine/tooling";
-import { concepts, vocabulary as words } from "@examples/reading-circle/vocabulary";
+import { applicationConceptSet, concepts } from "@examples/reading-circle/concepts";
 
 const { Discussing, Gathering, Selecting } = concepts;
 
@@ -330,7 +330,7 @@ const errorPins = {
 
 function buildBook() {
   return assemble({
-    vocabulary: words,
+    conceptSet: applicationConceptSet,
     composition: {
       book: {
         ClearedReadingClosesDiscussion,
@@ -373,7 +373,7 @@ describe("the example book", () => {
   test("every mistake the book shows has its documented result", async () => {
     const book = await bookText();
     const rejects = (entry: Record<string, unknown>) => () =>
-      assemble({ vocabulary: words, composition: { bad: entry } });
+      assemble({ conceptSet: applicationConceptSet, composition: { bad: entry } });
 
     expect(rejects({ CloseTheAbsentDiscussion })).toThrow(errorPins.freshUnderNo);
     expect(rejects({ ReopenOnJoin })).toThrow(errorPins.unusedName);

@@ -41,7 +41,7 @@ people changing the sync-engine repository.
 The consumer document owners are:
 
 - Semantic design decisions: `docs/user/design.md`; design review: `docs/user/guide/reviewing-a-design.md`
-- Progressive application authoring: `docs/user/guide/`
+- Progressive application authoring and registered design workflow: `docs/user/guide/`
 - Application model explanation: `docs/user/overview.md`
 - Small tested read constructions: `docs/user/guide/read-construction.md`
 - Exact core exports and API summaries: `docs/user/reference/public-api.md`
@@ -59,6 +59,7 @@ The project document owners are:
 - Contributor workflow: `CONTRIBUTING.md`
 - Contributor documentation map: `docs/project/index.md`
 - Contributor implementation map: `docs/project/architecture.md`
+- Authored-design parsing and enforcement: `docs/project/concept-specification-processing.md`
 - Release procedure: `docs/project/releasing.md`
 - Coding-agent checkout instructions: `AGENTS.md`
 - Vite+ docs: `node_modules/vite-plus/docs/` or https://viteplus.dev/guide/

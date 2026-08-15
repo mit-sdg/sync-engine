@@ -1,185 +1,198 @@
 # How sync-engine applications fit together
 
-sync-engine composes independently implemented stateful behaviors into one
-application. This page maps the setup files to the runtime and follows one
-request through them. Use [Designing with concepts](design.md) before choosing
-concept boundaries, [Public API](reference/public-api.md) for signatures and
-defaults, and [Execution semantics](reference/semantics.md) for runtime behavior.
+sync-engine separates reusable concept contracts from the application decisions
+that connect them. This page explains those authored contracts, their executable
+counterparts, and why design checking occurs in tooling rather than at runtime.
+Use [Designing with concepts](design.md) to choose boundaries and [Application
+authoring](guide/authoring.md) to create the files.
 
-## Application layers
+## Three authored contracts
 
-A registered application moves from declarations to an assembly and,
-optionally, to a public boundary in this order:
+An application design has three distinct parts:
 
-```text
-authored design
-  concept specifications + composition prose + optional vocabulary
-                    |
-                    v
-executable declarations
-  classes + registrations + reactions, endpoints, views, and formers
-                    |
-                    v
-                  assembly
-               /            \
-              v              v
-           tooling    application invoker
-              |              ^
-              v              |
- read-back + wire contract   gateway / transport
-              |              ^
-              v              |
-          typed client ------+
-```
+1. A **concept specification** defines reusable concept-local behavior through
+   Purpose, Principle, external Types, raw State, Actions, and Queries.
+2. **Application design prose** explains application behavior and links each
+   selected reaction, view, and former to the decision it realizes.
+3. **Application type declarations** resolve every concept-external type to a
+   concrete application type or a type owned by another selected concept.
 
-Authored design explains the intended application. Executable TypeScript declares
-the application the engine can assemble. Generated read-back reports what one
-assembly contains; it is derived evidence, not the source of either the authored
-design or runtime semantics. Concepts define independent behavior, composition
-connects it, and assembly installs one combination. Tooling and a generated
-client are optional. The lower-level `vocabulary(...)` path can assemble concepts
-without specification registration.
+These parts answer different questions. A concept specification explains a
+mechanism without naming an application. Application prose explains why
+selected declarations are present. Application type bindings record how otherwise-independent concept parameters
+meet in this assembly.
 
-## Application-owned design and source
+There is no required `application.md`, design directory layout, or one-to-one
+pairing between prose and source modules. Introductions, history, and unresolved
+notes may remain ordinary unregistered Markdown. Only explicitly configured
+design files participate in checking.
 
-A conventional application keeps authored design separate from executable source:
+## From authored design to runtime
 
 ```text
-design/
-  concepts/Name.md
-  compositions/Group.md
-  vocabulary.md              # optional
-src/
-  concepts/Name.ts
-  concepts/Name.registry.ts  # optional
-  compositions/Group.ts
-  vocabulary.ts
-tests/
-  concepts/Name.test.ts
-  compositions/Group.test.ts
+concept specifications + registered application documents
+                              |
+                              v
+classes + registrations + reactions + views + formers + endpoints
+                              |
+                              v
+                        selected assembly
+                         /           \
+                        v             v
+                design tooling    runtime invoker
+                        |             ^
+                        v             |
+              manifest/read-back   gateway/client
 ```
 
-Configure the application's TypeScript or bundler Markdown mapping so
-`@design/*` resolves to `design/*`. Registries import specifications by stable
-application path, such as `@design/concepts/Name.md`, rather than by proximity to
-the implementation. Applications do not add a `design/README.md` or design
-index: the registered concept files, composition modules, and optional vocabulary
-module are the entrypoints.
+`registerConcept` connects a concept class to imported specification text.
+`conceptSet` gives each selected instance its application name and returns one
+registered concept-set object. Pass that whole object to `assemble` as
+`conceptSet`. Its `.concepts` property contains typed declaration references for
+writing composition; it is not another concept set and is not the value passed
+to `assemble`. Its `.implementations(...)` method constructs implementation
+maps when an application selects a default or named floor. Composition builds
+reaction, endpoint, view, and former declarations. `assemble` installs the
+selected declarations and implementations.
 
-`design/concepts/Name.md` is the registered specification for one concept.
-`design/compositions/Group.md` explains one larger executable composition group;
-`src/compositions/Group.ts` imports and exports it as `spec` through
-`@design/compositions/Group.md`. `design/vocabulary.md`, when needed, records
-application-wide cross-concept type roles and named pure computations. The matching `src/vocabulary.ts` is the
-conventional `conceptSet(...)` module, not a semantically special filename; it
-imports and re-exports `@design/vocabulary.md` as `spec` when that design file is
-present.
+Runtime assembly does not load application design Markdown. Consequently a
+production process does not fail merely because authored documentation is not
+deployed. The complete design contract is instead mandatory for config-based
+tooling: `sync-engine check`, artifact generation, and artifact checking.
 
-## Concepts own behavior and state
+## Concept definitions and application instances
 
-A **concept** is an ordinary TypeScript class paired, in the registered path,
-with a Markdown specification. Non-underscore prototype methods are actions;
-underscore-prefixed methods are queries. An action may change concept state. A
-query reads current state and must not create side effects.
+A concept owns behavior and state. Its class does not import peer concepts or
+application composition. The specification's H1 names the reusable definition,
+while the key assigned by `conceptSet` names one application instance. The same
+definition may be instantiated several times.
 
-Concept code does not import peer concepts or application composition. Selecting,
-for example, can own one current choice without knowing that one application
-opens a discussion after a choice. The application states that connection in a
-reaction, so the same Selecting implementation can participate in another
-composition.
+A strict specification has ordered Purpose, Principle, Types, State, Actions,
+and Queries sections. Types declares only opaque external parameters. State is
+retained raw for provenance but remains unparsed until SSF has a final grammar.
+Actions use explicit `where`/`then` branches and terminal returns or refusals;
+queries select `one`, `optional`, or `many` and return named rows. See [Concept
+specification format](reference/concept-specification.md).
 
-The specification records the concept's purpose, principle, actions, queries,
-and expected refusals. Its optional State section is not a runtime schema.
-[Concept specification format](reference/concept-specification.md) defines what
-registration and source checking parse.
+Registration and source checking compare machine-readable declaration shape
+with TypeScript. Natural-language conditions, effects, and query meaning remain
+design contracts and test responsibilities.
 
-## Registration names the concepts
+## Application types close external parameters
 
-`registerConcept(...)` joins a class, its specification, refusal mappings, and
-optional implementation floors. `conceptSet(...)` assigns application names and
-derives the inert concept references used in composition, the vocabulary used by
-assembly and tooling, and implementation factories. The lower-level
-`vocabulary(...)` API can describe small assemblies without registration. See
-the [`language` API](reference/public-api.md#language) for accepted entries.
+A `types` fence in any registered application document can contain concrete
+types and direct bindings for selected concept instances:
 
-Calling an action through a concept reference while authoring composition creates
-declaration data. Execution begins only after assembly instruments concrete
-concept instances.
+```types
+concrete Person
+  A stable identity supplied by the institution.
 
-## Composition connects concepts
+PostComments.User is Person
+  Comment authors use institution identities.
 
-Composition has four declaration forms:
+PostComments.Target is Posting.Post
+  Post comments attach to published posts.
+```
 
-| Form     | Purpose                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------- |
-| Reaction | Watch an action ask or outcome, read current state when needed, and ask consequence actions |
-| View     | Name a reusable relation or policy decision                                                 |
-| Former   | Construct a current result tree from queries, views, or other formers                       |
-| Endpoint | Receive outside input and produce a boundary response through the reaction model            |
+`concrete` introduces an application type and requires a prose definition.
+`is` binds one selected instance's external parameter directly to either a
+concrete type or a type owned by another selected concept instance. Chains,
+cycles, bindings to external parameters, missing or duplicate bindings, and
+unused concrete types are rejected.
 
-These declarations carry application policy and references; concepts retain
-domain state. Declarations may be nested in TypeScript records or created by
-factory functions before `assemble(...)`.
+Because State is not parsed, tooling can verify the selected concept on a
+qualified target but cannot yet prove that the final type name is state-owned.
+It reports no heuristic approximation of that missing proof.
 
-## Assembly installs one application
+## Application prose covers executable decisions
 
-`assemble(...)` receives a vocabulary, concept implementations, and composition.
-It validates machine-checkable registration, declaration, portability, and
-boundary constraints; instruments the instances; installs reactions and reads;
-and creates the process-local runtime state used for scheduling, query caching,
-admission, and occurrence matching. It does not validate purpose, ownership, or
-concept independence. A second call creates a separate runtime; it does not
-reconfigure the first.
+Registered application documents are ordinary Markdown with one nonempty H1.
+They have no prescribed heading layout. Authors place typed links beside design
+claims or as Markdown citations:
 
-Ordinary assembly accepts portable declarations: definitions whose canonical
-JSON can be registered again against the same named vocabulary. Local closures
-and other executable escape hatches are available only through `advanced` manual
-construction. The [assembly API](reference/public-api.md#assembly) defines the returned
-surface and [portable and local behavior](reference/semantics.md#portable-and-local-behavior)
-defines the rejection boundary.
+```md
+Editing a post [refreshes its derived content](reaction:Forum.posts.RefreshDerivedContent).
+```
 
-## One request through the boundary
+The supported destination kinds are `reaction:`, `view:`, `former:`, and
+`computation:`. Each destination names exactly one selected declaration; there
+are no wildcards or implied descendant links.
 
-A representative request crosses these components:
+Coverage is bidirectional. Every typed link must resolve, every selected
+authored reaction tree must have a reaction link, and every selected named view
+and former must have a link of its own kind. The checker does not interpret the
+surrounding prose or require one link per sentence. A declaration can have
+several references, all retained in read-back.
 
-1. A client sends a generated route and input through its selected transport.
-2. The gateway checks route admission, drain state, and configured limits, then
-   forwards accepted work to the assembly's invoker.
-3. The endpoint's `receive(...)` pattern binds admitted input.
-4. The endpoint may read views or queries and ask a concept action.
-5. The engine records the ask, runs the action on that concept instance's serial
-   action queue, and records its return, refusal, or fault.
-6. Matching reactions may read current state and ask further actions.
-7. A matching endpoint path asks `respond(...)`; at most one response is accepted.
-8. The client resolves to the success value or an error envelope.
+One top-level authored reaction or endpoint tree has one reaction identity even
+when lowering produces several runtime stages. Core-generated boundary and
+outcome reactions are exempt. Views and formers receive full coverage; there is
+no helper exemption.
 
-The boundary is transport-neutral. The local client applies a JSON projection;
-other transports define their own protocol behavior.
+## Stable application identities
 
-## Concept state and occurrence evidence
+Reactions, endpoints, views, and formers use their dotted path in the selected
+composition, for example `Forum.posts.RefreshDerivedContent` or
+`Forum.feed.HomeFeed`. Path segments begin with a letter or `_` and continue
+with letters, digits, `_`, or `-`.
 
-Concept state is domain state owned by concept implementations and their storage.
-Occurrence evidence records asks, outcomes, faults, reaction firings, and selected
-runtime failures inside one assembly. These are different data: occurrence
-records describe execution, while concept storage is the source from which
-queries obtain domain state. The engine uses a process-local occurrence index
-for matching and inspection. An optional `LogSink` may receive an audit copy,
-but a sink does not replace concept storage or provide replay.
+The same declaration object cannot be installed under two paths. Other
+constructs may import and use a view or former without reinstalling it.
+Independently constructed declarations remain distinct even when their behavior
+is similar.
 
-The engine does not rebuild concept state, pending requests, or interrupted
-reactions from occurrence output. Applications that require durable state and
-restart recovery implement both in concept storage and host procedures. See
-[logs, concept implementations, and restart](reference/semantics.md#logs-concept-implementations-and-restart)
-and [persistence, restart, and recovery](guide/persistence-recovery.md).
+## Computations are application design
 
-## Guarantee boundaries
+Registered application documents, including a dedicated types document, may
+contain any number of `computations` fences. There is no required
+`computations.md`. A declaration has a signature and a required indented prose
+body:
 
-The runtime serializes action bodies per concept instance within one assembly.
-Other instances, assemblies, and processes execute independently. Each action
-commits independently; timeout and abort stop waiting but do not cancel accepted
-work. Generated wire contracts provide TypeScript checks, while runtime value
-validation requires explicit endpoint validators.
+```computations
+invitationMailText(invitation: String, credential: String) : String
+  Produces the invitation containing the credential and public sign-in URL.
+```
 
-[Operational limits](reference/operations.md) states the resulting deployment
-requirements. Use [Execution semantics](reference/semantics.md) when correctness depends
-on ordering, failure delivery, cancellation, retention, or boundary settlement.
+Every executable computation has exactly one declaration, and every declaration
+names one executable computation. Inputs and optionality must agree. A
+`computation:` link elsewhere is optional but must resolve. Computations return
+one bare result type; concept action/query rows do not.
+
+## Configurations define variants
+
+Each generated config selects one assembly and its own design corpus:
+
+```text
+design: {
+  version: 1,
+  documents: [
+    new URL("./design/types.md", import.meta.url),
+    new URL("./design/forum.md", import.meta.url),
+  ],
+}
+```
+
+`documents` contains explicit local `file:` URLs. Documents may be elsewhere in
+a monorepo. Any document may contain `types` fences, and the checker combines
+the declarations across the registered corpus. An application with no
+application-level declarations uses `design: { version: 1, documents: [] }`.
+
+A second supported application variant uses a second config. Shared documents
+can be reused only when every typed reference resolves in each selected
+variant. The checker does not union possible runtime options and defines no
+conditional-link syntax.
+
+## Generated evidence and runtime boundaries
+
+Design tooling retains normalized source contents in provenance, so a prose-only
+change changes input digests. Generated read-back links to source files and
+one-based lines rather than copying application prose. It reports selected
+reaction lowering, views, formers, computations, concept signatures and
+instances, and resolved application type bindings.
+
+The runtime still serializes action bodies only per concept instance within one
+assembly. It does not provide transactions across actions, persistence, replay,
+distributed serialization, cancellation of accepted work, or exactly-once
+execution. Generated TypeScript is not runtime validation. See [Execution
+semantics](reference/semantics.md) and [Operational
+limits](reference/operations.md) for those boundaries.

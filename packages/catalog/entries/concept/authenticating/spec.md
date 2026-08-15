@@ -13,6 +13,12 @@ the password using the old password, after which the old password fails and the 
 one succeeds. Ari unregisters with the current password, and the username is no longer
 registered.
 
+## Types
+
+```types
+
+```
+
 ## State
 
 ```state
@@ -76,9 +82,3 @@ unregister (username: Username, password: Password) : return (username: Username
 _registered (username: Username) : one (registered: Flag)
   answers false for an unknown Username
 ```
-
-## Types
-
-`Username` is a caller-chosen account name. `Password` is transient input. `Salt` is a
-fresh per-verifier value. `Secret` is a one-way password verifier. `Flag` is a Boolean
-value.

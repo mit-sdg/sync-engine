@@ -1,21 +1,22 @@
 import { assemble, conceptSet, Logging, registerConcept } from "@sync-engine/assembly";
+import type { VocabularyAssemblyOptions } from "@sync-engine/advanced";
 import type {
   ActionRefusal,
-  AssemblyOptions,
   ConceptImplementation,
+  ImplementationOverrides,
   LogEntry,
   LogSink,
 } from "@sync-engine/assembly";
 import type { GatewayOptions } from "@sync-engine/boundary";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import type {
-  ApplicationManifestV5,
+  ApplicationManifestV1,
   ComputationInventoryIR,
   ConceptImplementationProvenanceIR,
 } from "@sync-engine/tooling";
 
-declare const manifestV5: ApplicationManifestV5;
-const manifestVersion: 5 = manifestV5.version;
+declare const manifestV1: ApplicationManifestV1;
+const manifestVersion: 1 = manifestV1.version;
 void manifestVersion;
 declare const computationInventory: ComputationInventoryIR;
 const computationSource: "standard" | "vocabulary" = computationInventory.source;
@@ -166,7 +167,10 @@ const logSink: LogSink = {
     occurrenceEntries.push(entry);
   },
 };
-const synchronousOptions: AssemblyOptions<{ Saving: typeof SynchronousActionConcept }, {}> = {
+const synchronousOptions: VocabularyAssemblyOptions<
+  { Saving: typeof SynchronousActionConcept },
+  {}
+> = {
   vocabulary: synchronousVocabulary,
   composition: {},
   initialize: { Saving: ["saved:"] },
@@ -245,16 +249,13 @@ const replacementSet = conceptSet({
 replacementSet.implementations("own", undefined);
 replacementSet.implementations("inherited", undefined);
 assemble({
-  vocabulary: replacementSet.vocabulary,
+  conceptSet: replacementSet,
   composition: {},
   instances: { Replacing: ownMethodReplacement },
 });
 
-assemble({
-  vocabulary: replacementSet.vocabulary,
-  composition: {},
-  instances: {
-    // @ts-expect-error Public assembly replacements must implement the callable protocol.
-    Replacing: { state: new Map<string, string>() },
-  },
-});
+const malformedOverrides: ImplementationOverrides<typeof replacementSet> = {
+  // @ts-expect-error Public assembly replacements must implement the callable protocol.
+  Replacing: { state: new Map<string, string>() },
+};
+void malformedOverrides;

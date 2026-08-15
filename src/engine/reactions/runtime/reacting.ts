@@ -2,6 +2,7 @@
 
 import { setOwn } from "@engine/utils/own-property";
 import type { ComputationRef } from "@engine/reads/computations";
+import type { AuthoredDeclarationIdentity } from "@engine/reads/declaration-identity";
 import type { ReadEnv } from "@engine/reads/definition-registry";
 import { Frames, varKeyOf } from "@engine/reads/frames";
 import { isFusedFormer } from "@engine/reads/former-nodes";
@@ -133,8 +134,12 @@ export class Reacting {
     this.instrumentation.invalidateAll();
   }
 
-  register(reactions: ReactionMap): void {
+  register(
+    reactions: ReactionMap,
+    authoredByBase: Readonly<Record<string, AuthoredDeclarationIdentity>> = {},
+  ): void {
     const prepared = Object.entries(reactions).map(([base, reaction]) => {
+      const authored = authoredByBase[base];
       const lowered: Array<{
         executable: ExecutableReaction;
         reaction: ReactionIR;
@@ -160,7 +165,7 @@ export class Reacting {
         }
         this.registry.indexDeclarationReads(declaration);
         if (outcome.reactions !== undefined) {
-          const encodedFamily = serializeReactionFamily(outcome.reactions);
+          const encodedFamily = serializeReactionFamily(outcome.reactions, authored);
           for (const [stage, live] of outcome.reactions.entries()) {
             const encoded = encodedFamily[stage];
             const serialized = canonicalJson(encoded);
@@ -203,6 +208,7 @@ export class Reacting {
             name,
             outcome.reason ?? "not lowerable",
             declaration,
+            authored,
           ),
           executable: {
             name,
@@ -335,8 +341,20 @@ export class Reacting {
     this.registry.declareFormers(...refs);
   }
 
+  declareAuthoredFormers(
+    ...declarations: ReadonlyArray<readonly [FormerRef, AuthoredDeclarationIdentity]>
+  ): void {
+    this.registry.declareAuthoredFormers(...declarations);
+  }
+
   declareViews(...refs: RelationView[]): void {
     this.registry.declareViews(...refs);
+  }
+
+  declareAuthoredViews(
+    ...declarations: ReadonlyArray<readonly [RelationView, AuthoredDeclarationIdentity]>
+  ): void {
+    this.registry.declareAuthoredViews(...declarations);
   }
 
   registerFormers(formers: FormerIR[]): void {

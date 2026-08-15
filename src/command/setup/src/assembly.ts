@@ -1,10 +1,9 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { applicationConcepts, vocabulary } from "./vocabulary.ts";
+import { applicationConceptSet } from "./concepts.ts";
 
 export function assembleApplication() {
   return assemble({
-    vocabulary,
-    instances: applicationConcepts.implementations(),
+    conceptSet: applicationConceptSet,
     composition: {},
   });
 }

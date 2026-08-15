@@ -9,96 +9,9 @@ import {
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { reaction, when } from "@mit-sdg/sync-engine/language";
-
-const entriesSpecification = `# Entries
-
-## Purpose
-
-Create durable entries once per domain operation while keeping names unique.
-
-## Principle
-
-An operation returns its original entry when retried. Another operation cannot
-claim an existing name.
-
-## State
-
-\`\`\`state
-a set of Entries with
-  an entryId String
-  an operationId String
-  a unique name String
-\`\`\`
-
-## Actions
-
-\`\`\`actions
-create (operationId: String, name: String) : return (entryId: String, name: String)
-  where operationId identifies an entry with name
-  then
-    return its entryId and name
-  where operationId or name belongs to a different entry
-  then
-    refuse CONFLICT "The operation or name is already committed differently."
-  where operationId and name are new
-  then
-    add an entry for operationId and name
-    return its entryId and name
-\`\`\`
-`;
-
-const effectsSpecification = `# Effects
-
-## Purpose
-
-Observe successful entry actions as an instance-local surrounding effect.
-
-## Principle
-
-Every successful entry action can be observed, including an idempotent retry.
-
-## State
-
-\`\`\`state
-a sequence of Observations with
-  an operationId String
-  an entryId String
-\`\`\`
-
-## Actions
-
-\`\`\`actions
-record (operationId: String, entryId: String) : return (recorded: Flag)
-  then
-    append an observation
-    return recorded true
-\`\`\`
-`;
-
-const faultingSpecification = `# Faulting
-
-## Purpose
-
-Exercise an unexpected fault after an earlier domain action commits.
-
-## Principle
-
-A requested fault throws rather than returning a domain refusal.
-
-## State
-
-\`\`\`state
-no durable state
-\`\`\`
-
-## Actions
-
-\`\`\`actions
-crash (operationId: String) : return (reached: Flag)
-  then
-    fault unexpectedly
-\`\`\`
-`;
+import effectsSpecification from "../design/concepts/Effects.md" with { type: "text" };
+import entriesSpecification from "../design/concepts/Entries.md" with { type: "text" };
+import faultingSpecification from "../design/concepts/Faulting.md" with { type: "text" };
 
 export class Conflict extends Error {}
 
@@ -146,7 +59,6 @@ export const multiInstanceConcepts: RegisteredConceptSet<MultiInstanceRegistrati
   Faulting: faulting,
 });
 const { concepts } = multiInstanceConcepts;
-export const vocabulary: typeof multiInstanceConcepts.vocabulary = multiInstanceConcepts.vocabulary;
 
 const { Effects, Entries, Faulting } = concepts;
 
@@ -193,7 +105,7 @@ export function assembleMultiInstanceContract(): Assembly<{
   Faulting: typeof FaultingContract;
 }> {
   return assemble({
-    vocabulary,
+    conceptSet: multiInstanceConcepts,
     instances: multiInstanceConcepts.implementations(),
     composition,
   });

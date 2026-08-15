@@ -12,6 +12,13 @@ are listed in that order with their authors, and each post is readable by identi
 Publishing a blank message or one longer than 500 characters is refused and creates no
 Post.
 
+## Types
+
+```types
+external Author
+  The identity that authored the post.
+```
+
 ## State
 
 ```state
@@ -44,8 +51,3 @@ _get (post: Post) : optional (author: Author, content: String, publishedAt: Date
 _byAuthor (author: Author) : many (post: Post, content: String, publishedAt: DateTime)
   orders rows by publishedAt and then Post identity
 ```
-
-## Types
-
-`Post` is an identity allocated by Posting. `Author` is an opaque external identity.
-`String` is owned text. `DateTime` is an absolute instant.

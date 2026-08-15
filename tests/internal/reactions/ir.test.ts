@@ -3,7 +3,8 @@
  * chains, consequence-input validation, JSON round trips, and fixture export.
  */
 import { describe, expect, test } from "vite-plus/test";
-import { reaction, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { reaction, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import type { Frames } from "@sync-engine/internal/reads/frames";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";

@@ -6,20 +6,20 @@ Start with [Getting started](guide/getting-started.md), then read the
 
 ## Start by task
 
-| Task                                        | Start with                                                                                                                                                 |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
-| Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
-| Organize application design files           | [Organize application-owned design](guide/authoring.md#organize-application-owned-design)                                                                  |
-| Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
-| Initialize the first application            | [Getting started](guide/getting-started.md)                                                                                                                |
-| Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
-| Call an existing application                | [`client` API](reference/public-api.md#client), then [Call the typed client](guide/authoring.md#call-the-typed-client)                                     |
-| Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
-| Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
-| Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                              |
-| Look up an export, command, format, or term | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md) |
-| Evaluate a deployment                       | [Operational limits](reference/operations.md)                                                                                                              |
+| Task                                           | Start with                                                                                                                                                 |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Understand the application model               | [How sync-engine applications fit together](overview.md)                                                                                                   |
+| Design concepts                                | [Designing with concepts](design.md)                                                                                                                       |
+| Author and register application design         | [Author an application design](guide/authoring.md)                                                                                                         |
+| Review a concept design                        | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
+| Initialize the first application               | [Getting started](guide/getting-started.md)                                                                                                                |
+| Study an implemented multi-concept application | [Reading Circle](../../examples/reading-circle/README.md)                                                                                                  |
+| Call an existing application                   | [`client` API](reference/public-api.md#client)                                                                                                             |
+| Construct a read                               | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
+| Add persistence, restart, or recovery          | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
+| Determine exact runtime behavior               | [Execution semantics](reference/semantics.md)                                                                                                              |
+| Look up an export, command, format, or term    | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md) |
+| Evaluate a deployment                          | [Operational limits](reference/operations.md)                                                                                                              |
 
 ## Application authoring path
 
@@ -28,8 +28,11 @@ Start with [Getting started](guide/getting-started.md), then read the
 2. [Application model](overview.md) explains the parts introduced by the setup
    files. Read [Designing with concepts](design.md) before choosing concept
    boundaries.
-3. [Application authoring](guide/authoring.md) adds concepts, composition,
-   assembly, generated artifacts, validation, and a typed client.
+3. [Reading Circle](../../examples/reading-circle/README.md) provides the
+   smallest complete concept, composition, assembly, gateway, and client.
+4. [Application design authoring](guide/authoring.md) registers strict concept
+   specifications, application types, typed prose, and generated evidence
+   around the selected executable application.
 
 Use the [read construction cookbook](guide/read-construction.md) when a former
 needs optional, repeated, or folded data. Use [Persistence, restart, and
@@ -45,23 +48,23 @@ decisions.
 This catalog is exhaustive. References are under `reference/`; procedures are
 under `guide/`.
 
-| Path                                                                                 | Class        | Scope                                                   |
-| ------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------- |
-| [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                    |
-| [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Absolute-link map and constraints for software agents   |
-| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                          |
-| [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Multi-concept application authoring                     |
-| [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Ordered concept and composition review                  |
-| [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts           |
-| [`docs/user/guide/persistence-recovery.md`](guide/persistence-recovery.md)           | How-to guide | Persistence, restart, occurrence evidence, and recovery |
-| [`docs/user/overview.md`](overview.md)                                               | Explanation  | Application model and guarantee boundaries              |
-| [`docs/user/design.md`](design.md)                                                   | Explanation  | Concept boundaries, ownership, actions, and composition |
-| [`docs/user/reference/public-api.md`](reference/public-api.md)                       | Reference    | Exact core exports and principal API shapes             |
-| [`docs/user/reference/semantics.md`](reference/semantics.md)                         | Reference    | Execution, failure, ordering, and settlement contracts  |
-| [`docs/user/reference/concept-specification.md`](reference/concept-specification.md) | Reference    | Concept-file grammar and validation boundaries          |
-| [`docs/user/reference/cli.md`](reference/cli.md)                                     | Reference    | Installed command syntax and behavior                   |
-| [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities |
-| [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                   |
+| Path                                                                                 | Class        | Scope                                                          |
+| ------------------------------------------------------------------------------------ | ------------ | -------------------------------------------------------------- |
+| [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                           |
+| [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Package-local document map and constraints for software agents |
+| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                                 |
+| [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Strict concepts, application types, typed prose, and artifacts |
+| [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Semantic, authored-contract, and coverage review               |
+| [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts                  |
+| [`docs/user/guide/persistence-recovery.md`](guide/persistence-recovery.md)           | How-to guide | Persistence, restart, occurrence evidence, and recovery        |
+| [`docs/user/overview.md`](overview.md)                                               | Explanation  | Application model and guarantee boundaries                     |
+| [`docs/user/design.md`](design.md)                                                   | Explanation  | Concept boundaries, ownership, actions, and composition        |
+| [`docs/user/reference/public-api.md`](reference/public-api.md)                       | Reference    | Exact core exports and principal API shapes                    |
+| [`docs/user/reference/semantics.md`](reference/semantics.md)                         | Reference    | Execution, failure, ordering, and settlement contracts         |
+| [`docs/user/reference/concept-specification.md`](reference/concept-specification.md) | Reference    | Concept-file grammar and validation boundaries                 |
+| [`docs/user/reference/cli.md`](reference/cli.md)                                     | Reference    | Installed command syntax and behavior                          |
+| [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities        |
+| [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                          |
 
 ## Packages, examples, and policies
 

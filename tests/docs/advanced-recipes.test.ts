@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FileLogSink, assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
 type Note = { note: string; text: string };

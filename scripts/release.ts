@@ -616,14 +616,14 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
 
   const support = sources.get("SUPPORT.md") ?? "";
   const analysisFormatFacts = [
-    "sync-engine.application-index` version 2",
-    "sync-engine.impact-trace` version 2",
-    "sync-engine.application-source-index` version 2",
-    "sync-engine.application-project-analysis` version 2",
+    "sync-engine.application-index` version 3",
+    "sync-engine.impact-trace` version 3",
+    "sync-engine.application-source-index` version 3",
+    "sync-engine.application-project-analysis` version 3",
   ] as const;
   const supportFacts = [
     "Only the newest beta is supported.",
-    "sync-engine.application-manifest` version 5",
+    "sync-engine.application-manifest` version 1",
   ];
   if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
   if (facts.bun !== undefined) supportFacts.push(`Bun \`${facts.bun}\``);

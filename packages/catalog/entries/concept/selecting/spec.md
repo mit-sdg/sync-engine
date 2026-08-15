@@ -13,6 +13,15 @@ changing another workshop's selection. Clearing the workshop removes its
 current selection. A second clear is refused because there is nothing left to
 clear.
 
+## Types
+
+```types
+external Scope
+  The context in which one item is current.
+external Item
+  The object selected within a scope.
+```
+
 ## State
 
 ```state
@@ -27,6 +36,7 @@ a Current set of Selections
 
 ```actions
 choose (scope: Scope, item: Item) : return (selection: Selection)
+  where true
   then
     remove any selection with scope from current
     add a new selection with scope and item
@@ -46,13 +56,8 @@ clear (scope: Scope) : return (selection: Selection)
 ## Queries
 
 ```queries
-_current (scope: Scope) : optional (selection: Selection, item: Item)
+_current (scope: Scope) : optional (selection: Selection, scope: Scope, item: Item)
   answers no row for a Scope with no current Selection
-_get (selection: Selection) : optional (scope: Scope, item: Item)
+_get (selection: Selection) : optional (selection: Selection, scope: Scope, item: Item)
   answers no row for an unknown Selection
 ```
-
-## Types
-
-`Selection` is an identity allocated by Selecting. `Scope` and `Item` are opaque
-external identities.

@@ -1,6 +1,6 @@
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { former, reaction, when, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../vocabulary.ts";
+import { concepts } from "../concepts.ts";
 
 const { Mitigating, Rooming } = concepts;
 

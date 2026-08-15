@@ -1,7 +1,8 @@
 /** Focused engine tests covering matching, flow isolation, and firing consumption. */
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
-import { earlier, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { earlier, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";

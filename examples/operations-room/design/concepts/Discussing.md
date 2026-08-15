@@ -12,6 +12,15 @@ shown in the order it arrived. Mina closes the discussion. A later response is
 refused because the discussion is closed, as is an attempt to open a second
 discussion about the same subject while the first one is open.
 
+## Types
+
+```types
+external Subject
+  The object receiving a discussion.
+external Person
+  The identity that authored a response.
+```
+
 ## State
 
 ```state
@@ -63,12 +72,7 @@ close (discussion: Discussion) : return ()
 ```queries
 _openFor (subject: Subject) : optional (discussion: Discussion)
   answers no row for a Subject with no open Discussion
-_responses (discussion: Discussion) : many (response: Response, author: Person, text: String)
+_responses (discussion: Discussion) : many (response: Response, discussion: Discussion, author: Person, text: String)
   answers no rows for a Discussion with no Responses
   orders rows by when each Response was added
 ```
-
-## Types
-
-`Discussion` and `Response` are identities allocated by Discussing. `Subject`
-and `Person` are opaque external identities. `String` is owned text.

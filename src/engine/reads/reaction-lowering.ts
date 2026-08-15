@@ -10,6 +10,7 @@ import type {
   WhereFn,
 } from "@engine/reactions/types";
 import { withLive } from "./ir.ts";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ConsequenceIR, ReactionIR, UnloweredIR, WhereOpIR } from "./ir.ts";
 import {
   encodePattern,
@@ -219,7 +220,11 @@ function encodeConsequence(step: StepNode, vars: PatternVariables): ConsequenceI
   };
 }
 
-function serializeReactionWith(reaction: LoweredReaction, vars: PatternVariables): ReactionIR {
+function serializeReactionWith(
+  reaction: LoweredReaction,
+  vars: PatternVariables,
+  authored?: AuthoredDeclarationIdentity,
+): ReactionIR {
   const when = reaction.when.map((clause) => encodeTrigger(clause, vars));
   const where: WhereOpIR[] =
     reaction.whereFn !== undefined
@@ -227,6 +232,7 @@ function serializeReactionWith(reaction: LoweredReaction, vars: PatternVariables
       : (reaction.whereOps ?? []).map((op) => encodeWhereOp(op, vars));
   const ir: ReactionIR = {
     name: reaction.name,
+    ...(authored === undefined ? {} : { authored }),
     when,
     ...(reaction.step.deferred === true ? { deferred: true as const } : {}),
     where,
@@ -237,9 +243,12 @@ function serializeReactionWith(reaction: LoweredReaction, vars: PatternVariables
 }
 
 /** Serialize one lowered family with stable variable names across its continuation stages. */
-export function serializeReactionFamily(reactions: readonly LoweredReaction[]): ReactionIR[] {
+export function serializeReactionFamily(
+  reactions: readonly LoweredReaction[],
+  authored?: AuthoredDeclarationIdentity,
+): ReactionIR[] {
   const vars = new PatternVariables();
-  return reactions.map((reaction) => serializeReactionWith(reaction, vars));
+  return reactions.map((reaction) => serializeReactionWith(reaction, vars, authored));
 }
 
 /** Keep every inspectable dependency fact from a reaction whose whole pipeline stays local. */
@@ -247,6 +256,7 @@ export function serializeUnloweredReaction(
   name: string,
   reason: string,
   declaration: ReactionDeclaration,
+  authored?: AuthoredDeclarationIdentity,
 ): UnloweredIR {
   const vars = new PatternVariables();
   const when = declaration.when.map((clause) => encodeTrigger(clause, vars));
@@ -261,6 +271,7 @@ export function serializeUnloweredReaction(
   }
   return {
     name,
+    ...(authored === undefined ? {} : { authored }),
     reason,
     known: {
       when,

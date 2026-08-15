@@ -11,7 +11,8 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { compute, reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { compute, reaction, when } from "@sync-engine/language";
 import { inspectAssembly, renderInputContracts } from "@sync-engine/tooling";
 
 class DuplicateTitle extends Error {}
@@ -56,7 +57,43 @@ describe("canonical public API", () => {
       concepts: {
         Cataloging: {
           class: Cataloging,
-          spec: "# Cataloging\n\n## Purpose\n\nKeep titles.\n\n## Principle\n\nA title appears once.",
+          spec: `# Cataloging
+
+## Purpose
+
+Keep titles.
+
+## Principle
+
+A title appears once.
+
+## Types
+
+\`\`\`types
+\`\`\`
+
+## State
+
+\`\`\`state
+a set of titles
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+add(title: String) : return (title: String)
+  where true
+  then
+    add title
+    return title
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_titles() : many (title: String)
+\`\`\`
+`,
         },
       },
       computations: {},
@@ -256,7 +293,6 @@ const register = {
     "refused",
     "returned",
     "view",
-    "vocabulary",
     "when",
     "where",
     "whether",
@@ -264,10 +300,10 @@ const register = {
   assembly: [
     "ActionRefusal",
     "Assembly",
-    "AssemblyOptions",
     "ConceptFloor",
     "ConceptImplementation",
     "ConceptRegistration",
+    "ConceptSetAssemblyOptions",
     "ExecutionLimits",
     "FileLogSink",
     "FiringRecord",
@@ -338,7 +374,7 @@ const register = {
     "ActionTriggerIR",
     "AppIR",
     "ApplicationDiagnostic",
-    "ApplicationManifestV5",
+    "ApplicationManifestV1",
     "ChannelTriggerIR",
     "ComputationInventoryIR",
     "ConceptImplementationProvenanceIR",
@@ -351,7 +387,7 @@ const register = {
     "FormerNodeIR",
     "FormerSourceIR",
     "GeneratedApplication",
-    "ManifestEndpointV5",
+    "ManifestEndpointV1",
     "ObservedOccurrence",
     "PatternIR",
     "PlannedWireProjection",
@@ -360,12 +396,13 @@ const register = {
     "QueryRefIR",
     "ReactionIR",
     "SpecificationActionIR",
-    "SpecificationDocumentationIR",
+    "SpecificationExternalTypeIR",
     "SpecificationFieldIR",
     "SpecificationLocationIR",
     "SpecificationQueryIR",
     "SpecificationRefusalIR",
     "SpecificationResultIR",
+    "SpecificationStateIR",
     "SpecificationTypeIR",
     "SpliceIR",
     "TriggerIR",
@@ -402,9 +439,11 @@ const register = {
     "EngineOptions",
     "LogEvent",
     "Refuse",
+    "VocabularyAssemblyOptions",
     "createEngine",
     "custom",
     "faulted",
+    "vocabulary",
   ],
 } as const;
 

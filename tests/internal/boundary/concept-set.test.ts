@@ -8,6 +8,7 @@ import {
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { applicationManifest, renderApp } from "@sync-engine/tooling";
+import { vocabulary } from "@sync-engine/advanced";
 import { compute, former, where } from "@sync-engine/language";
 
 class MissingItem extends Error {}
@@ -28,6 +29,10 @@ class Cataloging {
 
 class Remembering {
   constructor(readonly store = "memory") {}
+
+  remember(_: Record<string, never>) {
+    return {};
+  }
 }
 
 class PersistentCataloging extends Cataloging {
@@ -36,9 +41,56 @@ class PersistentCataloging extends Cataloging {
   }
 }
 
-/** A specification document with the given fences under the required prose. */
-function specFor(body = ""): string {
-  return `# Concept\n\n## Purpose\n\nKeep a catalog.\n\n## Principle\n\nA missing item is refused.\n${body}`;
+interface SpecificationParts {
+  readonly actions?: string;
+  readonly name?: string;
+  readonly queries?: string;
+  readonly state?: string;
+  readonly types?: string;
+}
+
+/** Build a complete strict specification while varying only declarations under test. */
+function specFor({
+  actions = "remember() : return ()\n  where true\n  then\n    return",
+  name = "Remembering",
+  queries = "",
+  state = "a set of Items",
+  types = "",
+}: SpecificationParts = {}): string {
+  return `# ${name}
+
+## Purpose
+
+Keep a catalog.
+
+## Principle
+
+A missing item is refused.
+
+## Types
+
+\`\`\`types
+${types}
+\`\`\`
+
+## State
+
+\`\`\`state
+${state}
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+${actions}
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+${queries}
+\`\`\`
+`;
 }
 
 const bare = specFor();
@@ -46,26 +98,21 @@ const bare = specFor();
 const withoutLocations = (value: unknown): unknown =>
   JSON.parse(JSON.stringify(value, (key, item) => (key === "location" ? undefined : item)));
 
-const catalogingSpec = specFor(`
-## Actions
-
-\`\`\`actions
-find () : return ()
+const catalogingActions = `find() : return ()
   where the item is absent
   then
     refuse ITEM_NOT_FOUND "There is no such item."
 
-misplaced () : return ()
+misplaced() : return ()
+  where true
   then
-    return
-\`\`\`
-
-## Queries
-
-\`\`\`queries
-_find () : optional (item: Item)
-\`\`\`
-`);
+    return`;
+const catalogingQueries = "_find() : optional (item: Item)";
+const catalogingSpec = specFor({
+  actions: catalogingActions,
+  name: "Cataloging",
+  queries: catalogingQueries,
+});
 
 const cataloging = registerConcept({
   class: Cataloging,
@@ -83,15 +130,25 @@ describe("external concept registration", () => {
       where(compute(set.computations.normalize, { value }, result)).form({ result }),
     );
     const application = assembleApplication({
-      vocabulary: set.vocabulary,
+      conceptSet: set,
       composition: { normalized },
       instances: set.implementations(),
     });
 
-    expect(set.computations.normalize).toBe(set.vocabulary.computations.normalize);
+    expect(set.computations.normalize.computationName).toBe("normalize");
     expect(await application.form(normalized({ value: "  Ready  " }))).toEqual({
       result: "ready",
     });
+  });
+
+  test("requires exactly one concept selection", () => {
+    const set = conceptSet({ Cataloging: cataloging });
+    expect(() => assembleApplication({ composition: {} } as never)).toThrow(
+      "supply exactly one conceptSet or vocabulary declaration",
+    );
+    expect(() =>
+      assembleApplication({ conceptSet: set, vocabulary: {}, composition: {} } as never),
+    ).toThrow("supply exactly one conceptSet or vocabulary declaration");
   });
 
   test("carries the specification's refusal branch into action-aware instrumentation", async () => {
@@ -108,7 +165,7 @@ describe("external concept registration", () => {
         .then(respond({ ok: true })),
     );
     const application = assemble({
-      vocabulary: set.vocabulary,
+      conceptSet: set,
       composition: { Find, Misplaced },
       instances: { Cataloging: new PersistentCataloging("primary") },
     });
@@ -145,7 +202,7 @@ describe("external concept registration", () => {
         .then(respond({ detail })),
     );
     const application = assemble({
-      vocabulary: set.vocabulary,
+      conceptSet: set,
       composition: { Find },
       instances: { Cataloging: new Cataloging() },
     });
@@ -162,23 +219,24 @@ describe("external concept registration", () => {
 });
 
 describe("parsed declarations and class methods", () => {
-  test("state notation is absent from registration and every generated design surface", () => {
+  test("raw state is retained in registration and manifests but omitted from read-back", () => {
     const marker = "STATE_ONLY_SENTINEL";
+    const state = `${marker}\nthere are no methods and the database has an incompatible field {]`;
     const registration = registerConcept({
       class: Cataloging,
-      spec: catalogingSpec.replace(
-        "## Actions",
-        `## State\n\n\`\`\`state\n${marker}\n` +
-          "there are no methods and the database has an incompatible field {]\n" +
-          "```\n\n## Actions",
-      ),
+      spec: specFor({
+        actions: catalogingActions,
+        name: "Cataloging",
+        queries: catalogingQueries,
+        state,
+      }),
       refusals: { ITEM_NOT_FOUND: MissingItem },
     });
 
-    expect(withoutLocations(registration.specification)).toEqual(
+    expect(withoutLocations(registration.specification)).not.toEqual(
       withoutLocations(cataloging.specification),
     );
-    expect(registration.specification).not.toHaveProperty("state");
+    expect(registration.specification.state.body).toBe(state);
 
     const set = conceptSet({ Cataloging: registration });
     const Find = endpoint("/find", () =>
@@ -187,7 +245,7 @@ describe("parsed declarations and class methods", () => {
         .then(respond({ found: true })),
     );
     const application = assembleApplication({
-      vocabulary: set.vocabulary,
+      conceptSet: set,
       composition: { Find },
       instances: set.implementations(),
     });
@@ -198,7 +256,7 @@ describe("parsed declarations and class methods", () => {
       app: manifest.application,
     });
 
-    expect(JSON.stringify(manifest)).not.toContain(marker);
+    expect(JSON.stringify(manifest)).toContain(marker);
     expect(readBack).not.toContain(marker);
     expect(manifest.endpoints[0]?.validators).toEqual({ input: false, output: false });
   });
@@ -207,24 +265,37 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Remembering,
-        spec: specFor("\n## Actions\n\n```actions\nforget () : return ()\n```\n"),
+        spec: specFor({
+          actions: "forget() : return ()\n  where true\n  then\n    return",
+        }),
       }),
     ).toThrow(/declares the action `forget`, which the class does not implement/);
   });
 
   test("an action the specification does not declare fails by name", () => {
-    expect(() => registerConcept({ class: Cataloging, spec: bare })).toThrow(
-      /implements the action `find`, `misplaced`, which the specification does not declare/,
-    );
+    const findOnly = specFor({
+      actions: catalogingActions.split("\n\nmisplaced", 1)[0],
+      name: "Cataloging",
+      queries: catalogingQueries,
+    });
+    expect(() =>
+      registerConcept({
+        class: Cataloging,
+        spec: findOnly,
+        refusals: { ITEM_NOT_FOUND: MissingItem },
+      }),
+    ).toThrow(/implements the action `misplaced`, which the specification does not declare/);
   });
 
   test("a query the specification does not declare fails by name", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nfind () : return ()\nmisplaced () : return ()\n```\n",
-        ),
+        spec: specFor({
+          actions:
+            "find() : return ()\n  where true\n  then\n    return\n\n" +
+            "misplaced() : return ()\n  where true\n  then\n    return",
+        }),
       }),
     ).toThrow(/implements the query `_find`, which the specification does not declare/);
   });
@@ -238,9 +309,9 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Shelving,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nshelve (item: Item, aisle: Aisle) : return ()\n```\n",
-        ),
+        spec: specFor({
+          actions: "shelve(item: Item, aisle: Aisle) : return ()\n  where true\n  then\n    return",
+        }),
       }),
     ).toThrow(/`shelve` declares the inputs `item`, `aisle` but the class takes `item`, `shelf`/);
   });
@@ -250,12 +321,13 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nfind () : return ()\n  then\n" +
-            '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
-            "misplaced (shelf: Shelf) : return ()\n```\n" +
-            "\n## Queries\n\n```queries\n_find () : optional (item: Item)\n```\n",
-        ),
+        spec: specFor({
+          actions:
+            "find() : return ()\n  where true\n  then\n" +
+            '    refuse ITEM_NOT_FOUND "There is no such item."\n\n' +
+            "misplaced(shelf: Shelf) : return ()\n  where true\n  then\n    return",
+          queries: catalogingQueries,
+        }),
         refusals: { ITEM_NOT_FOUND: MissingItem },
       }),
     ).not.toThrow();
@@ -281,13 +353,14 @@ describe("parsed declarations and class methods", () => {
     expect(() =>
       registerConcept({
         class: Cataloging,
-        spec: specFor(
-          "\n## Actions\n\n```actions\nfind () : return ()\n  then\n" +
-            '    refuse ITEM_NOT_FOUND "There is no such item."\n' +
-            "misplaced () : return ()\n  then\n" +
-            '    refuse SHELVED_WRONG "The item sits on the wrong shelf."\n```\n' +
-            "\n## Queries\n\n```queries\n_find () : optional (item: Item)\n```\n",
-        ),
+        spec: specFor({
+          actions:
+            "find() : return ()\n  where true\n  then\n" +
+            '    refuse ITEM_NOT_FOUND "There is no such item."\n\n' +
+            "misplaced() : return ()\n  where true\n  then\n" +
+            '    refuse SHELVED_WRONG "The item sits on the wrong shelf."',
+          queries: catalogingQueries,
+        }),
         refusals: { ITEM_NOT_FOUND: MissingItem, SHELVED_WRONG: MissingItem },
       }),
     ).toThrow(/share one Error class/);
@@ -295,10 +368,39 @@ describe("parsed declarations and class methods", () => {
 });
 
 describe("concept floors", () => {
+  test("accepts a lower-level declaration and validates descriptor shape", () => {
+    const declared = vocabulary({ concepts: { Remembering }, computations: {} });
+    const valid = {
+      name: "memory",
+      instances: { Remembering: new Remembering() },
+      resources: [],
+      async close() {},
+    };
+    expect(conceptFloor(declared, valid)).toBe(valid);
+
+    const set = conceptSet({ Remembering: registerConcept({ class: Remembering, spec: bare }) });
+    expect(() => conceptFloor(set, { ...valid, name: "" })).toThrow("name must not be empty");
+    expect(() =>
+      conceptFloor(set, {
+        ...valid,
+        instances: { Remembering: new Remembering(), Extra: {} } as never,
+      }),
+    ).toThrow("unknown Extra");
+    expect(() => conceptFloor(set, { ...valid, resources: "database" as never })).toThrow(
+      "resources must be a list",
+    );
+    expect(() => conceptFloor(set, { ...valid, resources: [1] as never })).toThrow(
+      "resources must be a list",
+    );
+    expect(() => conceptFloor(set, { ...valid, close: true as never })).toThrow(
+      "close must release",
+    );
+  });
+
   test("an incomplete floor names what it is missing", () => {
     const set = conceptSet({ Cataloging: cataloging });
     expect(() =>
-      conceptFloor(set.vocabulary, {
+      conceptFloor(set, {
         name: "incomplete",
         instances: {} as never,
         resources: [],
@@ -342,7 +444,7 @@ describe("concept floors", () => {
     const mongo = set.implementations("mongo", { store: "primary" });
     const selected = (instances: typeof mongo) =>
       applicationManifest(
-        assembleApplication({ vocabulary: set.vocabulary, instances, composition: {} }),
+        assembleApplication({ conceptSet: set, instances, composition: {} }),
       ).conceptImplementations.find(({ concept }) => concept === "Remembering")?.selected;
 
     expect(selected(mongo)).toEqual({
@@ -356,7 +458,7 @@ describe("concept floors", () => {
       floor: "mongo",
     });
 
-    const hosted = conceptFloor(set.vocabulary, {
+    const hosted = conceptFloor(set, {
       name: "hosted",
       instances: { Remembering: new Remembering("hosted") },
       resources: [],
@@ -374,13 +476,13 @@ describe("concept floors", () => {
       Remembering: registerConcept({ class: Remembering, spec: bare }),
     });
     const shared = new Remembering("shared");
-    const first = conceptFloor(set.vocabulary, {
+    const first = conceptFloor(set, {
       name: "first",
       instances: { Remembering: shared },
       resources: [],
       async close() {},
     });
-    conceptFloor(set.vocabulary, {
+    conceptFloor(set, {
       name: "second",
       instances: { Remembering: shared },
       resources: [],
@@ -389,7 +491,7 @@ describe("concept floors", () => {
 
     const selected = applicationManifest(
       assembleApplication({
-        vocabulary: set.vocabulary,
+        conceptSet: set,
         instances: { ...first.instances },
         composition: {},
       }),
@@ -425,7 +527,7 @@ describe("concept floors", () => {
       }),
     });
     const application = assembleApplication({
-      vocabulary: set.vocabulary,
+      conceptSet: set,
       composition: {},
       instances: set.implementations("persistent", undefined),
     });
@@ -467,7 +569,7 @@ describe("concept floors", () => {
       }),
     });
     const application = assembleApplication({
-      vocabulary: set.vocabulary,
+      conceptSet: set,
       composition: {},
       instances: set.implementations("structural", undefined),
     });

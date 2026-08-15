@@ -5,6 +5,7 @@ import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
 import type { InstrumentedQuery, ReactionDeclaration } from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
+import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
 import {
   fragmentChannelsOfFormer,
@@ -41,6 +42,7 @@ export class Registry {
   private readonly computationsByName = new Map<string, ComputationRef>();
   private readonly viewsByName = new Map<string, RelationView>();
   private readonly formersByName = new Map<string, FormerRef>();
+  private readonly authoredByDeclaration = new WeakMap<object, AuthoredDeclarationIdentity>();
   private readonly resolver: NameResolver;
   private readonly authored: AuthoredReferenceResolver;
   private readonly validator: ViewFormerValidator;
@@ -129,14 +131,33 @@ export class Registry {
     for (const ref of refs) this.indexView(ref);
   }
 
+  declareAuthoredViews(
+    ...declarations: ReadonlyArray<readonly [RelationView, AuthoredDeclarationIdentity]>
+  ): void {
+    for (const [ref, authored] of declarations) {
+      this.authoredByDeclaration.set(ref, authored);
+      this.indexView(ref);
+    }
+  }
+
   declareFormers(...refs: FormerRef[]): void {
     for (const ref of refs) this.indexFormer(ref);
+  }
+
+  declareAuthoredFormers(
+    ...declarations: ReadonlyArray<readonly [FormerRef, AuthoredDeclarationIdentity]>
+  ): void {
+    for (const [ref, authored] of declarations) {
+      this.authoredByDeclaration.set(ref, authored);
+      this.indexFormer(ref);
+    }
   }
 
   registerViews(views: ViewIR[]): void {
     this.binder.assertViewDag(views);
     for (const ir of views) {
       const ref = this.binder.bindView(ir);
+      if (ir.authored !== undefined) this.authoredByDeclaration.set(ref, ir.authored);
       if (!this.registerUniqueView(ref, ir, false)) continue;
       this.validator.assertViewUsable(ref);
       this.viewsByName.set(ir.name, ref);
@@ -146,6 +167,7 @@ export class Registry {
   registerFormers(formers: FormerIR[]): void {
     for (const ir of formers) {
       const ref = this.binder.bindFormer(ir);
+      if (ir.authored !== undefined) this.authoredByDeclaration.set(ref, ir.authored);
       if (!this.registerUniqueFormer(ref, ir, false)) continue;
       this.validator.assertFormable(ref);
       this.formersByName.set(ir.name, ref);
@@ -170,6 +192,10 @@ export class Registry {
 
   viewRefs(): Iterable<RelationView> {
     return this.viewsByName.values();
+  }
+
+  authoredIdentityOf(ref: object): AuthoredDeclarationIdentity | undefined {
+    return this.authoredByDeclaration.get(ref);
   }
 
   private viewNamed(name: string): RelationView | undefined {

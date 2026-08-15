@@ -49,4 +49,4 @@ Manifests do not contain destinations, package requirements, ownership, installa
 
 Normal results go to stdout. Executable errors go to stderr. `--raw` emits no labels or metadata. The catalog reads only its packaged index, manifests, and selected assets; it never writes to the current working directory or any user project.
 
-The catalog does not guess whether an asset belongs in `src/vocabulary.ts`, under `src/compositions/`, behind an application's `@design/*` alias, or elsewhere. The user owns that decision and any adaptation required by the application.
+The catalog does not guess whether an asset belongs in `src/concepts.ts`, under `src/compositions/`, behind an application's `@design/*` alias, or elsewhere. The user owns that decision and any adaptation required by the application.

@@ -1,7 +1,7 @@
 # Getting started
 
 This tutorial initializes and runs a concept-free sync-engine application in
-an existing Bun package. Add registrations to `src/vocabulary.ts`, real
+an existing Bun package. Add registrations to `src/concepts.ts`, real
 composition modules under `src/compositions/`, and runtime options to
 `src/assembly.ts`.
 
@@ -38,7 +38,7 @@ this tutorial, add these scripts to `package.json`:
 {
   "scripts": {
     "generate": "sync-engine artifacts pin",
-    "check": "sync-engine check --config generated.config.ts && sync-engine artifacts check && tsc --noEmit",
+    "check": "sync-engine check && sync-engine artifacts check && tsc --noEmit",
     "start": "bun src/main.ts"
   }
 }
@@ -52,32 +52,38 @@ tsconfig.json
 src/
   assembly.ts
   main.ts
-  vocabulary.ts
+  concepts.ts
 ```
 
 ## Stable extension points
 
-`src/vocabulary.ts` starts with no registrations:
+`src/concepts.ts` starts with no registrations:
 
 ```ts
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 
-export const applicationConcepts = conceptSet({});
-export const { concepts, vocabulary } = applicationConcepts;
+export const applicationConceptSet = conceptSet({});
+export const { concepts } = applicationConceptSet;
 ```
 
+`applicationConceptSet` is the complete object passed to assembly. `concepts`
+is its authoring facet: composition modules import that alias to refer to named
+concept declarations after registrations are added. It is empty in this initial
+concept-free application.
+
 A concept-free setup does not create placeholder design or composition files.
-Add real composition modules under `src/compositions/` when the design calls
-for them. Until then, `src/assembly.ts` assembles an empty composition:
+Its generated config contains `design: { version: 1, documents: [] }`, the
+explicit empty application-design contract. Add real composition modules under
+`src/compositions/` when the design calls for them. Until then,
+`src/assembly.ts` assembles an empty composition:
 
 ```ts
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { applicationConcepts, vocabulary } from "./vocabulary.ts";
+import { applicationConceptSet } from "./concepts.ts";
 
 export function assembleApplication() {
   return assemble({
-    vocabulary,
-    instances: applicationConcepts.implementations(),
+    conceptSet: applicationConceptSet,
     composition: {},
   });
 }
@@ -93,9 +99,9 @@ bun run check
 bun run start
 ```
 
-`generate` writes the configured read-back and wire contract. `check` compares
-concept specifications with their classes, inspects application diagnostics,
-verifies the generated files, and runs TypeScript. The concept-free application
+`generate` writes the configured read-back and wire contract. `check` defaults
+to `generated.config.ts`, checks concept source and the registered application
+design, verifies generated files, and runs TypeScript. The concept-free application
 has no concepts or endpoints, so `start` prints `[]`.
 
 Rerun `sync-engine setup` to reconcile setup files. It verifies unchanged

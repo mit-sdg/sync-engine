@@ -1,18 +1,20 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
-import { vocabulary } from "@sync-engine/language";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
+import { vocabulary } from "@sync-engine/advanced";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
+import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
 import {
   checkGenerated,
+  inspectGenerated,
   pinGenerated,
   renderGenerated,
   resolveApplication,
@@ -26,24 +28,23 @@ import { loadGeneratedApplication } from "@command/generated-config";
  * resolve against a project laid out the way the generator writes one.
  */
 const configUrl = new URL("../../packaging/application/generated.config.ts", import.meta.url);
-const languageModule = new URL("../../../src/language/index.ts", import.meta.url);
-
-class SessioningConcept {
-  start({ user }: { user: string }) {
-    return { session: `session-${user}`, expiresAt: new Date(0) };
-  }
-
-  current({ session }: { session: string }) {
-    return { user: session.slice("session-".length) };
-  }
-}
-
-const vocabularyDeclaration = vocabulary({
-  concepts: { Sessioning: SessioningConcept },
-  computations: {},
+const languageModule = new URL("./fixtures/generated-artifacts/vocabulary.ts", import.meta.url);
+const conceptFreeModule = new URL(
+  "./fixtures/generated-artifacts/concept-free/vocabulary.ts",
+  import.meta.url,
+);
+const conceptFreeVocabulary = vocabulary({ concepts: {}, computations: {} });
+const fixtureDesign = (documents: readonly string[] = []) => ({
+  version: 1 as const,
+  documents: documents.map(
+    (name) => new URL(`./fixtures/generated-artifacts/${name}.md`, import.meta.url),
+  ),
 });
-const { Sessioning } = vocabularyDeclaration.concepts;
-
+const emptyDesign = fixtureDesign();
+const loginDesign = fixtureDesign(["login"]);
+const loginCurrentDesign = fixtureDesign(["login", "current"]);
+const closureDesign = fixtureDesign(["closure"]);
+const apiClosureDesign = fixtureDesign(["api-closure"]);
 const Login = endpoint(
   "/login",
   ({ user, session, expiresAt }) =>
@@ -88,7 +89,8 @@ describe("generated application artifacts", () => {
             assemble: () => application,
             directory: new URL("./generated/", import.meta.url),
             title: "Application",
-            vocabulary: { module: languageModule },
+            design: loginDesign,
+            conceptSet: { module: languageModule },
           },
           configUrl,
         ),
@@ -97,12 +99,95 @@ describe("generated application artifacts", () => {
 
     expect(boundary?.actions.map(({ name }) => name)).toEqual(["request", "respond"]);
     expect(inspection.diagnostics.map(({ code }) => code)).toContain("MISSING_ENDPOINT_FALLBACK");
-    expect(rendered).toContain("- `request (…)`");
-    expect(rendered).toContain("- `respond (…)` — may refuse `NOT_PENDING`");
+    expect(rendered).toContain("### Sessioning");
+    expect(rendered).not.toContain("### RequestBoundary");
     expect(rendered).not.toMatch(/- `(register|cancel|respondFramework) /);
     expect(rendered).toContain("when RequestBoundary.request");
     expect(rendered).toContain("RequestBoundary.respond (");
+  }, 15_000);
+
+  test("assembles once while checking the exact generated application", async () => {
+    let assemblies = 0;
+    await renderGenerated(
+      resolveApplication(
+        {
+          assemble: () => {
+            assemblies += 1;
+            return assemble({ vocabulary: vocabularyDeclaration, composition: { Login } });
+          },
+          directory: new URL("./not-written/", import.meta.url),
+          title: "Single check",
+          design: loginDesign,
+          conceptSet: { module: languageModule },
+        },
+        configUrl,
+      ),
+    );
+    expect(assemblies).toBe(1);
   });
+
+  test("rebuilds source analysis for each programmatic inspection after source edits", async () => {
+    const fixtureDirectory = fileURLToPath(
+      new URL("./fixtures/generated-artifacts/", import.meta.url),
+    );
+    const temporary = await mkdtemp(join(fixtureDirectory, ".source-analysis-"));
+    const modulePath = join(temporary, "vocabulary.ts");
+    const specPath = join(temporary, "sessioning.md");
+    const source = (parameter: "user" | "account") => `
+import { vocabulary as declareVocabulary } from "@mit-sdg/sync-engine/advanced";
+import sessioningSpec from "./sessioning.md" with { type: "text" };
+export class SessioningConcept {
+  start({ ${parameter} }: { ${parameter}: string }) {
+    return { session: \`session-\${${parameter}}\`, expiresAt: new Date(0) };
+  }
+  current({ session }: { session: string }) { return { user: session }; }
+}
+export const vocabulary = declareVocabulary({
+  concepts: { Sessioning: { class: SessioningConcept, spec: sessioningSpec } },
+  computations: {},
+});
+`;
+    try {
+      await writeFile(specPath, await readFile(join(fixtureDirectory, "sessioning.md"), "utf8"));
+      await writeFile(
+        join(temporary, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            allowArbitraryExtensions: true,
+            module: "NodeNext",
+            moduleResolution: "NodeNext",
+            target: "ESNext",
+          },
+          files: ["vocabulary.ts"],
+        }),
+      );
+      await writeFile(modulePath, source("user"));
+      const application = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+          directory: new URL("./not-written/", import.meta.url),
+          title: "Fresh source analysis",
+          design: loginDesign,
+          conceptSet: { module: pathToFileURL(modulePath) },
+        },
+        configUrl,
+      );
+
+      const first = await inspectGenerated(application, (_assembly, analysis) =>
+        analysis.context.source.getFullText(),
+      );
+      expect(first).toContain("start({ user }");
+
+      await writeFile(modulePath, source("account"));
+      const second = await inspectGenerated(application, (_assembly, analysis) =>
+        analysis.context.source.getFullText(),
+      );
+      expect(second).toContain("start({ account }");
+      expect(second).not.toContain("start({ user }");
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }, 15_000);
 
   test("warns when an endpoint has no answer path", () => {
     const application = assemble({
@@ -136,9 +221,9 @@ describe("generated application artifacts", () => {
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--vocabulary-module path | --config path] [--fail-on-warnings]
-    Check registered concepts against erased TypeScript source and optionally inspect application diagnostics.
-    Without a config, uses src/concept-set.ts as a compatibility default.\n`;
+  sync-engine check [--config path] [--fail-on-warnings]
+    Check the configured application, including concept TypeScript source agreement and application diagnostics.
+    The configuration path defaults to generated.config.ts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,
       encoding: "utf8",
@@ -189,26 +274,41 @@ describe("generated application artifacts", () => {
 
       const unknown = run("check", "--unknown");
       expect(unknown.status).toBe(1);
-      expect(unknown.stderr).toContain(
-        "sync-engine check [--vocabulary-module path | --config path]",
-      );
+      expect(unknown.stderr).toContain("sync-engine check [--config path]");
 
-      const twoRoots = run(
-        "check",
-        "--vocabulary-module",
-        "src/application-concepts.ts",
-        "--config",
-        "generated.config.ts",
-      );
-      expect(twoRoots.status).toBe(1);
-      expect(twoRoots.stderr).toContain("--vocabulary-module path | --config path");
+      const removedMode = run("check", "--vocabulary-module", "src/application-concepts.ts");
+      expect(removedMode.status).toBe(1);
+      expect(removedMode.stderr).toContain("sync-engine check [--config path]");
       expect(existsSync(join(temporary, "imported"))).toBe(false);
+
+      await rm(join(temporary, "generated.config.ts"));
+      const missingDefault = run("check");
+      expect(missingDefault.status).toBe(1);
+      expect(missingDefault.stderr).toContain("Configuration does not exist: generated.config.ts");
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
-  test("an HTTP cookie policy emits logical and projected named contracts", async () => {
+  test("HTTP policies project cookie and logical fields in one generated operation", async () => {
+    const cookieProjection = httpWire({
+      name: "ApplicationWireHttpCookie",
+      policy: httpPolicy({
+        publicOrigin: "http://localhost:3000",
+        cookies: {
+          session: {
+            name: "session",
+            input: "session",
+            issue: [{ path: "/login", value: "session", expires: "expiresAt" }],
+            clear: [],
+          },
+        },
+      }),
+    });
+    const logicalProjection = httpWire({
+      name: "ApplicationWireHttp",
+      policy: httpPolicy({ publicOrigin: "https://example.test" }),
+    });
     const application = assemble({
       vocabulary: vocabularyDeclaration,
       composition: { Login, Current },
@@ -219,22 +319,19 @@ describe("generated application artifacts", () => {
           assemble: () => application,
           directory: new URL("./generated/", import.meta.url),
           title: "Application",
-          vocabulary: { module: languageModule },
+          design: loginCurrentDesign,
+          conceptSet: { module: languageModule },
           projections: [
-            httpWire({
-              name: "ApplicationWireHttp",
-              policy: httpPolicy({
-                publicOrigin: "http://localhost:3000",
-                cookies: {
-                  session: {
-                    name: "session",
-                    input: "session",
-                    issue: [{ path: "/login", value: "session", expires: "expiresAt" }],
-                    clear: [],
-                  },
-                },
-              }),
-            }),
+            cookieProjection,
+            {
+              ...logicalProjection,
+              project(facts) {
+                return {
+                  ...logicalProjection.project(facts),
+                  render: { appWideErrorName: "PlainHttpAppWideError" },
+                };
+              },
+            },
           ],
         },
         configUrl,
@@ -245,38 +342,19 @@ describe("generated application artifacts", () => {
     expect(rendered.wire).toContain("export type ApplicationWire = {");
     expect(rendered.wire).toContain('"session": Jsonify<');
     expect(rendered.wire).toContain("export type HttpAppWideError =");
+    expect(rendered.wire).toContain("export type ApplicationWireHttpCookie = {");
+    expect(rendered.wire).toContain("export type PlainHttpAppWideError =");
     expect(rendered.wire).toContain("export type ApplicationWireHttp = {");
-    const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
-    expect(projected).not.toContain('"session":');
-  });
 
-  test("an HTTP policy projects errors without consuming logical fields", async () => {
-    const application = assemble({
-      vocabulary: vocabularyDeclaration,
-      composition: { Login, Current },
-    });
-    const rendered = await renderGenerated(
-      resolveApplication(
-        {
-          assemble: () => application,
-          directory: new URL("./generated/", import.meta.url),
-          title: "Application",
-          vocabulary: { module: languageModule },
-          projections: [
-            httpWire({
-              name: "ApplicationWireHttp",
-              policy: httpPolicy({ publicOrigin: "https://example.test" }),
-            }),
-          ],
-        },
-        configUrl,
-      ),
+    const cookie = rendered.wire.slice(
+      rendered.wire.indexOf("ApplicationWireHttpCookie"),
+      rendered.wire.indexOf("PlainHttpAppWideError"),
     );
-
-    const projected = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp"));
-    expect(projected).toContain('"session":');
-    expect(projected).toContain('error: { error: HttpAppWideError | "INVALID_REQUEST" }');
-  });
+    expect(cookie).not.toContain('"session":');
+    const logical = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp ="));
+    expect(logical).toContain('"session":');
+    expect(logical).toContain('error: { error: PlainHttpAppWideError | "INVALID_REQUEST" }');
+  }, 15_000);
 
   test("ordinary assembly rejects an executable endpoint absent from portable IR", async () => {
     const application = resolveApplication(
@@ -288,7 +366,8 @@ describe("generated application artifacts", () => {
           }),
         directory: new URL("./not-written/", import.meta.url),
         title: "Incomplete application",
-        vocabulary: { module: languageModule },
+        design: apiClosureDesign,
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -328,7 +407,8 @@ describe("generated application artifacts", () => {
           }),
         directory,
         title: "Rejected local endpoint",
-        vocabulary: { module: languageModule },
+        design: closureDesign,
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -348,11 +428,12 @@ describe("generated application artifacts", () => {
     const escaped = join(temporary, "escape.md");
     const application = resolveApplication(
       {
-        assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+        assemble: () => assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
         directory: pathToFileURL(`${generated}/`),
         specification: "%2e%2e/escape.md",
         title: "Unsafe path application",
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        conceptSet: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -368,7 +449,84 @@ describe("generated application artifacts", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
+
+  test("rejects canonical output collisions with every registered authoritative input kind", async () => {
+    const fixtureDirectory = new URL("./fixtures/generated-artifacts/", import.meta.url);
+    const cases = [
+      {
+        label: "generated config",
+        directory: new URL("../../packaging/application/", import.meta.url),
+        specification: "generated.config.ts",
+        authored: false,
+      },
+      {
+        label: "design document",
+        directory: fixtureDirectory,
+        specification: "login.md",
+        authored: true,
+      },
+      {
+        label: "concept specification",
+        directory: fixtureDirectory,
+        specification: "sessioning.md",
+        authored: true,
+      },
+      {
+        label: "concept-set module",
+        directory: new URL("./fixtures/generated-artifacts/concept-free/", import.meta.url),
+        specification: "vocabulary.ts",
+        authored: false,
+      },
+    ] as const;
+
+    for (const collision of cases) {
+      const application = resolveApplication(
+        {
+          assemble: () =>
+            collision.authored
+              ? assemble({ vocabulary: vocabularyDeclaration, composition: { Login } })
+              : assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
+          directory: collision.directory,
+          specification: collision.specification,
+          title: "Colliding application",
+          design: collision.authored ? loginDesign : emptyDesign,
+          conceptSet: { module: collision.authored ? languageModule : conceptFreeModule },
+        },
+        configUrl,
+      );
+      await expect(pinGenerated(application, "specification")).rejects.toThrow(
+        new RegExp(`collides with authoritative ${collision.label}`),
+      );
+    }
+  }, 30_000);
+
+  test("canonicalization rejects a symlinked output alias of a registered design source", async () => {
+    const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-alias-"));
+    const alias = join(temporary, "design-alias.md");
+    const designPath = fileURLToPath(
+      new URL("./fixtures/generated-artifacts/login.md", import.meta.url),
+    );
+    try {
+      await symlink(designPath, alias);
+      const application = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+          directory: pathToFileURL(`${temporary}/`),
+          specification: "design-alias.md",
+          title: "Aliased collision",
+          design: loginDesign,
+          conceptSet: { module: languageModule },
+        },
+        configUrl,
+      );
+      await expect(pinGenerated(application, "specification")).rejects.toThrow(
+        /collides with authoritative design document/,
+      );
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }, 15_000);
 
   test("selectively pins atomic files and detects missing or changed output", async () => {
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-"));
@@ -376,11 +534,11 @@ describe("generated application artifacts", () => {
     const directory = pathToFileURL(`${generated}/`);
     const application = resolveApplication(
       {
-        assemble: () =>
-          assemble({ vocabulary: vocabularyDeclaration, composition: { Login, Current } }),
+        assemble: () => assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
         directory,
         title: "Filesystem application",
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        conceptSet: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -405,7 +563,7 @@ describe("generated application artifacts", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   test("reports generated artifact filesystem failures without partial writes", async () => {
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-generated-failure-"));
@@ -414,11 +572,12 @@ describe("generated application artifacts", () => {
     await mkdir(blocked, { recursive: true });
     const application = resolveApplication(
       {
-        assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: { Login } }),
+        assemble: () => assemble({ vocabulary: conceptFreeVocabulary, composition: {} }),
         directory: pathToFileURL(`${generated}/`),
         specification: "blocked.md",
         title: "Blocked application",
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        conceptSet: { module: conceptFreeModule },
       },
       configUrl,
     );
@@ -434,7 +593,7 @@ describe("generated application artifacts", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   test("drains inspection before closing application-owned generation resources", async () => {
     const lifecycle: string[] = [];
@@ -455,7 +614,8 @@ describe("generated application artifacts", () => {
         },
         directory: new URL("./not-written/", import.meta.url),
         title: "Lifecycle application",
-        vocabulary: { module: languageModule },
+        design: loginDesign,
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -476,7 +636,8 @@ describe("generated application artifacts", () => {
           closed = true;
         },
         title: "Failed lifecycle application",
-        vocabulary: { module: languageModule },
+        design: emptyDesign,
+        conceptSet: { module: languageModule },
       },
       configUrl,
     );
@@ -493,9 +654,12 @@ describe("an artifact configuration's defaults", () => {
       await mkdir(join(directory, "src"));
       await writeFile(
         join(directory, "generated.config.ts"),
-        'export default { assemble() {}, title: "Loaded application" };\n',
+        'export default { assemble() {}, title: "Loaded application", design: { version: 1, documents: [] } };\n',
       );
-      await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
+      await writeFile(
+        join(directory, "src/concepts.ts"),
+        "export const applicationConceptSet = {};\n",
+      );
       const resolved = await loadGeneratedApplication("generated.config.ts", directory);
       expect(resolved.title).toBe("Loaded application");
     } finally {
@@ -503,16 +667,93 @@ describe("an artifact configuration's defaults", () => {
     }
   });
 
-  test("a title and an assembly are enough with the compatibility source name", async () => {
+  test("resolves registered local design sources outside the application directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sync-engine-design-config-"));
+    try {
+      const applicationDirectory = join(root, "application");
+      const sharedDirectory = join(root, "shared-design");
+      await mkdir(applicationDirectory, { recursive: true });
+      await mkdir(sharedDirectory, { recursive: true });
+      const typesDesign = pathToFileURL(join(applicationDirectory, "types.md"));
+      const sharedDesign = pathToFileURL(join(sharedDirectory, "behavior.md"));
+      await writeFile(typesDesign, "# Application types\n");
+      await writeFile(sharedDesign, "# Shared behavior\n");
+      const localConfig = pathToFileURL(join(applicationDirectory, "generated.config.ts"));
+
+      const resolved = resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
+          title: "Registered design",
+          design: { version: 1, documents: [typesDesign, sharedDesign] },
+          conceptSet: { module: languageModule },
+        },
+        localConfig,
+      );
+
+      expect(resolved.design).toEqual({
+        version: 1,
+        documents: [typesDesign, sharedDesign],
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("requires and validates every design registration", () => {
+    const application = {
+      assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
+      title: "Design validation",
+      conceptSet: { module: languageModule },
+    };
+    const resolveDesign = (design?: unknown) =>
+      resolveApplication(
+        { ...application, ...(design === undefined ? {} : { design }) } as never,
+        configUrl,
+      );
+
+    expect(() => resolveDesign()).toThrow("design block is required");
+    expect(() => resolveDesign({ version: 2, documents: [] })).toThrow("design.version must be 1");
+    expect(() => resolveDesign({ version: 1, vocabulary: configUrl, documents: [] })).toThrow(
+      "design.vocabulary was removed",
+    );
+    expect(() => resolveDesign({ version: 1 })).toThrow("design.documents must be an array");
+    expect(() => resolveDesign({ version: 1, documents: ["design.md"] })).toThrow(
+      "design.documents[0] must be a URL",
+    );
+    expect(() =>
+      resolveDesign({ version: 1, documents: [new URL("https://example.test/design.md")] }),
+    ).toThrow("design.documents[0] must be a local file URL, not https:");
+    expect(() =>
+      resolveDesign({
+        version: 1,
+        documents: [new URL("./absent-design.md", import.meta.url)],
+      }),
+    ).toThrow(/design\.documents\[0\] does not exist: .*absent-design\.md/);
+    expect(() => resolveDesign({ version: 1, documents: [configUrl, configUrl] })).toThrow(
+      "design.documents[1] duplicates design.documents[0]",
+    );
+    expect(() =>
+      resolveApplication(
+        { ...application, design: emptyDesign, vocabulary: { module: languageModule } } as never,
+        configUrl,
+      ),
+    ).toThrow("top-level vocabulary was replaced by conceptSet");
+  });
+
+  test("a title and an assembly use the conventional concept-set source", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sync-engine-default-config-"));
     try {
       await mkdir(join(directory, "src"));
-      await writeFile(join(directory, "src/concept-set.ts"), "export const vocabulary = {};\n");
+      await writeFile(
+        join(directory, "src/concepts.ts"),
+        "export const applicationConceptSet = {};\n",
+      );
       const compatibilityConfigUrl = pathToFileURL(join(directory, "generated.config.ts"));
       const resolved = resolveApplication(
         {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Reading circle",
+          design: emptyDesign,
         },
         compatibilityConfigUrl,
       );
@@ -522,14 +763,14 @@ describe("an artifact configuration's defaults", () => {
         wire: resolved.wire,
         wireName: resolved.wireName,
         wireBanner: resolved.wireBanner,
-        vocabularyFrom: resolved.vocabularyFrom,
+        conceptSetFrom: resolved.conceptSetFrom,
       }).toEqual({
         directory: new URL("./generated/", compatibilityConfigUrl).href,
         specification: "reading-circle.md",
         wire: "wire.ts",
         wireName: "ReadingCircleWire",
         wireBanner: undefined,
-        vocabularyFrom: { from: "../src/concept-set.ts", export: "vocabulary" },
+        conceptSetFrom: { from: "../src/concepts.ts", export: "applicationConceptSet" },
       });
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -541,18 +782,19 @@ describe("an artifact configuration's defaults", () => {
       {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
         title: "Reading circle",
+        design: emptyDesign,
         specification: "book.md",
         specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",
         wireBanner: "// Project wire contract",
-        vocabulary: { module: languageModule, export: "words" },
+        conceptSet: { module: languageModule, export: "words" },
       },
       configUrl,
     );
     const rendered = await renderGenerated(resolved);
     expect(resolved.specification).toBe("book.md");
     expect(resolved.wireName).toBe("CircleContracts");
-    expect(resolved.vocabularyFrom.export).toBe("words");
+    expect(resolved.conceptSetFrom.export).toBe("words");
     expect(
       rendered.specification.startsWith(
         `<!-- Project specification -->\n<!-- Manifest producer: ${PACKAGE_NAME}@${PACKAGE_VERSION}; concept specification: sync-engine.concept-specification@1; renderer: ${PACKAGE_NAME}@${PACKAGE_VERSION}. -->`,
@@ -565,17 +807,18 @@ describe("an artifact configuration's defaults", () => {
     ).toBe(true);
   });
 
-  test("a vocabulary module that is not there fails by path", () => {
+  test("a concept-set module that is not there fails by path", () => {
     expect(() =>
       resolveApplication(
         {
           assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
           title: "Reading circle",
-          vocabulary: { module: new URL("./absent/concept-set.ts", import.meta.url) },
+          design: emptyDesign,
+          conceptSet: { module: new URL("./absent/concept-set.ts", import.meta.url) },
         },
         configUrl,
       ),
-    ).toThrow(/no vocabulary module at .*absent[/\\]concept-set\.ts/);
+    ).toThrow(/no concept-set module at .*absent[/\\]concept-set\.ts/);
   });
 
   test("a configuration without a title fails", () => {

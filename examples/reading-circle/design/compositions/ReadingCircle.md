@@ -3,37 +3,19 @@
 A reading circle brings members together around one current reading and keeps
 their discussion attached to that circle's particular selection.
 
-## Compositions
+A host [creates a circle](reaction:ReadingCircle.CircleMembership.CreateCircle)
+as its first member, and other people may
+[join it](reaction:ReadingCircle.CircleMembership.JoinCircle).
 
-### CircleMembership
+[Choosing a reading](reaction:ReadingCircle.ReadingDiscussion.ChooseReading) for
+a circle [opens a discussion for that selection](reaction:ReadingCircle.ReadingDiscussion.SelectedReadingOpensDiscussion).
+A person [may respond when membership holds](view:ReadingCircle.ReadingDiscussion.MemberMayRespond),
+and the [accepted response endpoint](reaction:ReadingCircle.ReadingDiscussion.AddResponse)
+adds that response to the current reading's discussion. The complementary
+[nonmembership relation](view:ReadingCircle.ReadingDiscussion.NonmemberMayNotRespond)
+drives the [rejection endpoint](reaction:ReadingCircle.ReadingDiscussion.RejectNonmemberResponse),
+which returns `NOT_A_MEMBER`.
 
-A host creates a circle as its first member, and other people may join it.
-
-### ReadingDiscussion
-
-Choosing a reading for a circle opens a discussion for that selection. A circle
-member may respond to the current reading; a nonmember's response request
-returns `NOT_A_MEMBER`.
-
-### CirclePages
-
-Opening a circle presents its name, host, members, current reading, and the
-responses to that reading together.
-
-## Views
-
-### MemberMayRespond
-
-A person may respond in a circle when that person is a member of the circle.
-
-### NonmemberMayNotRespond
-
-A person may not respond in a circle when that person is not a member of the
-circle.
-
-## Formers
-
-### CirclePage
-
-The circle page combines circle details and membership with the current
-selection's open discussion and responses.
+[Opening a circle](reaction:ReadingCircle.CirclePages.GetCirclePage) uses the
+[circle page](former:ReadingCircle.CirclePages.CirclePage) to present its name,
+host, members, current reading, and the responses to that reading together.

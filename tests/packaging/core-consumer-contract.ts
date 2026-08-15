@@ -1,22 +1,18 @@
 import { createClient, createLocalClient } from "@mit-sdg/sync-engine/client";
 import type { ClientError, ClientTransport } from "@mit-sdg/sync-engine/client";
 import { assemble, conceptSet, Logging, registerConcept } from "@mit-sdg/sync-engine/assembly";
-import type {
-  ActionRefusal,
-  AssemblyOptions,
-  LogEntry,
-  LogSink,
-} from "@mit-sdg/sync-engine/assembly";
+import type { ActionRefusal, LogEntry, LogSink } from "@mit-sdg/sync-engine/assembly";
 import type { GatewayOptions, InvocationResult, Invoker } from "@mit-sdg/sync-engine/boundary";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { vocabulary, type VocabularyAssemblyOptions } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 import type {
-  ApplicationManifestV5,
+  ApplicationManifestV1,
   ComputationInventoryIR,
   ConceptImplementationProvenanceIR,
 } from "@mit-sdg/sync-engine/tooling";
 
-declare const manifestV5: ApplicationManifestV5;
-const manifestVersion: 5 = manifestV5.version;
+declare const manifestV1: ApplicationManifestV1;
+const manifestVersion: 1 = manifestV1.version;
 void manifestVersion;
 declare const computationInventory: ComputationInventoryIR;
 const computationSource: "standard" | "vocabulary" = computationInventory.source;
@@ -101,7 +97,7 @@ if (occurrenceEntry.kind === "firing") {
   occurrenceEntry.firing.consumed.push("another-id");
 }
 void [accidentallyAsyncLogSink, AccidentallyAsyncLogSink];
-const directOptions: AssemblyOptions<{ Direct: typeof DirectConcept }, {}> = {
+const directOptions: VocabularyAssemblyOptions<{ Direct: typeof DirectConcept }, {}> = {
   vocabulary: directVocabulary,
   composition: {},
   initialize: { Direct: ["direct:"] },

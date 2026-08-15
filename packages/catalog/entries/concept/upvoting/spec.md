@@ -11,6 +11,15 @@ Ari upvotes proposal `p1`, giving it score 1. Bo downvotes `p1`, returning the s
 A second downvote from Ari is refused. Ari unvotes, leaving Bo's downvote and score -1;
 a second unvote is refused.
 
+## Types
+
+```types
+external Item
+  The object receiving votes.
+external Voter
+  The identity expressing one current preference.
+```
+
 ## State
 
 ```state
@@ -32,11 +41,11 @@ upvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where the current Vote for item and voter is down
   then
     change that Vote to up
-    return item and voter
+    return item, voter
   where there is no Vote for item and voter
   then
     add an up Vote for item and voter
-    return item and voter
+    return item, voter
 
 downvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where the current Vote for item and voter is down
@@ -45,11 +54,11 @@ downvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where the current Vote for item and voter is up
   then
     change that Vote to down
-    return item and voter
+    return item, voter
   where there is no Vote for item and voter
   then
     add a down Vote for item and voter
-    return item and voter
+    return item, voter
 
 unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where there is no Vote for item and voter
@@ -58,7 +67,7 @@ unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
   where there is a Vote for item and voter
   then
     delete that Vote
-    return item and voter
+    return item, voter
 ```
 
 ## Queries
@@ -70,8 +79,3 @@ _score (item: Item) : one (score: Integer)
   answers the number of up Votes minus the number of down Votes
   answers 0 for an Item with no Votes
 ```
-
-## Types
-
-`Item` and `Voter` are opaque external identities. `Direction` is the value `up` or
-`down`. `Integer` is a signed whole number.

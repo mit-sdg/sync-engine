@@ -1,6 +1,7 @@
 /** Query answers and the optional promises that narrow their cardinality. */
 import { describe, expect, test } from "vite-plus/test";
-import { each, former, vocabulary, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { each, former, where } from "@sync-engine/language";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
 import { quietReacting } from "../../utils/reacting.ts";
 

@@ -12,6 +12,13 @@ in publication order with their authors, and each post can be read by its
 identity. Publishing a blank message or one longer than 500 characters is
 refused and does not add a post.
 
+## Types
+
+```types
+external Author
+  The identity that authored the post.
+```
+
 ## State
 
 ```state
@@ -41,8 +48,3 @@ _all () : many (post: Post, author: Author, content: String)
 _get (post: Post) : optional (author: Author, content: String)
   answers no row for an unknown Post
 ```
-
-## Types
-
-`Post` is an identity Posting allocates for each published message. `Author` is
-an opaque external identity. A post's `String` content is owned by Posting.

@@ -6,7 +6,6 @@ export {
   composition,
   multiInstanceConcepts,
   multiInstanceHttpPolicy,
-  vocabulary,
 } from "./contract.ts";
 export type { MultiInstanceHttpWire, MultiInstanceWire } from "./generated/wire.ts";
 

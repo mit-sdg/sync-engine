@@ -45,7 +45,7 @@ assembly registration; former-root errors fail when installed for evaluation.
 ## The scene
 
 The [reading-circle example](../../../examples/reading-circle/README.md)
-supplies this vocabulary and its query promises:
+supplies this concept set and its query promises:
 
 | Concept    | Actions                    | Queries and their promises                                                                                                                        |
 | ---------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -54,7 +54,7 @@ supplies this vocabulary and its query promises:
 | Discussing | `open`, `respond`, `close` | `_openFor (subject) → discussion` at most one · `_responses (discussion) → response, author, text` any number                                     |
 
 The entries register in composition `book`, reflected in reaction read-backs.
-Query promises belong to the vocabulary contract, not each use site.
+Query promises belong to the concept-set contract, not each use site.
 
 ## 1 · A plain line
 

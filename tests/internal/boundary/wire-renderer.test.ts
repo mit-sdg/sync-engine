@@ -304,31 +304,31 @@ describe("wire TypeScript renderer", () => {
     expect(source).toContain("error: { error: HttpAppWideError");
   });
 
-  test("uses exact vocabulary references only when given an anchor", () => {
+  test("uses exact concept-set references only when given an anchor", () => {
     const fallback = renderWireTypes(anchoredFixture);
     const anchored = renderWireTypes(anchoredFixture, {
-      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
     });
 
     expect(fallback).toContain('"entry": Json;');
-    expect(fallback).not.toContain("ApplicationVocabulary");
+    expect(fallback).not.toContain("ApplicationConceptSet");
     expect(anchored).toContain(
-      'import type { vocabulary as ApplicationVocabulary } from "./vocabulary.ts";',
+      'import type { applicationConceptSet as ApplicationConceptSet } from "./concepts.ts";',
     );
     expect(anchored).toContain(
-      'Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Ledger"]["add"]>>, ["entry"]>>',
+      'Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Ledger"]["add"]>>, ["entry"]>>',
     );
     expect(anchored).toContain(
-      'Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationVocabulary.concepts)["Ledger"]["_labelOf"]>>>, ["label"]>> | null',
+      'Jsonify<AtPath<QueryRow<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Ledger"]["_labelOf"]>>>, ["label"]>> | null',
     );
     expect(anchored).not.toContain("type OneOf<");
   });
 
   test("emits exactly the helpers used by sparse and appended contracts", async () => {
-    const vocabulary = { from: "./vocabulary.ts", export: "vocabulary" };
+    const conceptSet = { from: "./concepts.ts", export: "applicationConceptSet" };
     const empty = renderWireTypes(wireWithOutput(reference()), {
       moduleName: "EmptyWire",
-      vocabulary,
+      conceptSet,
     });
     const literal = renderWireTypes(
       wireWithOutput({
@@ -344,11 +344,11 @@ describe("wire TypeScript renderer", () => {
           },
         ],
       }),
-      { moduleName: "LiteralWire", vocabulary },
+      { moduleName: "LiteralWire", conceptSet },
     );
     const number = renderWireTypes(wireWithOutput(reference({ source: "number" })), {
       moduleName: "NumberWire",
-      vocabulary,
+      conceptSet,
     });
     const appendedWire = wireWithOutput(
       reference({
@@ -360,31 +360,31 @@ describe("wire TypeScript renderer", () => {
     );
     const preamble = renderWireTypes(wireWithOutput({ kind: "literal", value: true }), {
       moduleName: "LogicalWire",
-      vocabulary,
+      conceptSet,
       sharedWires: [appendedWire],
     });
     const appended = renderWireTypes(appendedWire, {
       moduleName: "AppendedWire",
       appWideErrorName: "AppendedAppWideError",
-      vocabulary,
+      conceptSet,
       preamble: false,
     });
 
     expect(empty).toContain("type AllOf<");
     expect(empty).toContain("type Jsonify<");
-    expect(empty).not.toContain("ApplicationVocabulary");
+    expect(empty).not.toContain("ApplicationConceptSet");
     expect(empty).not.toContain("type AtPath<");
     expect(literal).toContain("type OneOf<");
     expect(literal).toContain("type Jsonify<");
-    expect(literal).not.toContain("ApplicationVocabulary");
+    expect(literal).not.toContain("ApplicationConceptSet");
     expect(literal).not.toContain("type AtPath<");
     expect(literal).not.toContain("type AllOf<");
     expect(number).toContain("type Jsonify<");
-    expect(number).not.toContain("ApplicationVocabulary");
+    expect(number).not.toContain("ApplicationConceptSet");
     expect(number).not.toContain("type AtPath<");
     expect(number).not.toContain("type AllOf<");
     expect(number).not.toContain("type OneOf<");
-    expect(preamble).toContain("ApplicationVocabulary");
+    expect(preamble).toContain("ApplicationConceptSet");
     expect(preamble).toContain("type AtPath<");
     expect(preamble).toContain("type QueryRow<");
 
@@ -393,8 +393,8 @@ describe("wire TypeScript renderer", () => {
       "literal.ts": literal,
       "number.ts": number,
       "appended.ts": `${preamble}\n${appended}`,
-      "vocabulary.ts": `
-export declare const vocabulary: {
+      "concepts.ts": `
+export declare const applicationConceptSet: {
   concepts: { Ledger: { rows(input: Record<string, never>): readonly { value: string }[] } };
 };
 `,
@@ -434,7 +434,7 @@ export declare const vocabulary: {
     };
     expect(() =>
       renderWireTypes(unresolved, {
-        vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+        conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
         strictLeaves: true,
       }),
     ).toThrow(
@@ -480,11 +480,11 @@ export declare const vocabulary: {
       ],
     };
     const wire = renderWireTypes(computationWire, {
-      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
       strictLeaves: true,
     });
-    const vocabulary = `
-export declare const vocabulary: {
+    const conceptSet = `
+export declare const applicationConceptSet: {
   concepts: Record<string, never>;
   computations: {
     setupSecretMatches: { fn: (input: { secret: string }) => Promise<boolean> };
@@ -507,15 +507,15 @@ void wrongInput;
 void wrongOutput;
 `;
 
-    await typecheck({ "wire.ts": wire, "vocabulary.ts": vocabulary, "consumer.ts": consumer });
+    await typecheck({ "wire.ts": wire, "concepts.ts": conceptSet, "consumer.ts": consumer });
   });
 
   test("the anchored module typechecks exact client-facing leaves", async () => {
     const wire = renderWireTypes(anchoredFixture, {
-      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
       strictLeaves: true,
     });
-    const vocabulary = `
+    const conceptSet = `
 export class LedgerConcept {
   add(_: { item: string; amount: number }): { entry: string } {
     return { entry: "entry" };
@@ -533,7 +533,7 @@ export class LedgerConcept {
     return {};
   }
 }
-export declare const vocabulary: { concepts: { Ledger: LedgerConcept } };
+export declare const applicationConceptSet: { concepts: { Ledger: LedgerConcept } };
 `;
     const consumer = `
 import type { WireContracts } from "./wire.ts";
@@ -560,6 +560,6 @@ void wrongInput;
 void wrongOutput;
 void conflict;
 `;
-    await typecheck({ "wire.ts": wire, "vocabulary.ts": vocabulary, "consumer.ts": consumer });
+    await typecheck({ "wire.ts": wire, "concepts.ts": conceptSet, "consumer.ts": consumer });
   });
 });

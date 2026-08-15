@@ -1,5 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 import { expect, test } from "vite-plus/test";
 import { TimingConcept } from "./timing.ts";
 
@@ -40,8 +41,10 @@ test("Timing answers the configured wall-clock reader", () => {
   let current = t1;
   const timing = new TimingConcept(() => current);
 
+  expect(timing.read({})).toEqual({ time: t1 });
   expect(timing._now()).toEqual({ time: t1 });
   current = t2;
+  expect(timing.read({})).toEqual({ time: t2 });
   expect(timing._now()).toEqual({ time: t2 });
 });
 

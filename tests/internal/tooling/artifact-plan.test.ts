@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import {
   applyArtifactPlan,
@@ -103,7 +103,7 @@ describe("artifact plans", () => {
       specificationBanner: "<!-- Ping specification -->",
       wire: "wire.ts",
       wireBanner: "// Ping wire",
-      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+      conceptSet: { from: "../src/concept-set.ts", export: "vocabulary" },
       strictLeaves: true,
       projections: [
         {
@@ -137,7 +137,7 @@ describe("artifact plans", () => {
     expect(plan.entries.every(({ content }) => content.includes(PACKAGE_VERSION))).toBe(true);
   });
 
-  test("requires manifest version 5", () => {
+  test("requires manifest version 1", () => {
     const manifest = applicationManifest(
       assemble({
         vocabulary: vocabulary({ concepts: {}, computations: {} }),
@@ -147,109 +147,70 @@ describe("artifact plans", () => {
 
     expect(() =>
       planGenerated({ ...manifest, version: 4 } as never, { title: "Old manifest" }),
-    ).toThrow("requires an application manifest at version 5");
+    ).toThrow("requires an application manifest at version 1");
   });
 
-  test("renders retained authored concept contracts from the manifest", () => {
+  test("retains raw authored concept state while assembly-only read-back makes no design claim", () => {
     class CatalogingConcept {
-      configure(_: { values: Map<string, unknown>; source?: string }) {
-        return { configuration: "ready" };
+      configure(_: { source?: string }) {
+        return {};
       }
-
-      _items(_: { catalog: string }): { item: string; position: number }[] {
+      _items(_: { catalog: string }): { item: string }[] {
         return [];
       }
+      static readonly queries = { _items: "many" } as const;
     }
-    class InvalidConfiguration extends Error {}
     const registration = registerConcept({
       class: CatalogingConcept,
       spec: `# Cataloging
 
 ## Purpose
-
 Keep a configured catalog.
 
 ## Principle
-
-Ada configures a catalog and reads its ordered items.
+A configured catalog answers item queries.
 
 ## Types
+\`\`\`types
+external Source
+  The configuration source.
+\`\`\`
 
-\`Configuration\` is a durable catalog configuration.
+## State
+\`\`\`state
+catalogs: set Catalog
+\`\`\`
 
 ## Actions
-
 \`\`\`actions
-configure (values: Map<Text, Value>, source?: Source | null) : return (configuration: Configuration)
-  validates every supplied value
+configure(source?: Source) : return ()
+  where true
   then
-    refuse INVALID_CONFIGURATION "The value \\"unknown\\" is not supported."
+    return
 \`\`\`
 
 ## Queries
-
 \`\`\`queries
-_items (catalog: Catalog) : many (item: Item, position: Number)
-  answers no rows for an unknown Catalog
-  orders rows by ascending position
+_items(catalog: Catalog) : many (item: String)
 \`\`\`
-
-## Invariants
-
-Positions are unique within a Catalog.
 `,
-      refusals: { INVALID_CONFIGURATION: InvalidConfiguration },
     });
     const set = conceptSet({ Cataloging: registration });
     const manifest = applicationManifest(
-      assemble({ vocabulary: set.vocabulary, instances: set.implementations(), composition: {} }),
+      assemble({ conceptSet: set, instances: set.implementations(), composition: {} }),
     );
     const authored = manifest.concepts.find(({ name }) => name === "Cataloging")?.specification;
-
-    expect(authored).toMatchObject({
-      format: "sync-engine.concept-specification",
-      version: 1,
-      actions: [
-        {
-          parameters: [
-            { name: "values", type: { kind: "named", name: "Map" } },
-            { name: "source", optional: true, type: { kind: "union" } },
-          ],
-          result: { kind: "fields", fields: [{ name: "configuration" }] },
-          refusals: [
-            {
-              code: "INVALID_CONFIGURATION",
-              message: 'The value "unknown" is not supported.',
-            },
-          ],
-        },
-      ],
-      queries: [{ body: expect.stringContaining("ascending position") }],
-      documentation: [
-        { kind: "types", name: "Types" },
-        { kind: "extension", name: "Invariants" },
-      ],
-    });
-
+    expect(authored?.state.body).toBe("catalogs: set Catalog");
+    expect(authored?.externalTypes.map(({ name }) => name)).toEqual(["Source"]);
+    expect(manifest.design.checked).toBe(false);
     const content = planGenerated(manifest, { title: "Catalog" }).entries.find(
       ({ kind }) => kind === "specification",
     )?.content;
-    expect(content).toContain(
-      "`configure (values: Map<Text, Value>, source?: Source | null) : return (configuration: Configuration)`",
-    );
-    expect(content).toContain("validates every supplied value");
-    expect(content).toContain(
-      'refuse INVALID_CONFIGURATION "The value \\"unknown\\" is not supported."',
-    );
-    expect(content).toContain("**Registered refusal codes:** `INVALID_CONFIGURATION`");
-    expect(content).toContain("`_items (catalog: Catalog) : many (item: Item, position: Number)`");
-    expect(content).toContain("orders rows by ascending position");
-    expect(content).toContain("#### Types");
-    expect(content).toContain("#### Invariants");
-    expect(content).toContain("Registration checks member names, recoverable input names");
+    expect(content).not.toContain("Keep a configured catalog");
+    expect(content).not.toContain("catalogs: set Catalog");
   });
 
-  test("strict wire planning requires a vocabulary anchor", () => {
+  test("strict wire planning requires a concept-set anchor", () => {
     const Ping = endpoint("/ping", () => receive().then(respond({ ok: true })));
     const manifest = applicationManifest(
       assemble({
@@ -259,7 +220,7 @@ Positions are unique within a Catalog.
     );
 
     expect(() => planGenerated(manifest, { title: "Ping", strictLeaves: true })).toThrow(
-      "strictLeaves requires a vocabulary type anchor",
+      "strictLeaves requires a concept-set type anchor",
     );
   });
 
@@ -315,7 +276,7 @@ Positions are unique within a Catalog.
     });
     const options = {
       title: "Ping",
-      vocabulary: { from: "../src/concept-set.ts", export: "vocabulary" },
+      conceptSet: { from: "../src/concept-set.ts", export: "vocabulary" },
     };
 
     expect(() =>

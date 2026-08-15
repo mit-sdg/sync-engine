@@ -1,273 +1,218 @@
-# Concept specification processing
+# Concept specification and application-design processing
 
-This document maps how this checkout extracts and uses machine-readable facts
-from registered concept Markdown, including enforcement gaps. The supported [concept specification
-format](../user/reference/concept-specification.md) remains the consumer contract;
-[engine architecture](architecture.md) defines surrounding boundaries.
+This document explains the version-1 processing boundary for authored design.
+The [concept specification reference](../user/reference/concept-specification.md)
+and [CLI reference](../user/reference/cli.md) own the consumer contract. This
+page owns implementation relationships, enforcement limits, and deferred design
+questions.
 
-## Contract boundary
+## Two input families, one selected design
 
-| Source                                        | Establishes                                              |
-| --------------------------------------------- | -------------------------------------------------------- |
-| Consumer reference and public declarations    | Behavior consumers may rely on                           |
-| Implementation files named below              | What this checkout does, including accidental behavior   |
-| Focused tests and `bun run check`             | Cases the repository currently verifies                  |
-| [Extension directions](#extension-directions) | Options only; no implementation or compatibility promise |
+Tooling combines two authored input families for the exact assembly selected by
+one generated config:
 
-The engine does not infer schemas or behavior from human-readable Markdown.
-[Known gaps](#known-gaps) records enforcement differences.
+| Input                             | Machine-readable contribution                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Registered concept specifications | Definition identity, external parameters, raw State, structured actions/queries, and source provenance |
+| Registered application documents  | Links, computations, concrete types, external bindings, full normalized source, and locations          |
+
+The executable assembly supplies selected concept instances, authored reaction
+and endpoint trees, named views, named formers, and executable computations.
+The checker joins the authored and executable inventories. It does not infer a
+corpus from directories, composition modules, or conventional filenames.
 
 ## Processing pipeline
 
-| Stage         | Owner                                                     | Current effect                                                                          |
-| ------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Parse         | `src/engine/reactions/concepts/concept-spec.ts`           | Convert Markdown text to versioned `ConceptSpec`                                        |
-| Register      | `src/engine/boundary/assembly/concept-set.ts`             | Compare declarations with the class and validate refusal mappings                       |
-| Project       | `conceptSet` in the same file                             | Carry the parsed contract plus runtime query/refusal contracts into metadata            |
-| Source-check  | `src/command/check.ts`                                    | Compare declarations with supported TypeScript source forms                             |
-| Attach        | `src/engine/boundary/assembly/assemble.ts`                | Attach vocabulary metadata to selected instances                                        |
-| Execute reads | `src/engine/reads/queries.ts`                             | Enforce query answer containers and cardinality during reaction, view, and former reads |
-| Inspect       | `src/engine/reactions/concepts/introspect.ts` and tooling | Emit the parsed contract in inventories, manifests, and read-back                       |
+```text
+generated config
+  -> statically resolve design URLs and concept-spec imports
+  -> assemble the selected variant
+  -> parse concept specifications and application documents
+  -> resolve TypeScript declaration shapes
+  -> join definition and instance identities
+  -> validate application types and declaration coverage
+  -> canonicalize provenance and source digests
+  -> inspect lowering and executable contracts
+  -> emit manifest/read-back/wire or compare pinned artifacts
+```
 
-Registration recovers some runtime parameter names; source checking reads class
-declarations and catches forms erased from JavaScript. Query enforcement applies
-to instrumented reads, not every direct method call. The lower-level
-`vocabulary({ class, spec })` path differs from `registerConcept`; see
-[Vocabulary-only parsing](#vocabulary-only-parsing).
+`sync-engine check`, generated-artifact creation, and generated-artifact checking
+use this complete pipeline. Runtime `assemble(...)` does not load design files
+and therefore has no deployment-time dependency on Markdown.
 
-## Parser behavior
+## Concept parser boundary
 
-`parseSpec(markdown)` is a purpose-built Markdown section scanner and
-declaration parser, not a general Markdown parser. It returns these top-level
-fields:
+The concept parser recognizes one H1 and the exact ordered H2 sequence Purpose,
+Principle, Types, State, Actions, and Queries. Unknown, duplicate, missing, or
+reordered H2 sections fail. Purpose and Principle are nonempty prose.
 
-| Field            | Retained data                                                                          |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| `format/version` | `sync-engine.concept-specification` version 1                                          |
-| `purpose`        | Trimmed text from the unique nonempty `## Purpose` section                             |
-| `principle`      | Trimmed text from the unique nonempty `## Principle` section                           |
-| `actions`        | Structured parameters/result, body, refusals, compatibility input names, and locations |
-| `queries`        | Structured parameters/result, body, promise, compatibility input names, and locations  |
-| `documentation`  | Ordered Types and extension sections with Markdown bodies and locations                |
+Its version-1 IR retains:
 
-Type expressions are an implementation-language-independent tree of named
-references, generic arguments, unions, `null`, and `undefined`. Results are
-inline fields or a type expression. `ConceptSpec` has no State descriptor or
-executable action behavior tree. Parsing has no explicit document-size or
-declaration-count limit and retains the string and complete line array.
+- concept-definition name;
+- Purpose and Principle;
+- ordered external declarations and their optional explanations;
+- normalized raw State fence text;
+- structured action inputs and named result rows;
+- structured branches and terminal return/refusal outcomes;
+- query inputs, cardinality, named rows, and optional prose bodies; and
+- one-based source locations.
 
-### Sections and fences
+The format remains named `sync-engine.concept-specification`, version `1`. This
+is a beta redefinition, not compatibility with the former version-1 grammar.
+There is no legacy parser or format auto-detection.
 
-`sectionsOf` recognizes second-level headings outside backtick or tilde fences.
-Heading indentation is accepted; spelling, case, and level are otherwise exact.
-Purpose and Principle are required, nonempty, and unique. Actions and Queries
-are optional but unique when present. Duplicate State sections are not checked
-because State is not parsed.
+### State is deliberately raw
 
-`fenceOf` finds an `actions` fence only inside `## Actions` and a `queries`
-fence only inside `## Queries`. A declaration fence in an example, State, or an
-unrelated section is ignored. A second matching fence or an unterminated
-matching fence fails with its location.
+The State fence is normalized and retained but not parsed. Its intended language
+is SSF; the grammar is not yet stable enough for a correct parser. Processing
+must not add a partial parser, heuristic type scan, or private dialect.
 
-`documentationOf` retains `## Types` as a typed documentation block and every
-other non-reserved second-level section as an extension block. Purpose,
-Principle, State, Actions, and Queries are reserved. Documentation blocks retain
-authored order and have no registration semantics.
+Consequently source checking cannot yet prove state-owned type use, external
+parameter use, State/storage agreement, or the final owned type on a qualified
+type-binding target. These absent proofs are explicit limitations rather than
+warnings generated from guesses.
 
-Within a selected fence, each nonempty left-aligned line starts a declaration.
-Indented lines belong to the preceding declaration; an indented line before a
-signature fails. Actions and queries retain normalized bodies with outer blank
-lines and common indentation removed.
+## Static source agreement
 
-### Signatures and refusals
+Strict checking traces the Markdown import passed to each selected
+`registerConcept` call, verifies source bytes against registered text, and
+records the path. Dynamic or unresolvable spec construction fails. Source URL is
+not duplicated in runtime registration.
 
-`SignatureParser` consumes the complete declaration line. Its balanced grammar
-parses comma-separated fields, optional markers, qualified named types, nested
-generic arguments, parenthesized types, unions, `null`, and `undefined`. It
-retains structured input and result declarations plus a compatibility `inputs`
-name list. Duplicate fields, missing types or results, and trailing text fail at
-the source line and column.
+TypeScript resolution compares member names and the finite top-level shapes of
+inputs, action results, and query rows, including optionality. The checker also
+compares successful action terminal return names and registered refusal
+mappings. It fails closed when a shape cannot be resolved.
 
-Action names match `[A-Za-z][A-Za-z0-9_]*` and resolve with `return`. Query
-names match `_[A-Za-z0-9_]*` and resolve with `one`, `optional`, or `many`; `_`
-alone is therefore a valid query name. Names must be unique within their
-declaration fence.
+This comparison intentionally stops short of semantic type-name equivalence.
+Concept identity types commonly erase to `string`; State and persistence have no
+machine comparison until a separately designed State contract exists.
 
-Action body lines beginning with the literal text `refuse ` must match a code
-followed by a JSON-compatible quoted string. Messages are decoded, must be
-nonempty, and may contain escaped quotes. One action cannot repeat a code;
-several actions may use the same code.
+## Definition and instance joins
 
-Parsed types, outputs, rows, and bodies are documentation, not runtime schemas or
-behavior. The parser does not interpret `where`, `then`, `return`, state changes,
-ordering, or other prose.
+The H1 identifies a reusable concept definition. A `conceptSet` property
+identifies an application instance. Canonicalization stores both.
 
-## Enforcement stages
+When selected registrations share a definition name, their canonical
+specifications must be equal. Implementation class or floor may differ without
+changing definition identity. Generated read-back renders one definition
+contract and lists its selected instances and bindings rather than duplicating
+the contract.
 
-### `registerConcept`
+## Application-type processing
 
-`registerConcept` inventories callable own and inherited prototype methods up
-to, but excluding, `Object.prototype`. Underscore-prefixed methods are queries;
-other methods are actions. Accessors and non-function properties are excluded.
+Any registered application document can contain `types` fences. The parser
+records `concrete` declarations with required prose definitions and
+`ConceptInstance.External is Target` bindings with optional explanations.
+Validation combines every fence in the registered corpus.
 
-Registration enforces:
+Validation joins against the exact selected assembly and enforces:
 
-- action and query membership in both directions;
-- input-name equality, disregarding order, when runtime function text exposes a
-  nonempty top-level destructured parameter;
-- one registered `Error` subclass for every parsed refusal code;
-- no extra refusal mapping; and
-- a distinct `Error` class for each refusal code.
+- every selected external parameter is bound exactly once;
+- every left side names a selected instance and declared external parameter;
+- every right side directly names a concrete type or selected concept-owned
+  type;
+- no target is an external parameter;
+- no chain, cycle, duplicate, missing, or unresolved binding exists; and
+- every concrete type is used.
 
-Placeholder, plain, absent, empty, or unsupported destructured parameters skip
-runtime input comparison. Registration does not inspect returns, outputs, State,
-action behavior, fields, or storage.
+The current unparsed-State boundary permits checking the target instance but not
+proving its final owned type name. That proof remains deferred.
 
-`conceptSet` retains the parsed specification in metadata. Refusals become
-action-specific triples of code, normative specification message, and
-registered `Error` class. Query promises become a map keyed by query name.
+The containing document's prose is included in digests and may also contain
+typed links and computation fences. The concept-set source has no Markdown
+import/export path; `design.documents` is the sole registration path.
 
-### Vocabulary-only parsing
+## Application-document processing
 
-`specifiedContracts` in `src/engine/reactions/authoring/refs.ts` retains the
-parsed contract and derives Purpose, Principle, and query promises from a
-`{ class, spec }` descriptor. It cannot derive refusal contracts, which require
-registered Error classes. Explicit descriptor metadata can override parsed
-metadata. This path omits `registerConcept` conformance checks.
+Each configured document is a local `file:` URL and contains one nonempty H1.
+No other heading structure has parser significance. `types` and `computations`
+fences may appear in any of these documents. The Markdown link parser
+supports inline and standard reference-style links with the destination schemes
+`reaction:`, `view:`, `former:`, and `computation:`.
 
-### `sync-engine check`
+Declaration links resolve by exact dotted authored identity. Identity derives
+from the selected composition path and uses restricted path segments. The same
+declaration object cannot be installed under several paths.
 
-The installed command discovers concepts from registrations, not Markdown paths.
-With `--config`, `assembledConcepts` selects application-owned canonical concepts
-from the assembled manifest. Without a config, `loadRegisteredConcepts` imports
-the selected vocabulary module and reads the classes and specification metadata
-retained by `conceptSet`. Both paths reject a selected registration without a
-parsed specification. The specification's filename and location therefore have
-no role after its registration module imports it.
+Coverage joins are bidirectional:
 
-Static discovery in `registeredClassSources` locates only the TypeScript class
-source needed for erased input checks. It scans `conceptSet(...)` calls whose
-registration map is an object literal or local object variable, follows local
-and imported object spreads, and follows direct or imported registration
-variables to `registerConcept(...)`. The registered class must be a named import
-with a directly resolvable filesystem module specifier. This locator is
-syntactic: it does not apply TypeScript path mapping to registration or class
-module specifiers and does not follow class re-exports. Runtime registration
-already owns member agreement; source checking compares only members whose input
-names runtime reflection could not recover and verifies that the located class
-matches the registered canonical class.
+- every typed link resolves to one selected declaration of the stated kind;
+- every selected authored reaction or endpoint tree has a reaction link;
+- every selected named view has a view link;
+- every selected named former has a former link; and
+- executable and authored computation definitions correspond one-to-one.
 
-`checkerFor` loads the nearest `tsconfig.json`, preserving compiler options,
-module resolution, paths, and project references. Config-included concepts share
-a cached Program; an excluded concept source is added explicitly. Without a
-config, one NodeNext Program starts from the class source. Parameter types and
-inherited method declarations use normal TypeScript resolution.
+One authored reaction or endpoint tree is the version-1 coverage unit, even when
+lowered into several runtime reactions. Core-generated boundary and outcome
+reactions are exempt. No view/former helper category, wildcard, namespace
+coverage, or implied descendant exists.
 
-For inputs, the checker supports no parameter, one flat untyped destructuring,
-or one typed parameter whose semantic type resolves to a finite object key set.
-The TypeChecker naturally resolves local and imported aliases, interfaces and
-extension, qualified names, re-exports, utility and equivalent mapped types, and
-finite records. Resolution distributes unions and intersections as key-set
-alternatives. An intersection combines each possible set; a union is accepted
-only when every final alternative has the same keys.
+The parser does not interpret surrounding prose and emits no heuristic warning
+for apparently unlinked sentences. Multiple source locations for one declaration
+are retained without selecting a primary location.
 
-Resolution is cycle-safe and bounded to an expansion depth of 32 and 64
-generated alternatives. It fails closed for differing alternatives, open index
-signatures, unresolved or generic mapped shapes, `any`, `unknown`, primitives,
-arrays, callables, and invalid parameter lists. `Record<string, never>`
-contributes no keys, while `Record<"known", never>` contributes its finite key.
+## Computation processing
 
-Diagnostics retain the parameter type, first unsupported operation, declaration
-location, relevant TypeScript diagnostic, and differing key sets.
+Any registered application document can contain any number of `computations`
+fences. Declarations are globally unique for the selected design. Each has a
+signature and nonempty prose body.
 
-`scripts/check-specs.ts` separately passes the example, catalog-entry, and packed
-fixture roots to the older `conceptDirectories` helper. That repository gate
-checks only directories containing adjacent `spec.md` and `registry.ts` files;
-it does not discover application design files such as
-`design/concepts/Name.md`. This scan is not installed-command discovery. The
-installed command defaults to importing `src/concept-set.ts` only as a no-option
-compatibility convention. An empty selected `conceptSet({})` is valid for a
-concept-free application.
+Validation compares executable and authored names, input names, and optionality.
+Semantic type equivalence, result validation, and body meaning remain authored
+contracts. A computation returns one value and therefore retains a bare result
+type, unlike concept action/query result rows.
 
-### Runtime and tooling
+## Canonical provenance and artifacts
 
-Purpose and Principle are descriptive inventory metadata, not assertions.
-Refusal metadata maps a registered exception on its declared action to the
-specification code and message. Ordinary assembly treats undeclared advanced
-`Refuse` codes as faults; manual `createEngine` may accept them. Refusal mappings
-are action-specific: another action throwing the same `Error` class faults unless
-it declares the code.
+Canonical provenance includes normalized complete contents of every registered
+application document, not only extracted links. A prose-only change changes the
+input digest.
 
-Query promises are attached to vocabulary references and instrumented query
-wrappers. `queryRows` enforces them when reactions, views, or formers evaluate a
-query:
+The application manifest resets to `sync-engine.application-manifest`, version
+`1`. It retains raw State, structured declarations, definition/instance joins,
+application-type resolution, source locations, and design digests. Old manifest
+versions are rejected without upconversion.
 
-| Promise    | Required result                            |
-| ---------- | ------------------------------------------ |
-| `one`      | One non-null, non-array object             |
-| `optional` | An array containing zero or one object row |
-| `many`     | An array containing object rows            |
+Generated Markdown links to prose rather than copying it. Paths are relative and
+host-independent; one-based lines are shown separately. It lists every source
+location covering a declaration. Concept read-back omits Purpose, Principle,
+raw State, action/query bodies, and application prose while still exposing
+structured signatures, cardinality, refusals, instances, bindings, computation
+signatures, and executable lowering.
 
-A direct instrumented query call returns the implementation result without
-passing through `queryRows`; the promise is not checked on that path.
+## Enforcement ownership
 
 TypeScript concept class signatures and registered vocabulary computation
 function signatures, not Markdown types or results, drive authoring types and
 wire provenance.
 
-`ConceptInventoryIR.specification` is optional, so concepts declared without a
-specification retain the narrower inventory. Registered concepts carry the
-version-1 JSON-safe contract. Manifest canonicalization sorts
-runtime inventory members but preserves authored contract arrays, including
-documentation order. The Markdown renderer prefers the authored contract and
-falls back to the narrow legacy inventory when none is present. Generated
-provenance identifies the manifest producer, specification format, and renderer.
+| Property                                                      | Enforcement owner                        |
+| ------------------------------------------------------------- | ---------------------------------------- |
+| Section and fence grammar                                     | Concept and application document parsers |
+| Source text and TypeScript shape agreement                    | Config-based static checker              |
+| Selected definition/instance inventory                        | Assembly inspection plus checker join    |
+| Application-type closure                                      | Design checker                           |
+| Reaction/view/former/computation coverage                     | Design checker                           |
+| Design source digests and links                               | Manifest/artifact tooling                |
+| Query cardinality during evaluated reads                      | Runtime read evaluation                  |
+| Prose truth, State meaning, storage, transactions, durability | Review and tests                         |
 
-## Deliberately uninterpreted material
+Repository-owned catalog validation may use internal validation until a
+supported low-level checker is designed. The installed CLI no longer exposes
+`--vocabulary-module` or an unconfigured concept-set mode.
 
-The current design leaves these properties to principle, implementation, and
-backend tests:
+## Hard beta migration
 
-- runtime validation of action outputs and query rows;
-- resolution of type names and runtime input schemas;
-- State shape, relationships, multiplicity, and invariants;
-- action conditions, effects, and operation order;
-- query purity; and
-- persistence, transaction, concurrency, and durability behavior.
+Implementation and repository migration replace the old format in one break:
+there is no compatibility flag, legacy parser, automatic detection, old-manifest
+decoder, runtime composition/design Markdown import, or partial artifact
+success. Examples, catalog data, packaging fixtures, tests, declarations, docs,
+and generated artifacts must move together before downstream applications.
 
-Purpose, Principle, and action bodies are design evidence, not proof of
-implementation behavior.
+## Deferred design questions
 
-## Known gaps
-
-| Current behavior                           | Consequence                                           |
-| ------------------------------------------ | ----------------------------------------------------- |
-| Named specification types are not resolved | Parsed references do not prove a declaration exists   |
-| Runtime role recovery reads function text  | Runtime registration can skip an erased comparison    |
-| Direct query roots bypass `queryRows`      | Cardinality enforcement depends on the call path      |
-| Parsed action bodies are not interpreted   | Conditions and effects require implementation tests   |
-| State has no parsed representation         | State claims require implementation and backend tests |
-
-## Verification ownership
-
-| Test                                            | Primary evidence                               |
-| ----------------------------------------------- | ---------------------------------------------- |
-| `tests/internal/reactions/concept-spec.test.ts` | Parser output and basic grammar failures       |
-| `tests/internal/boundary/concept-set.test.ts`   | Registration, refusal metadata, and projection |
-| `tests/internal/tooling/check-specs.test.ts`    | TypeScript source forms and repository roots   |
-| `tests/internal/reads/query-answers.test.ts`    | Read-path query normalization and cardinality  |
-
-After changing parsing, registration, source checking, or the format, run
-`bun run check`. Add focused tests for each newly accepted or rejected form.
-
-## Extension directions
-
-| Direction                                            | Enables                                                        | Does not establish                              | Main decision or cost                                                          |
-| ---------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| Make direct-query cardinality consistent             | One promise rule across direct and evaluated reads             | Row-field validation                            | Failure timing changes and must account for caching, admission, and row limits |
-| Add a backend-neutral state descriptor when required | Let participating adapters validate shared logical constraints | Automatic persistence or transaction guarantees | Define adapter capabilities, migrations, and unsupported constraints           |
-
-Do not turn natural-language behavior or parsed result declarations into
-runtime guarantees implicitly. Any future enforcement or State descriptor needs
-an explicit, versioned consumer contract with projection, serialization,
-compatibility, and tests at every downstream stage.
+1. **SSF grammar and parser.** Choose the final external grammar, parse State into structured IR, validate owned and parameter types, and compare type-binding targets with state-owned types. Do not implement a partial approximation now.
+2. **Concrete-type taxonomy.** Reconsider whether provisional `concrete` should distinguish application-owned, platform-owned, and externally supplied types.
+3. **Reaction-tree granularity.** Reconsider whether authored reaction and endpoint trees should require branch- or consequence-level design coverage.
+4. **Low-level concept checker.** Design a supported concept-only checker to replace the removed `--vocabulary-module` mode without weakening config-based application guarantees.

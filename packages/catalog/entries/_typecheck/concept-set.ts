@@ -16,7 +16,7 @@ import { timing } from "../concept/timing/registry.ts";
 import { trashing } from "../concept/trashing/registry.ts";
 import { upvoting } from "../concept/upvoting/registry.ts";
 
-export const applicationConcepts = conceptSet({
+export const applicationConceptSet = conceptSet({
   Alerting: alerting,
   Approving: approving,
   Auditing: auditing,
@@ -34,4 +34,4 @@ export const applicationConcepts = conceptSet({
   Trashing: trashing,
   Upvoting: upvoting,
 });
-export const { concepts, vocabulary } = applicationConcepts;
+export const { concepts } = applicationConceptSet;

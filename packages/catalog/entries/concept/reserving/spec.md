@@ -11,6 +11,15 @@ Ari reserves resource `slot-9`. Bo's attempt to reserve `slot-9` is refused. Ari
 cancels, after which Bo can reserve it. Bo fulfills the reservation, permanently
 consuming `slot-9`; another reservation of that resource is refused.
 
+## Types
+
+```types
+external Resource
+  The reservable unit receiving an exclusive claim.
+external Claimant
+  The identity holding a reservation.
+```
+
 ## State
 
 ```state
@@ -61,14 +70,8 @@ fulfill (reservation: Reservation, claimant: Claimant, at: DateTime) : return (r
 _blocking (resource: Resource) : optional (reservation: Reservation, claimant: Claimant, status: ReservationStatus, reservedAt: DateTime)
   answers the active or fulfilled Reservation for the Resource
   answers no row when the Resource is available
-_get (reservation: Reservation) : optional (resource: Resource, claimant: Claimant, status: ReservationStatus, reservedAt: DateTime, endedAt: DateTime | undefined)
+_get (reservation: Reservation) : optional (resource: Resource, claimant: Claimant, status: ReservationStatus, reservedAt: DateTime, endedAt?: DateTime)
   answers no row for an unknown Reservation
 _activeFor (claimant: Claimant) : many (reservation: Reservation, resource: Resource, reservedAt: DateTime)
   orders active Reservations by reservedAt and then Reservation identity
 ```
-
-## Types
-
-`Reservation` is an identity allocated by Reserving. `Resource` and `Claimant` are
-opaque external identities. `ReservationStatus` is `active`, `cancelled`, or
-`fulfilled`. `DateTime` is an absolute instant.

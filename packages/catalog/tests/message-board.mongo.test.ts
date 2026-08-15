@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 import { test, vi } from "vite-plus/test";
-import { applicationConcepts } from "../entries/_typecheck/concept-set.ts";
+import { applicationConceptSet } from "../entries/_typecheck/concept-set.ts";
 import {
   exerciseMessageBoard,
   exerciseMessageBoardSecurity,
@@ -15,7 +15,7 @@ async function withMongoFloor(run: (instances: CatalogInstances) => Promise<void
   await client.connect();
   const db = client.db(`message_board_${crypto.randomUUID()}`);
   try {
-    const instances = applicationConcepts.implementations("mongo", { db });
+    const instances = applicationConceptSet.implementations("mongo", { db });
     await run(instances);
   } finally {
     try {

@@ -1,9 +1,6 @@
-import spec from "@design/compositions/Room.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { each, form, former, whether, where } from "@mit-sdg/sync-engine/language";
-import { concepts } from "../vocabulary.ts";
-
-export { spec };
+import { concepts } from "../concepts.ts";
 
 const { Alerting, Discussing, Gathering, Selecting } = concepts;
 
@@ -124,12 +121,6 @@ const roomDashboard = former(
     }),
 );
 
-export const compositions = {
-  RoomMembership: { CreateRoom, JoinRoom },
-  MitigationSelection: { ChooseMitigation },
-  RoomDashboard: { GetRoom },
-};
-
 export const formers = {
   ResponderRoster: responderRoster,
   RoomSummary: roomSummary,
@@ -137,4 +128,17 @@ export const formers = {
   CurrentMitigation: currentMitigation,
   ResponseStats: responseStats,
   RoomDashboard: roomDashboard,
+};
+
+export const composition = {
+  RoomMembership: { CreateRoom, JoinRoom },
+  MitigationSelection: { ChooseMitigation },
+  RoomDashboard: { GetRoom, RoomDashboard: formers.RoomDashboard },
+  ReadModels: {
+    ResponderRoster: formers.ResponderRoster,
+    RoomSummary: formers.RoomSummary,
+    RequiredCurrentMitigation: formers.RequiredCurrentMitigation,
+    CurrentMitigation: formers.CurrentMitigation,
+    ResponseStats: formers.ResponseStats,
+  },
 };

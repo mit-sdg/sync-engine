@@ -1,6 +1,6 @@
 import { assemble } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import { Frames } from "@sync-engine/internal/reads/frames";
 
 class SessioningConcept {
@@ -22,5 +22,6 @@ const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
 export default {
   assemble: () => assemble({ vocabulary: declared, composition: { Api: { ClosureEndpoint } } }),
   title: "Incomplete application",
-  vocabulary: { module: new URL("../../../src/language/index.ts", import.meta.url) },
+  design: { version: 1, documents: [] },
+  conceptSet: { module: new URL("../../../src/language/index.ts", import.meta.url) },
 };

@@ -1,13 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  compute,
-  earlier,
-  is,
-  no,
-  vocabulary,
-  where,
-  whether,
-} from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { compute, earlier, is, no, where, whether } from "@mit-sdg/sync-engine/language";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {
@@ -20,7 +13,10 @@ import {
   renderWireTypes,
   validateApplicationManifest,
 } from "@mit-sdg/sync-engine/tooling";
+import type { ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 import type { AppIR, ActionTriggerIR } from "@engine/reads/ir";
+import { parseSpec } from "@engine/reactions/concepts/concept-spec";
+import { canonicalDigest } from "@engine/utils/canonical-json";
 import type { WireContractsIR } from "@engine/boundary/wire/wire-contracts";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 
@@ -43,6 +39,11 @@ const First = endpoint(
 const Second = endpoint("/shared", ({ value }) =>
   receive({ value }).then(respond({ source: "second", value })),
 );
+
+function reseal<T extends { digest: string }>(value: T): T {
+  const { digest: _digest, ...body } = value;
+  return { ...value, digest: canonicalDigest(body) };
+}
 
 function application(reverse = false) {
   return assemble({
@@ -101,7 +102,7 @@ describe("application manifest", () => {
 
     expect(manifest).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 5,
+      version: 1,
       generator: { name: PACKAGE_NAME, version: PACKAGE_VERSION },
       digest: expect.stringMatching(/^fnv1a64-[0-9a-f]{16}$/),
       endpoints: [
@@ -394,14 +395,14 @@ describe("application manifest", () => {
     expect(manifest.diagnostics.filter(({ code }) => code === "UNRESOLVED_WIRE_LEAF")).toEqual([]);
     expect(() => validateApplicationManifest(manifest)).not.toThrow();
     const rendered = renderWireTypes(manifest.wire, {
-      vocabulary: { from: "./vocabulary.ts", export: "vocabulary" },
+      conceptSet: { from: "./vocabulary.ts", export: "vocabulary" },
       strictLeaves: true,
     });
     expect(rendered).toContain(
-      '"setupSecret": Jsonify<AtPath<Parameters<(typeof ApplicationVocabulary.computations)["setupSecretMatches"]["fn"]>[0], ["secret"]>>;',
+      '"setupSecret": Jsonify<AtPath<Parameters<(typeof ApplicationConceptSet.computations)["setupSecretMatches"]["fn"]>[0], ["secret"]>>;',
     );
     expect(rendered).toContain(
-      '"valid": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationVocabulary.computations)["setupSecretMatches"]["fn"]>>, []>>;',
+      '"valid": Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.computations)["setupSecretMatches"]["fn"]>>, []>>;',
     );
   });
 
@@ -687,11 +688,11 @@ describe("application manifest", () => {
       receive({ item }).where(Looking._get({ item })).then(respond({ item })),
     );
     const diagnostics = applicationManifest(
-      assemble({ vocabulary: lookup, composition: { Get, "Get:shadow": Shadow } }),
+      assemble({ vocabulary: lookup, composition: { Get, Group: { Shadow } } }),
     ).diagnostics;
 
     expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
-    expect(diagnostics[0]?.endpoint).toEqual({ name: "Get:shadow", path: "/shadow" });
+    expect(diagnostics[0]?.endpoint).toEqual({ name: "Group.Shadow", path: "/shadow" });
   });
 
   test("does not equate guards whose local variables bind different request fields", () => {
@@ -981,6 +982,248 @@ describe("application manifest", () => {
     expect(forward).toMatch(/"defaults": \{\n\s+"a": 2,\n\s+"z": 1/);
   });
 
+  test("accepts the full former-node and wire-origin vocabulary of manifest V1", () => {
+    const enriched = structuredClone(applicationManifest(application()));
+    const source = {
+      op: "find",
+      query: { concept: "Looking", query: "_get" },
+      in: { item: { $var: "item" } },
+      out: { item: { $var: "found" } },
+      not: {},
+    };
+    enriched.application.reactions.push({
+      name: "ChannelReaction",
+      when: [
+        {
+          kind: "channel",
+          channel: "returned",
+          pattern: {},
+          except: [],
+          exceptBy: ["Ignored"],
+          by: "Selected",
+        },
+      ],
+      where: [],
+      then: [],
+    });
+    enriched.application.views = [
+      {
+        name: "RichView",
+        alternatives: [
+          [
+            { op: "custom", fnRef: "predicate", opaque: true, in: ["item"], out: ["ok"] },
+            {
+              op: "count",
+              query: { concept: "Looking", query: "_get" },
+              in: {},
+              out: "total",
+            },
+            { op: "find", view: "OtherView", in: {}, out: {}, not: {} },
+          ],
+        ],
+        ins: ["item"],
+        outs: ["ok", "total"],
+        bindings: [],
+        promise: "many",
+        holds: true,
+      },
+    ] as never;
+    enriched.application.formers = [
+      {
+        name: "RichFormer",
+        ins: ["item"],
+        bindings: ["item"],
+        promise: "optional",
+        body: {
+          node: "record",
+          where: [{ op: "compute", computation: "lt", in: {}, out: "computed" }],
+          entries: {
+            leaf: { node: "leaf", var: "item" },
+            nested: { node: "former", former: "OtherFormer", in: {}, whether: true },
+            rows: {
+              node: "each",
+              from: source,
+              where: [],
+              arranged: { by: "item", order: "descending" },
+              as: { node: "leaf", var: "found" },
+            },
+            count: { node: "count", from: source, where: [] },
+            first: {
+              node: "first",
+              from: source,
+              value: "found",
+              where: [],
+              arranged: { order: "newest" },
+            },
+            distinct: { node: "distinct", from: source, value: "found", where: [] },
+          },
+          splices: [{ fragment: "OtherFormer", in: {}, whether: true }],
+        },
+      },
+    ] as never;
+    enriched.wire.endpoints[0].input = {
+      kind: "reference",
+      allOf: [
+        { source: "action-input", concept: "Looking", member: "open", path: ["item"] },
+        { source: "literal", value: "fixed" },
+        { source: "number" },
+      ],
+      sites: ["RichFormer"],
+    };
+
+    expect(applicationManifestDigest(enriched)).toMatch(/^fnv1a64-/);
+  });
+
+  test("rejects JavaScript values that cannot be canonical manifest JSON", () => {
+    const invalidValues: { value: unknown; message: RegExp }[] = [];
+    const withNumber = structuredClone(applicationManifest(application()));
+    withNumber.generator.version = Number.NaN as never;
+    invalidValues.push({ value: withNumber, message: /finite JSON number/ });
+
+    const withUndefined = structuredClone(applicationManifest(application()));
+    withUndefined.generator.version = undefined as never;
+    invalidValues.push({ value: withUndefined, message: /received undefined/ });
+
+    const withDate = structuredClone(applicationManifest(application()));
+    withDate.generator = new Date() as never;
+    invalidValues.push({ value: withDate, message: /plain JSON object/ });
+
+    const cyclic = structuredClone(applicationManifest(application()));
+    (cyclic.design as unknown as Record<string, unknown>).cycle = cyclic;
+    invalidValues.push({ value: cyclic, message: /contains a cycle/ });
+
+    const withSymbol = structuredClone(applicationManifest(application()));
+    Object.defineProperty(withSymbol.generator, Symbol("hidden"), {
+      value: true,
+      enumerable: true,
+    });
+    invalidValues.push({ value: withSymbol, message: /symbol keys/ });
+
+    const withGetter = structuredClone(applicationManifest(application()));
+    Object.defineProperty(withGetter.generator, "version", {
+      enumerable: true,
+      get: () => "1.0.0",
+    });
+    invalidValues.push({ value: withGetter, message: /enumerable data property/ });
+
+    const sparse = structuredClone(applicationManifest(application()));
+    const sparseDiagnostics: unknown[] = [];
+    sparseDiagnostics.length = 1;
+    sparse.diagnostics = sparseDiagnostics as never;
+    invalidValues.push({ value: sparse, message: /enumerable JSON array element/ });
+
+    const decoratedArray = structuredClone(applicationManifest(application()));
+    Object.assign(decoratedArray.diagnostics, { note: "not an index" });
+    invalidValues.push({ value: decoratedArray, message: /non-index properties/ });
+
+    for (const { value, message } of invalidValues) {
+      expect(() => validateApplicationManifest(value)).toThrow(message);
+    }
+  });
+
+  test("reports structural manifest mistakes at their exact schema paths", () => {
+    const malformed: { value: unknown; message: RegExp }[] = [
+      { value: null, message: /at \$: expected an object/ },
+      { value: [], message: /at \$: expected an object/ },
+      { value: 42, message: /at \$: expected an object/ },
+    ];
+    const changed = (mutate: (manifest: ReturnType<typeof applicationManifest>) => void) => {
+      const manifest = structuredClone(applicationManifest(application()));
+      mutate(manifest);
+      return manifest;
+    };
+
+    malformed.push(
+      {
+        value: changed((manifest) => {
+          delete (manifest.generator as unknown as Record<string, unknown>).name;
+        }),
+        message: /\$\.generator\.name.*required property/,
+      },
+      {
+        value: changed((manifest) => {
+          (manifest.generator as unknown as Record<string, unknown>).extra = true;
+        }),
+        message: /\$\.generator\.extra.*not part of manifest version 1/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.generator.version = "not-semver";
+        }),
+        message: /\$\.generator\.version.*semantic version/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.digest = "";
+        }),
+        message: /\$\.digest.*non-empty string/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.diagnostics = {} as never;
+        }),
+        message: /\$\.diagnostics.*expected an array/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.endpoints[0].validators.input = "yes" as never;
+        }),
+        message: /\$\.endpoints\[0\]\.validators\.input.*boolean/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.design.checked = "yes" as never;
+        }),
+        message: /\$\.design\.checked.*boolean/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [
+            { op: "custom", fnRef: "predicate", opaque: false, in: [], out: [] },
+          ] as never;
+        }),
+        message: /\.opaque.*expected true/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [
+            {
+              op: "count",
+              query: { concept: "Looking", query: "_get" },
+              in: {},
+              out: "total",
+            },
+          ] as never;
+        }),
+        message: /\.op.*count.*not allowed/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [
+            { op: "find", query: {}, view: "Other", in: {}, out: {} },
+          ] as never;
+        }),
+        message: /exactly one of.*query.*view/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].where = [{ op: "unknown" }] as never;
+        }),
+        message: /recognized read operation/,
+      },
+      {
+        value: changed((manifest) => {
+          manifest.application.reactions[0].when[0].kind = "unknown" as never;
+        }),
+        message: /expected.*action.*channel/,
+      },
+    );
+
+    for (const { value, message } of malformed) {
+      expect(() => validateApplicationManifest(value)).toThrow(message);
+    }
+  });
+
   test("validates, parses, and recomputes the format-owned canonical digest", () => {
     const manifest = applicationManifest(application());
     expect(applicationManifestDigest(manifest)).toBe(manifest.digest);
@@ -1005,18 +1248,119 @@ describe("application manifest", () => {
     );
   });
 
-  test("rejects version 4 rather than upconverting it", () => {
-    const {
-      computations: _computations,
-      conceptImplementations: _conceptImplementations,
-      ...previousShape
-    } = applicationManifest(application());
-    const version4 = { ...previousShape, version: 4 };
+  test("rejects old manifest JSON rather than decoding it", () => {
+    const old = { ...applicationManifest(application()), version: 5 };
 
-    expect(() => validateApplicationManifest(version4)).toThrow(/\$\.version.*expected 5/);
-    expect(() => parseApplicationManifest(JSON.stringify(version4))).toThrow(
-      /\$\.version.*expected 5/,
-    );
+    expect(() => validateApplicationManifest(old)).toThrow(/\$\.version.*expected 1/);
+    expect(() => parseApplicationManifest(JSON.stringify(old))).toThrow(/\$\.version.*expected 1/);
+  });
+
+  test("rejects digest-valid concept and authored-identity states no parser can produce", () => {
+    const specification = parseSpec(`# Example
+
+## Purpose
+
+Exercise decoder invariants.
+
+## Principle
+
+One valid operation remains inspectable.
+
+## Types
+
+\`\`\`types
+\`\`\`
+
+## State
+
+\`\`\`state
+opaque
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+perform(value: String) : return (result: String)
+  where true
+  then
+    return result
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_get(value: String) : optional (result: String)
+\`\`\`
+`);
+    const base = applicationManifest(application());
+    const seed = reseal({
+      ...base,
+      concepts: [
+        ...base.concepts,
+        {
+          name: "Example",
+          purpose: specification.purpose,
+          principle: specification.principle,
+          specification,
+          actions: [{ name: "perform", roles: ["value"] }],
+          queries: [{ name: "_get", roles: ["value"], returns: "optional" as const }],
+        },
+      ],
+      conceptImplementations: [
+        ...base.conceptImplementations,
+        {
+          concept: "Example",
+          canonical: { owner: "application" as const },
+          selected: { via: "default" as const },
+        },
+      ],
+    });
+    expect(() => validateApplicationManifest(seed)).not.toThrow();
+
+    const rejects = (
+      mutate: (manifest: ApplicationManifestV1) => void,
+      expected: string | RegExp,
+    ) => {
+      const forged = structuredClone(seed);
+      mutate(forged);
+      const digestValid = reseal(forged);
+      expect(() => parseApplicationManifest(JSON.stringify(digestValid))).toThrow(expected);
+    };
+    const example = (manifest: ApplicationManifestV1) => manifest.concepts.at(-1)!;
+
+    rejects((manifest) => {
+      example(manifest).specification!.actions = [];
+    }, "$.concepts[1].specification.actions");
+    rejects((manifest) => {
+      example(manifest).specification!.actions[0].inputs = ["other"];
+    }, "$.concepts[1].specification.actions[0].inputs");
+    rejects((manifest) => {
+      const action = example(manifest).specification!.actions[0] as unknown as {
+        parameters: unknown[];
+      };
+      action.parameters.push(structuredClone(action.parameters[0]));
+    }, "$.concepts[1].specification.actions[0].parameters[1].name");
+    rejects((manifest) => {
+      const result = example(manifest).specification!.actions[0].result as unknown as {
+        fields: unknown[];
+      };
+      result.fields.push(structuredClone(result.fields[0]));
+    }, "$.concepts[1].specification.actions[0].result.fields[1].name");
+    rejects((manifest) => {
+      example(manifest).specification!.actions[0].name = "_perform";
+    }, "$.concepts[1].specification.actions[0].name");
+    rejects((manifest) => {
+      example(manifest).specification!.queries[0].name = "get";
+    }, "$.concepts[1].specification.queries[0].name");
+    rejects((manifest) => {
+      example(manifest).actions[0].roles = ["forged"];
+    }, "$.concepts[1].actions[0].roles");
+    rejects((manifest) => {
+      manifest.application.reactions[0].authored = {
+        kind: "reaction",
+        identity: "Forum.bad segment",
+      };
+    }, "$.application.reactions[0].authored.identity");
   });
 
   test("rejects malformed computation and implementation inventories", () => {
@@ -1204,7 +1548,7 @@ describe("application manifest", () => {
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toMatchObject({
       format: "sync-engine.application-manifest",
-      version: 5,
+      version: 1,
     });
     expect(printed.stdout.endsWith("\n")).toBe(true);
 

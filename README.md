@@ -68,19 +68,25 @@ dependencies and verifies the empty application.
 
 Choose the path that matches the next task:
 
-| Task                                                         | Start here                                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------- |
-| Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)                      |
-| Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)                  |
-| Initialize and run a concept-free application                | [Getting started](docs/user/guide/getting-started.md)           |
-| Add concepts, reactions, views, formers, and endpoints       | [Authoring path](docs/user/index.md#application-authoring-path) |
-| Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)                 |
-| Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md)         |
-| Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md)         |
-| Inspect complete applications                                | [Example applications](examples/README.md)                      |
+| Task                                                         | Start here                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------- |
+| Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)              |
+| Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)          |
+| Initialize and run a concept-free application                | [Getting started](docs/user/guide/getting-started.md)   |
+| Study concepts, reactions, views, formers, and endpoints     | [Reading Circle](examples/reading-circle/README.md)     |
+| Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)         |
+| Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md) |
+| Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md) |
+| Inspect complete applications                                | [Example applications](examples/README.md)              |
 
-Software agents can use [`docs/user/llms.txt`](docs/user/llms.txt) for supported
-imports, authoring sequence, commands, and source-of-truth order.
+### Coding agents
+
+Start with the installed package's [`docs/user/llms.txt`](docs/user/llms.txt).
+Its package-local links match the installed beta. Treat `docs/user/`, the shipped
+examples, and declared public entrypoints as the consumer surface. Do not infer
+contracts from `dist/engine/`, `dist/command/`, repository source, or deep
+imports; report a documentation gap when the public docs and exported
+TypeScript signatures are insufficient.
 
 ## A first composition rule
 
@@ -90,7 +96,7 @@ returns a new selection:
 
 ```ts
 import { reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "./vocabulary.ts";
+import { concepts } from "./concepts.ts";
 
 const { Discussing, Selecting } = concepts;
 
@@ -102,10 +108,10 @@ export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
 At runtime, a returned `Selecting.choose` occurrence binds `selection` and asks
 `Discussing.open`. Selecting and Discussing remain independently implemented.
 
-See [Connect independent
-behaviors](docs/user/guide/authoring.md#connect-independent-behaviors) for the
-authoring path and [Execution semantics](docs/user/reference/semantics.md) for ordering and
-failure behavior.
+See the [Reading Circle source map](examples/reading-circle/README.md#source-map)
+for a complete application, [application design authoring](docs/user/guide/authoring.md)
+for the authored contract around executable declarations, and [execution
+semantics](docs/user/reference/semantics.md) for ordering and failure behavior.
 
 ## Expose an application boundary
 
@@ -115,7 +121,7 @@ that declaration callable:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { concepts } from "./vocabulary.ts";
+import { concepts } from "./concepts.ts";
 
 const { Selecting } = concepts;
 

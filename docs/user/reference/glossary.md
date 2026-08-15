@@ -21,15 +21,15 @@ causal flow, and any asking reaction.
 
 ## Assembly
 
-One installed vocabulary, concept implementation set, and composition, with its
+One installed concept set, concept implementation set, and composition, with its
 own execution lifecycle and occurrence index. Creating another assembly creates
 another runtime.
 
 ## Authored design
 
-Application-owned Markdown that states intended concept contracts, larger
-composition purposes, and optional application-wide vocabulary. It is distinct
-from executable TypeScript declarations and generated read-back.
+Application-owned concept specifications and explicitly configured application
+documents containing prose, application types, and computations. It is distinct from executable TypeScript
+declarations and generated read-back.
 
 ## Binding
 
@@ -39,9 +39,9 @@ binding; reusing a bound name tests equality.
 ## Composition
 
 The application-level collection of reactions, views, formers, and endpoints.
-Composition connects concepts without adding peer dependencies to them. An
-authored composition document explains larger groups and independently meaningful
-reads; it is not the executable collection itself.
+Composition connects concepts without adding peer dependencies to them.
+Registered application prose may explain declarations from any number of
+composition groups; no paired composition document is required.
 
 ## Concept
 
@@ -51,16 +51,25 @@ concept APIs; composition connects them.
 
 ## Concept specification
 
-A Markdown document containing a concept's purpose, principle, action and query
-declarations, refusals, and reader documentation. Only the contracts in the
-[concept specification reference](concept-specification.md) are enforced. State
-notation and natural-language behavior are not runtime schemas.
+A strict Markdown document containing ordered Purpose, Principle, external
+Types, raw State, structured Actions, and Queries for one reusable definition.
+Only the contracts in the [concept specification
+reference](concept-specification.md) are enforced. Raw State and
+natural-language behavior are not runtime schemas.
 
 ## Concept floor
 
 A named complete implementation map for one concept set, with host-owned
 resources and `close()`. The host owns its lifecycle. A floor selects
-implementations without changing vocabulary or specifications.
+implementations without changing the concept set or specifications.
+
+## Concept set
+
+The registered selection of named concept instances used by one application
+variant. `conceptSet(...)` returns the complete object passed to `assemble`.
+Its `.concepts` property contains typed references for authoring composition;
+its `.implementations(...)` method constructs implementation maps. The property
+is a facet of the set, not a second set.
 
 ## Consequence
 
@@ -166,7 +175,7 @@ state.
 ## Portable behavior
 
 A declaration whose canonical JSON can be registered against the same named
-vocabulary. Ordinary assemblies and generated contracts contain portable
+concept set. Ordinary assemblies and generated contracts contain portable
 behavior only.
 
 ## Principle
@@ -225,11 +234,17 @@ cardinality.
 
 ## Vocabulary
 
-The named action, query, and optional computation references for a concept set,
-together with concept metadata. Vocabulary references are inert until resolved
-against an engine. An application's optional authored vocabulary document
-records cross-concept type-role edges and named pure computations; it is not the
-runtime vocabulary object.
+The advanced runtime declaration containing named action, query, and optional
+computation references together with concept metadata. `conceptSet` creates this
+declaration internally for ordinary config-based applications; only low-level
+callers import `vocabulary` from `/advanced`. Vocabulary references are inert
+until resolved against an engine.
+
+## Application types
+
+Concrete application types and direct bindings for selected concept-external
+parameters. They are declared in `types` fences in any registered application
+design document and are checked by tooling rather than loaded at runtime.
 
 ## Wire contract
 

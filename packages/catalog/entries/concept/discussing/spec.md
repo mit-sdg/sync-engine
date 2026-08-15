@@ -13,6 +13,15 @@ refused, as is an attempt to open a second discussion about `p1` while the first
 is open. After closure, a new discussion about `p1` may be opened without changing the
 old discussion or its responses.
 
+## Types
+
+```types
+external Subject
+  The object receiving a discussion.
+external Author
+  The identity that authored a response.
+```
+
 ## State
 
 ```state
@@ -76,9 +85,3 @@ _responses (discussion: Discussion) : many (response: Response, author: Author, 
 _response (response: Response) : optional (discussion: Discussion, author: Author, text: String, addedAt: DateTime)
   answers no row for an unknown Response
 ```
-
-## Types
-
-`Discussion` and `Response` are identities allocated by Discussing. `Subject` and
-`Author` are opaque external identities. `String` is owned text. `DateTime` is an
-absolute instant.

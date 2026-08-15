@@ -1,5 +1,5 @@
 /** Words used to declare concepts, reactions, views, and formers. */
-export { reaction, vocabulary } from "@engine/reactions/authoring/refs";
+export { reaction } from "@engine/reactions/authoring/refs";
 export { earlier } from "@engine/reactions/authoring/words";
 export { when } from "@engine/reactions/authoring/public-words";
 export { refused, returned } from "@engine/reactions/authoring/channels";

@@ -74,10 +74,10 @@ attachments whose target is each post.
 Before adding a comment, the endpoint checks that its target post exists.
 
 The authored application design lives under `design/`: concept specifications
-state each independent concept's contract, composition specifications state how
-the application connects them, and `design/vocabulary.md` records cross-concept
-identity interpretations. Principle tests live under `tests/concepts/`. The
-[technical notes](TECHNICAL.md) describe implementation choices, endpoint
+state each independent concept's contract, composition documents explain how
+the application connects them with exact typed links, and `design/types.md`
+records application types and cross-concept bindings. Principle tests live under
+`tests/concepts/`. The [technical notes](TECHNICAL.md) describe implementation choices, endpoint
 branches, HTTP policy, cookie projection, runtime validation, execution limits,
 failure boundaries, session cleanup, generated contracts, and network-test
 evidence.
@@ -116,25 +116,25 @@ composition, or contract change, then review both generated files.
 
 ## Source map
 
-| Path                                                       | Role                                                            |
-| ---------------------------------------------------------- | --------------------------------------------------------------- |
-| `design/concepts/*.md`                                     | Standalone concept specifications                               |
-| `design/compositions/*.md`                                 | Host-independent application composition design                 |
-| `design/vocabulary.md`                                     | Cross-concept type interpretations                              |
-| `src/concepts/*.ts`, `src/concepts/*.registry.ts`          | Concept implementations and registrations                       |
-| `src/vocabulary.ts`                                        | Application concept set and vocabulary design export            |
-| `src/compositions/Sessions.ts`                             | Session endpoint groups and their authored specification        |
-| `src/compositions/Board.ts`                                | Board endpoint groups, owned former, and authored specification |
-| `src/compositions/validators.ts`                           | Runtime endpoint validator helpers                              |
-| `src/assembly.ts`, `src/application.ts`                    | Assembly, execution limits, application, and gateway            |
-| `src/edge.ts`                                              | Plain and cookie-backed HTTP policies                           |
-| `src/api-host.ts`                                          | Bun host for the plain JSON API                                 |
-| `src/client.ts`                                            | Typed cookie-projected HTTP client                              |
-| `src/host.ts`, `src/web/`                                  | Bun browser host, static routing, and browser UI                |
-| `tests/concepts/`, `tests/compositions/`                   | Concept principles and application/network behavior             |
-| `tests/projected-wire-contract.ts`                         | Compile-time browser projection checks                          |
-| [`generated/message-board.md`](generated/message-board.md) | Pinned assembled read-back                                      |
-| [`generated/wire.ts`](generated/wire.ts)                   | Pinned logical and browser-projected contracts                  |
+| Path                                                       | Role                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------- |
+| `design/concepts/*.md`                                     | Standalone concept specifications                        |
+| `design/compositions/*.md`                                 | Host-independent application composition design          |
+| `design/types.md`                                          | Application concrete types and cross-concept bindings    |
+| `src/concepts/*.ts`, `src/concepts/*.registry.ts`          | Concept implementations and registrations                |
+| `src/concepts.ts`                                          | Application concept set and typed composition references |
+| `src/compositions/Sessions.ts`                             | Session endpoint groups                                  |
+| `src/compositions/Board.ts`                                | Board endpoint groups and owned former                   |
+| `src/compositions/validators.ts`                           | Runtime endpoint validator helpers                       |
+| `src/assembly.ts`, `src/application.ts`                    | Assembly, execution limits, application, and gateway     |
+| `src/edge.ts`                                              | Plain and cookie-backed HTTP policies                    |
+| `src/api-host.ts`                                          | Bun host for the plain JSON API                          |
+| `src/client.ts`                                            | Typed cookie-projected HTTP client                       |
+| `src/host.ts`, `src/web/`                                  | Bun browser host, static routing, and browser UI         |
+| `tests/concepts/`, `tests/compositions/`                   | Concept principles and application/network behavior      |
+| `tests/projected-wire-contract.ts`                         | Compile-time browser projection checks                   |
+| [`generated/message-board.md`](generated/message-board.md) | Pinned assembled read-back                               |
+| [`generated/wire.ts`](generated/wire.ts)                   | Pinned logical and browser-projected contracts           |
 
 Continue with [Designing with concepts](../../docs/user/design.md) for concept
 boundaries and composition criteria, or the [application

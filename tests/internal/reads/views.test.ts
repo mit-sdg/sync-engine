@@ -7,17 +7,8 @@
  * own examples: `(requester) may read (file)`, `(venue) has room`.
  */
 import { describe, expect, test } from "vite-plus/test";
-import {
-  count,
-  earlier,
-  is,
-  reaction,
-  view,
-  vocabulary,
-  when,
-  where,
-  whether,
-} from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { count, earlier, is, reaction, view, when, where, whether } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { analyzeLocalBehavior } from "@sync-engine/internal/reads/local-behavior";

@@ -12,6 +12,15 @@ target is refused. Cy cannot accept Bo's invitation. Bo accepts it, after which 
 second acceptance and Ari's attempt to revoke it are refused. Ari may issue a new
 invitation after an earlier invitation is declined or revoked.
 
+## Types
+
+```types
+external Target
+  The object to which participation is invited.
+external Person
+  The external identity of an inviter or invitee.
+```
+
 ## State
 
 ```state
@@ -69,14 +78,8 @@ revoke (invitation: Invitation, inviter: Person, at: DateTime) : return (invitat
 ## Queries
 
 ```queries
-_get (invitation: Invitation) : optional (target: Target, inviter: Person, invitee: Person, status: InvitationStatus, issuedAt: DateTime, decidedAt: DateTime | undefined)
+_get (invitation: Invitation) : optional (target: Target, inviter: Person, invitee: Person, status: InvitationStatus, issuedAt: DateTime, decidedAt?: DateTime)
   answers no row for an unknown Invitation
 _pendingFor (invitee: Person) : many (invitation: Invitation, target: Target, inviter: Person, issuedAt: DateTime)
   orders rows by issuedAt and then Invitation identity
 ```
-
-## Types
-
-`Invitation` is an identity allocated by Inviting. `Target` and `Person` are opaque
-external identities. `InvitationStatus` is `pending`, `accepted`, `declined`, or
-`revoked`. `DateTime` is an absolute instant.

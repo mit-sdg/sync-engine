@@ -38,47 +38,49 @@ rule and permits a concept to participate in another composition.
 ## Recording the application design
 
 Keep authored intent, executable declarations, and generated evidence distinct.
-The application owns concept specifications under `design/concepts/Name.md` and
-lean composition explanations under `design/compositions/Group.md`. It may add
-`design/vocabulary.md` when application-wide type roles or named pure
-computations need one shared record. Do not add a design README or index, and do
-not copy generated paths, binding mechanics, or other read-back into authored
-design.
+A concept specification records reusable concept-local behavior. Registered
+application prose records the decisions realized by selected reactions, views,
+and formers. `types` fences in those registered documents resolve every
+concept-external type for that application.
 
-A composition document opens with the group's overall purpose. Its
-`## Compositions` section has one `###` entry per larger executable reaction or
-endpoint group, using the same group names as TypeScript. Optional `## Views` and
-`## Formers` sections describe only reads that carry an independently meaningful
-application decision or result. The canonical application shape keeps
-`compositions`, `views`, and `formers` separate: `compositions` contains the
-larger reaction and endpoint groups, while each read has one owner and is
-installed exactly once. Several groups may reuse a read by import without
-re-exporting it. A composition document should not enumerate hundreds of
-individual reactions or reproduce declaration mechanics. Failure names remain ordinary application choices; this convention
-defines no reserved failure keywords.
+Application prose is ordinary Markdown with one nonempty H1. Organize it around
+natural application topics and place exact `reaction:`, `view:`, and `former:`
+links beside the claims they support. There is no required heading scheme,
+`application.md`, design index, source-tree mirror, or one-document-per-module
+rule. Only documents listed by local URL in a generated config are enforced;
+general introductions, history, and unresolved notes can remain unregistered.
 
-When cross-concept type roles need a structured application-wide record,
-`design/vocabulary.md` uses one edge per line:
+Every selected authored reaction or endpoint tree, every named view, and every
+named former requires coverage. One link names one exact dotted composition
+path; wildcards and implied descendants do not exist. The checker resolves the
+link but does not judge whether the surrounding prose describes the declaration
+honestly. That correspondence remains a review responsibility.
 
-````md
-## Types
+An application `types` fence uses `concrete` to introduce an application type
+and `is` to bind one selected concept instance's external parameter directly:
 
 ```types
-Consumer.External <- Owner.Owned
-```
-````
+concrete Person
+  A stable identity supplied by the institution.
 
-The identity allocated and owned by the role on the right is supplied to the
-opaque external role on the left. The edge does not transfer ownership and does
-not promise TypeScript assignability, runtime validation, a shared
-representation, or an exhaustive inventory. Record named pure computations in
-this vocabulary document as well. Views remain composition because they express
-application decisions over current state rather than pure vocabulary
-computations.
+PostComments.User is Person
+PostComments.Target is Posting.Post
+```
+
+A right side names either a concrete type or a type owned by a selected concept
+instance. Bindings do not transfer ownership, establish TypeScript
+assignability, or provide runtime validation. Chains, bindings to external
+parameters, missing bindings, and unused concrete declarations are invalid.
+
+Named computations may be declared in `computations` fences anywhere in
+registered application prose, including a dedicated types document. Each executable computation
+has exactly one declaration. Views remain distinct because they express
+application decisions over current state rather than pure computations.
 
 These files state design intent. TypeScript classes, registrations, reactions,
-endpoints, views, and formers are the executable declarations. Generated
-read-back describes the selected assembly and does not replace either layer.
+endpoints, views, and formers are executable declarations. Generated read-back
+links the selected declarations back to authored source and does not replace
+either layer.
 
 ## Purpose and principle
 
@@ -120,15 +122,12 @@ lifecycle stage of each managed entity, and any order, multiplicity, or invarian
 that changes behavior. Tables, documents, indexes, caches, and serialization
 formats are implementation choices unless they alter the observable contract.
 
-The optional `State` section in a concept specification is notation for readers;
-registration derives no schema or validator from it. See [State
-notation](reference/concept-specification.md#state-notation). Record owned facts
-in `State`, but state each invariant where the specification enforces it. Put a
-bound in the `where` branch that refuses out-of-range values. Represent order
-with `seq` and describe that order in the query that returns the sequence. The
-absence of a removing transition expresses permanence. [Writing
-conventions](reference/concept-specification.md#writing-conventions) maps other
-statements to their owning sections.
+The required `State` fence is normalized and retained but remains unparsed until
+Simple State Form has a final grammar. Registration derives no schema or
+validator from it. See [`State`](reference/concept-specification.md#state).
+Record owned facts in State and put each enforced invariant in the action branch
+that checks it. Do not compensate for deferred SSF parsing with a heuristic type
+scan or private notation dialect.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

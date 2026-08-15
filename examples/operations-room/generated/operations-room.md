@@ -10,297 +10,119 @@ _specifications and composition source, then regenerate this file._
 
 ### Alerting
 
-**Purpose.** Keep an alert visible to its recipient until they acknowledge it, so pending
-matters do not depend on memory.
-
-**Principle.** An alert is raised for Mina about a failed checkout, followed by one about a
-delayed deployment. She sees both in that order. An alert raised for Jo does not
-change Mina's alerts. Mina acknowledges the failed-checkout alert; her delayed-
-deployment alert and Jo's alert remain. Trying to acknowledge the first alert
-again is refused because it is no longer open.
-
-_Registration checks member names, recoverable input names, and refusal mappings._
-_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
+Defined in [Alerting](../design/concepts/Alerting.md), line 1.
 
 #### Actions
 
-##### `raise (recipient: Person, subject: Subject) : return (alert: Alert)`
-
-**Authored behavior:**
-
-    then
-      add a new alert with recipient and subject
-      return alert
-
-##### `acknowledge (alert: Alert) : return (alert: Alert)`
-
-**Authored behavior:**
-
-    where alert not in alerts
-    then
-      refuse ALERT_NOT_FOUND "There is no such open alert."
-    where alert in alerts
-    then
-      delete alert
-      return alert
-
-**Registered refusal codes:** `ALERT_NOT_FOUND`
+- `raise(recipient: Person, subject: Subject) : return (alert: Alert)`
+- `acknowledge(alert: Alert) : return (alert: Alert)`
+  - Refuses `ALERT_NOT_FOUND`: There is no such open alert.
 
 #### Queries
 
-##### `_openFor (recipient: Person) : many (alert: Alert, subject: Subject)`
+- `_openFor(recipient: Person) : many (alert: Alert, recipient: Person, subject: Subject)`
 
-**Authored behavior:**
+#### Selected instances and bindings
 
-    answers no rows for a Person with no open Alerts
-    orders rows by when each Alert was raised
-
-#### Types
-
-`Alert` is an identity allocated by Alerting. `Person` and `Subject` are opaque
-external identities.
+- `Alerting`
+  - `Alerting.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 29.
+  - `Alerting.Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 32.
 
 ### Discussing
 
-**Purpose.** Open a discussion about a subject and collect authored responses, so people can
-carry an exchange forward and close it deliberately.
-
-**Principle.** Mina opens a discussion about a proposal. Sol responds, and the response is
-shown in the order it arrived. Mina closes the discussion. A later response is
-refused because the discussion is closed, as is an attempt to open a second
-discussion about the same subject while the first one is open.
-
-_Registration checks member names, recoverable input names, and refusal mappings._
-_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
+Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 
 #### Actions
 
-##### `open (subject: Subject) : return (discussion: Discussion)`
-
-**Authored behavior:**
-
-    where no open discussion has subject
-    then
-      add a new discussion with subject
-      add discussion to open
-      return discussion
-    where some open discussion has subject
-    then
-      refuse DISCUSSION_ALREADY_OPEN "This subject already has an open discussion."
-
-**Registered refusal codes:** `DISCUSSION_ALREADY_OPEN`
-
-##### `respond (discussion: Discussion, author: Person, text: String) : return (response: Response)`
-
-**Authored behavior:**
-
-    where discussion in open
-    then
-      add a new response with discussion, author, and text
-      return response
-    where discussion not in open
-    then
-      refuse DISCUSSION_NOT_OPEN "This discussion is not open."
-
-**Registered refusal codes:** `DISCUSSION_NOT_OPEN`
-
-##### `close (discussion: Discussion) : return ()`
-
-**Authored behavior:**
-
-    where discussion in open
-    then
-      remove discussion from open
-      return
-    where discussion not in open
-    then
-      refuse DISCUSSION_NOT_OPEN "This discussion is not open."
-
-**Registered refusal codes:** `DISCUSSION_NOT_OPEN`
+- `open(subject: Subject) : return (discussion: Discussion)`
+  - Refuses `DISCUSSION_ALREADY_OPEN`: This subject already has an open discussion.
+- `respond(discussion: Discussion, author: Person, text: String) : return (response: Response)`
+  - Refuses `DISCUSSION_NOT_OPEN`: This discussion is not open.
+- `close(discussion: Discussion) : return ()`
+  - Refuses `DISCUSSION_NOT_OPEN`: This discussion is not open.
 
 #### Queries
 
-##### `_openFor (subject: Subject) : optional (discussion: Discussion)`
+- `_openFor(subject: Subject) : optional (discussion: Discussion)`
+- `_responses(discussion: Discussion) : many (response: Response, discussion: Discussion, author: Person, text: String)`
 
-**Authored behavior:**
+#### Selected instances and bindings
 
-    answers no row for a Subject with no open Discussion
-
-##### `_responses (discussion: Discussion) : many (response: Response, author: Person, text: String)`
-
-**Authored behavior:**
-
-    answers no rows for a Discussion with no Responses
-    orders rows by when each Response was added
-
-#### Types
-
-`Discussion` and `Response` are identities allocated by Discussing. `Subject`
-and `Person` are opaque external identities. `String` is owned text.
+- `Discussing`
+  - `Discussing.Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 23.
+  - `Discussing.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 26.
 
 ### Gathering
 
-**Purpose.** Let a host create a named gathering and let people join or leave it, so
-belonging is an explicit, visible state.
-
-**Principle.** Asha creates Saturday Workshop and becomes its first member. Bo joins and appears
-among its members. When Bo tries to join again, the gathering refuses the
-duplicate. Bo leaves; a second attempt to leave is refused because Bo no longer
-belongs. When Cy tries to join an unknown gathering, it is refused because the
-gathering does not exist.
-
-_Registration checks member names, recoverable input names, and refusal mappings._
-_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
+Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 
 #### Actions
 
-##### `create (name: String, host: Person) : return (gathering: Gathering)`
-
-**Authored behavior:**
-
-    then
-      add a new gathering with name and host
-      add a new membership with gathering and member host
-      return gathering
-
-##### `join (gathering: Gathering, member: Person) : return (membership: Membership)`
-
-**Authored behavior:**
-
-    where gathering not in gatherings
-    then
-      refuse GATHERING_NOT_FOUND "There is no such gathering."
-    where gathering in gatherings and some membership has gathering and member
-    then
-      refuse ALREADY_JOINED "This person already belongs to the gathering."
-    where gathering in gatherings and no membership has gathering and member
-    then
-      add a new membership with gathering and member
-      return membership
-
-**Registered refusal codes:** `GATHERING_NOT_FOUND`, `ALREADY_JOINED`
-
-##### `leave (gathering: Gathering, member: Person) : return (membership: Membership)`
-
-**Authored behavior:**
-
-    where gathering not in gatherings
-    then
-      refuse GATHERING_NOT_FOUND "There is no such gathering."
-    where gathering in gatherings and no membership has gathering and member
-    then
-      refuse NOT_JOINED "This person does not belong to the gathering."
-    where gathering in gatherings and some membership has gathering and member
-    then
-      delete that membership
-      return membership
-
-**Registered refusal codes:** `GATHERING_NOT_FOUND`, `NOT_JOINED`
+- `create(name: String, host: Person) : return (gathering: Gathering)`
+- `join(gathering: Gathering, member: Person) : return (membership: Membership)`
+  - Refuses `GATHERING_NOT_FOUND`: There is no such gathering.
+  - Refuses `ALREADY_JOINED`: This person already belongs to the gathering.
+- `leave(gathering: Gathering, member: Person) : return (membership: Membership)`
+  - Refuses `GATHERING_NOT_FOUND`: There is no such gathering.
+  - Refuses `NOT_JOINED`: This person does not belong to the gathering.
 
 #### Queries
 
-##### `_get (gathering: Gathering) : optional (name: String, host: Person)`
+- `_get(gathering: Gathering) : optional (gathering: Gathering, name: String, host: Person)`
+- `_members(gathering: Gathering) : many (member: Person)`
+- `_membership(gathering: Gathering, member: Person) : one (joined: Flag)`
 
-**Authored behavior:**
+#### Selected instances and bindings
 
-    answers no row for an unknown Gathering
-
-##### `_members (gathering: Gathering) : many (member: Person)`
-
-**Authored behavior:**
-
-    answers no rows for an unknown Gathering
-    orders rows by when each Person joined
-
-##### `_membership (gathering: Gathering, member: Person) : one (joined: Flag)`
-
-**Authored behavior:**
-
-    answers false when Person is not a member or Gathering is unknown
-
-#### Types
-
-`Gathering` and `Membership` are identities allocated by Gathering. `Person` is
-an opaque external identity. `String` is owned text. `Flag` is a Boolean value.
-
-### RequestBoundary
-
-**Purpose.** Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.
-
-**Principle.** A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.
-
-Actions:
-
-- `request (…)`
-- `respond (…)` — may refuse `NOT_PENDING`
+- `Gathering`
+  - `Gathering.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 14.
 
 ### Selecting
 
-**Purpose.** Keep one current item for a shared scope, so everyone working in that scope can
-begin from the same choice.
-
-**Principle.** A workshop chooses Essay A and it becomes the workshop's current selection.
-Later it chooses Essay B; the new selection replaces Essay A as current without
-changing another workshop's selection. Clearing the workshop removes its
-current selection. A second clear is refused because there is nothing left to
-clear.
-
-_Registration checks member names, recoverable input names, and refusal mappings._
-_Engine-evaluated reads enforce query cardinality. Types, results, and behavior prose are not executable assertions._
+Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 
 #### Actions
 
-##### `choose (scope: Scope, item: Item) : return (selection: Selection)`
-
-**Authored behavior:**
-
-    then
-      remove any selection with scope from current
-      add a new selection with scope and item
-      add selection to current
-      return selection
-
-##### `clear (scope: Scope) : return (selection: Selection)`
-
-**Authored behavior:**
-
-    where some current selection has scope
-    then
-      remove that selection from current
-      return selection
-    where no current selection has scope
-    then
-      refuse NO_CURRENT_SELECTION "This scope has no current selection."
-
-**Registered refusal codes:** `NO_CURRENT_SELECTION`
+- `choose(scope: Scope, item: Item) : return (selection: Selection)`
+- `clear(scope: Scope) : return (selection: Selection)`
+  - Refuses `NO_CURRENT_SELECTION`: This scope has no current selection.
 
 #### Queries
 
-##### `_current (scope: Scope) : optional (selection: Selection, item: Item)`
+- `_current(scope: Scope) : optional (selection: Selection, scope: Scope, item: Item)`
+- `_get(selection: Selection) : optional (selection: Selection, scope: Scope, item: Item)`
 
-**Authored behavior:**
+#### Selected instances and bindings
 
-    answers no row for a Scope with no current Selection
+- `Selecting`
+  - `Selecting.Scope` is `Gathering.Gathering` — [Operations Room Application Types](../design/types.md), line 17.
+  - `Selecting.Item` is `Mitigation` — [Operations Room Application Types](../design/types.md), line 20.
 
-##### `_get (selection: Selection) : optional (scope: Scope, item: Item)`
+## Application types
 
-**Authored behavior:**
+Concrete types:
 
-    answers no row for an unknown Selection
-
-#### Types
-
-`Selection` is an identity allocated by Selecting. `Scope` and `Item` are opaque
-external identities.
+- `Person` — [Operations Room Application Types](../design/types.md), line 8.
+- `Mitigation` — [Operations Room Application Types](../design/types.md), line 11.
 
 ## Views
 
 _Views name reusable conditions. Multiple `where` blocks are alternatives._
 
+### (responder) may contribute in (room)
+
+Authored path: `Contributions.ResponderMayContribute`.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 8.
+
 ```view
 (responder) may contribute in (room) — inputs (responder, room); outputs (); bindings ()
   where Gathering._membership (gathering: room, member: responder) has (joined: true)
 ```
+
+### (responder) may not contribute in (room)
+
+Authored path: `Contributions.ResponderMayNotContribute`.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 11.
 
 ```view
 (responder) may not contribute in (room) — inputs (responder, room); outputs (); bindings ()
@@ -312,6 +134,11 @@ _Views name reusable conditions. Multiple `where` blocks are alternatives._
 _Formers name result shapes evaluated when asked. The source former owns_
 _the authored explanation; this section records the generated shape._
 
+### the current mitigation (room)
+
+Authored path: `Room.ReadModels.CurrentMitigation`.
+- Covered by [Room](../design/compositions/Room.md), line 15.
+
 ```former
 Former "the current mitigation (room)" — inputs (room); bindings (mitigation); promises at most one record — forms:
   a record of
@@ -319,6 +146,11 @@ Former "the current mitigation (room)" — inputs (room); bindings (mitigation);
     mitigation
     room
 ```
+
+### the operations room (room)
+
+Authored path: `Room.RoomDashboard.RoomDashboard`.
+- Covered by [Room](../design/compositions/Room.md), line 18.
 
 ```former
 Former "the operations room (room)" — inputs (room); bindings (name, host, responder, selection, mitigation, discussion, response, author, text, alert, subject, alertedMitigation); promises exactly one record — forms:
@@ -348,6 +180,11 @@ Former "the operations room (room)" — inputs (room); bindings (name, host, res
     room
 ```
 
+### the required current mitigation (room)
+
+Authored path: `Room.ReadModels.RequiredCurrentMitigation`.
+- Covered by [Room](../design/compositions/Room.md), line 14.
+
 ```former
 Former "the required current mitigation (room)" — inputs (room); bindings (mitigation); promises exactly one record — forms:
   a record of
@@ -355,6 +192,11 @@ Former "the required current mitigation (room)" — inputs (room); bindings (mit
     mitigation
     room
 ```
+
+### the responder roster of (room)
+
+Authored path: `Room.ReadModels.ResponderRoster`.
+- Covered by [Room](../design/compositions/Room.md), line 8.
 
 ```former
 Former "the responder roster of (room)" — inputs (room); bindings (responder); promises exactly one record — forms:
@@ -364,6 +206,11 @@ Former "the responder roster of (room)" — inputs (room); bindings (responder);
         responder
 ```
 
+### the response stats of (discussion)
+
+Authored path: `Room.ReadModels.ResponseStats`.
+- Covered by [Room](../design/compositions/Room.md), line 22.
+
 ```former
 Former "the response stats of (discussion)" — inputs (discussion); bindings (response, responder); promises exactly one record — forms:
   a record of
@@ -371,6 +218,11 @@ Former "the response stats of (discussion)" — inputs (discussion); bindings (r
     responders: the distinct responder of each Discussing._responses (discussion) has (author: responder, response)
     responseCount: the count of Discussing._responses (discussion) has (author: responder, response)
 ```
+
+### the room summary (room)
+
+Authored path: `Room.ReadModels.RoomSummary`.
+- Covered by [Room](../design/compositions/Room.md), line 9.
 
 ```former
 Former "the room summary (room)" — inputs (room); bindings (name, host); promises exactly one record — forms:
@@ -386,6 +238,9 @@ Former "the room summary (room)" — inputs (room); bindings (name, host); promi
 
 ### Contributions.AddContribution
 
+Authored path: `Contributions.AddContribution`.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 6.
+
 ```reaction
 when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
 where
@@ -398,6 +253,9 @@ then
 
 ### Contributions.AddContribution#2
 
+Authored path: `Contributions.AddContribution`.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 6.
+
 ```reaction
 when Discussing.respond (author: responder, discussion, text, response), asked by Contributions.AddContribution
 where
@@ -407,6 +265,9 @@ then
 ```
 
 ### Contributions.RejectContribution
+
+Authored path: `Contributions.RejectContribution`.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 9.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
@@ -438,6 +299,9 @@ then
 
 ### MitigationAlerts.SelectedMitigationAlertsResponders
 
+Authored path: `MitigationAlerts.SelectedMitigationAlertsResponders`.
+- Covered by [Mitigation Alerts](../design/compositions/MitigationAlerts.md), line 5.
+
 ```reaction
 when Selecting.choose (scope: room, selection)
 where
@@ -448,6 +312,9 @@ then
 
 ### MitigationDiscussion.SelectedMitigationOpensDiscussion
 
+Authored path: `MitigationDiscussion.SelectedMitigationOpensDiscussion`.
+- Covered by [Mitigation Discussion](../design/compositions/MitigationDiscussion.md), line 4.
+
 ```reaction
 when Selecting.choose (selection)
 then
@@ -456,6 +323,9 @@ then
 
 ### Room.MitigationSelection.ChooseMitigation
 
+Authored path: `Room.MitigationSelection.ChooseMitigation`.
+- Covered by [Room](../design/compositions/Room.md), line 12.
+
 ```reaction
 when RequestBoundary.request (mitigation, path: "/rooms/choose-mitigation", requestId, room)
 then
@@ -463,6 +333,9 @@ then
 ```
 
 ### Room.MitigationSelection.ChooseMitigation#2
+
+Authored path: `Room.MitigationSelection.ChooseMitigation`.
+- Covered by [Room](../design/compositions/Room.md), line 12.
 
 ```reaction
 when Selecting.choose (item: mitigation, scope: room, selection), asked by Room.MitigationSelection.ChooseMitigation
@@ -474,6 +347,9 @@ then
 
 ### Room.RoomDashboard.GetRoom
 
+Authored path: `Room.RoomDashboard.GetRoom`.
+- Covered by [Room](../design/compositions/Room.md), line 17.
+
 ```reaction
 when RequestBoundary.request (path: "/rooms/get", requestId, room)
 then
@@ -482,6 +358,9 @@ then
 
 ### Room.RoomMembership.CreateRoom
 
+Authored path: `Room.RoomMembership.CreateRoom`.
+- Covered by [Room](../design/compositions/Room.md), line 6.
+
 ```reaction
 when RequestBoundary.request (host, name, path: "/rooms/create", requestId)
 then
@@ -489,6 +368,9 @@ then
 ```
 
 ### Room.RoomMembership.CreateRoom#2
+
+Authored path: `Room.RoomMembership.CreateRoom`.
+- Covered by [Room](../design/compositions/Room.md), line 6.
 
 ```reaction
 when Gathering.create (host, name, gathering: room), asked by Room.RoomMembership.CreateRoom
@@ -500,6 +382,9 @@ then
 
 ### Room.RoomMembership.JoinRoom
 
+Authored path: `Room.RoomMembership.JoinRoom`.
+- Covered by [Room](../design/compositions/Room.md), line 7.
+
 ```reaction
 when RequestBoundary.request (path: "/rooms/join", requestId, responder, room)
 then
@@ -507,6 +392,9 @@ then
 ```
 
 ### Room.RoomMembership.JoinRoom#2
+
+Authored path: `Room.RoomMembership.JoinRoom`.
+- Covered by [Room](../design/compositions/Room.md), line 7.
 
 ```reaction
 when Gathering.join (gathering: room, member: responder, membership), asked by Room.RoomMembership.JoinRoom

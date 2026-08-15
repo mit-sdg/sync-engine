@@ -26,7 +26,7 @@ const repositoryOnlySources = new Map<string, URL[]>([
   [
     new URL("getting-started.md", guideDirectory).pathname,
     [
-      new URL("../../src/command/setup/src/vocabulary.ts", import.meta.url),
+      new URL("../../src/command/setup/src/concepts.ts", import.meta.url),
       new URL("../../src/command/setup/src/assembly.ts", import.meta.url),
     ],
   ],
@@ -89,7 +89,7 @@ describe("guided curriculum", () => {
 
     expect(guide).toContain("sync-engine setup");
     expect(guide).toContain("concept-free");
-    expect(guide).toContain("src/vocabulary.ts");
+    expect(guide).toContain("src/concepts.ts");
     expect(guide).toContain("src/compositions/");
     expect(guide).not.toContain("src/concept-set.ts");
     expect(guide).not.toContain("src/composition.ts");
@@ -163,6 +163,15 @@ describe("guided curriculum", () => {
     expect(index).not.toContain("@mit-sdg/sync-engine/utils");
   });
 
+  test("the agent index keeps installed-package research on the public surface", async () => {
+    const index = await readFile(new URL("../../docs/user/llms.txt", import.meta.url), "utf8");
+
+    expect(index).toContain("## Installed-package boundary");
+    expect(index).toMatch(/Do not inspect or\s+infer contracts from `dist\/engine\/`/);
+    expect(index).toContain("report the public-contract gap");
+    expect(index).not.toContain("raw.githubusercontent.com/mit-sdg/sync-engine/main");
+  });
+
   test("local links and anchors resolve and guides avoid unsupported entrypoints", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("../../package.json", import.meta.url), "utf8"),
@@ -195,7 +204,12 @@ describe("guided curriculum", () => {
       for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
         const target = match[1];
         const firstPartyRaw = target.startsWith(firstPartyRawPrefix);
-        if (/^(?:https?:|mailto:)/.test(target) && !firstPartyRaw) continue;
+        if (
+          /^(?:https?:|mailto:|reaction:|view:|former:|computation:)/.test(target) &&
+          !firstPartyRaw
+        ) {
+          continue;
+        }
         const hashAt = target.indexOf("#");
         const targetPath = hashAt < 0 ? target : target.slice(0, hashAt);
         const path = firstPartyRaw ? targetPath.slice(firstPartyRawPrefix.length) : targetPath;

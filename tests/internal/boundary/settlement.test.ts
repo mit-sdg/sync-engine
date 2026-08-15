@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { no, reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { no, reaction, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 

@@ -66,7 +66,7 @@ export interface ApplicationProjectProvenance extends AnalysisProvenance {
  */
 export interface ApplicationProjectAnalysis {
   readonly format: "sync-engine.application-project-analysis";
-  readonly version: 2;
+  readonly version: 3;
   readonly manifestDigest: string;
   readonly provenance: ApplicationProjectProvenance;
   readonly diagnostics: readonly ApplicationProjectDiagnostic[];
