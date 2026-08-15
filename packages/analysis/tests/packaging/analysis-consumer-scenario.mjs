@@ -49,7 +49,7 @@ const manifest = parseApplicationManifest(
   renderApplicationManifest(applicationManifest(application)),
 );
 assert(manifest.version === 1, "packed consumer did not generate and parse a V1 manifest");
-assert(manifest.generator.version === "1.0.0-beta.10", "packed core provenance is not beta.10");
+assert(manifest.generator.version === "1.0.0-beta.11", "packed core provenance is not beta.11");
 
 const consumer = dirname(fileURLToPath(import.meta.url));
 const projectDirectory = resolve(consumer, "analysis-project");
@@ -108,8 +108,8 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
       ? await analyzeApplicationProject(projectOptions)
       : loadApplicationProject(projectOptions);
   assert(
-    project.provenance.analyzer.version === "1.0.0-beta.10",
-    "packed analyzer provenance is not beta.10",
+    project.provenance.analyzer.version === "1.0.0-beta.11",
+    "packed analyzer provenance is not beta.11",
   );
   assert(project.version === 3, "packed project analysis is not V3");
   assert(project.applicationIndex.version === 3, "packed application index is not V3");
@@ -120,8 +120,8 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
     "packed project byte usage is not derivable from file records",
   );
   assert(
-    project.provenance.manifest.generator.version === "1.0.0-beta.10",
-    "packed project core provenance is not beta.10",
+    project.provenance.manifest.generator.version === "1.0.0-beta.11",
+    "packed project core provenance is not beta.11",
   );
   assert(
     project.provenance.files.every(({ path }) => !path.startsWith("..")),

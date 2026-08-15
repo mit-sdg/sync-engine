@@ -8,6 +8,7 @@ type Manifest = Record<string, unknown>;
 
 async function currentPackage(): Promise<{
   version: string;
+  packageManager: string;
   dependencies: { typescript: string };
   devDependencies: { "@types/node": string };
 }> {
@@ -24,6 +25,7 @@ async function project(manifest: Manifest = {}): Promise<string> {
 }
 
 async function manifestAt(root: string): Promise<{
+  packageManager: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
   scripts: Record<string, string>;
@@ -80,6 +82,23 @@ describe("sync-engine setup", () => {
       expect(second.installation).toBe("not-needed");
       expect(second.written).toEqual([]);
       expect(second.verified).toHaveLength(5);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("adds the canonical Bun package manager before installation when it is absent", async () => {
+    const root = await project({ packageManager: undefined });
+    try {
+      const result = await setupProject(root, {
+        install: async () => {
+          expect((await manifestAt(root)).packageManager).toBe(
+            (await currentPackage()).packageManager,
+          );
+        },
+      });
+      expect(result.manifestUpdated).toBe(true);
+      expect(result.installation).toBe("completed");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -218,8 +237,8 @@ describe("sync-engine setup", () => {
     [
       "conflicting core declarations",
       JSON.stringify({
-        dependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.10" },
-        devDependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.9" },
+        dependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.2" },
+        devDependencies: { "@mit-sdg/sync-engine": "1.0.0-beta.3" },
       }),
       "conflicting @mit-sdg/sync-engine",
     ],

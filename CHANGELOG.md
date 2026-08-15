@@ -5,6 +5,77 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.11] - 2026-08-15
+
+This beta adds a design-first Agent Skill and read-only analysis command, makes
+application setup complete a compatible Bun package, tightens draft concept
+syntax, and narrows catalog examples to the memory implementation.
+
+### Compatibility
+
+- Added the documentation-only `@mit-sdg/sync-engine-skill` package. Its native
+  subagent workflow covers interactive or assumption-based product discovery,
+  independent design and criticism, user review of the actual Markdown,
+  path-isolated implementation, evidence, validation, and final acceptance. It
+  depends on the exact matching analysis and catalog packages and has no runtime
+  JavaScript API.
+- `@mit-sdg/sync-engine-analysis` now installs the read-only
+  `sync-engine-analysis` command. It obtains the configured V1 manifest through
+  core and provides bounded `summary`, `search`, `describe`, `sources`, `impact`,
+  and `diagnostics` projections without writing application files.
+- `sync-engine setup` now adds the canonical Bun `packageManager` when absent,
+  completes missing managed package fields, installs dependencies when it
+  changes the manifest, and then creates missing concept-free templates.
+  Compatible existing dependency declarations and all existing scripts are
+  preserved; conflicting or incompatible declarations fail before the manifest
+  is written.
+- Added `sync-engine check-concepts <paths...>` for syntax-only validation of
+  explicit draft concept files without loading application configuration or
+  TypeScript. The version-1 parser now rejects subsection headings, fenced
+  blocks in Purpose or Principle, and application-design links or computations
+  fences anywhere in a concept specification.
+- Catalog concept entries no longer ship MongoDB implementations or their
+  selectors. All 16 entries retain the memory implementation, and the catalog
+  remains a read-only source browser rather than a persistence library.
+
+### Migration
+
+- Before rerunning `sync-engine setup`, review any partially authored package
+  manifest. Setup can now add the canonical Bun `packageManager`, exact core,
+  TypeScript, and `@types/node` dependencies, add absent standard scripts, write
+  `package.json`, and run `bun install`; it still never overwrites an existing
+  script or application file.
+- Remove subsection headings and fenced blocks from concept Purpose and
+  Principle sections, and move application links and computation declarations
+  into registered application-design documents. Use `check-concepts` while the
+  design is still a draft, then use config-based `check` after registration.
+- Catalog users that copied a MongoDB example must retain and maintain that
+  application-owned source or provide their own persistent implementation. New
+  catalog selection should use the remaining `memory/...` selectors and adapt
+  storage deliberately.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.11` when they
+  are used together. The skill requires a harness with native isolated
+  subagents; it pauses rather than simulating an independent review when those
+  capabilities are unavailable.
+
+### Generated formats
+
+- Core application manifests remain at version 1. Analysis application indexes,
+  impact traces, source indexes, and project snapshots remain at version 3.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.11`; no persisted-format version changes.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged. The new
+  skill is orchestration documentation, and the analysis command is read-only
+  static evidence rather than runtime proof.
+- Catalog removal of MongoDB examples does not add a persistence guarantee to
+  memory implementations. Applications remain responsible for durable storage,
+  transactions, deployment controls, and recovery where required.
+
+[Release][1.0.0-beta.11] | [Changes since 1.0.0-beta.10][1.0.0-beta.11-compare]
+
 ## [1.0.0-beta.10] - 2026-08-15
 
 This beta replaces the preliminary authored-design workflow with one strict,
@@ -891,6 +962,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.11]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.11
+[1.0.0-beta.11-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.10...v1.0.0-beta.11
 [1.0.0-beta.10]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.10
 [1.0.0-beta.10-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.9...v1.0.0-beta.10
 [1.0.0-beta.9]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.9

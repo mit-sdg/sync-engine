@@ -6,7 +6,7 @@ Install it as a development dependency, then browse a design before choosing any
 source:
 
 ```sh
-bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.10
+bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.11
 bunx catalog list
 bunx catalog show concept/labeling
 bunx catalog show recipe/workshop-selection
