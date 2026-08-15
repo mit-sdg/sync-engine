@@ -8,9 +8,14 @@ import { SelectingMemoryConcept } from "./selecting.memory.ts";
 import type { Db } from "mongodb";
 import { SelectingMongoConcept } from "./selecting.mongo.ts";
 //#endfloor
+//#floor postgres
+import type { Pool } from "pg";
+import { SelectingPostgresConcept } from "./selecting.postgres.ts";
+//#endfloor
 
 //#class memory SelectingMemoryConcept
 //#class mongo SelectingMongoConcept
+//#class postgres SelectingPostgresConcept
 export const selecting = registerConcept({
   class: SelectingMemoryConcept, // selected-class
   spec,
@@ -21,6 +26,9 @@ export const selecting = registerConcept({
     //#endfloor
     //#floor mongo
     mongo: ({ db }: { db: Db }) => new SelectingMongoConcept(db),
+    //#endfloor
+    //#floor postgres
+    postgres: ({ pool }: { pool: Pool }) => new SelectingPostgresConcept(pool),
     //#endfloor
   },
 });

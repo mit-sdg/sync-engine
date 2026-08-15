@@ -13,6 +13,10 @@
     "mongo": {
       "summary": "MongoDB replica set or sharded deployment using transactions to retain history and advance one current projection.",
       "sources": ["selecting.mongo.ts", "selecting.mongo.test.ts"]
+    },
+    "postgres": {
+      "summary": "PostgreSQL tables using one transaction per choice to retain history and upsert one current projection per scope.",
+      "sources": ["selecting.postgres.ts", "selecting.postgres.test.ts"]
     }
   }
 }
