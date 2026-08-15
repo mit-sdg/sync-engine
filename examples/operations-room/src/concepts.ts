@@ -16,20 +16,20 @@ import { gathering } from "./concepts/Gathering.registry.ts";
 import { selecting } from "./concepts/Selecting.registry.ts";
 import { identitiesFor } from "./identities.ts";
 
-export const applicationConcepts = conceptSet({
+export const applicationConceptSet = conceptSet({
   Gathering: gathering,
   Selecting: selecting,
   Discussing: discussing,
   Alerting: alerting,
 });
 
-export const { concepts } = applicationConcepts;
+export const { concepts } = applicationConceptSet;
 
 /** Build the concept set with one fixed id sequence per concept name. */
 export function deterministicImplementations(
   sequences: Readonly<Record<string, readonly string[]>>,
 ) {
-  return applicationConcepts.implementations("deterministic", {
+  return applicationConceptSet.implementations("deterministic", {
     identities: identitiesFor(sequences, Object.keys(concepts)),
   });
 }

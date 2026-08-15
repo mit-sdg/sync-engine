@@ -558,7 +558,7 @@ describe("concept discovery", () => {
       source,
       'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\n' +
         'import { sessioning } from "../sessioning/registry.ts";\n' +
-        "export const applicationConcepts = conceptSet({ Sessioning: sessioning });\n",
+        "export const applicationConceptSet = conceptSet({ Sessioning: sessioning });\n",
     );
 
     expect(registeredConceptSources(source)).toEqual([
@@ -634,7 +634,7 @@ describe("concept discovery", () => {
     const module = join(directory, "missing-concept-set.mjs");
     await writeFile(module, "export const other = {};\n");
     await expect(loadRegisteredConcepts(module)).rejects.toThrow(
-      'does not export "applicationConcepts"',
+      'does not export "applicationConceptSet"',
     );
   });
 
@@ -653,7 +653,7 @@ describe("concept discovery", () => {
       source,
       'import { conceptSet } from "@mit-sdg/sync-engine/assembly";\n' +
         'import { selected } from "./registrations.ts";\n' +
-        "export const applicationConcepts = conceptSet({ ...selected });\n",
+        "export const applicationConceptSet = conceptSet({ ...selected });\n",
     );
 
     expect(registeredConceptSources(source)).toEqual([
@@ -821,19 +821,19 @@ describe("concept discovery", () => {
           'import { SessioningConcept } from "./sessioning.ts";\n' +
           'import spec from "../design/concepts/Sessioning.md" with { type: "text" };\n' +
           "const Sessioning = registerConcept({ class: SessioningConcept, spec });\n" +
-          "export const applicationConcepts = conceptSet({ Sessioning });\n",
+          "export const applicationConceptSet = conceptSet({ Sessioning });\n",
       );
       await writeFile(
         join(project, "generated.config.ts"),
         'import { assemble } from "@mit-sdg/sync-engine/assembly";\n' +
-          'import { applicationConcepts } from "./src/application-concepts.ts";\n' +
+          'import { applicationConceptSet } from "./src/application-concepts.ts";\n' +
           "export default {\n" +
           '  title: "Session application",\n' +
           "  design: { version: 1, documents: [] },\n" +
           '  conceptSet: { module: new URL("./src/application-concepts.ts", import.meta.url) },\n' +
           "  assemble: () => assemble({\n" +
-          "    conceptSet: applicationConcepts,\n" +
-          "    instances: applicationConcepts.implementations(),\n" +
+          "    conceptSet: applicationConceptSet,\n" +
+          "    instances: applicationConceptSet.implementations(),\n" +
           "    composition: {},\n" +
           "  }),\n" +
           "};\n",

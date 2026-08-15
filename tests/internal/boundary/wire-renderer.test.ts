@@ -307,13 +307,13 @@ describe("wire TypeScript renderer", () => {
   test("uses exact concept-set references only when given an anchor", () => {
     const fallback = renderWireTypes(anchoredFixture);
     const anchored = renderWireTypes(anchoredFixture, {
-      conceptSet: { from: "./concepts.ts", export: "applicationConcepts" },
+      conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
     });
 
     expect(fallback).toContain('"entry": Json;');
     expect(fallback).not.toContain("ApplicationConceptSet");
     expect(anchored).toContain(
-      'import type { applicationConcepts as ApplicationConceptSet } from "./concepts.ts";',
+      'import type { applicationConceptSet as ApplicationConceptSet } from "./concepts.ts";',
     );
     expect(anchored).toContain(
       'Jsonify<AtPath<Awaited<ReturnType<(typeof ApplicationConceptSet.concepts)["Ledger"]["add"]>>, ["entry"]>>',
@@ -325,7 +325,7 @@ describe("wire TypeScript renderer", () => {
   });
 
   test("emits exactly the helpers used by sparse and appended contracts", async () => {
-    const conceptSet = { from: "./concepts.ts", export: "applicationConcepts" };
+    const conceptSet = { from: "./concepts.ts", export: "applicationConceptSet" };
     const empty = renderWireTypes(wireWithOutput(reference()), {
       moduleName: "EmptyWire",
       conceptSet,
@@ -394,7 +394,7 @@ describe("wire TypeScript renderer", () => {
       "number.ts": number,
       "appended.ts": `${preamble}\n${appended}`,
       "concepts.ts": `
-export declare const applicationConcepts: {
+export declare const applicationConceptSet: {
   concepts: { Ledger: { rows(input: Record<string, never>): readonly { value: string }[] } };
 };
 `,
@@ -434,7 +434,7 @@ export declare const applicationConcepts: {
     };
     expect(() =>
       renderWireTypes(unresolved, {
-        conceptSet: { from: "./concepts.ts", export: "applicationConcepts" },
+        conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
         strictLeaves: true,
       }),
     ).toThrow(
@@ -480,11 +480,11 @@ export declare const applicationConcepts: {
       ],
     };
     const wire = renderWireTypes(computationWire, {
-      conceptSet: { from: "./concepts.ts", export: "applicationConcepts" },
+      conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
       strictLeaves: true,
     });
     const conceptSet = `
-export declare const applicationConcepts: {
+export declare const applicationConceptSet: {
   concepts: Record<string, never>;
   computations: {
     setupSecretMatches: { fn: (input: { secret: string }) => Promise<boolean> };
@@ -512,7 +512,7 @@ void wrongOutput;
 
   test("the anchored module typechecks exact client-facing leaves", async () => {
     const wire = renderWireTypes(anchoredFixture, {
-      conceptSet: { from: "./concepts.ts", export: "applicationConcepts" },
+      conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
       strictLeaves: true,
     });
     const conceptSet = `
@@ -533,7 +533,7 @@ export class LedgerConcept {
     return {};
   }
 }
-export declare const applicationConcepts: { concepts: { Ledger: LedgerConcept } };
+export declare const applicationConceptSet: { concepts: { Ledger: LedgerConcept } };
 `;
     const consumer = `
 import type { WireContracts } from "./wire.ts";

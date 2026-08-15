@@ -22,7 +22,7 @@ layout separate from executable source and generated evidence.
   registration or runtime semantics.
 - `sync-engine setup` now creates `src/concepts.ts` and no placeholder design or
   composition file. Its generated descriptor uses the conventional
-  `applicationConcepts` export.
+  `applicationConceptSet` export.
 - `sync-engine check` discovers selected registrations from the required
   generated config instead of scanning Markdown roots. The assembled
   application's concepts are authoritative; the old `--vocabulary-module` and

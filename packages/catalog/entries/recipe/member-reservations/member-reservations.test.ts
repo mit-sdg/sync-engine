@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { describe, expect, test } from "vite-plus/test";
-import { applicationConcepts } from "@catalog/concepts";
+import { applicationConceptSet } from "@catalog/concepts";
 import { compositions } from "./member-reservations.ts";
 
 const { CancelMemberReservation, FulfillMemberReservation, ReserveForMember } =
@@ -8,7 +8,7 @@ const { CancelMemberReservation, FulfillMemberReservation, ReserveForMember } =
 const { GetMemberReservations } = compositions.ReservationLists;
 
 type Floor = "memory" | "mongo";
-type Instances = ReturnType<(typeof applicationConcepts)["implementations"]>;
+type Instances = ReturnType<(typeof applicationConceptSet)["implementations"]>;
 interface MongoFloorLease {
   database: unknown;
   close(): Promise<void>;
@@ -18,7 +18,7 @@ const openMongoFloor = (
     __catalogMongoFloor?: () => Promise<MongoFloorLease>;
   }
 ).__catalogMongoFloor;
-const implementations = applicationConcepts.implementations as unknown as (
+const implementations = applicationConceptSet.implementations as unknown as (
   floor: Floor,
   context: object,
 ) => Instances;
@@ -60,7 +60,7 @@ for (const floor of ["memory", "mongo"] as const) {
       async () => {
         await withFloor(floor, async (instances) => {
           const application = assemble({
-            conceptSet: applicationConcepts,
+            conceptSet: applicationConceptSet,
             instances: instances as never,
             composition: {
               CancelMemberReservation,

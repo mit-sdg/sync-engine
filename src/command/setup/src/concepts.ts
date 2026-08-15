@@ -1,4 +1,4 @@
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 
-export const applicationConcepts = conceptSet({});
-export const { concepts } = applicationConcepts;
+export const applicationConceptSet = conceptSet({});
+export const { concepts } = applicationConceptSet;

@@ -14,7 +14,7 @@ export interface SetupResult {
 }
 
 const IDENTIFIERS: Readonly<Record<string, readonly string[]>> = {
-  "src/concepts.ts": ["applicationConcepts"],
+  "src/concepts.ts": ["applicationConceptSet"],
   "src/assembly.ts": ["assembleApplication"],
 };
 
@@ -202,7 +202,7 @@ export async function setupProject(directory = "."): Promise<SetupResult> {
   if (eligible.has("src/assembly.ts") && !canUse("src/concepts.ts")) {
     eligible.delete("src/assembly.ts");
     guidance.push(
-      "Integration required: src/assembly.ts needs the applicationConcepts export from src/concepts.ts.",
+      "Integration required: src/assembly.ts needs the applicationConceptSet export from src/concepts.ts.",
     );
   }
   if (

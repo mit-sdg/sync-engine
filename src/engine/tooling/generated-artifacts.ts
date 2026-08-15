@@ -64,7 +64,7 @@ export interface GeneratedApplication {
   /**
    * The module whose exported concept set anchors generated wire types and source
    * analysis; defaults to `src/concepts.ts` beside the config, exporting
-   * `applicationConcepts`.
+   * `applicationConceptSet`.
    */
   conceptSet?: { module?: URL; export?: string };
   /** Ordered transport-specific contracts appended after the logical wire. */
@@ -214,7 +214,7 @@ export function resolveApplication(
     wireName: application.wireName ?? `${pascal(application.title)}Wire`,
     conceptSetFrom: {
       from: posix.normalize(specifierFrom(directory, module)),
-      export: application.conceptSet?.export ?? "applicationConcepts",
+      export: application.conceptSet?.export ?? "applicationConceptSet",
     },
   };
   configurationSource.set(resolved, config);

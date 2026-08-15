@@ -618,21 +618,21 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required | Default                                                          |
-| --------------------- | -------- | ---------------------------------------------------------------- |
-| `assemble`            | yes      | Synchronous function that returns the application assembly       |
-| `title`               | yes      | Application title used to derive names                           |
-| `close`               | no       | Runs after the generated assembly drains                         |
-| `directory`           | no       | `new URL("./generated/", configUrl)`                             |
-| `specification`       | no       | Slugged title plus `.md`                                         |
-| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance          |
-| `wire`                | no       | `"wire.ts"`                                                      |
-| `wireName`            | no       | Pascal-cased title plus `Wire`                                   |
-| `wireBanner`          | no       | Exact package/version generator banner                           |
-| `design.version`      | yes      | Must be `1`                                                      |
-| `design.documents`    | yes      | Local design URLs; may contain `types` fences or be empty        |
-| `conceptSet`          | no       | Source anchor; defaults to `src/concepts.ts#applicationConcepts` |
-| `projections`         | no       | Ordered transport-specific projections                           |
+| Field                 | Required | Default                                                            |
+| --------------------- | -------- | ------------------------------------------------------------------ |
+| `assemble`            | yes      | Synchronous function that returns the application assembly         |
+| `title`               | yes      | Application title used to derive names                             |
+| `close`               | no       | Runs after the generated assembly drains                           |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                               |
+| `specification`       | no       | Slugged title plus `.md`                                           |
+| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance            |
+| `wire`                | no       | `"wire.ts"`                                                        |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                                     |
+| `wireBanner`          | no       | Exact package/version generator banner                             |
+| `design.version`      | yes      | Must be `1`                                                        |
+| `design.documents`    | yes      | Local design URLs; may contain `types` fences or be empty          |
+| `conceptSet`          | no       | Source anchor; defaults to `src/concepts.ts#applicationConceptSet` |
+| `projections`         | no       | Ordered transport-specific projections                             |
 
 The default specification banner consists of these comments:
 

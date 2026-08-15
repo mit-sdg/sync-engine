@@ -4889,7 +4889,7 @@ export interface GeneratedApplication {
     /**
      * The module whose exported concept set anchors generated wire types and source
      * analysis; defaults to `src/concepts.ts` beside the config, exporting
-     * `applicationConcepts`.
+     * `applicationConceptSet`.
      */
     conceptSet?: {
         module?: URL;

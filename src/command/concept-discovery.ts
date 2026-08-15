@@ -51,10 +51,10 @@ export function registeredConcepts(conceptSet: unknown): RegisteredSourceConcept
 
 /** Read the same registration facts from an assembled application's manifest. */
 export function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[] {
-  const applicationConcepts = manifest.conceptImplementations.filter(
+  const applicationImplementations = manifest.conceptImplementations.filter(
     ({ canonical }) => canonical.owner === "application",
   );
-  return applicationConcepts.map((implementation) => {
+  return applicationImplementations.map((implementation) => {
     const concept = manifest.concepts.find(({ name }) => name === implementation.concept);
     if (concept?.specification === undefined) {
       throw new Error(
@@ -84,7 +84,7 @@ export function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSo
 /** Import an explicitly selected concept-set module. */
 export async function loadRegisteredConcepts(
   modulePath: string,
-  exportName = "applicationConcepts",
+  exportName = "applicationConceptSet",
 ): Promise<RegisteredSourceConcept[]> {
   const loaded = (await import(pathToFileURL(modulePath).href)) as Record<string, unknown>;
   if (!(exportName in loaded)) {

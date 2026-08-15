@@ -1,6 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { expect } from "vite-plus/test";
-import { applicationConcepts } from "@catalog/concepts";
+import { applicationConceptSet } from "@catalog/concepts";
 import { compositions } from "./message-board.ts";
 
 const { AddMessageBoardComment, PublishMessageBoardPost, RetractMessageBoardComment } =
@@ -15,7 +15,7 @@ const {
 } = compositions.Accounts;
 const { ListMessageBoard } = compositions.BoardPages;
 
-export type CatalogInstances = ReturnType<typeof applicationConcepts.implementations>;
+export type CatalogInstances = ReturnType<typeof applicationConceptSet.implementations>;
 
 type MessageBoardApplication = ReturnType<typeof assembleMessageBoard>;
 
@@ -33,7 +33,12 @@ const composition = {
 };
 
 export function assembleMessageBoard(instances: CatalogInstances) {
-  return assemble({ conceptSet: applicationConcepts, instances, composition, queryCache: "none" });
+  return assemble({
+    conceptSet: applicationConceptSet,
+    instances,
+    composition,
+    queryCache: "none",
+  });
 }
 
 async function invoke(

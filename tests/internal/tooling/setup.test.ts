@@ -82,7 +82,10 @@ describe("sync-engine setup", () => {
       await import("node:fs/promises").then(({ mkdir }) =>
         mkdir(join(root, "src"), { recursive: true }),
       );
-      await writeFile(join(root, "src/concepts.ts"), "// export const applicationConcepts = {};\n");
+      await writeFile(
+        join(root, "src/concepts.ts"),
+        "// export const applicationConceptSet = {};\n",
+      );
       const result = await setupProject(root);
       expect(result.written).not.toContain("src/assembly.ts");
       expect(result.guidance.join("\n")).toContain("src/assembly.ts");

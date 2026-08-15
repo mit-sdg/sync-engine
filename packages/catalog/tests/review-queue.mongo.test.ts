@@ -1,6 +1,6 @@
 import { MongoClient } from "mongodb";
 import { test, vi } from "vite-plus/test";
-import { applicationConcepts } from "../entries/_typecheck/concept-set.ts";
+import { applicationConceptSet } from "../entries/_typecheck/concept-set.ts";
 import {
   exerciseReviewQueue,
   exerciseReviewQueueRepair,
@@ -14,7 +14,7 @@ async function withMongoFloor(run: (instances: CatalogInstances) => Promise<void
   await client.connect();
   const db = client.db(`review_queue_${crypto.randomUUID()}`);
   try {
-    const instances = applicationConcepts.implementations("mongo", { db });
+    const instances = applicationConceptSet.implementations("mongo", { db });
     await run(instances);
   } finally {
     try {

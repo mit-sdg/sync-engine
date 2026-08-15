@@ -704,7 +704,7 @@ export class AlertingConcept { raise({ subject }: { subject: string }) { return 
 export class UnrelatedConcept { touch() { return {}; } }
 
 export const selecting = registerConcept({ class: SelectingConcept, spec });
-const applicationConcepts = conceptSet(
+const applicationConceptSet = conceptSet(
   {
     Alerting: registerConcept({ class: AlertingConcept, spec: "# Alerting" }),
     Discussing: registerConcept({ class: DiscussingConcept, spec: "# Discussing" }),
@@ -713,7 +713,7 @@ const applicationConcepts = conceptSet(
   },
   { "unused vocabulary": ({ value }: { value: unknown }) => value },
 );
-const { concepts, vocabulary } = applicationConcepts;
+const { concepts, vocabulary } = applicationConceptSet;
 const { Selecting, Discussing, Alerting } = concepts;
 
 export const ObserveCurrent = react(() => Selecting._current() && Alerting.raise({ subject: "x" }));

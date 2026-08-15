@@ -62,8 +62,8 @@ src/
 ```ts
 import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 
-export const applicationConcepts = conceptSet({});
-export const { concepts } = applicationConcepts;
+export const applicationConceptSet = conceptSet({});
+export const { concepts } = applicationConceptSet;
 ```
 
 A concept-free setup does not create placeholder design or composition files.
@@ -74,11 +74,11 @@ explicit empty application-design contract. Add real composition modules under
 
 ```ts
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { applicationConcepts } from "./concepts.ts";
+import { applicationConceptSet } from "./concepts.ts";
 
 export function assembleApplication() {
   return assemble({
-    conceptSet: applicationConcepts,
+    conceptSet: applicationConceptSet,
     composition: {},
   });
 }

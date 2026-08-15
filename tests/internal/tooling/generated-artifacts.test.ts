@@ -658,7 +658,7 @@ describe("an artifact configuration's defaults", () => {
       );
       await writeFile(
         join(directory, "src/concepts.ts"),
-        "export const applicationConcepts = {};\n",
+        "export const applicationConceptSet = {};\n",
       );
       const resolved = await loadGeneratedApplication("generated.config.ts", directory);
       expect(resolved.title).toBe("Loaded application");
@@ -746,7 +746,7 @@ describe("an artifact configuration's defaults", () => {
       await mkdir(join(directory, "src"));
       await writeFile(
         join(directory, "src/concepts.ts"),
-        "export const applicationConcepts = {};\n",
+        "export const applicationConceptSet = {};\n",
       );
       const compatibilityConfigUrl = pathToFileURL(join(directory, "generated.config.ts"));
       const resolved = resolveApplication(
@@ -770,7 +770,7 @@ describe("an artifact configuration's defaults", () => {
         wire: "wire.ts",
         wireName: "ReadingCircleWire",
         wireBanner: undefined,
-        conceptSetFrom: { from: "../src/concepts.ts", export: "applicationConcepts" },
+        conceptSetFrom: { from: "../src/concepts.ts", export: "applicationConceptSet" },
       });
     } finally {
       await rm(directory, { recursive: true, force: true });
