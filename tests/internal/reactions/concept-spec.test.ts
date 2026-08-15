@@ -114,13 +114,32 @@ describe("concept specification document structure", () => {
     );
   });
 
-  test("requires nonempty Purpose and Principle prose", () => {
+  test("requires nonempty unfenced Purpose and Principle prose", () => {
     expect(() => parseSpec(specification({ purpose: "" }))).toThrow(
       '"## Purpose" section is empty',
     );
     expect(() => parseSpec(specification({ principle: "" }))).toThrow(
       '"## Principle" section is empty',
     );
+    expect(() =>
+      parseSpec(specification({ principle: "```text\nSupporting notation.\n```" })),
+    ).toThrow('"## Principle" section allows prose but no fenced blocks');
+  });
+
+  test("rejects subsection headings and application-only Markdown", () => {
+    expect(() =>
+      parseSpec(specification({ principle: "A scenario.\n\n### Additional details\n\nMore." })),
+    ).toThrow("subsection headings are not allowed");
+    expect(() =>
+      parseSpec(specification({ principle: "A [rule](reaction:Application.Rule) runs." })),
+    ).toThrow("application design links are not allowed");
+    expect(() =>
+      parseSpec(
+        specification({
+          principle: "```computations\ncalculate() : Value\n  Does work.\n```",
+        }),
+      ),
+    ).toThrow("computations fences are not allowed");
   });
 });
 

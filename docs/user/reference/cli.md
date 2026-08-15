@@ -73,7 +73,8 @@ For each selected application concept, `check`:
 
 - traces the static Markdown import supplying `registerConcept(...).spec`;
 - verifies that the source file matches the registered text;
-- parses the strict ordered version-1 concept format;
+- parses the strict ordered version-1 concept format, rejecting subordinate
+  headings and application-only Markdown;
 - compares action and query member names;
 - compares input, action-result, and query-row field names and optionality;
 - checks successful branch return names and refusal mappings; and
@@ -87,8 +88,9 @@ being skipped. `field?: T` and `field: T | undefined` have equivalent
 optionality.
 
 The checker does not claim semantic equivalence between authored type names and
-TypeScript types. It retains raw State but does not parse SSF or compare State
-with class fields, storage, or application type-binding targets.
+TypeScript types or require non-external names to have Types declarations. It
+retains raw State but does not parse SSF or compare State with class fields,
+storage, or application type-binding targets.
 
 ### Application-design checks
 

@@ -38,10 +38,14 @@ rule and permits a concept to participate in another composition.
 ## Recording the application design
 
 Keep authored intent, executable declarations, and generated evidence distinct.
-A concept specification records reusable concept-local behavior. Registered
-application prose records the decisions realized by selected reactions, views,
-and formers. `types` fences in those registered documents resolve every
-concept-external type for that application.
+A concept specification records reusable concept-local behavior. For
+application-owned concepts, prefer `design/concepts/DefinitionName.md`; explicit
+registration imports remain authoritative, so packages and established
+repositories may use another layout. Registered application prose records the
+decisions realized by selected reactions, views, and formers. `types` fences in
+those registered documents resolve every concept-external type for that
+application. Concept specifications are imported by `registerConcept` and are
+not application documents listed again in `design.documents`.
 
 Application prose is ordinary Markdown with one nonempty H1. Organize it around
 natural application topics and place exact `reaction:`, `view:`, and `former:`
@@ -103,11 +107,12 @@ Reduce a broad goal to a concrete capability or failure. Several mechanisms can
 serve one goal while imposing different state, authority, lifecycle, and failure
 rules. Name application-specific scope explicitly.
 
-A principle is one concrete scenario that demonstrates the purpose. Start from
-empty state, perform setup through the concept's own actions, observe results
-through its queries, and include the refusals that distinguish the mechanism. A
-principle that requires a peer action describes a workflow or exposes a wrong
-boundary.
+A principle is one concrete prose scenario that demonstrates the purpose. Start
+from empty state, perform setup through the concept's own actions, observe
+results through its queries, and include the refusals that distinguish the
+mechanism. Do not turn Principle into a container for subordinate reference
+sections or fenced notation. A principle that requires a peer action describes
+a workflow or exposes a wrong boundary.
 
 [Gathering](../../examples/reading-circle/design/concepts/Gathering.md) is the
 throughline. It creates a named gathering, establishes its host as a member,
@@ -125,9 +130,11 @@ formats are implementation choices unless they alter the observable contract.
 The required `State` fence is normalized and retained but remains unparsed until
 Simple State Form has a final grammar. Registration derives no schema or
 validator from it. See [`State`](reference/concept-specification.md#state).
-Record owned facts in State and put each enforced invariant in the action branch
-that checks it. Do not compensate for deferred SSF parsing with a heuristic type
-scan or private notation dialect.
+Names introduced by State and conventional names used in operation signatures
+do not require declarations in the external-only Types fence. Record owned facts
+in State and put each enforced invariant or value refinement in the action branch
+that checks it. Do not compensate for deferred SSF parsing with local type
+aliases, a heuristic type scan, or a private notation dialect.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

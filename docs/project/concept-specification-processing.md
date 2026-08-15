@@ -44,7 +44,9 @@ and therefore has no deployment-time dependency on Markdown.
 
 The concept parser recognizes one H1 and the exact ordered H2 sequence Purpose,
 Principle, Types, State, Actions, and Queries. Unknown, duplicate, missing, or
-reordered H2 sections fail. Purpose and Principle are nonempty prose.
+reordered H2 sections and all subordinate headings fail. Purpose and Principle
+are nonempty prose without fenced blocks. Markdown application-design links and
+`computations` fences fail anywhere in the specification.
 
 Its version-1 IR retains:
 
@@ -69,8 +71,10 @@ must not add a partial parser, heuristic type scan, or private dialect.
 
 Consequently source checking cannot yet prove state-owned type use, external
 parameter use, State/storage agreement, or the final owned type on a qualified
-type-binding target. These absent proofs are explicit limitations rather than
-warnings generated from guesses.
+type-binding target. Named types used by State, actions, and queries do not need
+local declarations; Types inventories only external application parameters.
+These absent proofs are explicit limitations rather than warnings generated from
+guesses.
 
 ## Static source agreement
 
