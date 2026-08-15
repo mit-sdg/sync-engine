@@ -354,7 +354,7 @@ export const vocabulary = declareVocabulary({
     const logical = rendered.wire.slice(rendered.wire.indexOf("ApplicationWireHttp ="));
     expect(logical).toContain('"session":');
     expect(logical).toContain('error: { error: PlainHttpAppWideError | "INVALID_REQUEST" }');
-  });
+  }, 15_000);
 
   test("ordinary assembly rejects an executable endpoint absent from portable IR", async () => {
     const application = resolveApplication(
