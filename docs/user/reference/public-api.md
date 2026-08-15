@@ -180,7 +180,7 @@ sensitive host sink.
 An ordinary application creates one registered concept-set object and passes
 that object—not its `.concepts` property—to assembly:
 
-```ts
+```typescript
 export const applicationConceptSet = conceptSet({
   Posting: posting,
   Commenting: commenting,
