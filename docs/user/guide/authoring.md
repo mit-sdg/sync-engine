@@ -23,6 +23,21 @@ Application files may use any sensible layout. The checker follows the config,
 selected assembly, imported concept specifications, and typed links; it does not
 require design and source trees to mirror each other.
 
+Application-owned concepts should normally keep one flat specification per
+definition under `design/concepts/`, named by its H1 identity:
+
+```text
+design/
+  concepts/
+    Commenting.md
+    Posting.md
+```
+
+This is an authoring convention, not discovery or validation behavior. A
+published concept package, monorepo package, or established repository may keep
+the imported specification elsewhere. The registration import remains the sole
+source of truth.
+
 ## 2. Write each concept specification
 
 For every selected application-owned concept definition, create a Markdown file
@@ -39,15 +54,28 @@ with this exact top-level structure:
 ## Queries
 ```
 
-Declare concept-external parameters in the sole `types` fence. Put one raw
-`state` fence in State. Declare at least one structured action with explicit
-branches, and put the sole `queries` fence in Queries even when it is empty.
-Do not add application typed links or computations.
+Declare concept-external parameters in the sole `types` fence. The fence may be
+empty: concept-owned identities, conventional values, and refinements used in
+State or operation signatures are not additional Types declarations. Put one
+raw `state` fence in State and express enforced refinements in the owning action
+branches. Declare at least one structured action with explicit branches, and put
+the sole `queries` fence in Queries even when it is empty. Do not add subsection
+headings, fenced blocks in Purpose or Principle, application typed links, or
+computations.
 
-Import the file as text and pass it to `registerConcept`. The strict config check
-traces that import and rejects dynamic or unresolvable specification
-construction. The H1 names the reusable definition; the `conceptSet` key names
-each application instance.
+Import the file as text and pass it to `registerConcept`. A specification under
+the recommended layout is imported directly; it is not also listed in
+`design.documents`:
+
+```ts no-check
+import spec from "@design/concepts/Commenting.md" with { type: "text" };
+
+export const commenting = registerConcept({ class: CommentingConcept, spec });
+```
+
+The strict config check traces that import and rejects dynamic or unresolvable
+specification construction. The H1 names the reusable definition; the
+`conceptSet` key names each application instance.
 
 Verify the specification before continuing:
 

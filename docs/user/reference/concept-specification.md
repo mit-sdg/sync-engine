@@ -27,13 +27,15 @@ each and in this order:
 ```
 
 The H1 is the concept-definition name, not an application instance name.
-Unknown, missing, reordered, or duplicate H2 sections are rejected. `Purpose`
-and `Principle` must contain nonempty prose.
+Unknown, missing, reordered, or duplicate H2 sections are rejected. Subsection
+headings are also rejected: the six H2 sections are the complete document
+outline. `Purpose` and `Principle` must contain nonempty prose and no fenced
+blocks.
 
 `Types`, `Actions`, and `Queries` contain only their one matching fence and no
 surrounding Markdown. `State` contains one `state` fence and may have concise
 prose after it for invariants that the notation cannot express. Application
-links and `computations` fences are rejected anywhere in a concept
+design links and `computations` fences are rejected anywhere in a concept
 specification.
 
 ## Complete example
@@ -117,6 +119,13 @@ An external type is an opaque parameter supplied by each application that uses
 the concept. The explanation is retained as documentation. The `external`
 keyword is required; concrete types and bindings are application design,
 not concept-local declarations.
+
+Other names in State, action signatures, and query signatures are descriptive
+vocabulary, not declarations that must be repeated in Types. A name may identify
+concept-owned state, a conventional value such as `String` or `Flag`, or a
+refinement whose accepted values are established by action conditions and
+refusals. Version 1 parses type-expression shape but neither defines a primitive
+type universe nor requires every named type to have a declaration.
 
 ## `State`
 
@@ -265,7 +274,9 @@ registerConcept({ class: Commenting, spec });
 Strict config-based checking traces the import that supplies `spec`, verifies
 that its file contents match the registered text, and records the source path.
 Dynamic or unresolvable specification construction fails the check. The
-registration API does not accept a duplicate source URL.
+registration API does not accept a duplicate source URL. The source path and
+filename have no effect on the contract; the authoring guide recommends a
+consistent design-first layout without making it a checker requirement.
 
 The IR format remains `sync-engine.concept-specification`, version `1`. This is
 an intentional beta redefinition: legacy concept specifications are not parsed

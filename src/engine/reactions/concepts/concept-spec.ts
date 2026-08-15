@@ -1,6 +1,7 @@
 /** Parse the complete version-1 authored contract of one concept definition. */
 
 import { createHash } from "node:crypto";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import type {
   ConceptSpecificationIR,
   SpecificationActionIR,
@@ -80,10 +81,48 @@ function closes(marker: FenceMarker, open: FenceMarker): boolean {
   return marker.character === open.character && marker.length >= open.length && marker.info === "";
 }
 
-function headingOf(line: string, level: 1 | 2): string | undefined {
+type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+function headingOf(line: string, level: HeadingLevel): string | undefined {
   const hashes = "#".repeat(level);
   const match = new RegExp(`^\\s{0,3}${hashes}(?!#)\\s+(.+?)\\s*#*\\s*$`).exec(line);
   return match?.[1];
+}
+
+interface MarkdownNode {
+  type: string;
+  url?: unknown;
+  lang?: unknown;
+  children?: readonly MarkdownNode[];
+  position?: { start: { line: number; column: number } };
+}
+
+/** Reject application-only constructs using Markdown structure rather than source-like text. */
+function rejectApplicationDesign(markdown: string, lines: readonly SourceLine[]): void {
+  const visit = (node: MarkdownNode): void => {
+    if (
+      (node.type === "link" || node.type === "definition") &&
+      typeof node.url === "string" &&
+      /^(?:reaction|view|former|computation):/.test(node.url)
+    ) {
+      const start = node.position?.start;
+      fail(
+        "application design links are not allowed in a concept specification",
+        start === undefined ? undefined : lines[start.line - 1],
+        start?.column,
+      );
+    }
+    if (node.type === "code" && node.lang === "computations") {
+      const start = node.position?.start;
+      fail(
+        "computations fences are not allowed in a concept specification",
+        start === undefined ? undefined : lines[start.line - 1],
+        start?.column,
+      );
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(fromMarkdown(markdown) as MarkdownNode);
 }
 
 /** Validate the document skeleton while dividing it into the six required sections. */
@@ -91,7 +130,7 @@ function documentOf(lines: readonly SourceLine[]): {
   definitionName: string;
   sections: readonly DocumentSection[];
 } {
-  const headings: { level: 1 | 2; name: string; line: SourceLine }[] = [];
+  const headings: { level: HeadingLevel; name: string; line: SourceLine }[] = [];
   let open: FenceMarker | undefined;
   for (const line of lines) {
     const marker = markerOf(line.text);
@@ -103,12 +142,19 @@ function documentOf(lines: readonly SourceLine[]): {
       open = marker;
       continue;
     }
-    const h1 = headingOf(line.text, 1);
-    const h2 = headingOf(line.text, 2);
-    if (h1 !== undefined) headings.push({ level: 1, name: h1, line });
-    else if (h2 !== undefined) headings.push({ level: 2, name: h2, line });
+    for (const level of [1, 2, 3, 4, 5, 6] as const) {
+      const name = headingOf(line.text, level);
+      if (name !== undefined) {
+        headings.push({ level, name, line });
+        break;
+      }
+    }
   }
 
+  const subsection = headings.find(({ level }) => level > 2);
+  if (subsection !== undefined) {
+    fail("subsection headings are not allowed in a concept specification", subsection.line);
+  }
   const h1s = headings.filter(({ level }) => level === 1);
   if (h1s.length === 0) fail("the document has no concept-definition H1");
   if (h1s.length > 1) fail("the document has more than one H1", h1s[1].line);
@@ -163,6 +209,10 @@ function documentOf(lines: readonly SourceLine[]): {
 }
 
 function proseOf(section: DocumentSection): string {
+  const fence = section.lines.find(({ text }) => markerOf(text) !== undefined);
+  if (fence !== undefined) {
+    fail(`the "## ${section.heading}" section allows prose but no fenced blocks`, fence);
+  }
   const text = section.lines
     .map(({ text }) => text)
     .join("\n")
@@ -540,6 +590,7 @@ export function parseSpec(markdown: string): ConceptSpec {
     );
   const normalized = normalizedSource(markdown);
   const lines = normalized.split("\n").map((text, index) => ({ text, number: index + 1 }));
+  rejectApplicationDesign(normalized, lines);
   const { definitionName, sections } = documentOf(lines);
   const [purpose, principle, types, state, actions, queries] = sections;
   const typesFence = fencedSection(types, "types");

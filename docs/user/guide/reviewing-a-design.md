@@ -44,8 +44,11 @@ For every selected concept specification, verify:
 
 - one H1 names the reusable definition rather than an application instance;
 - Purpose, Principle, Types, State, Actions, and Queries occur exactly once and
-  in that order;
+  in that order, with no subordinate headings;
+- Purpose and Principle are unfenced prose, and Principle is one concrete
+  scenario rather than a container for reference material;
 - Types contains only one `types` fence of explicit `external` declarations;
+  concept-owned and conventional names do not need local declarations;
 - State contains one raw `state` fence and no claim that version 1 parses SSF;
 - Actions contains at least one action, explicit `where`/`then` branches, and
   exactly one terminal return or refusal per branch;
