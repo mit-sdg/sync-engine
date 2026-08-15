@@ -51,7 +51,7 @@ under `guide/`.
 | Path                                                                                 | Class        | Scope                                                          |
 | ------------------------------------------------------------------------------------ | ------------ | -------------------------------------------------------------- |
 | [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                           |
-| [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Absolute-link map and constraints for software agents          |
+| [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Package-local document map and constraints for software agents |
 | [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                                 |
 | [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Strict concepts, application types, typed prose, and artifacts |
 | [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Semantic, authored-contract, and coverage review               |

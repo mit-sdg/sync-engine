@@ -9,8 +9,8 @@ behavior tests.
 ## 1. Fix the review scope
 
 Start from one generated config. Record the exact assembly variant, configured
-configured application document URLs and every application `types` fence. Review another variant
-from its own config. Do not infer a union of runtime options.
+application document URLs, and every application `types` fence. Review another
+variant from its own config. Do not infer a union of runtime options.
 
 Confirm that every URL is an explicit local `file:` URL. Design files may live
 anywhere in the checkout; matching source and design directory structures are
