@@ -9,13 +9,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { AuthenticatingMemoryConcept } from "./authenticating.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { AuthenticatingMongoConcept } from "./authenticating.mongo.ts";
-//#endfloor
 
 //#class memory AuthenticatingMemoryConcept
-//#class mongo AuthenticatingMongoConcept
 export const authenticating = registerConcept({
   class: AuthenticatingMemoryConcept, // selected-class
   spec,
@@ -28,9 +23,6 @@ export const authenticating = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new AuthenticatingMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new AuthenticatingMongoConcept(db),
     //#endfloor
   },
 });

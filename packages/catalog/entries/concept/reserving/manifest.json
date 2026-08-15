@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local reservation and blocking-resource indexes with injectable identities.",
       "sources": ["reserving.memory.ts", "reserving.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB reservations with injectable identities, a partial unique blocking-resource index, and conditional terminal updates.",
-      "sources": ["reserving.mongo.ts", "reserving.mongo.test.ts"]
     }
   }
 }

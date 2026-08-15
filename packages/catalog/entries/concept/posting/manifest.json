@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local permanent Post records with injectable identity allocation.",
       "sources": ["posting.memory.ts", "posting.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB Post records indexed by explicit publication time and identity.",
-      "sources": ["posting.mongo.ts", "posting.mongo.test.ts"]
     }
   }
 }

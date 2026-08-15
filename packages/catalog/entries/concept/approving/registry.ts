@@ -10,13 +10,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { ApprovingMemoryConcept } from "./approving.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { ApprovingMongoConcept } from "./approving.mongo.ts";
-//#endfloor
 
 //#class memory ApprovingMemoryConcept
-//#class mongo ApprovingMongoConcept
 export const approving = registerConcept({
   class: ApprovingMemoryConcept, // selected-class
   spec,
@@ -30,9 +25,6 @@ export const approving = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new ApprovingMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new ApprovingMongoConcept(db),
     //#endfloor
   },
 });

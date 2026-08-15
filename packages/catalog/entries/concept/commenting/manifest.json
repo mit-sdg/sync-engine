@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local Comment records with injectable identity allocation.",
       "sources": ["commenting.memory.ts", "commenting.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB Comment records with indexed order and conditional author retraction.",
-      "sources": ["commenting.mongo.ts", "commenting.mongo.test.ts"]
     }
   }
 }

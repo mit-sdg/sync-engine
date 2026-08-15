@@ -9,14 +9,6 @@
     "memory": {
       "summary": "Process-local trails holding entries in position order with injectable identity allocation.",
       "sources": ["auditing.memory.ts", "auditing.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB entries with unique trail position and event indexes and duplicate-key position retry.",
-      "sources": [
-        "auditing.mongo.ts",
-        "auditing.mongo.test.ts",
-        "auditing.mongo.concurrent.test.ts"
-      ]
     }
   }
 }

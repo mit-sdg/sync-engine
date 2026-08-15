@@ -110,9 +110,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Test
         run: bun run test
-        env:
-          CATALOG_MONGO: ${{ runner.os == 'Linux' && '1' || '0' }}
-          CATALOG_SKIP_MONGO: ${{ runner.os != 'Linux' && '1' || '0' }}
       - name: Platform application scenarios
         if: runner.os != 'Linux'
         run: bun run scenario
@@ -128,8 +125,6 @@ jobs:
           bun-version: "1.3.14"
       - run: bun install --frozen-lockfile
       - run: bun run coverage
-        env:
-          CATALOG_MONGO: "1"
 
   required:
     name: CI required

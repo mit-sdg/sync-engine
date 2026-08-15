@@ -10,13 +10,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { LabelingMemoryConcept } from "./labeling.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { LabelingMongoConcept } from "./labeling.mongo.ts";
-//#endfloor
 
 //#class memory LabelingMemoryConcept
-//#class mongo LabelingMongoConcept
 export const labeling = registerConcept({
   class: LabelingMemoryConcept, // selected-class
   spec,
@@ -30,9 +25,6 @@ export const labeling = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new LabelingMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new LabelingMongoConcept(db),
     //#endfloor
   },
 });

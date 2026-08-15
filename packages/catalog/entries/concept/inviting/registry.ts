@@ -8,13 +8,8 @@ import spec from "./spec.md" with { type: "text" };
 //#floor memory
 import { InvitingMemoryConcept } from "./inviting.memory.ts";
 //#endfloor
-//#floor mongo
-import type { Db } from "mongodb";
-import { InvitingMongoConcept } from "./inviting.mongo.ts";
-//#endfloor
 
 //#class memory InvitingMemoryConcept
-//#class mongo InvitingMongoConcept
 export const inviting = registerConcept({
   class: InvitingMemoryConcept, // selected-class
   spec,
@@ -26,9 +21,6 @@ export const inviting = registerConcept({
   floors: {
     //#floor memory
     memory: (_context: {}) => new InvitingMemoryConcept(),
-    //#endfloor
-    //#floor mongo
-    mongo: ({ db }: { db: Db }) => new InvitingMongoConcept(db),
     //#endfloor
   },
 });

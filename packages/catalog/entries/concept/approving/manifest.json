@@ -9,15 +9,6 @@
     "memory": {
       "summary": "Process-local review records with injectable identity allocation and pending Subject and reviewer indexes.",
       "sources": ["approving.behavior.ts", "approving.memory.ts", "approving.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB reviews with injectable identity allocation, a partial unique pending-Subject index, and conditional decisions.",
-      "sources": [
-        "approving.behavior.ts",
-        "approving.mongo.ts",
-        "approving.mongo.test.ts",
-        "approving.mongo.concurrent.test.ts"
-      ]
     }
   }
 }

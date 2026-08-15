@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local discussion and ordered response state with injectable identity allocation.",
       "sources": ["discussing.memory.ts", "discussing.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB replica set or sharded deployment using transactions to make responses atomic with closure.",
-      "sources": ["discussing.mongo.ts", "discussing.mongo.test.ts"]
     }
   }
 }

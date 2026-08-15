@@ -9,10 +9,6 @@
     "memory": {
       "summary": "Process-local vote records with scores derived on each query.",
       "sources": ["upvoting.memory.ts", "upvoting.memory.test.ts"]
-    },
-    "mongo": {
-      "summary": "MongoDB vote records with unique voter-item storage enforcement and derived scores.",
-      "sources": ["upvoting.mongo.ts", "upvoting.mongo.test.ts"]
     }
   }
 }
