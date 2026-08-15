@@ -1,4 +1,5 @@
-import { count, reaction, returned, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { count, reaction, returned, when, where } from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {

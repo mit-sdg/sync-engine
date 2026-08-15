@@ -11,7 +11,8 @@ import {
   receive,
   respond,
 } from "@sync-engine/boundary";
-import { compute, reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { compute, reaction, when } from "@sync-engine/language";
 import { inspectAssembly, renderInputContracts } from "@sync-engine/tooling";
 
 class DuplicateTitle extends Error {}
@@ -292,7 +293,6 @@ const register = {
     "refused",
     "returned",
     "view",
-    "vocabulary",
     "when",
     "where",
     "whether",
@@ -300,7 +300,6 @@ const register = {
   assembly: [
     "ActionRefusal",
     "Assembly",
-    "AssemblyOptions",
     "ConceptFloor",
     "ConceptImplementation",
     "ConceptRegistration",
@@ -440,9 +439,11 @@ const register = {
     "EngineOptions",
     "LogEvent",
     "Refuse",
+    "VocabularyAssemblyOptions",
     "createEngine",
     "custom",
     "faulted",
+    "vocabulary",
   ],
 } as const;
 

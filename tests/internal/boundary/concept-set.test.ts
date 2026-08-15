@@ -8,7 +8,8 @@ import {
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { applicationManifest, renderApp } from "@sync-engine/tooling";
-import { compute, former, vocabulary, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { compute, former, where } from "@sync-engine/language";
 
 class MissingItem extends Error {}
 

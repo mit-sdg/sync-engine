@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { assemble } from "@sync-engine/assembly";
 import { bindTransport, createGateway, endpoint, receive, respond } from "@sync-engine/boundary";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import { applicationManifest } from "@sync-engine/tooling";
 
 function application() {

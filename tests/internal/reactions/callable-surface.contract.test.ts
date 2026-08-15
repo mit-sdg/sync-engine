@@ -1,4 +1,5 @@
-import { count, reaction, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { count, reaction, when, where } from "@sync-engine/language";
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
 import type { AppIR } from "@sync-engine/internal/reads/ir";

@@ -1,5 +1,6 @@
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 import { expect, test } from "vite-plus/test";
 import { TimingConcept } from "./timing.ts";
 

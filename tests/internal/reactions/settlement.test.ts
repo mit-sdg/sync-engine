@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
 import type { LogEntry, LogSink } from "@sync-engine/assembly";
-import { earlier, no, reaction, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { earlier, no, reaction, when, where } from "@sync-engine/language";
 import type { Empty, Vars } from "@sync-engine/internal/reactions/types";
 import { SettlementBook } from "@sync-engine/internal/reactions/runtime/settlement";
 import type { MatchedTrigger } from "@sync-engine/internal/reactions/runtime/firing-pipeline";

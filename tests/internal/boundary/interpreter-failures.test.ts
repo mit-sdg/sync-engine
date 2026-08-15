@@ -3,7 +3,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { reaction, view, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { reaction, view, when, where } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { custom } from "@sync-engine/internal/reads/where-ops";

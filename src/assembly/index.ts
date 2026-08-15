@@ -2,7 +2,6 @@
 export { assemble } from "@engine/boundary/assembly/assembly-facade";
 export type {
   Assembly,
-  AssemblyOptions,
   ConceptSetAssemblyOptions,
 } from "@engine/boundary/assembly/assembly-facade";
 export { conceptFloor, conceptSet, registerConcept } from "@engine/boundary/assembly/concept-set";

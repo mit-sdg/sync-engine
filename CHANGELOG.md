@@ -29,8 +29,10 @@ layout separate from executable source and generated evidence.
   no-config modes are removed. Unregistered Markdown is ignored.
 - `conceptSet(...)` is now the application-facing assembly value. Pass it as
   `assemble({ conceptSet, composition })`; the nested `set.vocabulary` projection
-  is removed. The lower-level `vocabulary(...)` declaration remains available
-  for callers without registered specifications or implementation floors.
+  is removed. The lower-level `vocabulary(...)` declaration moved from
+  `/language` to `/advanced` for callers without registered specifications or
+  implementation floors. Its option type is now
+  `VocabularyAssemblyOptions`, also exported from `/advanced`.
 - Removed the `--concepts` check option. Source analysis now locates only the
   class declarations needed for TypeScript-erased input names and follows
   supported direct or imported registrations and registration-map spreads.

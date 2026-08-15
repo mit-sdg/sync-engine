@@ -30,7 +30,7 @@ type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => obje
   > &
     RequiredConstructionSources<T>;
 
-export type AssemblyOptions<
+export type VocabularyAssemblyOptions<
   TEntries extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 > = BaseAssemblyOptions<ConceptClassesOf<TEntries>> & {
@@ -53,11 +53,13 @@ export function assemble<
 export function assemble<
   TEntries extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
->(options: AssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
+>(
+  options: VocabularyAssemblyOptions<TEntries, TComputations>,
+): Assembly<ConceptClassesOf<TEntries>>;
 export function assemble(
   options:
     | ConceptSetAssemblyOptions<Record<string, AnyRegisteredConcept>, Record<string, ComputationFn>>
-    | AssemblyOptions<Record<string, ConceptEntry>, Record<string, ComputationFn>>,
+    | VocabularyAssemblyOptions<Record<string, ConceptEntry>, Record<string, ComputationFn>>,
 ): Assembly<Record<string, new (...args: never[]) => object>> {
   const assembled =
     options.conceptSet === undefined ? assembleEngine(options) : assembleEngine(options);

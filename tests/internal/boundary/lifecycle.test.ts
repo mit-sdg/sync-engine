@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import type { LogEntry, LogSink } from "@sync-engine/assembly";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
-import { each, earlier, former, reaction, vocabulary, when, where } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { each, earlier, former, reaction, when, where } from "@sync-engine/language";
 import type { Empty, Vars } from "@sync-engine/internal/reactions/types";
 import { flow } from "@sync-engine/internal/reactions/context";
 import { ActionConcept, type ActionRecord } from "@sync-engine/internal/reactions/runtime/actions";

@@ -1,4 +1,4 @@
-import { vocabulary as declareVocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary as declareVocabulary } from "@mit-sdg/sync-engine/advanced";
 import sessioningSpec from "./sessioning.md" with { type: "text" };
 
 export class SessioningConcept {

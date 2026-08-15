@@ -8,7 +8,7 @@ import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/assembly";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
@@ -134,7 +134,7 @@ describe("generated application artifacts", () => {
     const modulePath = join(temporary, "vocabulary.ts");
     const specPath = join(temporary, "sessioning.md");
     const source = (parameter: "user" | "account") => `
-import { vocabulary as declareVocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary as declareVocabulary } from "@mit-sdg/sync-engine/advanced";
 import sessioningSpec from "./sessioning.md" with { type: "text" };
 export class SessioningConcept {
   start({ ${parameter} }: { ${parameter}: string }) {

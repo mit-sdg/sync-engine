@@ -866,7 +866,7 @@ resulting reaction failure also fails, settlement aborts and the outer action
 call rejects. The engine still clears active-flow matching values and reports
 quiescence; it does not roll back concept state. The sink is an audit destination;
 it does not supply matching, retention, or replay. `logSink` and `retention` are
-independent `AssemblyOptions` and may be used together.
+independent assembly options and may be used together.
 
 Each ordinary assembly creates its own field-name redactor before entries reach
 the internal index, a sink, an observer, or an inspection summary. During an

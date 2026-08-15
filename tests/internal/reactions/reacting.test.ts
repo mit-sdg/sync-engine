@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting.ts";
 import { createEngine } from "@sync-engine/internal/reactions/engine.ts";
-import { each, former, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { each, former, when } from "@sync-engine/language";
 
 describe("Reacting interpreter loop", () => {
   test("fires a registered consequence exactly once", async () => {

@@ -234,10 +234,11 @@ cardinality.
 
 ## Vocabulary
 
-The lower-level runtime declaration containing named action, query, and optional
+The advanced runtime declaration containing named action, query, and optional
 computation references together with concept metadata. `conceptSet` creates this
-declaration internally for ordinary config-based applications. Vocabulary
-references are inert until resolved against an engine.
+declaration internally for ordinary config-based applications; only low-level
+callers import `vocabulary` from `/advanced`. Vocabulary references are inert
+until resolved against an engine.
 
 ## Application types
 

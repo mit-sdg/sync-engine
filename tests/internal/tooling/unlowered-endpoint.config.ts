@@ -1,6 +1,6 @@
 import { assemble } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import { Frames } from "@sync-engine/internal/reads/frames";
 
 class SessioningConcept {

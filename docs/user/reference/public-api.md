@@ -15,13 +15,13 @@ generated-assembly compatibility, and format-version rules. The
 | [`@mit-sdg/sync-engine/boundary`](#boundary) | Endpoints, invocation, gateways, and transport binding               |
 | [`@mit-sdg/sync-engine/client`](#client)     | Local and custom clients over a generated contract                   |
 | [`@mit-sdg/sync-engine/tooling`](#tooling)   | Assembly inspection, read-back rendering, and wire generation        |
-| [`@mit-sdg/sync-engine/advanced`](#advanced) | Manual engine construction and explicit escape hatches               |
+| [`@mit-sdg/sync-engine/advanced`](#advanced) | Low-level declarations, manual engines, and explicit escape hatches  |
 
 ## `language`
 
 <!-- register:language:start -->
 
-`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `vocabulary`, `when`, `where`, `whether`
+`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -29,7 +29,6 @@ generated-assembly compatibility, and format-version rules. The
 
 | API                    | Compact signature                                                                               |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `vocabulary`           | `vocabulary({ concepts, computations? })`                                                       |
 | `reaction`             | `reaction(vars => when(trigger).where(...conditions).then(...consequences))`                    |
 | `.afterFlowSettles()`  | `when(trigger).afterFlowSettles().then(step)` or `completedStage.afterFlowSettles().then(step)` |
 | `returned` / `refused` | `(pattern?, { by?, except?, exceptBy? }?)`                                                      |
@@ -66,15 +65,8 @@ union-typed query reference is rejected outright so the input argument cannot
 select or mask one possible query; choose one concrete query before calling
 `count`.
 
-`vocabulary` is the lower-level declaration API for callers that do not use
-registered specifications or implementation floors. Config-based applications
-normally use `conceptSet` from `/assembly`, which creates this declaration
-internally.
-
-Concept entries accepted by `vocabulary` are either a concept class or
-`{ class, spec?, purpose?, principle?, queries?, outcomes?, refusals? }`.
 `QueryPromise` is `"one" | "optional" | "many"`.
-When a query promise is available as a TypeScript literal, the vocabulary types
+When a query promise is available as a TypeScript literal, concept-set types
 link `"one"` to a record return and `"optional"` or `"many"` to an array of
 records. Runtime evaluation checks the same container and cardinality contract.
 `Condition`, `ReadLine`, and `RelationView` name reusable declaration shapes.
@@ -99,35 +91,30 @@ formers](semantics.md#views-and-formers).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `AssemblyOptions`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
 ### Assembly construction
 
 ```ts
-assemble(options: ConceptSetAssemblyOptions | AssemblyOptions): Assembly
+assemble(options: ConceptSetAssemblyOptions): Assembly
 ```
 
-| `AssemblyOptions` field | Required    | Default / effect                                                                                             |
-| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `conceptSet`            | yes¹        | Registered application concept set                                                                           |
-| `vocabulary`            | yes¹        | Lower-level declaration alternative to `conceptSet`                                                          |
-| `composition`           | yes         | Reactions, endpoints, views, and formers to register                                                         |
-| `initialize`            | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
-| `instances`             | no          | Ready implementations by concept name; each overrides `initialize`                                           |
-| `logging`               | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
-| `retention`             | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
-| `queryCache`            | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
-| `logSink`               | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
-| `executionLimits`       | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
-| `observers`             | no          | No operational observers                                                                                     |
-| `rawFaultReporter`      | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
-| `redaction`             | no          | Universal sensitive-field patterns only                                                                      |
-
-¹ Supply exactly one of `conceptSet` or the lower-level `vocabulary`. Config-based
-applications use `conceptSet`; `vocabulary` remains available for declarations
-that do not use registered specifications or implementation floors.
+| `ConceptSetAssemblyOptions` field | Required    | Default / effect                                                                                             |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `conceptSet`                      | yes         | Registered application concept set                                                                           |
+| `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                         |
+| `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
+| `instances`                       | no          | Ready implementations by concept name; each overrides `initialize`                                           |
+| `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
+| `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
+| `queryCache`                      | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
+| `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
+| `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
+| `observers`                       | no          | No operational observers                                                                                     |
+| `rawFaultReporter`                | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
+| `redaction`                       | no          | Universal sensitive-field patterns only                                                                      |
 
 `RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
 be a finite, non-negative integer. Window enforcement runs automatically only
@@ -691,18 +678,28 @@ defines derivation guarantees.
 
 <!-- register:advanced:start -->
 
-`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `createEngine`, `custom`, `faulted`
+`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `VocabularyAssemblyOptions`, `createEngine`, `custom`, `faulted`, `vocabulary`
 
 <!-- register:advanced:end -->
 
-Use `/advanced` only for manual engine construction or explicit escape hatches.
+Use `/advanced` only for low-level declarations, manual engine construction, or explicit escape hatches.
 It follows the same beta compatibility policy as other public subpaths.
 
-| API            | Compact signature / role                         |
-| -------------- | ------------------------------------------------ |
-| `createEngine` | `createEngine(options?: EngineOptions): Engine`  |
-| `custom`       | `custom(fn, inputs, outputs)`                    |
-| `faulted`      | `faulted(pattern, { by?, except?, exceptBy? }?)` |
+| API                         | Compact signature / role                             |
+| --------------------------- | ---------------------------------------------------- |
+| `createEngine`              | `createEngine(options?: EngineOptions): Engine`      |
+| `vocabulary`                | `vocabulary({ concepts, computations? })`            |
+| `VocabularyAssemblyOptions` | Direct-vocabulary option type accepted by `assemble` |
+| `custom`                    | `custom(fn, inputs, outputs)`                        |
+| `faulted`                   | `faulted(pattern, { by?, except?, exceptBy? }?)`     |
+
+`vocabulary` is the low-level declaration API for callers that deliberately do
+not use registered specifications or implementation floors. Concept entries are
+either a concept class or `{ class, spec?, purpose?, principle?, queries?,
+outcomes?, refusals? }`. Ordinary config-based applications use `conceptSet`
+from `/assembly`, which creates the executable declaration internally. A direct
+vocabulary can still be passed to `assemble` through the advanced
+`VocabularyAssemblyOptions` alternative.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

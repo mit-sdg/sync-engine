@@ -6,7 +6,8 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { earlier, reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { earlier, reaction, when } from "@sync-engine/language";
 
 import {
   ActionConcept,

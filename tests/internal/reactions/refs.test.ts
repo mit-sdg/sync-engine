@@ -14,16 +14,8 @@ import {
   isReaction,
 } from "@sync-engine/internal/reactions/authoring/refs";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
-import {
-  each,
-  former,
-  reaction,
-  whether,
-  view,
-  vocabulary,
-  when,
-  where,
-} from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { each, former, reaction, whether, view, when, where } from "@sync-engine/language";
 
 class NotingConcept {
   static readonly queries = { _getNote: "optional", _all: "many" } as const;

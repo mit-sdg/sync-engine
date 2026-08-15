@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { Refuse } from "@sync-engine/advanced";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { endpoint, FrameworkErrorCode, receive, respond } from "@sync-engine/boundary";
 import { createLocalClient } from "@sync-engine/client";

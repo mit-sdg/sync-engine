@@ -62,7 +62,8 @@ describe("fault logging", () => {
       process.env.LOG_LEVEL = "error";
       vi.resetModules();
       const { Reacting } = await import("@sync-engine/internal/reactions/runtime/reacting");
-      const { vocabulary, when } = await import("@sync-engine/language");
+      const { vocabulary } = await import("@sync-engine/advanced");
+      const { when } = await import("@sync-engine/language");
 
       class Starting {
         run(_: Record<PropertyKey, never>) {

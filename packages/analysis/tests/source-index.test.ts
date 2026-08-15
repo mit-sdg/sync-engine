@@ -23,7 +23,10 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import ts from "typescript";
 
-const coreDeclarations = `declare module "@mit-sdg/sync-engine/assembly" {
+const coreDeclarations = `declare module "@mit-sdg/sync-engine/advanced" {
+  export function vocabulary<T>(declaration: T): any;
+}
+declare module "@mit-sdg/sync-engine/assembly" {
   export function assemble<T>(options: T): T;
   export function conceptSet<T, U>(registrations: T, computations?: U): {
     vocabulary: unknown;
@@ -36,7 +39,6 @@ declare module "@mit-sdg/sync-engine/boundary" {
   export function endpoint<T>(path: string, declaration: T): T;
 }
 declare module "@mit-sdg/sync-engine/language" {
-  export function vocabulary<T>(declaration: T): any;
   export function reaction<T>(declaration: T): T;
   export function view<T>(name: string, declaration: T): T;
   export function former<T>(name: string, declaration: T): T;
@@ -258,8 +260,9 @@ describe("symbol-aware application source index", () => {
       endpoints: [{ name: "nested.Route", path: "/same", reactions: ["nested.Route"] }],
     });
     const sourceIndex = index(manifest, {
-      "barrel.ts": `export { assemble } from "@mit-sdg/sync-engine/assembly";
-export { reaction as declareReaction, vocabulary, view } from "@mit-sdg/sync-engine/language";
+      "barrel.ts": `export { vocabulary } from "@mit-sdg/sync-engine/advanced";
+export { assemble } from "@mit-sdg/sync-engine/assembly";
+export { reaction as declareReaction, view } from "@mit-sdg/sync-engine/language";
 export { endpoint } from "@mit-sdg/sync-engine/boundary";
 export * as language from "@mit-sdg/sync-engine/language";
 `,
@@ -300,7 +303,10 @@ export const application = assemble({ vocabulary: words, composition: { nested }
   test("uses exact public imports when resolved module exports omit declarations", () => {
     const manifest = manifestFor({ concepts: [], reactions: ["React"] });
     const sourceIndex = index(manifest, {
-      "core.d.ts": `declare module "@mit-sdg/sync-engine/assembly" {
+      "core.d.ts": `declare module "@mit-sdg/sync-engine/advanced" {
+  export const placeholder: unknown;
+}
+declare module "@mit-sdg/sync-engine/assembly" {
   export const placeholder: unknown;
 }
 declare module "@mit-sdg/sync-engine/language" {
@@ -308,7 +314,8 @@ declare module "@mit-sdg/sync-engine/language" {
 }
 `,
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 const React = reaction(() => null);
 const words = vocabulary({ concepts: {}, computations: {} });
 export const application = assemble({ vocabulary: words, composition: { React } });
@@ -416,7 +423,7 @@ assemble({ vocabulary, composition: {} });
     });
     const sourceIndex = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class Base { run() { return "base"; } }
 class DefaultCanonical extends Base { _read() {} }
 class InitializedCanonical extends Base { constructor(_value: string) { super(); } _read() {} }
@@ -504,7 +511,7 @@ assemble({ vocabulary, instances: set.implementations("production", {}), composi
     });
     const unresolved = index(unresolvedManifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class StorageCanonical { run() {} _read() {} }
 class FloorStorage extends StorageCanonical { run() { return "selected"; } }
 declare const dynamic: Record<string, object>;
@@ -666,7 +673,8 @@ export function buildTwo() { return assemble({ conceptSet: set, composition: com
     });
     const files = {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 class LogicalConcept { run() {} _read() {} }
 const words = vocabulary({ concepts: { Logical: LogicalConcept }, computations: {} });
 const React = reaction(() => null);
@@ -695,7 +703,7 @@ assemble({ vocabulary: words, composition: { React } });
     const depthManifest = manifestFor({ concepts: [] });
     const depthFiles = {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({ concepts: {}, computations: {} });
 const one = words;
 const two = one;
@@ -713,7 +721,7 @@ assemble({ vocabulary: three, composition: {} });
     const alternativesManifest = manifestFor({ concepts: [], computations: ["selected"] });
     const alternativesFiles = {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({
   concepts: {},
   computations: { selected: () => 1, extraA: () => 2, extraB: () => 3 },
@@ -737,7 +745,8 @@ assemble({ vocabulary: words, composition: {} });
   test("strictly validates attribution roots and supports path, export, and offset selection", () => {
     const manifest = manifestFor({ concepts: [], reactions: ["React"] });
     const source = `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 const words = vocabulary({ concepts: {}, computations: {} });
 export const React = reaction(() => null);
 export const application = assemble({ vocabulary: words, composition: { React } });
@@ -795,7 +804,7 @@ assemble({ conceptSet: set, composition: {} });
 
     const missingMembers = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class LogicalCanonical {}
 const words = vocabulary({ concepts: { Logical: LogicalCanonical }, computations: {} });
 assemble({ vocabulary: words, composition: {} });
@@ -847,7 +856,7 @@ assemble({ vocabulary: words, composition: {} });
     });
     const sourceIndex = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class ObjectCanonical { run() {} _read() {} }
 class DefaultCanonical { run() {} _read() {} }
 class ConditionalCanonical { run() {} _read() {} }
@@ -928,7 +937,8 @@ assemble({
     const manifest = manifestFor({ concepts: [], reactions: ["React"] });
     const sourceIndex = index(manifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction } from "@mit-sdg/sync-engine/language";
 const words = vocabulary({ concepts: {}, computations: {} });
 const React = reaction(() => null);
 assemble({ vocabulary: words, composition: { React } });
@@ -1118,7 +1128,8 @@ assemble({ conceptSet: set, composition: {} });
         manifest: { concepts: [], views: ["shared"] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { view, vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { view } from "@mit-sdg/sync-engine/language";
 const words = vocabulary({ concepts: {}, computations: {} });
 const First = view("shared", () => null);
 const Second = view("shared", () => null);
@@ -1130,7 +1141,7 @@ assemble({ vocabulary: words, composition: { First, Second } });
         manifest: { concepts: [], reactions: ["Missing"] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({ concepts: {}, computations: {} });
 assemble({ vocabulary: words, composition: {} });
 `,
@@ -1173,7 +1184,7 @@ assemble({ vocabulary: dynamicVocabulary, composition: {} });
         manifest: { concepts: [] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const first = vocabulary({ concepts: {}, computations: {} });
 const second = vocabulary({ concepts: {}, computations: {} });
 declare const choose: boolean;
@@ -1206,7 +1217,7 @@ assemble({ vocabulary: {}, composition: {} });
         },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 class LogicalCanonical { run() {} _read() {} }
 class Selected extends LogicalCanonical {}
 declare const dynamic: Record<string, object>;
@@ -1224,7 +1235,7 @@ assemble({ vocabulary: words, instances: { Logical: new Selected(), ...dynamic }
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint } from "@mit-sdg/sync-engine/boundary";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 declare const dynamic: Record<string, unknown>;
 const words = vocabulary({ concepts: {}, computations: {} });
 const Route = endpoint("/route", () => null);
@@ -1236,7 +1247,7 @@ assemble({ vocabulary: words, composition: { Route, ...dynamic } });
         manifest: { concepts: [], computations: ["custom"] },
         files: {
           "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary({ concepts: {}, computations: {} });
 assemble({ vocabulary: words, composition: {} });
 `,
@@ -1382,7 +1393,7 @@ _read() : optional (value: Text)
     const computationManifest = manifestFor({ concepts: [], computations: ["custom"] });
     const missingComputation = index(computationManifest, {
       "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 const words = vocabulary();
 assemble({ vocabulary: words, composition: {} });
 `,

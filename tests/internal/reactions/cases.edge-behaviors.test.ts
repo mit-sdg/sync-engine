@@ -4,7 +4,8 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { Logging } from "@sync-engine/assembly";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { reaction, when } from "@sync-engine/language";
 import type { StepNode, Vars } from "@sync-engine/internal/reactions/types";
 import { actionNameOf } from "@sync-engine/internal/reactions/concepts/introspect";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions";

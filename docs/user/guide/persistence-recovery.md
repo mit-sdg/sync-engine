@@ -4,7 +4,10 @@ This restart arrangement separates durable concept state, occurrence evidence,
 and process-local derived state. See the [application authoring guide](../index.md#application-authoring-path)
 for the assembly lifecycle and the [persistence](../reference/operations.md#persistence-and-restart)
 and [execution](../reference/semantics.md#logs-concept-implementations-and-restart)
-contracts.
+contracts. This focused recipe uses the direct `vocabulary` declaration from
+`/advanced` to avoid embedding two full concept specifications. Ordinary
+config-based applications use `conceptSet` instead; the persistence and recovery
+boundaries are the same.
 
 ```ts
 import * as fs from "node:fs";
@@ -12,7 +15,8 @@ import * as fs from "node:fs";
 
 ```ts
 import { FileLogSink, assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 ```
 
 ## Ownership

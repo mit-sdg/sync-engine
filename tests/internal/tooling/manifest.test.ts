@@ -1,13 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
-import {
-  compute,
-  earlier,
-  is,
-  no,
-  vocabulary,
-  where,
-  whether,
-} from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { compute, earlier, is, no, where, whether } from "@mit-sdg/sync-engine/language";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import {

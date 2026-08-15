@@ -5,6 +5,7 @@ import { lineOf } from "@sync-engine/internal/reads/lines";
  * and generated read-backs.
  */
 import { describe, expect, test } from "vite-plus/test";
+import { vocabulary } from "@sync-engine/advanced";
 import {
   each,
   form,
@@ -13,7 +14,6 @@ import {
   no,
   reaction,
   view,
-  vocabulary,
   when,
   where,
   whether,

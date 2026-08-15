@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 import {
   applicationManifest,
   parseApplicationManifest,
@@ -77,8 +78,9 @@ try {
   );
   writeFileSync(
     resolve(projectDirectory, "src/application.ts"),
-    `import { assemble } from "@mit-sdg/sync-engine/assembly";
-import { reaction, vocabulary, when } from "@mit-sdg/sync-engine/language";
+    `import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { reaction, when } from "@mit-sdg/sync-engine/language";
 
 class NotesConcept {
   add({ title }: { title: string }) { return { title }; }

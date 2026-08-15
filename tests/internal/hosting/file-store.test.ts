@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { faulted, type LogEvent } from "@sync-engine/advanced";
-import { reaction, vocabulary, when } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { reaction, when } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { ActionConcept } from "@sync-engine/internal/reactions/runtime/actions.ts";
 import { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";

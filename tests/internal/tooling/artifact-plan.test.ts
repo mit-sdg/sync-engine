@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { vocabulary } from "@mit-sdg/sync-engine/language";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
 import {
   applyArtifactPlan,

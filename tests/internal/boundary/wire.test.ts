@@ -7,17 +7,8 @@
 
 import { describe, expect, test } from "vite-plus/test";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import {
-  each,
-  former,
-  no,
-  reaction,
-  view,
-  vocabulary,
-  when,
-  where,
-  whether,
-} from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
+import { each, former, no, reaction, view, when, where, whether } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { wireContracts } from "@sync-engine/tooling";
 import { inventoryOf } from "@sync-engine/internal/reactions/concepts/introspect";

@@ -1,14 +1,14 @@
 import { assemble, conceptSet, Logging, registerConcept } from "@sync-engine/assembly";
+import type { VocabularyAssemblyOptions } from "@sync-engine/advanced";
 import type {
   ActionRefusal,
-  AssemblyOptions,
   ConceptImplementation,
   ImplementationOverrides,
   LogEntry,
   LogSink,
 } from "@sync-engine/assembly";
 import type { GatewayOptions } from "@sync-engine/boundary";
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import type {
   ApplicationManifestV1,
   ComputationInventoryIR,
@@ -167,7 +167,10 @@ const logSink: LogSink = {
     occurrenceEntries.push(entry);
   },
 };
-const synchronousOptions: AssemblyOptions<{ Saving: typeof SynchronousActionConcept }, {}> = {
+const synchronousOptions: VocabularyAssemblyOptions<
+  { Saving: typeof SynchronousActionConcept },
+  {}
+> = {
   vocabulary: synchronousVocabulary,
   composition: {},
   initialize: { Saving: ["saved:"] },

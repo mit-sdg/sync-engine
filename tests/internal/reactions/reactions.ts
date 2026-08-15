@@ -1,7 +1,7 @@
 /* Reaction fixtures for execution tests. Synthetic string-formatting steps
  * use `custom(...)`; application code normally uses named vocabulary
  * computations when it needs serialized output. */
-import { vocabulary } from "@sync-engine/language";
+import { vocabulary } from "@sync-engine/advanced";
 import { custom } from "@sync-engine/internal/reads/where-ops";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
 import type { Reacting } from "@sync-engine/internal/reactions/runtime/reacting";
