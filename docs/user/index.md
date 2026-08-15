@@ -6,20 +6,20 @@ Start with [Getting started](guide/getting-started.md), then read the
 
 ## Start by task
 
-| Task                                        | Start with                                                                                                                                                 |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Understand the application model            | [How sync-engine applications fit together](overview.md)                                                                                                   |
-| Design concepts                             | [Designing with concepts](design.md)                                                                                                                       |
-| Author and register application design      | [Author an application design](guide/authoring.md)                                                                                                         |
-| Review a concept design                     | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
-| Initialize the first application            | [Getting started](guide/getting-started.md)                                                                                                                |
-| Extend a multi-concept application          | [Application authoring](guide/authoring.md)                                                                                                                |
-| Call an existing application                | [`client` API](reference/public-api.md#client)                                                                                                             |
-| Construct a read                            | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
-| Add persistence, restart, or recovery       | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
-| Determine exact runtime behavior            | [Execution semantics](reference/semantics.md)                                                                                                              |
-| Look up an export, command, format, or term | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md) |
-| Evaluate a deployment                       | [Operational limits](reference/operations.md)                                                                                                              |
+| Task                                           | Start with                                                                                                                                                 |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Understand the application model               | [How sync-engine applications fit together](overview.md)                                                                                                   |
+| Design concepts                                | [Designing with concepts](design.md)                                                                                                                       |
+| Author and register application design         | [Author an application design](guide/authoring.md)                                                                                                         |
+| Review a concept design                        | [Reviewing a design](guide/reviewing-a-design.md)                                                                                                          |
+| Initialize the first application               | [Getting started](guide/getting-started.md)                                                                                                                |
+| Study an implemented multi-concept application | [Reading Circle](../../examples/reading-circle/README.md)                                                                                                  |
+| Call an existing application                   | [`client` API](reference/public-api.md#client)                                                                                                             |
+| Construct a read                               | [Read construction cookbook](guide/read-construction.md)                                                                                                   |
+| Add persistence, restart, or recovery          | [Persistence, restart, and recovery](guide/persistence-recovery.md)                                                                                        |
+| Determine exact runtime behavior               | [Execution semantics](reference/semantics.md)                                                                                                              |
+| Look up an export, command, format, or term    | [Public API](reference/public-api.md), [CLI](reference/cli.md), [concept format](reference/concept-specification.md), or [glossary](reference/glossary.md) |
+| Evaluate a deployment                          | [Operational limits](reference/operations.md)                                                                                                              |
 
 ## Application authoring path
 
@@ -28,8 +28,11 @@ Start with [Getting started](guide/getting-started.md), then read the
 2. [Application model](overview.md) explains the parts introduced by the setup
    files. Read [Designing with concepts](design.md) before choosing concept
    boundaries.
-3. [Application authoring](guide/authoring.md) adds concepts, composition,
-   assembly, generated artifacts, validation, and a typed client.
+3. [Reading Circle](../../examples/reading-circle/README.md) provides the
+   smallest complete concept, composition, assembly, gateway, and client.
+4. [Application design authoring](guide/authoring.md) registers strict concept
+   specifications, application types, typed prose, and generated evidence
+   around the selected executable application.
 
 Use the [read construction cookbook](guide/read-construction.md) when a former
 needs optional, repeated, or folded data. Use [Persistence, restart, and

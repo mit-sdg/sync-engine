@@ -6,36 +6,50 @@ This index is for human and software agents that use sync-engine to design,
 build, call, or operate an application. It does not describe changes to the
 sync-engine repository.
 
-The current release is beta, and only the newest beta is supported. Pin an exact package version and read the [support policy](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/SUPPORT.md) before upgrading or deploying it.
+The current release is beta, and only the newest beta is supported. Pin an exact package version and read the [support policy](../../SUPPORT.md) before upgrading or deploying it.
+
+## Installed-package boundary
+
+When this file is under an installed `@mit-sdg/sync-engine` package, use its
+package-local links. They describe the installed version; documentation from the
+repository's `main` branch may describe a different beta.
+
+Treat `README.md`, `SUPPORT.md`, `docs/user/`, the shipped examples, and the
+package's declared public entrypoints as the consumer surface. Do not inspect or
+infer contracts from `dist/engine/`, `dist/command/`, other emitted implementation
+files, repository source, or deep imports. Those files can change without a
+supported API change. If the public documentation and exported TypeScript
+signatures do not answer a question, report the public-contract gap instead of
+inferring an answer from implementation source.
 
 ## Start here
 
-- [Documentation index](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/index.md) — reader paths by task
-- [Application model](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/overview.md) — concepts, composition, assembly, clients, and occurrence evidence
-- [Getting started](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/getting-started.md) — initialize and run a concept-free application
-- [Core Public API](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/public-api.md) — supported core subpaths, exports, signatures, and defaults
-- [Execution semantics](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/semantics.md) — authoritative runtime behavior
-- [Operational limits](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/operations.md) — deployment suitability and host responsibilities
+- [Documentation index](index.md) — reader paths by task
+- [Application model](overview.md) — concepts, composition, assembly, clients, and occurrence evidence
+- [Getting started](guide/getting-started.md) — initialize and run a concept-free application
+- [Core Public API](reference/public-api.md) — supported core subpaths, exports, signatures, and defaults
+- [Execution semantics](reference/semantics.md) — authoritative runtime behavior
+- [Operational limits](reference/operations.md) — deployment suitability and host responsibilities
 
 ## Design
 
-- [Designing with concepts](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/design.md) — purpose, ownership, actions, boundaries, composition, and hazards
-- [Reviewing a design](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/reviewing-a-design.md) — ordered review procedure and required evidence
+- [Designing with concepts](design.md) — purpose, ownership, actions, boundaries, composition, and hazards
+- [Reviewing a design](guide/reviewing-a-design.md) — ordered review procedure and required evidence
 
 ## Authoring
 
-- [Application design authoring](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/authoring.md)
-- [Read construction cookbook](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/read-construction.md)
-- [Concept specification format](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/concept-specification.md)
-- [Command-line reference](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/cli.md)
-- [Glossary](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/reference/glossary.md)
+- [Application design authoring](guide/authoring.md)
+- [Read construction cookbook](guide/read-construction.md)
+- [Concept specification format](reference/concept-specification.md)
+- [Command-line reference](reference/cli.md)
+- [Glossary](reference/glossary.md)
 
 ## Examples
 
-- [Reading Circle](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/reading-circle/README.md) — shortest complete multi-concept application
-- [Operations Room](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/operations-room/README.md) — selectable reactions, policy, and staged formers
-- [Message board](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/examples/message-board/README.md) — complete browser app with authentication, typed HTTP, and secure cookie sessions
-- [Persistence, restart, and recovery](https://raw.githubusercontent.com/mit-sdg/sync-engine/main/docs/user/guide/persistence-recovery.md) — durable concept state versus occurrence evidence
+- [Reading Circle](../../examples/reading-circle/README.md) — shortest complete multi-concept application
+- [Operations Room](../../examples/operations-room/README.md) — selectable reactions, policy, and staged formers
+- [Message board](../../examples/message-board/README.md) — complete browser app with authentication, typed HTTP, and secure cookie sessions
+- [Persistence, restart, and recovery](guide/persistence-recovery.md) — durable concept state versus occurrence evidence
 
 ## Working rules
 

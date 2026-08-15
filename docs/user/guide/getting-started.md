@@ -66,6 +66,11 @@ export const applicationConceptSet = conceptSet({});
 export const { concepts } = applicationConceptSet;
 ```
 
+`applicationConceptSet` is the complete object passed to assembly. `concepts`
+is its authoring facet: composition modules import that alias to refer to named
+concept declarations after registrations are added. It is empty in this initial
+concept-free application.
+
 A concept-free setup does not create placeholder design or composition files.
 Its generated config contains `design: { version: 1, documents: [] }`, the
 explicit empty application-design contract. Add real composition modules under

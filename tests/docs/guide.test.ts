@@ -163,6 +163,15 @@ describe("guided curriculum", () => {
     expect(index).not.toContain("@mit-sdg/sync-engine/utils");
   });
 
+  test("the agent index keeps installed-package research on the public surface", async () => {
+    const index = await readFile(new URL("../../docs/user/llms.txt", import.meta.url), "utf8");
+
+    expect(index).toContain("## Installed-package boundary");
+    expect(index).toMatch(/Do not inspect or\s+infer contracts from `dist\/engine\/`/);
+    expect(index).toContain("report the public-contract gap");
+    expect(index).not.toContain("raw.githubusercontent.com/mit-sdg/sync-engine/main");
+  });
+
   test("local links and anchors resolve and guides avoid unsupported entrypoints", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("../../package.json", import.meta.url), "utf8"),

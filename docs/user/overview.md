@@ -46,10 +46,14 @@ classes + registrations + reactions + views + formers + endpoints
 ```
 
 `registerConcept` connects a concept class to imported specification text.
-`conceptSet` gives each selected instance its application name and supplies the
-object passed to `assemble`. Composition builds reaction, endpoint, view, and
-former declarations. `assemble` installs the selected declarations and
-implementations.
+`conceptSet` gives each selected instance its application name and returns one
+registered concept-set object. Pass that whole object to `assemble` as
+`conceptSet`. Its `.concepts` property contains typed declaration references for
+writing composition; it is not another concept set and is not the value passed
+to `assemble`. Its `.implementations(...)` method constructs implementation
+maps when an application selects a default or named floor. Composition builds
+reaction, endpoint, view, and former declarations. `assemble` installs the
+selected declarations and implementations.
 
 Runtime assembly does not load application design Markdown. Consequently a
 production process does not fail merely because authored documentation is not

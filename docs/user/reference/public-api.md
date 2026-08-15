@@ -177,6 +177,30 @@ sensitive host sink.
 
 ### Registration and floors
 
+An ordinary application creates one registered concept-set object and passes
+that object—not its `.concepts` property—to assembly:
+
+```ts
+export const applicationConceptSet = conceptSet({
+  Posting: posting,
+  Commenting: commenting,
+});
+
+export const { concepts } = applicationConceptSet;
+
+assemble({
+  conceptSet: applicationConceptSet,
+  composition,
+});
+```
+
+`applicationConceptSet.concepts` contains typed concept declarations used while
+writing composition. `applicationConceptSet.implementations(...)` constructs
+concrete implementation maps, and `applicationConceptSet.computations` contains
+the named computation references supplied to `conceptSet`. The complete
+`applicationConceptSet` retains all three facets and the internal declaration
+needed by assembly and tooling.
+
 | API               | Compact signature                                                 |
 | ----------------- | ----------------------------------------------------------------- |
 | `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |

@@ -90,6 +90,7 @@ bun run artifacts:check
 Run `bun run artifacts:pin` only after an intentional composition,
 specification, or contract change, then review both generated files.
 
-Continue with the [application authoring guide](../../docs/user/guide/authoring.md)
-for a progressive construction of this example, or the [read construction
+Use the [application design authoring guide](../../docs/user/guide/authoring.md)
+to register strict specifications, type bindings, prose coverage, and generated
+evidence around an executable application. Use the [read construction
 cookbook](../../docs/user/guide/read-construction.md) for smaller former examples.

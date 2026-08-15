@@ -63,6 +63,14 @@ A named complete implementation map for one concept set, with host-owned
 resources and `close()`. The host owns its lifecycle. A floor selects
 implementations without changing the concept set or specifications.
 
+## Concept set
+
+The registered selection of named concept instances used by one application
+variant. `conceptSet(...)` returns the complete object passed to `assemble`.
+Its `.concepts` property contains typed references for authoring composition;
+its `.implementations(...)` method constructs implementation maps. The property
+is a facet of the set, not a second set.
+
 ## Consequence
 
 An action ask produced by a matching reaction. Consequences in one `then(...)`
