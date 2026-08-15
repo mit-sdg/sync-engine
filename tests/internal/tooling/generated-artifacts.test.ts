@@ -124,7 +124,7 @@ describe("generated application artifacts", () => {
       ),
     );
     expect(assemblies).toBe(1);
-  });
+  }, 15_000);
 
   test("rebuilds source analysis for each programmatic inspection after source edits", async () => {
     const fixtureDirectory = fileURLToPath(

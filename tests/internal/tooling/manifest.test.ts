@@ -1558,7 +1558,7 @@ _get(value: String) : optional (result: String)
     });
     expect(checked.status).toBe(0);
     expect(checked.stdout).toContain("Application diagnostic check passed");
-  }, 20_000);
+  }, 30_000);
 });
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

@@ -81,7 +81,7 @@
     "release:update": "bun scripts/update-release-manifests.ts",
     "release:verify": "bun scripts/verify-release.ts",
     "scenario": "bun run build && bun scripts/examples.ts scenario",
-    "test": "LOG_LEVEL=error vp test",
+    "test": "LOG_LEVEL=error vp test --maxWorkers=2",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
