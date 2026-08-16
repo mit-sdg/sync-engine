@@ -1,10 +1,10 @@
 # Run roles with Paseo
 
-A Paseo working directory and assignment prose are not read confinement. Before any
-implementation or evidence role, verify that the selected provider or harness actually
-denies reads outside the assignment's allowed application paths, including framework
-source, installed package internals, source maps, and traced imports. If it cannot, stop
-and name the missing harness capability; post-hoc write inspection is not a substitute.
+Paseo `--cwd` and assignment prose are not confinement. Before an
+implementation or evidence role, verify that the provider or harness enforces read and
+write denial outside assigned application paths, including framework source, installed
+package internals, source maps, and traced imports. Without it, continue design and criticism but
+stop before that role.
 
 Inspect the coordinator exactly once through `$PASEO_AGENT_ID`:
 
@@ -33,8 +33,8 @@ paseo run --provider <provider> --model <model> --thinking <normal> --cwd "$PWD"
 
 Capture the child identifier. If launch output does not attest resolved parent,
 provider, model, reasoning, and working directory, inspect the child once. Stop before
-assignment on any mismatch. Never launch implementation roles in a sync-engine
-framework checkout.
+assignment on any mismatch. Never launch implementation or evidence roles in a
+sync-engine framework checkout.
 
 Deliver initial and diagnostic files without blocking:
 

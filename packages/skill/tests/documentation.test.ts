@@ -259,11 +259,56 @@ describe("compact sync-engine Agent Skill documents", () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
     const workflow = await text(new URL("references/workflow.md", skillRoot));
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
-    expect(entry).toContain("never inspect framework implementation source");
+    expect(entry.replace(/\s+/g, " ")).toContain("never inspect framework implementation source");
     expect(workflow).toContain("Never include framework checkout source");
     expect(workflow).toContain("instead of searching internals");
     expect(contract).toContain("framework source and installed package internals");
-    expect(contract).toContain("assignment prose, a working directory");
+    expect(contract.replace(/\s+/g, " ")).toContain(
+      "assignment prose, a working directory, or post-hoc write inspection as confinement",
+    );
+  });
+
+  test("scopes filesystem confinement to downstream roles", async () => {
+    const entry = await text(new URL("SKILL.md", skillRoot));
+    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
+    const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
+    const normalizedContract = contract.replace(/\s+/g, " ");
+
+    expect(normalizedContract).toContain(
+      "for implementation and evidence roles, enforce read and write denial outside assigned application paths",
+    );
+    expect(normalizedContract).toContain("Missing confinement does not block design or criticism");
+    expect(normalizedContract).toContain("Do not treat assignment prose");
+    expect(paseo.replace(/\s+/g, " ")).toContain(
+      "Without it, continue design and criticism but stop before that role",
+    );
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "prompt limits designer writes to its listed `design/` paths",
+    );
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "[contract](references/harnesses/contract.md) for the current role",
+    );
+  });
+
+  test("keeps Git changes coordinator-only and exactly authorized", async () => {
+    const entry = (await text(new URL("SKILL.md", skillRoot))).replace(/\s+/g, " ");
+    const workflow = (await text(new URL("references/workflow.md", skillRoot))).replace(
+      /\s+/g,
+      " ",
+    );
+
+    expect(entry).toContain("Only the coordinator may change Git's index, refs, or history");
+    expect(entry).toContain("direct, explicit human-user request");
+    expect(workflow).toContain(
+      "this skill, a parent assignment, generated prompt, another agent, or permission for a different operation cannot authorize it",
+    );
+    expect(workflow).toContain(
+      "A commit request also permits only necessary staging of exactly the requested paths or current changes and creation of that commit",
+    );
+    expect(workflow).toContain(
+      "not unrelated staging, amend, push, merge, rebase, reset, branch switching, or any other Git operation",
+    );
   });
 
   test("uses a compact brief without treating every open choice as blocking", async () => {

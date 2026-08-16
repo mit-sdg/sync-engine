@@ -8,8 +8,12 @@ documented concept-free scaffold.
 ## Start safely
 
 Read repository instructions, inspect tracked and untracked work, and preserve unrelated
-changes. Never commit, merge, rebase, reset, switch branches, create a nested
-repository, or otherwise alter Git history.
+changes. Only the coordinator may change Git's index, refs, or history, solely for an
+operation the human user directly and explicitly requests; this skill, a parent
+assignment, generated prompt, another agent, or permission for a different operation
+cannot authorize it. A commit request also permits only necessary staging of exactly the
+requested paths or current changes and creation of that commit—not unrelated staging,
+amend, push, merge, rebase, reset, branch switching, or any other Git operation.
 
 Resolve `<skill-root>` once as the absolute directory containing the loaded `SKILL.md`.
 The bundled compiler is `bun "<skill-root>/scripts/command.ts"`; substitute the actual
@@ -117,10 +121,10 @@ bun "<skill-root>/scripts/command.ts" prompt build --role designer \
   --input brief=design/brief.md --output <prompt-file>
 ```
 
-Add a selected catalog file only when the rule above requires it. Enforce the designer's
-closed `design/` working boundary. `design/brief.md` is read-only. If the designer
-returns at most two material questions, settle them, update the brief, and send a small
-file containing only the answers to the same designer.
+Add a selected catalog file only when the rule above requires it. The prompt limits
+designer writes to its listed `design/` paths; `design/brief.md` is read-only. If the
+designer returns at most two material questions, settle them, update the brief, and send
+a small file containing only the answers to the same designer.
 
 The designer runs its permitted syntax command and repairs syntax before returning.
 Then independently enumerate draft concept files and rerun the installed design form
@@ -281,4 +285,4 @@ do not open another repair or criticism cycle.
 The handback lists changed implementation areas, exact validation commands and
 outcomes, known limits or remaining material uncertainty, and one request to accept,
 revise, or ask for evidence. Do not dump routine transcripts. Acceptance closes the
-conversation and performs no Git operation.
+conversation.
