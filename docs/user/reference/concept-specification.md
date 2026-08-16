@@ -146,10 +146,11 @@ type universe nor requires every named type to have a declaration.
 the fence contents verbatim in concept-specification IR and application
 manifests. Version 1 does not parse or validate those contents.
 
-The intended notation is Simple State Form (SSF), based on the
+Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
-Its grammar remains deferred. Version 1 therefore does not implement a partial
-parser, scan type names heuristically, or define a private SSF dialect.
+Version 1 enforcement remains deferred: it does not implement a partial parser, scan
+type names heuristically, or define a private SSF dialect. Review SSF declaration,
+identity, multiplicity, type, naming, and indentation rules manually.
 
 Because State is unparsed, tooling does not yet prove:
 
@@ -210,8 +211,9 @@ _query(input: Type) : many (field: Type)
 
 Input and result fields are parenthesized and named. Bare result types are
 rejected. The optional indented body is arbitrary prose; no word such as
-`answers` or `orders` is required. Omit the body when State and the signature
-already determine the answer.
+`answers` or `orders` is required by the parser. The broader authored-design guidance
+is stricter: every query includes a body explaining its answer, unknown or empty case,
+and deterministic ordering for `many`.
 
 The cardinalities retain their runtime meaning:
 

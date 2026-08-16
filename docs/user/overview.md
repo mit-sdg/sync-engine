@@ -70,10 +70,11 @@ while the key assigned by `conceptSet` names one application instance. The same
 definition may be instantiated several times.
 
 A strict specification has ordered Purpose, Principle, Types, State, Actions,
-and Queries sections. Types declares only opaque external parameters. State is
-retained raw for provenance but remains unparsed until SSF has a final grammar.
+and Queries sections. Types declares only opaque external parameters. State uses SSF
+and is retained raw for provenance; version 1 leaves its grammar for manual review.
 Actions use explicit `where`/`then` branches and terminal returns or refusals;
-queries select `one`, `optional`, or `many` and return named rows. See [Concept
+queries select `one`, `optional`, or `many`, return named rows, and explain their
+answers in an indented body. See [Concept
 specification format](reference/concept-specification.md).
 
 Registration and source checking compare machine-readable declaration shape

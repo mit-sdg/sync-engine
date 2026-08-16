@@ -31,10 +31,11 @@ files are written.
 sync-engine setup [directory]
 ```
 
-The directory defaults to the current working directory and must already contain a
-valid `package.json`. Setup adds the installed package's canonical Bun
-`packageManager` when the field is absent. An existing `packageManager` must name Bun
-and is preserved. The command creates neither the directory nor package manifest.
+The directory defaults to the current working directory and must exist. When
+`package.json` is absent, setup creates a minimal private ES-module package. Otherwise
+the manifest must be valid JSON. Setup adds the installed package's canonical Bun
+`packageManager` when absent; an existing value must name Bun and is preserved. The
+command never creates the target directory.
 
 Setup validates dependency declarations across `dependencies`, `devDependencies`, and
 `peerDependencies`. Different declarations for the same managed package are a
@@ -42,8 +43,8 @@ conflict. It completes these missing managed fields:
 
 - adds the canonical Bun `packageManager` field;
 - adds the exact installed `@mit-sdg/sync-engine` version to `dependencies`;
-- adds an exact compatible TypeScript version to `devDependencies`;
-- adds an exact compatible `@types/node` version to `devDependencies`; and
+- adds the installed package's supported TypeScript range to `devDependencies`;
+- adds its supported `@types/bun` and `@types/node` ranges to `devDependencies`; and
 - adds missing `generate`, `check`, and `start` scripts.
 
 The standard scripts are:
@@ -57,8 +58,8 @@ The standard scripts are:
 ```
 
 An existing compatible dependency declaration is preserved in its existing section.
-The core declaration must equal the running core version; TypeScript and `@types/node`
-ranges must be subsets of the supported ranges. Every existing script is preserved,
+The core declaration must equal the running core version; TypeScript, `@types/bun`, and
+`@types/node` ranges must be subsets of the supported ranges. Every existing script is preserved,
 even when its command differs from the standard. Invalid fields, conflicting
 declarations, and incompatible ranges fail before `package.json` is written.
 
@@ -70,7 +71,8 @@ An unchanged manifest does not run installation, so an unchanged second invocati
 idempotent.
 
 Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
-`src/assembly.ts`, and `src/main.ts`. Its concept-free generated config contains
+`src/assembly.ts`, and `src/main.ts`. The generated `tsconfig.json` loads both Bun and
+Node ambient types. Its concept-free generated config contains
 `design: { version: 1, documents: [] }`. For each target, setup creates an absent file,
 verifies a byte-identical file, and leaves every other existing file unchanged as
 application-owned. It never merges or rewrites existing source, config, or tsconfig.

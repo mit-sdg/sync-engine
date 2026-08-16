@@ -148,10 +148,12 @@ lifecycle stage of each managed entity, and any order, multiplicity, or invarian
 that changes behavior. Tables, documents, indexes, caches, and serialization
 formats are implementation choices unless they alter the observable contract.
 
-The required `State` fence is normalized and retained but remains unparsed until
-Simple State Form has a final grammar. Registration derives no schema or
-validator from it. See [`State`](reference/concept-specification.md#state).
-Names introduced by State and conventional names used in operation signatures
+The required `State` fence is normalized and retained but remains unparsed. Authors
+must nevertheless use Simple State Form (SSF): set, sequence, singleton, and subset
+declarations with indented relation fields; implicit set identity rather than synthetic
+ID fields; capitalized types, lowercase field names, uppercase enumeration values, and
+SSF primitives. Registration derives no schema or validator from it. See
+[`State`](reference/concept-specification.md#state). Names introduced by State and conventional names used in operation signatures
 do not require declarations in the external-only Types fence. Record owned facts
 in State and put each enforced invariant or value refinement in the action branch
 that checks it. Do not compensate for deferred SSF parsing with local type
@@ -221,9 +223,11 @@ specify and test that effect; the action implementation or backing store must
 provide any transaction needed to make it atomic.
 
 Queries read state without side effects. Their `one`, `optional`, or `many`
-promise is a domain cardinality claim, not a performance hint. The promise
-determines whether composition can require one row, tolerate absence, or fan out.
-[Query semantics](reference/semantics.md#queries) defines runtime checking and caching.
+promise is a domain cardinality claim, not a performance hint. Every authored query has
+an indented body stating what it answers, its unknown or empty case, and deterministic
+ordering for `many`; the signature alone is incomplete. The promise determines whether
+composition can require one row, tolerate absence, or fan out. [Query
+semantics](reference/semantics.md#queries) defines runtime checking and caching.
 
 Cover each applicable lifecycle stage: creation, use, completion, expiry,
 retention, reversal, deletion, or deliberate permanence. Do not add CRUD

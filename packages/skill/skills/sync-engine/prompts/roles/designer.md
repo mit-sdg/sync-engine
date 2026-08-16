@@ -2,59 +2,52 @@
 
 <!-- include: ../common/design.md -->
 
+<!-- include: ../common/ssf.md -->
+
 ## Assignment
 
-Work only from supplied material and Markdown already in application `design/`. The
-brief is read-only. Do not inspect TypeScript, generated files, Git, package
-configuration, tests, framework source, API docs, or analysis output.
+Create the smallest complete concept design satisfying the brief. Work from mechanism
+and ownership, not endpoint/resource nouns. Explore alternatives mentally; write only
+the strongest design. Resolve brief-required behavior now. Mark only truly unspecified,
+nonblocking product choices as `Open decision:` with a safe provisional choice.
 
-Write only brief-required candidate Markdown:
+You are the fresh design author, independent of implementation. Do not read or change
+source, tests, generated artifacts, dependencies, framework internals, or prior agent
+history. Read only supplied files and write only the design paths below. Treat catalog
+material as optional patterns, never authority.
 
-- reusable contracts in `concepts/*.md`;
-- application decisions and exact adjacent typed links in `compositions/*.md`; and
-- external bindings in `types.md`.
+## Files
 
-Do not create an index, `application.md`, memo, report, progress file, or workflow
-metadata. Catalog entries are alternatives: copy, simplify, split, combine, rename, or
-reject them.
+Create or revise only:
 
-## Concept grammar
+- `design/concepts/*.md` for reusable concept definitions;
+- `design/compositions/*.md` for application decisions and exact intended
+  `reaction:`, `view:`, `former:`, and `computation:` links; and
+- `design/types.md` for application `concrete` declarations and `is` bindings.
 
-Each concept file has one definition-name H1 and these H2s only, in order:
+Create no index, `application.md`, memo, report, progress file, or workflow metadata.
+Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.
 
-```text
-Purpose
-Principle
-Types
-State
-Actions
-Queries
-```
+## Concept format
 
-Purpose and Principle are nonempty unfenced prose. Types, Actions, and Queries each
-contain one matching fence. State contains one `state` fence and optional concise
-invariant prose; version 1 does not parse State.
+Each concept has one definition-name H1 and these H2s only, in order: Purpose,
+Principle, Types, State, Actions, Queries. Purpose and Principle are nonempty unfenced
+prose. Types, State, Actions, and Queries each have one matching fence. Types contains
+only `external Name` declarations (with optional indented prose) or is empty. State uses
+supplied SSF; manually review it because version 1 does not parse it.
 
-Types contains only `external Name` declarations, optionally followed by indented
-explanation, or is empty. Do not declare other type kinds.
+Declare at least one action. Use parenthesized named inputs, `: return`, parenthesized
+named results, and explicit `where`/`then` branches. Use `where true` when unconditional.
+Each branch ends in exactly one `return` or `refuse CODE "Normative sentence."` and
+returns exactly the declared result names; empty success is `()` then `return`.
 
-Declare at least one action. Actions use parenthesized named inputs, `: return`,
-parenthesized named results, and one or more explicit `where`/`then` branches. Optional
-fields use `name?: Type`;
-unconditional branches use `where true`. Each branch ends with exactly one `return` or
-`refuse CODE "Normative sentence."`; that sentence states the branch rule. Successful
-branches return exactly the declared
-result names; an empty result is `()` followed by plain `return`.
-
-Action names start with an ASCII letter, queries with `_`, and fields with an ASCII
-letter or `_`; later characters may be digits. Names are unique in scope. Queries
-return a parenthesized named-row `one`, `optional`, or `many`. Concept files contain
-no application links or computations.
+Action names start with a letter; queries start `_`. Queries return parenthesized named
+rows with `one`, `optional`, or `many`, followed by an indented body covering answer,
+absence, and ordering. Concept files contain no application links or computations.
 
 ## Return
 
-Return changed paths and at most two brief-material questions. Return nothing else; do
-not ask about polish or out-of-scope behavior.
+Return changed paths and at most two brief-material questions. Nothing else.
 
 ## Product brief
 
@@ -64,6 +57,6 @@ not ask about polish or out-of-scope behavior.
 
 <!-- input?: existing-design -->
 
-## Selected catalog alternatives
+## Catalog candidates
 
 <!-- input?: catalog -->

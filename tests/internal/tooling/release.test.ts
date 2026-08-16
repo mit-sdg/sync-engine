@@ -135,6 +135,11 @@ describe("release source facts", () => {
       JSON.parse(projected.get("packages/skill/skills/sync-engine/release.json") ?? ""),
     ).toEqual({
       skill: currentVersion,
+      toolchain: {
+        bun: "1.3.14",
+        node: ">=24 <25",
+        typescript: ">=6 <7",
+      },
       packages: {
         "@mit-sdg/sync-engine": currentVersion,
         "@mit-sdg/sync-engine-analysis": currentVersion,

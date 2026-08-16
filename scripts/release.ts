@@ -90,6 +90,7 @@ export const releaseSourcePaths = [
   "packages/skill/skills/sync-engine/references/harnesses/paseo.md",
   "packages/skill/skills/sync-engine/prompts/SOURCES.md",
   "packages/skill/skills/sync-engine/prompts/common/design.md",
+  "packages/skill/skills/sync-engine/prompts/common/ssf.md",
   "packages/skill/skills/sync-engine/prompts/roles/designer.md",
   "packages/skill/skills/sync-engine/prompts/roles/critic.md",
   "packages/skill/skills/sync-engine/prompts/roles/concept-worker.md",
@@ -308,6 +309,11 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     throw new Error(`${skillRuntimeReleasePath} must contain an object`);
   }
   skillRelease.skill = facts.version;
+  skillRelease.toolchain = {
+    bun: minimumBun,
+    node: facts.node,
+    typescript: facts.typescript,
+  };
   skillRelease.packages = Object.fromEntries(
     [coreWorkspace, workspaceById("analysis"), workspaceById("catalog")].map((workspace) => [
       workspace.packageName,

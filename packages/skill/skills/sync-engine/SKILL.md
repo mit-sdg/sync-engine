@@ -21,8 +21,9 @@ brief → independent design → syntax → bounded independent criticism
 - Authored Markdown under `design/` is product and design authority. Generated output,
   implementation, analysis, and coordinator notes are not.
 - Use fresh native agents for design, criticism, and evidence. Keep concept and
-  application implementation in separate bounded roles. Never imitate independent
-  review with coordinator self-review.
+  application implementation in separate bounded roles. The coordinator writes only the
+  brief and temporary assignments/context; it never substitutes for a role by authoring
+  design, production source, or tests. If a role cannot launch, stop.
 - Use the coordinator's exact provider and model for every role, at that provider's
   normal reasoning setting; do not repeat reasoning instructions in prompts.
 - Preserve unrelated work and Git history. Acceptance performs no Git operation.

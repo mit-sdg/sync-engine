@@ -58,7 +58,8 @@ inferring an answer from implementation source.
 - Keep concept specifications, registered composition documents, application types, executable declarations, and generated read-back distinct.
 - For new applications, author `design/concepts/*.md`, `design/compositions/*.md`, and `design/types.md`; conventionally pair one composition document with one source module.
 - Parse draft concepts with `sync-engine check-concepts`, then treat the generated config as the implemented design root: use explicit local URLs, exact typed links, and config-based `sync-engine check`; do not use the removed vocabulary-module mode.
-- Concept State is retained raw and SSF checking is deferred; do not infer schemas or state-owned type proof from it.
+- Author Concept State in SSF. Version 1 retains it raw and defers checking, so review SSF manually and do not infer schemas or state-owned type proof from parser success.
+- Give every query an indented body explaining its answers, empty or unknown case, and deterministic ordering for `many`.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.

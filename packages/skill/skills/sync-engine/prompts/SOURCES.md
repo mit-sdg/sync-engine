@@ -10,13 +10,13 @@ routine role prompts.
 The compact rules were checked against Canon `daniel` at
 `d907e027e70158d78d564b1a0fa961c06b1f76d3`.
 
-| Canon source                                                                                                                                        | Destination                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `background/behavior-description-generally.md`; `background/behavior-structuring-with-concepts.md`; `background/concept-as-behavior-and-service.md` | `common/design.md#useful-independent-concepts`; `#state-and-ownership`; `#actions-and-lifecycle`                                                  |
-| `background/concept-design-method.md`; `background/Negative purposes.md`                                                                            | purpose, boundaries, restraint, and coordination under common design rules                                                                        |
-| `background/concept-specifications.md`; `background/concept-design-rubric.md`                                                                       | purpose and Principle under useful independent concepts; state and action rules                                                                   |
-| `background/concept-design-types.md`; `background/concept-state-notation.md`                                                                        | generic opaque external identities and semantic state under state and ownership; SSF grammar omitted because local version 1 does not parse State |
-| `background/concept-synchronizations.md`                                                                                                            | `common/design.md#composition-and-failure`                                                                                                        |
+| Canon source                                                                                                                                        | Destination                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `background/behavior-description-generally.md`; `background/behavior-structuring-with-concepts.md`; `background/concept-as-behavior-and-service.md` | `common/design.md#useful-independent-concepts`; `#state-and-ownership`; `#actions-and-lifecycle`                       |
+| `background/concept-design-method.md`; `background/Negative purposes.md`                                                                            | purpose, boundaries, restraint, and coordination under common design rules                                             |
+| `background/concept-specifications.md`; `background/concept-design-rubric.md`                                                                       | purpose and Principle under useful independent concepts; state and action rules                                        |
+| `background/concept-design-types.md`; `background/concept-state-notation.md`; conceptbox `concept-state.md`                                         | generic opaque identities in `common/design.md`; complete compact authoring grammar and constraints in `common/ssf.md` |
+| `background/concept-synchronizations.md`                                                                                                            | `common/design.md#composition-and-failure`                                                                             |
 
 Canon treats Principle as an explanation of essential behavior, not the complete
 contract: it may use more than one archetypal scenario, and variants, refusals, and
@@ -74,10 +74,10 @@ requires nonempty unfenced prose without imposing a scenario count.
 | Core `docs/user/reference/concept-specification.md` section | Destination                                                                                           |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Recommended layout and draft command                        | designer template; coordinator design stage                                                           |
-| Document grammar                                            | `prompts/roles/designer.md#concept-grammar`                                                           |
+| Document grammar                                            | `prompts/roles/designer.md#concept-format`                                                            |
 | Complete example                                            | Removed; parser supplies exact mechanical feedback                                                    |
 | Types                                                       | designer grammar; common authored application design                                                  |
-| State                                                       | designer grammar; common state and ownership                                                          |
+| State                                                       | designer format; `common/design.md#state-and-ownership`; `common/ssf.md`                              |
 | Actions                                                     | designer grammar; common actions and lifecycle                                                        |
 | Queries                                                     | designer grammar; common actions and lifecycle                                                        |
 | Names and type expressions                                  | designer grammar                                                                                      |

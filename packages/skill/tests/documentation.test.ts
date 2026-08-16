@@ -25,14 +25,19 @@ function bytes(value: string): number {
   return Buffer.byteLength(value, "utf8");
 }
 
-function staticPrompt(roleSource: string, design: string): string {
-  return roleSource.replace("<!-- include: ../common/design.md -->", design.trimEnd());
+function staticPrompt(roleSource: string, includes: Readonly<Record<string, string>>): string {
+  return Object.entries(includes).reduce(
+    (rendered, [path, source]) => rendered.replace(`<!-- include: ${path} -->`, source.trimEnd()),
+    roleSource,
+  );
 }
 
 describe("compact sync-engine Agent Skill documents", () => {
-  test("ships one small semantic core and five role templates", async () => {
+  test("ships two small semantic references and five role templates", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
-    expect(bytes(design)).toBeLessThanOrEqual(8 * 1024);
+    const ssf = await text(new URL("common/ssf.md", promptRoot));
+    expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
+    expect(bytes(ssf)).toBeLessThanOrEqual(1.5 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -47,8 +52,10 @@ describe("compact sync-engine Agent Skill documents", () => {
 
     const designer = await text(new URL("roles/designer.md", promptRoot));
     const critic = await text(new URL("roles/critic.md", promptRoot));
-    expect(designer).toContain("<!-- include: ../common/design.md -->");
-    expect(critic).toContain("<!-- include: ../common/design.md -->");
+    for (const role of [designer, critic]) {
+      expect(role).toContain("<!-- include: ../common/design.md -->");
+      expect(role).toContain("<!-- include: ../common/ssf.md -->");
+    }
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
       expect(await text(new URL(`roles/${role}`, promptRoot))).not.toContain("<!-- include:");
     }
@@ -62,8 +69,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     const review = await text(new URL("docs/user/guide/reviewing-a-design.md", repositoryRoot));
     const compact = await text(new URL("common/design.md", promptRoot));
-    const designer = staticPrompt(await text(new URL("roles/designer.md", promptRoot)), compact);
-    const critic = staticPrompt(await text(new URL("roles/critic.md", promptRoot)), compact);
+    const ssf = await text(new URL("common/ssf.md", promptRoot));
+    const includes = { "../common/design.md": compact, "../common/ssf.md": ssf };
+    const designer = staticPrompt(await text(new URL("roles/designer.md", promptRoot)), includes);
+    const critic = staticPrompt(await text(new URL("roles/critic.md", promptRoot)), includes);
 
     expect(bytes(designer)).toBeLessThanOrEqual(bytes(oldDesign + grammar) * 0.4);
     expect(bytes(critic)).toBeLessThanOrEqual(bytes(oldDesign + grammar + review) * 0.4);
@@ -71,16 +80,24 @@ describe("compact sync-engine Agent Skill documents", () => {
 
   test("keeps optimized static role guidance bounded", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
+    const ssf = await text(new URL("common/ssf.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 8 * 1024,
-      critic: 7.25 * 1024,
+      designer: 9 * 1024,
+      critic: 8 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
       "evidence-worker": 2 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
-      expect(bytes(staticPrompt(source, design))).toBeLessThanOrEqual(limit);
+      expect(
+        bytes(
+          staticPrompt(source, {
+            "../common/design.md": design,
+            "../common/ssf.md": ssf,
+          }),
+        ),
+      ).toBeLessThanOrEqual(limit);
     }
   });
 
@@ -106,9 +123,22 @@ describe("compact sync-engine Agent Skill documents", () => {
       "A reaction cannot make separate owners atomic",
       "Request data is a claim, not\nauthentication",
       "State is unparsed in version 1",
+      "Write State only in Simple State Form",
+      "Every query has an indented prose body",
       "Neither proves boundaries",
     ]) {
       expect(normalizedDesign).toContain(rule.replace(/\s+/g, " "));
+    }
+
+    const ssf = (await text(new URL("common/ssf.md", promptRoot))).replace(/\s+/g, " ");
+    for (const rule of [
+      "Sets introduce identities—never add ID fields",
+      "Subsets classify existing parent members",
+      "Collections are never `optional`",
+      "No nested collections or unions",
+      "Declaration direction implies no storage, navigation, or ownership",
+    ]) {
+      expect(ssf).toContain(rule);
     }
 
     expect(normalizedDesign).toContain("Principle uses one or more short archetypal scenarios");
@@ -257,6 +287,11 @@ describe("compact sync-engine Agent Skill documents", () => {
     });
     expect(JSON.parse(await text(new URL("release.json", skillRoot)))).toEqual({
       skill: manifest.version,
+      toolchain: {
+        bun: "1.3.14",
+        node: ">=24 <25",
+        typescript: ">=6 <7",
+      },
       packages: {
         "@mit-sdg/sync-engine": manifest.version,
         "@mit-sdg/sync-engine-analysis": manifest.version,
@@ -284,8 +319,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
     expect(entry).toContain("Paseo guide");
     expect(entry).toContain("self-contained compiler");
+    expect(entry).toContain("never substitutes for a role");
     expect(entry).toContain("coordinator's exact provider and model");
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
+    expect(workflow).toContain("It never authors or\nrepairs concept/composition/type design");
+    expect(workflow).toContain("Do not run a Vite+ migration");
+    expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
     expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");

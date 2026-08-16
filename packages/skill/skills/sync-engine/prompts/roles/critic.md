@@ -2,6 +2,8 @@
 
 <!-- include: ../common/design.md -->
 
+<!-- include: ../common/ssf.md -->
+
 ## Assignment
 
 Review the complete authored candidate against the brief: every concept and

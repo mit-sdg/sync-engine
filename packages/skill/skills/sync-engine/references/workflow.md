@@ -1,7 +1,11 @@
 # Coordinator workflow
 
 This reference owns product decisions, stage transitions, role launches, validation,
-and handback. Compiled role prompts own delegated boundaries and outputs.
+and handback. Compiled role prompts own delegated boundaries and outputs. The coordinator
+may author only the brief and temporary assignment/context files. It never authors or
+repairs concept/composition/type design, production source, or tests; setup may create
+its documented concept-free scaffold. If a required role cannot launch, stop rather than
+substituting coordinator work.
 
 ## Start safely
 
@@ -11,10 +15,13 @@ repository, or otherwise alter Git history.
 
 Resolve `<skill-root>` once as the absolute directory containing the loaded `SKILL.md`.
 The bundled compiler is `bun "<skill-root>/scripts/command.ts"`; substitute the actual
-shell-quoted path in every command. Read `<skill-root>/release.json` for the exact
-compatible package versions.
+shell-quoted path in every command. Read `<skill-root>/release.json` for exact package
+versions and canonical toolchain facts.
 
-For a new application, initialize or reuse a Bun package. Install
+In an empty application directory, create only a minimal `package.json` before invoking
+Bun: a name, `private: true`, `type: "module"`, and `packageManager` using the exact Bun
+version in `release.json`. Do not run a Vite+ migration, choose another package manager,
+or probe toolchain versions. For a new application, initialize or reuse that Bun package. Install
 `@mit-sdg/sync-engine` at the exact release version and install matching
 `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog` as development
 dependencies. Do not install the skill package into the application. Before setup or
@@ -24,7 +31,11 @@ catalog use, verify exact versions and executable targets with:
 bun "<skill-root>/scripts/command.ts" release check .
 ```
 
-Only after that succeeds, run the installed `sync-engine setup`.
+Only after that succeeds, run the installed `sync-engine setup`. Setup owns the standard
+scripts, TypeScript, Bun and Node type declarations, `tsconfig.json`, and concept-free
+configuration. Do not install or downgrade those toolchain packages manually. If setup's
+installation fails, stop and report that bootstrap failure instead of probing alternate
+versions or package managers.
 
 For an existing configured application, run the same release check before its documented
 baseline. Do not rerun setup merely to impose default files or scripts.

@@ -191,12 +191,14 @@ For every concept, also verify manually that:
   for reference material;
 - Types contains one `types` fence with only explicit `external` declarations;
   concept-owned and conventional names do not need local declarations;
-- State contains one raw `state` fence and does not claim that version 1 validates
-  SSF;
+- State contains one raw `state` fence, follows SSF declaration, identity, type,
+  multiplicity, naming, and indentation rules, and does not claim that version 1
+  validates them;
 - every action has explicit `where`/`then` branches and one terminal return or refusal
   per branch;
 - action results and query rows use parenthesized named fields;
-- query prose adds only meaning not already evident from State and signature;
+- every query has indented prose stating what it answers, its unknown or empty case,
+  and deterministic ordering for `many`;
 - concept files contain no application links or computations; and
 - each refusal sentence states the same rule as its branch condition.
 

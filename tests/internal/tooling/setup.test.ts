@@ -10,7 +10,7 @@ async function currentPackage(): Promise<{
   version: string;
   packageManager: string;
   dependencies: { typescript: string };
-  devDependencies: { "@types/node": string };
+  devDependencies: { "@types/bun": string; "@types/node": string };
 }> {
   return JSON.parse(await readFile(new URL("../../../package.json", import.meta.url), "utf8"));
 }
@@ -45,8 +45,14 @@ describe("sync-engine setup", () => {
           expect(manifest.dependencies["@mit-sdg/sync-engine"]).toBe(
             (await currentPackage()).version,
           );
-          expect(manifest.devDependencies.typescript).toMatch(/^\d+\.\d+\.\d+$/);
-          expect(manifest.devDependencies["@types/node"]).toMatch(/^\d+\.\d+\.\d+$/);
+          const current = await currentPackage();
+          expect(manifest.devDependencies.typescript).toBe(current.dependencies.typescript);
+          expect(manifest.devDependencies["@types/bun"]).toBe(
+            current.devDependencies["@types/bun"],
+          );
+          expect(manifest.devDependencies["@types/node"]).toBe(
+            current.devDependencies["@types/node"],
+          );
           expect(manifest.scripts).toMatchObject({
             generate: "sync-engine artifacts pin",
             check: "sync-engine check && sync-engine artifacts check && tsc --noEmit",
@@ -71,7 +77,9 @@ describe("sync-engine setup", () => {
       expect(await readFile(join(root, "generated.config.ts"), "utf8")).toContain(
         "design: { version: 1, documents: [] }",
       );
-      expect(await readFile(join(root, "tsconfig.json"), "utf8")).toContain('"types": ["node"]');
+      expect(await readFile(join(root, "tsconfig.json"), "utf8")).toContain(
+        '"types": ["bun", "node"]',
+      );
 
       const second = await setupProject(root, {
         install: async () => {
@@ -108,7 +116,11 @@ describe("sync-engine setup", () => {
     const { version } = await currentPackage();
     const original = {
       dependencies: { "@mit-sdg/sync-engine": version, other: "1.2.3" },
-      devDependencies: { typescript: "^6.0.0", "@types/node": "^24.0.0" },
+      devDependencies: {
+        typescript: "^6.0.0",
+        "@types/bun": "^1.3.0",
+        "@types/node": "^24.0.0",
+      },
       scripts: {
         generate: "custom-generate",
         check: "custom-check",
@@ -248,6 +260,11 @@ describe("sync-engine setup", () => {
       "@mit-sdg/sync-engine 1.0.0-beta.1 is incompatible",
     ],
     [
+      "incompatible @types/bun",
+      JSON.stringify({ devDependencies: { "@types/bun": "1.2.0" } }),
+      "@types/bun 1.2.0 is incompatible",
+    ],
+    [
       "conflicting @types/node declarations",
       JSON.stringify({
         dependencies: { "@types/node": "24.0.0" },
@@ -288,10 +305,25 @@ describe("sync-engine setup", () => {
     }
   });
 
-  test("requires an existing Bun package", async () => {
+  test("creates a minimal private module package when package.json is absent", async () => {
     const root = await mkdtemp(join(tmpdir(), "sync-engine-setup-empty-"));
     try {
-      await expect(setupProject(root, { install: false })).rejects.toThrow("no package.json");
+      const result = await setupProject(root, { install: false });
+      const manifest = await manifestAt(root);
+      expect(result.manifestUpdated).toBe(true);
+      expect(result.installation).toBe("skipped");
+      expect(manifest).toMatchObject({
+        private: true,
+        type: "module",
+        packageManager: "bun@1.3.14",
+      });
+      expect(result.written).toEqual([
+        "tsconfig.json",
+        "src/concepts.ts",
+        "src/assembly.ts",
+        "generated.config.ts",
+        "src/main.ts",
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

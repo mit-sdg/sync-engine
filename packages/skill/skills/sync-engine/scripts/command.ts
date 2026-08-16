@@ -13,11 +13,13 @@ interface PackageManifest {
   readonly version?: string;
   readonly bin?: string | Readonly<Record<string, string>>;
   readonly skill?: string;
+  readonly toolchain?: Readonly<Record<string, string>>;
   readonly packages?: Readonly<Record<string, string>>;
 }
 
 interface SkillRelease {
   readonly skill: string;
+  readonly toolchain: Readonly<{ bun: string; node: string; typescript: string }>;
   readonly packages: Readonly<Record<string, string>>;
 }
 
@@ -75,6 +77,9 @@ async function readSkillRelease(): Promise<SkillRelease> {
   const value = await manifestAt(path);
   if (
     typeof value?.skill !== "string" ||
+    typeof value.toolchain?.bun !== "string" ||
+    typeof value.toolchain.node !== "string" ||
+    typeof value.toolchain.typescript !== "string" ||
     typeof value.packages !== "object" ||
     value.packages === null ||
     Array.isArray(value.packages)
