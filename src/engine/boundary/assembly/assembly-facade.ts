@@ -1,3 +1,4 @@
+import type { CompositionActions } from "@engine/reactions/runtime/composing";
 import type { ComputationFn } from "@engine/reads/computations";
 import type {
   ConceptClassesOf,
@@ -34,7 +35,15 @@ export type Assembly<TConcepts extends Record<string, new (...args: never[]) => 
   | "whenIdle"
   | "observeSettledChanges"
   | "form"
->;
+> & {
+  /**
+   * The live composition door: `CompositionBoundary`'s register, retire, and
+   * replace as instrumented actions over `ReactionIR`. The `composition`
+   * *option* is the authored module registered at boot; this field is the
+   * running door onto the same composition. Instrumented on first access.
+   */
+  readonly composition: CompositionActions;
+};
 
 type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => object>> =
   AssembleBaseOptions<
@@ -86,6 +95,9 @@ export function assemble(
     whenIdle: assembled.whenIdle,
     observeSettledChanges: assembled.observeSettledChanges,
     form: assembled.form,
+    get composition() {
+      return assembled.engine.composition;
+    },
   };
   rememberApplicationInvoker(facade.invoker, facade, facade.publicInterface);
   rememberAssembly(facade, assembled);

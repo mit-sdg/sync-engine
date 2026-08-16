@@ -273,6 +273,70 @@ _titles() : many (title: String)
       assemble({ vocabulary: second, instances: { Cataloging: shared }, composition: {} }),
     ).toThrow(/cannot carry two vocabulary declarations/);
   });
+
+  test("the assembled app carries the live composition door; the engine stays behind", async () => {
+    class RecordingConcept {
+      texts: string[] = [];
+      record({ text }: { text: string }) {
+        this.texts.push(text);
+        return {};
+      }
+    }
+    const words = vocabulary({
+      concepts: { Cataloging, Recording: RecordingConcept },
+      computations: {},
+    });
+    const { Cataloging: Catalog, Recording } = words.concepts;
+    const Announce = reaction(({ title }) =>
+      when(Catalog.add({}).responds({ title })).then(Recording.record({ text: title })),
+    );
+    const recording = new RecordingConcept();
+    const system = assemble({
+      vocabulary: words,
+      instances: { Recording: recording },
+      composition: { Announce },
+    });
+    expect("engine" in system).toBe(false);
+
+    await system.concepts.Cataloging.add({ title: "one" });
+    expect(recording.texts).toEqual(["one"]);
+
+    // Retiring through the door addresses the boot-registered family by name.
+    await system.composition.retire({ name: "Announce" });
+    await system.concepts.Cataloging.add({ title: "two" });
+    expect(recording.texts).toEqual(["one"]);
+
+    // Registering portable IR through the door matches later occurrences.
+    await system.composition.register({
+      name: "AnnounceAgain",
+      reactions: [
+        {
+          name: "AnnounceAgain",
+          when: [
+            {
+              kind: "action",
+              concept: "Cataloging",
+              action: "add",
+              input: {},
+              output: { title: { $var: "title" } },
+              posture: "returned",
+            },
+          ],
+          where: [],
+          then: [
+            {
+              kind: "request",
+              concept: "Recording",
+              action: "record",
+              input: { text: { $var: "title" } },
+            },
+          ],
+        },
+      ],
+    });
+    await system.concepts.Cataloging.add({ title: "three" });
+    expect(recording.texts).toEqual(["one", "three"]);
+  });
 });
 
 const register = {

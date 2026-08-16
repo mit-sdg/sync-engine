@@ -125,7 +125,16 @@ Every assembly owns an internal occurrence index; `logSink` neither replaces it
 nor restricts `retention`.
 
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
+<<<<<<< HEAD
 `whenIdle()`, `observeSettledChanges(observer)`, and `form(fusedFormer)`. Drain closes root admission immediately;
+=======
+`whenIdle()`, `form(fusedFormer)`, and `composition` — the [live composition
+door](#advanced) (`register`, `retire`, `replace` over `ReactionIR`),
+instrumented on first access. The `composition` _option_ is the authored module
+registered at boot; the returned `composition` field is the running door onto
+the same composition. The engine object itself stays behind the facade.
+Drain closes root admission immediately;
+>>>>>>> 4ce7196 (Hand the composition door through the assembly facade)
 both lifecycle promises resolve when accepted action, query, and former work
 actually settles. `form(...)` resolves to the formed runtime value; an optional
 record former contributes `null` to that result.
@@ -753,7 +762,8 @@ vocabulary can still be passed to `assemble` through the advanced
 taking and returning `ReactionIR`. Every composition change lands in the
 occurrence log, and matching honors it from that position onward. The full
 contract is [Live composition](semantics.md#live-composition). The concept is
-instrumented on first access; ordinary `assemble(...)` does not expose it.
+instrumented on first access. An ordinary assembled application reaches the
+same door as the `composition` field on its `Assembly`.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

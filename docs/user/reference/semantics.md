@@ -279,8 +279,9 @@ position in the log:
   patterns do not fit the old asks, the chain ends there without failure.
 
 Retiring a reaction does not retire views or formers it referenced; they
-remain declared. Ordinary `assemble(...)` does not expose the composition
-door.
+remain declared. An ordinary assembled application reaches the door as the
+`composition` field on its `Assembly`; the engine object itself stays behind
+the facade.
 
 ## Execution and concurrency
 
