@@ -714,7 +714,7 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       (workspace.declarationSnapshot === path ||
         knownWorkspaceAsset ||
         (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative) ||
-        ["plan.md", "tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
+        ["tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
         (workspaceRelative.startsWith("src/") && workspaceRelative.endsWith(".ts")) ||
         (workspaceRelative.startsWith("tests/") &&
           (workspaceRelative.endsWith(".ts") ||
