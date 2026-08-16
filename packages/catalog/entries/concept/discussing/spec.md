@@ -29,7 +29,7 @@ a set of Discussions with
   a subject Subject
   an openedAt DateTime
   an open Flag
-  a closedAt optional DateTime
+  an optional closedAt DateTime
 
 a seq of Responses with
   a discussion Discussion
