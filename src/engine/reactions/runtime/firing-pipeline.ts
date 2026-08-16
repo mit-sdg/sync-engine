@@ -92,6 +92,7 @@ export class FiringPipeline {
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
     private readonly assertRows: (flow: string, count: number) => void,
     private readonly consumeAction: (flow: string) => boolean,
+    private readonly isCurrent: (reaction: ExecutableReaction) => boolean = () => true,
   ) {}
 
   async fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void> {
@@ -115,7 +116,9 @@ export class FiringPipeline {
    * Each frontier qualifies every trigger armed in the flow before dispatching
    * any of their consequences, exactly as one landed occurrence does for its
    * siblings, then lets those consequences and the ordinary cascades they
-   * start drain before the next frontier opens. An unqualified combination
+   * start drain before the next frontier opens. Qualification reads the
+   * present, so a trigger whose reaction is no longer the currently
+   * registered definition is discarded. An unqualified combination
    * remains armed unless another firing consumes one of its trigger
    * occurrences. An interpreter or integrity failure prevents subsequent
    * frontiers but does not cancel matches already being processed in the current
@@ -131,6 +134,10 @@ export class FiringPipeline {
       while (this.settlement.has(flowToken) && !this.actions._flowFailed(flowToken)) {
         const prepared: PreparedFiring[] = [];
         for (const armed of this.settlement.pending(flowToken)) {
+          if (!this.isCurrent(armed.reaction)) {
+            this.settlement.retire(flowToken, armed);
+            continue;
+          }
           if (!this.retainUnconsumedFrames(armed)) {
             this.settlement.retire(flowToken, armed);
             continue;

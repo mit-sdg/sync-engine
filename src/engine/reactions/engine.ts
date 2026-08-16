@@ -14,7 +14,10 @@ import type { ComputationRef } from "@engine/reads/computations";
 import type { FormerRef, FusedFormer } from "@engine/reads/former-nodes";
 import type { RelationView } from "@engine/reads/lines";
 import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "@engine/reads/ir";
+import type { CompositionActions } from "./runtime/composing.ts";
 import { Reacting } from "./runtime/reacting.ts";
+
+export type { CompositionActions } from "./runtime/composing.ts";
 
 export interface Engine {
   /** Instrument every concept in a record, preserving keys. */
@@ -32,6 +35,14 @@ export interface Engine {
   declareViews(...refs: RelationView[]): void;
   /** Declare formers no reaction references — reads served at an edge or a CLI. */
   declareFormers(...refs: FormerRef[]): void;
+
+  /**
+   * The live composition door — register, retire, and replace as instrumented
+   * actions of the core `CompositionBoundary` concept, so every composition
+   * change lands in the occurrence log. Semantics: "Live composition" in the
+   * execution-semantics reference.
+   */
+  readonly composition: CompositionActions;
 
   /** Register reactions from exported `ReactionIR`; references resolve by name. */
   registerReactions(reactions: ReactionIR[]): void;

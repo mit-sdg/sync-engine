@@ -449,6 +449,7 @@ const register = {
     "wireContracts",
   ],
   advanced: [
+    "CompositionActions",
     "Engine",
     "EngineObserver",
     "EngineOptions",

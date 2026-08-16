@@ -1,7 +1,7 @@
 /** Binding facts shared by authored operations and their string-backed IR. */
 
 import type { Mapping } from "@engine/reactions/types";
-import { isVarIR } from "./ir.ts";
+import { hasMarkerKey, isVarIR } from "./ir.ts";
 import type { PatternIR, ViewOpIR, WhereOpIR } from "./ir.ts";
 import { walkValueTree } from "./value-tree.ts";
 import type { AnyWhereOp } from "./where-ops.ts";
@@ -29,6 +29,10 @@ type Backing = "authored" | "ir";
 function variablesIn(value: unknown, backing: Backing): Array<string | symbol> {
   const found: Array<string | symbol> = [];
   walkValueTree(value, (node) => {
+    if (typeof node === "object" && node !== null && hasMarkerKey(node, "$lit")) {
+      // A `$lit` payload is quoted data — matching and resolution never read into it.
+      return false;
+    }
     if (backing === "authored") {
       if (typeof node === "symbol") found.push(node);
     } else if (isVarIR(node)) {

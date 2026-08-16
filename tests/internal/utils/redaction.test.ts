@@ -54,10 +54,12 @@ describe("redact", () => {
     expect(() => redact(a)).not.toThrow();
   });
 
-  test("depth > 5 returns [max depth]", () => {
-    const obj = { a: { b: { c: { d: { e: { f: { g: 1 } } } } } } };
-    const result = redact(obj) as any;
-    expect(result.a.b.c.d.e.f).toBe("[max depth]");
+  test("nesting beyond the pathological-depth guard returns [max depth]", () => {
+    let obj: any = { leaf: 1 };
+    for (let level = 0; level < 70; level += 1) obj = { next: obj };
+    let cursor = redact(obj) as any;
+    while (typeof cursor === "object" && cursor !== null) cursor = cursor.next ?? cursor.leaf;
+    expect(cursor).toBe("[max depth]");
   });
 
   test("top-level Error instance keeps only its class", () => {

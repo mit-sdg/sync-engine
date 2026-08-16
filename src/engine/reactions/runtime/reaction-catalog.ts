@@ -19,6 +19,17 @@ export class ReactionCatalog {
     return undefined;
   }
 
+  /** The names one base owns, in registration order (or `undefined` if unknown). */
+  namesOf(base: string): string[] | undefined {
+    const names = this.namesByBase.get(base);
+    return names === undefined ? undefined : [...names];
+  }
+
+  /** Whether this executable is still the currently indexed definition of its name. */
+  isCurrent(reaction: ExecutableReaction): boolean {
+    return this.reactions[reaction.name] === reaction;
+  }
+
   unregisterBase(base: string): void {
     for (const reactionName of this.namesByBase.get(base) ?? []) {
       if (!Object.hasOwn(this.reactions, reactionName)) continue;

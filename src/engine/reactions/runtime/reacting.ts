@@ -40,6 +40,7 @@ import type {
 } from "../types.ts";
 import { ActionScheduler } from "./action-scheduler.ts";
 import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
+import { Composing, type CompositionActions } from "./composing.ts";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
 import { ConceptInstrumentation, type QueryCacheMode } from "./instrumenting.ts";
@@ -62,6 +63,7 @@ export class Reacting {
   private readonly triggerMatcher: TriggerMatcher;
   private readonly firingPipeline: FiringPipeline;
   private readonly execution?: ExecutionControl;
+  private compositionDoor?: CompositionActions;
 
   constructor(
     actionConcept: ActionConcept = new ActionConcept(),
@@ -107,7 +109,38 @@ export class Reacting {
       (record, durationMs) => this.react(record, durationMs),
       (flowToken, count) => this.assertRows(flowToken, count),
       (flowToken) => this.consumeAction(flowToken),
+      (reaction) => this.catalog.isCurrent(reaction),
     );
+  }
+
+  /** Instrumented on first access, so engines that never open the door keep their concept inventories unchanged. */
+  get composition(): CompositionActions {
+    if (this.compositionDoor === undefined) {
+      const door = new Composing({
+        ownerOf: (name) => this.catalog.ownerOf(name),
+        namesOf: (base) => this.catalog.namesOf(base),
+        bind: (reaction) => this.compileReaction(this.registry.bindReaction(reaction)),
+        install: (base, family) => {
+          for (const entry of family) {
+            this.catalog.index(entry.executable);
+            if (this.logging !== Logging.OFF) {
+              logger.info(readBackReaction(entry.reaction, this.registry.readBackEnv()));
+            }
+          }
+          this.catalog.finishBase(
+            base,
+            family.map((entry) => entry.reaction.name),
+            family.map((entry) => entry.reaction),
+          );
+        },
+        remove: (base) => this.catalog.unregisterBase(base),
+      });
+      this.compositionDoor = this.instrumentConcept(
+        door,
+        "CompositionBoundary",
+      ) as unknown as CompositionActions;
+    }
+    return this.compositionDoor;
   }
 
   addObserver(observer: EngineObserver): () => void {

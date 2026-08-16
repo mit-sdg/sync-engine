@@ -723,7 +723,7 @@ defines derivation guarantees.
 
 <!-- register:advanced:start -->
 
-`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `VocabularyAssemblyOptions`, `createEngine`, `custom`, `faulted`, `interfaceDeclaration`, `vocabulary`
+`CompositionActions`, `Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `VocabularyAssemblyOptions`, `createEngine`, `custom`, `faulted`, `interfaceDeclaration`, `vocabulary`
 
 <!-- register:advanced:end -->
 
@@ -733,6 +733,7 @@ It follows the same beta compatibility policy as other public subpaths.
 | API                         | Compact signature / role                             |
 | --------------------------- | ---------------------------------------------------- |
 | `createEngine`              | `createEngine(options?: EngineOptions): Engine`      |
+| `CompositionActions`        | The live composition door at `Engine.composition`    |
 | `vocabulary`                | `vocabulary({ concepts, computations? })`            |
 | `VocabularyAssemblyOptions` | Direct-vocabulary option type accepted by `assemble` |
 | `custom`                    | `custom(fn, inputs, outputs)`                        |
@@ -746,6 +747,13 @@ outcomes?, refusals? }`. Ordinary config-based applications use `conceptSet`
 from `/assembly`, which creates the executable declaration internally. A direct
 vocabulary can still be passed to `assemble` through the advanced
 `VocabularyAssemblyOptions` alternative.
+
+`Engine.composition` is the live composition door: `register`, `retire`, and
+`replace` as instrumented actions of the core `CompositionBoundary` concept,
+taking and returning `ReactionIR`. Every composition change lands in the
+occurrence log, and matching honors it from that position onward. The full
+contract is [Live composition](semantics.md#live-composition). The concept is
+instrumented on first access; ordinary `assemble(...)` does not expose it.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

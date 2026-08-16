@@ -108,7 +108,13 @@ export function redact(obj: unknown): unknown {
   return standaloneRedactor.redact(obj);
 }
 
-const MAX_REDACTION_DEPTH = 5;
+/**
+ * A guard against pathological nesting, not a bound on legitimate data: the
+ * occurrence log is the durable record of what an action was asked with —
+ * composition changes carry whole reaction definitions there — so any depth
+ * a real value reaches must survive the projection.
+ */
+const MAX_REDACTION_DEPTH = 64;
 
 /** Project arbitrary diagnostic data to a redacted value that JSON can always encode. */
 function redactValue(

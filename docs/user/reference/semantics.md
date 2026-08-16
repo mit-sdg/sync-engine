@@ -13,6 +13,7 @@ cookbook](../guide/read-construction.md).
 | Trigger matching and consequence paths      | [Reactions](#reactions)                                                                   |
 | Consequences held until causal work drains  | [Deferred triggers and settlement frontiers](#deferred-triggers-and-settlement-frontiers) |
 | Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                               |
+| Changing composition on a running engine    | [Live composition](#live-composition)                                                     |
 | In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                   |
 | Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                              |
 | Query promises, caching, and equality       | [Queries](#queries)                                                                       |
@@ -218,6 +219,68 @@ reaction, view, or former before an invoker, route set, generated plan, or
 artifact write is exposed. Manual engines under the `advanced` subpath may
 execute local constructs, but they do not gain ordinary assembly's application
 boundary or portability guarantees.
+
+### Live composition
+
+A running engine changes its own composition through the **composition
+boundary** — a core concept the engine owns, instrumented under the reserved
+name `CompositionBoundary` and reached as `Engine.composition`. Its three
+actions take and return portable data. `register({ name, reactions })` adds
+one reaction family from `ReactionIR`; `retire({ name })` removes the family
+registered under a name; `replace({ name, reactions })` swaps the name's
+definition in one step. Because these are instrumented actions, every
+composition change lands in the occurrence log with its full definition as
+input, serializes with the concept's other actions, and can itself trigger
+reactions.
+
+A family is one authored reaction's lowering: one or more `ReactionIR`
+entries registered under one owning name. Entry names are author-chosen and
+need not extend the owning name, but every name is claimed globally — an
+entry name owned elsewhere refuses. An operation is all-or-nothing: a
+refusal leaves the composition unchanged. `register` refuses
+`ALREADY_REGISTERED` when the name or any entry name is already owned,
+`NOT_A_FAMILY` when the input is not a named, non-empty, duplicate-free
+family, and `NOT_BINDABLE` when an entry does not bind against the engine's
+registered vocabulary. `retire` and `replace` refuse `NOT_REGISTERED` when
+the name is not a registered family name; retiring a stage name refuses and
+names its owning family. The door admits only portable IR — authored
+TypeScript forms lower to IR before it — while `retire` and `replace`
+address the whole composition, including reactions registered at boot and
+local ones.
+
+A reaction's consequence may itself ask a composition change. Definitions
+travel inside that consequence's input quoted as `$lit`, because pattern
+resolution reads unquoted `$var` nodes as bindings of the firing frame.
+
+Composition is concept state, and a change takes effect at its occurrence's
+position in the log:
+
+- **Matching reads the composition where a trigger lands.** A reaction
+  registered mid-run matches occurrences that land after its registration,
+  never earlier ones — including the registering occurrence itself, whose
+  matching already sees the change. A retired reaction stops matching from
+  its retirement occurrence onward, so it does not match that occurrence.
+- **A landing reads the composition once.** Reactions matched by a landed
+  occurrence run to completion under the definitions that matched them;
+  retire and replace never revoke a completed match or cancel a dispatched
+  consequence.
+- **Deferred qualification reads the present.** A settlement frontier
+  discards an armed trigger whose reaction has since been retired or
+  replaced; a replacement's definition never inherits the old definition's
+  armed matches.
+- **Composition is positional, never per-flow.** A flow spanning a change
+  has its earlier occurrences interpreted under the old composition and its
+  later ones under the new.
+- **Occurrences are version-free.** A reaction's identity is its name; its
+  definition is the name's current value; the history of values is the
+  composition occurrences themselves. `earlier` reads and stage provenance
+  match by name and pattern, so an in-flight chain crossing a replacement
+  hands off at its next landing to the new definitions — and when the new
+  patterns do not fit the old asks, the chain ends there without failure.
+
+Retiring a reaction does not retire views or formers it referenced; they
+remain declared. Ordinary `assemble(...)` does not expose the composition
+door.
 
 ## Execution and concurrency
 
