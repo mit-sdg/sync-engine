@@ -58,19 +58,11 @@ small semantic design document; role templates declare their exact file inputs.
 
 ## Deterministic prompt commands
 
-Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. Initialize
-then validate the compact product brief without requiring application dependencies:
-
-```sh
-bun "<skill-root>/scripts/command.ts" brief init design/brief.md
-# Fill the template.
-bun "<skill-root>/scripts/command.ts" brief check design/brief.md
-```
-
-For an empty directory, read `release.json` and first write a minimal private module
-package whose `packageManager` uses its exact Bun version. Do not run a Vite+ migration
-or choose another package manager. After installing application dependencies and before
-setup, verify their exact release and executable targets:
+Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. For an empty
+directory, read `release.json` and first write a minimal private module package whose
+`packageManager` uses its exact Bun version. Do not run a Vite+ migration or choose
+another package manager. After installing application dependencies and before setup,
+verify their exact release and executable targets:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" release check .
@@ -78,8 +70,18 @@ bunx --no-install sync-engine setup
 ```
 
 Setup supplies the supported TypeScript, Bun and Node declarations, standard scripts,
-and concept-free configuration; do not probe or downgrade toolchain versions. After
-independent review and authorization close, capture the authored design identity:
+and concept-free configuration; do not probe or downgrade toolchain versions. Only after
+setup succeeds, initialize and validate the compact product brief:
+
+```sh
+bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+# Fill the template.
+bun "<skill-root>/scripts/command.ts" brief check design/brief.md
+```
+
+`brief init` refuses to create a file before setup and prints the required bootstrap
+commands. After independent review and authorization close, capture the authored design
+identity:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" design digest design

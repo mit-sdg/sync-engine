@@ -279,6 +279,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "for implementation and evidence roles, enforce read and write denial outside assigned application paths",
     );
     expect(normalizedContract).toContain("Missing confinement does not block design or criticism");
+    expect(normalizedContract).toContain("or transfer any role to the coordinator");
     expect(normalizedContract).toContain("Do not treat assignment prose");
     expect(paseo.replace(/\s+/g, " ")).toContain(
       "Without it, continue design and criticism but stop before that role",
@@ -445,7 +446,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "If analysis or\ncatalog is absent, install only those missing packages",
     );
     expect(workflow).toContain("setup completion is a hard gate");
-    expect(workflow).toContain("Run this command alone—do not chain a premature check");
+    expect(workflow).toContain("leaves no brief and prints bootstrap steps");
+    expect(workflow).toContain("Run it alone—do not chain a premature check");
     expect(workflow).toContain("Default to no catalog context");
     expect(workflow).toContain("do not rebuild or resend the full designer prompt");
     expect(workflow).toContain("designer runs its permitted syntax command");

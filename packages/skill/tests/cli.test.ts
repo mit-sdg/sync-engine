@@ -38,16 +38,43 @@ async function writePackage(
   await writeFile(resolve(target, binTarget), "#!/usr/bin/env node\n");
 }
 
+async function writeConfiguredApplication(directory: string): Promise<void> {
+  for (const name of Object.keys(executables)) {
+    await writePackage(directory, name, "1.0.0-beta.12");
+  }
+  await Promise.all([
+    writeFile(resolve(directory, "package.json"), '{"private":true,"type":"module"}\n'),
+    writeFile(resolve(directory, "tsconfig.json"), "{}\n"),
+    writeFile(resolve(directory, "generated.config.ts"), "export default {};\n"),
+  ]);
+}
+
 afterEach(async () => {
   const { rm } = await import("node:fs/promises");
   await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
 describe("sync-engine-skill command", () => {
-  test("initializes the exact packaged brief template without replacing a brief", async () => {
+  test("requires setup before initializing the exact brief template", async () => {
     const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-brief-init-"));
     temporary.push(directory);
     const path = resolve(directory, "design/brief.md");
+    const premature = run(["brief", "init", path], directory);
+    expect(premature.status).toBe(1);
+    expect(premature.stderr).toContain("Brief init requires completed sync-engine setup");
+    expect(premature.stderr).toContain("release check .");
+    expect(premature.stderr).toContain("bunx --no-install sync-engine setup");
+    await expect(readFile(path, "utf8")).rejects.toThrow();
+
+    for (const name of Object.keys(executables)) {
+      await writePackage(directory, name, "1.0.0-beta.12");
+    }
+    const unconfigured = run(["brief", "init", path], directory);
+    expect(unconfigured.status).toBe(1);
+    expect(unconfigured.stderr).toContain("missing setup files");
+    await expect(readFile(path, "utf8")).rejects.toThrow();
+
+    await writeConfiguredApplication(directory);
     const initialized = run(["brief", "init", path], directory);
     expect(initialized.status).toBe(0);
     expect(initialized.stdout).toBe(

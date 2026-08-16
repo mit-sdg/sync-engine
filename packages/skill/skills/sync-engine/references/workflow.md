@@ -62,7 +62,8 @@ issue.
 ## Maintain the product brief
 
 Initialize a new brief from the packaged template; never guess or recreate its grammar.
-Run this command alone—do not chain a premature check:
+The command leaves no brief and prints bootstrap steps when release installation or setup
+is incomplete. Run it alone—do not chain a premature check:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief init design/brief.md
