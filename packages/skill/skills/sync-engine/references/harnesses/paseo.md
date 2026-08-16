@@ -15,9 +15,11 @@ paseo inspect "$PASEO_AGENT_ID" --json
 Cache its exact provider and model in active context. Do not infer the provider from the
 model ID: Pi `openai-codex/...` models still use `pi`, not `codex`. When the user has
 explicitly supplied descendant provider, model, and reasoning, use those values without
-provider discovery. Otherwise use provider model discovery once to select that exact
-model's advertised normal reasoning option; do not inherit coordinator elevation or
-guess an option ID.
+provider discovery. Do not pass `--mode` unless the user also supplied a mode that the
+provider advertises; in particular, omit `--mode` for Pi when `AvailableModes` is empty.
+The coordinator's displayed `Mode` is not a valid child option. Otherwise use provider
+model discovery once to select that exact model's advertised normal reasoning option;
+do not inherit coordinator elevation or guess an option ID.
 
 Before creating a child, confirm delegation is allowed by repository instructions.
 Launch every role in the application workspace with explicit cached provider, model,

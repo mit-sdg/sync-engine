@@ -323,6 +323,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("self-contained compiler");
     expect(entry).toContain("never substitutes for a role");
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
+    expect(entry).toContain("do not\n   read or recreate the packaged template directly");
     expect(entry).toContain("coordinator's exact provider and model");
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
@@ -340,7 +341,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(contract).toContain("deliver initial and follow-up prompts from files");
     expect(paseo).toContain("Pi `openai-codex/...` models still use `pi`, not `codex`");
     expect(paseo).toContain("use those values without\nprovider discovery");
-    expect(paseo).toContain("Otherwise use provider model discovery once");
+    expect(paseo).toContain("Otherwise use provider\nmodel discovery once");
+    expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
+    expect(paseo).toContain("displayed `Mode` is not a valid child option");
     expect(paseo).toContain("Wait for a file-delivered assignment");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
     expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');

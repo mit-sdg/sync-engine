@@ -46,8 +46,8 @@ brief → independent design → syntax → bounded independent criticism
    [harness contract](references/harnesses/contract.md). When Paseo is available, read
    the short [Paseo guide](references/harnesses/paseo.md); do not search for other
    orchestration instructions.
-4. Maintain the compact `design/brief.md` from
-   [the packaged template](prompts/templates/product-brief.md).
+4. Initialize and maintain `design/brief.md` with the workflow's brief commands; do not
+   read or recreate the packaged template directly.
 5. Build only the current role prompt with the compiler. Do not read role templates or
    common prompt files yourself; the compiler expands them for the delegated agent.
 6. Keep objective, decisions, current stage, critic count, and unresolved material
