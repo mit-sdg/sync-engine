@@ -201,6 +201,21 @@ Comments.User is Posting.Author
     }
   });
 
+  test("fails recognized noncanonical SSF with deterministic repairs", async () => {
+    const malformed = concept.replace(
+      "a set of Notes with an author Person and text String",
+      "a sequence of Notes\n  a discardedAt optional DateTime",
+    );
+    const root = await fixture({ "broken.md": malformed });
+    try {
+      await expect(checkDesignFiles(["broken.md"], root)).rejects.toThrow(
+        /broken\.md:.*\[SSF_NEAR_MISS_KEYWORD\].*suggestion: a seq of Notes with.*\[SSF_MISSING_WITH\].*suggestion: a seq of Notes with.*\[SSF_MISPLACED_OPTIONAL\].*suggestion: an optional discardedAt DateTime/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("attributes missing, non-regular, and unreadable operands", async () => {
     const root = await fixture({ "valid.md": composition, "unreadable.md": types });
     await mkdir(join(root, "directory.md"));

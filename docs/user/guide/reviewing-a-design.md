@@ -195,9 +195,9 @@ For every concept, also verify manually that:
   for reference material;
 - Types contains one `types` fence with only explicit `external` declarations;
   concept-owned and conventional names do not need local declarations;
-- State contains one raw `state` fence, follows SSF declaration, identity, type,
-  multiplicity, naming, and indentation rules, and does not claim that version 1
-  validates them;
+- State contains one raw `state` fence and follows SSF declaration, identity, type,
+  multiplicity, naming, and indentation rules; `check-design` validates only its
+  published set of recognized repairable forms, so review the remainder manually;
 - every action has explicit `where`/`then` branches and one terminal return or refusal
   per branch;
 - action results and query rows use parenthesized named fields;

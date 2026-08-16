@@ -101,6 +101,9 @@ Concept documents must pass the strict version-1 concept parser.
 Application-design documents use the same parser and assembly-independent validator as
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
+- recognized SSF declarations and fields avoid repairable near-miss keywords, article
+  errors, misplaced or collection-valued `optional`, and a missing `with` before
+  indented fields; unrecognized State lines remain opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
 - `computations` declarations have valid signatures, distinct input names, balanced
@@ -112,10 +115,11 @@ config-based `check`. Before assembly, `check-design` proves only these form pro
 - computation names, concrete type names, and binding left sides are not duplicated
   across the supplied application-design documents.
 
-The command does not discover additional files or require a complete corpus. It does
-not resolve typed links, binding left sides, or binding targets against selected
-instances or concept declarations. It also does not require declaration coverage,
-compare computation inputs with TypeScript, validate concept source agreement, or
+The command does not discover additional files or require a complete corpus. Its SSF
+validation is an intentionally incomplete form check, not a State parser, schema, or
+semantic type check. It does not resolve typed links, binding left sides, or binding
+targets against selected instances or concept declarations. It also does not require
+declaration coverage, compare computation inputs with TypeScript, validate concept source agreement, or
 inspect ordinary prose and computation-body semantics. Those checks need the selected
 assembly and remain the job of config-based `sync-engine check`. In particular, a
 binding target is accepted by shape even when the concept or concrete declaration is

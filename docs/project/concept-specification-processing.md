@@ -65,9 +65,18 @@ There is no legacy parser or format auto-detection.
 
 ### State is deliberately raw
 
-The State fence is normalized and retained but not parsed. Its intended language
-is SSF; the grammar is not yet stable enough for a correct parser. Processing
-must not add a partial parser, heuristic type scan, or private dialect.
+The State fence is normalized and retained but not parsed into structured IR. Its
+intended language is SSF; the grammar is not yet stable enough for an authoritative
+parser. Registration and assembly therefore do not depend on a partial parser,
+heuristic type scan, or private dialect.
+
+The independent `simple-state-form.ts` tooling module receives source-positioned
+Markdown fence lines and reports only a fixed set of recognized, mechanically
+repairable form issues. `check-design` runs it after the concept parser accepts the
+document and fails with every repair for that file. The validator ignores every line
+it cannot positively classify and neither changes concept IR nor runs during
+registration. New rules must preserve that recovering boundary and provide one
+concrete better form.
 
 Consequently source checking cannot yet prove state-owned type use, external
 parameter use, State/storage agreement, or the final owned type on a qualified
@@ -216,7 +225,7 @@ and generated artifacts must move together before downstream applications.
 
 ## Deferred design questions
 
-1. **SSF grammar and parser.** Choose the final external grammar, parse State into structured IR, validate owned and parameter types, and compare type-binding targets with state-owned types. Do not implement a partial approximation now.
+1. **Authoritative SSF grammar and parser.** Choose the final external grammar, parse State into structured IR, validate owned and parameter types, and compare type-binding targets with state-owned types. The limited form validator is deliberately not this parser.
 2. **Concrete-type taxonomy.** Reconsider whether provisional `concrete` should distinguish application-owned, platform-owned, and externally supplied types.
 3. **Reaction-tree granularity.** Reconsider whether authored reaction and endpoint trees should require branch- or consequence-level design coverage.
 4. **Low-level concept checker.** Design a supported concept-only checker to replace the removed `--vocabulary-module` mode without weakening config-based application guarantees.

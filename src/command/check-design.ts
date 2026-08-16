@@ -6,6 +6,10 @@ import {
   type AuthoredApplicationDesignDocument,
 } from "@engine/tooling/authored-application-design";
 import { scanDesignMarkdown } from "@engine/tooling/markdown-design-source";
+import {
+  validateSimpleStateForm,
+  type SimpleStateFormIssue,
+} from "@engine/tooling/simple-state-form";
 import { parseSpec } from "@engine/reactions/concepts/concept-spec";
 
 export interface CheckedDesignDocument {
@@ -18,6 +22,15 @@ const usage = `sync-engine check-design <paths...>
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function describeSimpleStateFormIssues(issues: readonly SimpleStateFormIssue[]): string {
+  return issues
+    .map(
+      ({ code, message, suggestion, location }) =>
+        `${location.source}:${location.line}:${location.column}: [${code}] ${message}\n  suggestion: ${suggestion}`,
+    )
+    .join("\n");
 }
 
 function resemblesConcept(markdown: string, source: string): boolean {
@@ -48,12 +61,21 @@ export async function checkDesignFiles(
       if (!(await stat(absolute)).isFile()) throw new Error("path is not a regular file");
       const markdown = await readFile(absolute, "utf8");
       let conceptError: unknown;
+      let isConcept = false;
       try {
         parseSpec(markdown);
-        checked.push({ path: label, kind: "concept" });
-        continue;
+        isConcept = true;
       } catch (error) {
         conceptError = error;
+      }
+      if (isConcept) {
+        const stateFence = scanDesignMarkdown(markdown, label).fences.find(
+          ({ info }) => info === "state",
+        );
+        const stateIssues = stateFence === undefined ? [] : validateSimpleStateForm(stateFence);
+        if (stateIssues.length > 0) throw new Error(describeSimpleStateFormIssues(stateIssues));
+        checked.push({ path: label, kind: "concept" });
+        continue;
       }
 
       try {

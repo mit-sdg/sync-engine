@@ -144,17 +144,22 @@ type universe nor requires every named type to have a declaration.
 
 ## `State`
 
-`State` contains exactly one `state` fence. The parser normalizes and retains
-the fence contents verbatim in concept-specification IR and application
-manifests. Version 1 does not parse or validate those contents.
+`State` contains exactly one `state` fence. The concept parser normalizes and
+retains the fence contents verbatim in concept-specification IR and application
+manifests. Version 1 does not parse State into structured IR or reject it during
+registration.
 
 Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
-Version 1 enforcement remains deferred: it does not implement a partial parser, scan
-type names heuristically, or define a private SSF dialect. Review SSF declaration,
-identity, multiplicity, type, naming, and indentation rules manually.
+The config-free `check-design` command separately applies an intentionally limited
+SSF form validator. It fails with a concrete repair when a recognized declaration or
+field uses a near-miss structural keyword, the wrong article before a structural
+keyword or `optional`, a misplaced `optional`, `optional` on a collection, or omits
+`with` before indented fields. Unrecognized State lines remain opaque; the validator
+is not a complete SSF parser and does not define State semantics. Review all other SSF
+declaration, identity, multiplicity, type, naming, and indentation rules manually.
 
-Because State is unparsed, tooling does not yet prove:
+Because State remains unparsed, tooling does not yet prove:
 
 - that action and query types are state-owned or external;
 - that every external type is used; or
