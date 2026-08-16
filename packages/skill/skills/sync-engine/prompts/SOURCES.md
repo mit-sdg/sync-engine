@@ -37,7 +37,7 @@ requires nonempty unfenced prose without imposing a scenario count.
 | final checks and acceptance                                    | `references/workflow.md#validate-once-and-stop`                                    |
 | `references/design-roles.md` closed context and catalog bounds | `references/workflow.md#select-compact-context`; designer and critic templates     |
 | designer read/write/output contract                            | `prompts/roles/designer.md#assignment`; `#return`                                  |
-| draft parser protocol                                          | `references/workflow.md#design-and-criticism`; designer grammar                    |
+| draft parser protocol                                          | designer self-check; `references/workflow.md#design-and-criticism` gate            |
 | critic read/output contract                                    | `prompts/roles/critic.md#assignment`                                               |
 | criticism and repair                                           | `references/workflow.md#design-and-criticism`                                      |
 | `references/implementation-roles.md` concept isolation         | `references/workflow.md#implement-in-bounded-phases`; concept-worker template      |

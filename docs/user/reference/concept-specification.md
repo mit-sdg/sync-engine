@@ -39,7 +39,8 @@ each and in this order:
 ## Queries
 ```
 
-The H1 is the concept-definition name, not an application instance name.
+The H1 is the concept-definition name, not an application instance name. Author it as
+a gerund naming the mechanism, such as `Tasking`, `Noting`, or `Authenticating`.
 Unknown, missing, reordered, or duplicate H2 sections are rejected. Subsection
 headings are also rejected: the six H2 sections are the complete document
 outline. `Purpose` and `Principle` must contain nonempty prose and no fenced

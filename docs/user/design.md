@@ -297,7 +297,8 @@ the gathering's existence, and creating a gathering establishes its host's
 membership as one invariant-preserving transition. A reaction would turn that
 transition into two independently failing actions.
 
-Use a familiar concept name only when its observable choices, lifecycle, and
+Name a concept with a gerund describing its mechanism—`Tasking`, not `Tasks`; `Noting`,
+not `Notes`. Use a familiar name only when its observable choices, lifecycle, and
 refusals match that mechanism. Otherwise narrow or rename it. A candidate
 suitable in every domain is often a utility or data structure. Test change
 containment by naming likely changes and the concepts or rules each would touch.

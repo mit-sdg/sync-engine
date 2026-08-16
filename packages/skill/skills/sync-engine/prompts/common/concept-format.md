@@ -1,10 +1,11 @@
 # Exact authored formats
 
-Each concept has one definition-name H1 and exactly these H2s, in order; no other
-headings or fences:
+Each concept has one gerund identifier H1 naming its mechanism (`# Tasking`, never
+`# Tasks` or `# Task Management`) and these H2s, in order;
+no other headings or fences:
 
 ````text
-# Name
+# Tasking
 
 ## Purpose
 Unfenced prose.
@@ -54,7 +55,8 @@ results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared
 names. Empty results use `: return ()` and bare `return`, never `return ()` or a
 standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
-within an action.
+within an action. Return declared names only: `return account`, never prose such as
+`return the session account`.
 
 Action names start with a letter; queries start `_`. Query resolution precedes the
 named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional State
@@ -75,3 +77,23 @@ Notes.Task is Tasking.Task
 
 The binding left side is `SelectedInstance.External`; the right side is a concrete or
 selected concept-owned type. Concept files contain no application links or computations.
+
+Each composition document has one nonempty H1 and decision prose. References are actual
+Markdown links to application declarations—not bare `view:` lines, routes, or
+concept actions:
+
+```md
+Editing [refreshes content](reaction:Forum.posts.RefreshDerivedContent).
+The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
+Visibility follows the [readability policy](view:Forum.posts.Readable).
+```
+
+Declare each executable computation once with an indented body:
+
+```computations
+normalizeTitle(raw: String) : String
+  Produces the canonical task title used by endpoint adaptation.
+```
+
+Prose may use `[normalization](computation:normalizeTitle)`. Routes stay in prose; link
+targets are exact dotted source paths.

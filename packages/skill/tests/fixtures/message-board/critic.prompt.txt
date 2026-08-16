@@ -147,7 +147,8 @@ wrong ownership; a wrong or missing action, refusal, lifecycle, visible result,
 authority, authorization, deletion, compensation, repair, external binding, or
 cross-concept failure rule; or failure to deliver brief-visible success. Explicitly
 check query cardinality/body agreement, optional State values in query rows, and every
-external binding's direction and actual owner.
+external binding's direction and actual owner. Reject bare typed-link text, route-shaped
+targets, and concept actions presented as application endpoint/view declarations.
 
 Application documents declare their linked endpoint trees, views, formers, and
 computations; do not demand an artificial API/adapter concept merely to own them.

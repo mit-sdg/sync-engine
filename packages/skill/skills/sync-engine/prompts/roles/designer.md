@@ -18,6 +18,15 @@ source, tests, generated artifacts, dependencies, framework internals, or prior 
 history. Read only supplied files and write only the design paths below. Treat catalog
 material as optional patterns, never authority.
 
+After writing the concept files, run only this read-only syntax command:
+
+```sh
+bunx --no-install sync-engine check-concepts design/concepts/*.md
+```
+
+Repair reported syntax and rerun until it passes. Do not inspect CLI or package internals.
+The coordinator will rerun the same gate independently.
+
 ## Files
 
 Create or revise only:

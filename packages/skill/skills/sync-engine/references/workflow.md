@@ -122,7 +122,9 @@ closed `design/` working boundary. `design/brief.md` is read-only. If the design
 returns at most two material questions, settle them, update the brief, and send a small
 file containing only the answers to the same designer.
 
-Enumerate draft concept files and run the installed parser from the application root:
+The designer runs its permitted syntax command and repairs syntax before returning.
+Then independently enumerate draft concept files and rerun the installed parser from
+the application root:
 
 ```sh
 bunx --no-install sync-engine check-concepts design/concepts/*.md

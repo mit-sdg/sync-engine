@@ -39,7 +39,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(1.5 * 1024);
-    expect(bytes(format)).toBeLessThanOrEqual(2.25 * 1024);
+    expect(bytes(format)).toBeLessThanOrEqual(3 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -59,8 +59,11 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(role).toContain("<!-- include: ../common/ssf.md -->");
     }
     expect(designer).toContain("<!-- include: ../common/concept-format.md -->");
+    expect(designer).toContain("bunx --no-install sync-engine check-concepts design/concepts/*.md");
+    expect(designer).toContain("coordinator will rerun the same gate independently");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
     expect(critic).toContain("check query cardinality/body agreement");
+    expect(critic).toContain("Reject bare typed-link text");
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
@@ -95,7 +98,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 10 * 1024,
+      designer: 11 * 1024,
       critic: 8.25 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
@@ -165,7 +168,13 @@ describe("compact sync-engine Agent Skill documents", () => {
       "_items(owner: Person) : many (item: Item, title: String)",
       "Tasking.Owner is Person",
       "Notes.Task is Tasking.Task",
+      "`# Tasking`, never `# Tasks` or `# Task Management`",
       "codes are unique within an action",
+      "never prose such as `return the session account`",
+      "[refreshes content](reaction:Forum.posts.RefreshDerivedContent)",
+      "[home feed](former:Forum.feed.HomeFeed)",
+      "[readability policy](view:Forum.posts.Readable)",
+      "```computations normalizeTitle(raw: String) : String",
       "A `one` body always promises one row",
     ]) {
       expect(format).toContain(rule);
@@ -366,6 +375,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("Run this command alone—do not chain a premature check");
     expect(workflow).toContain("Default to no catalog context");
     expect(workflow).toContain("do not rebuild or resend the full designer prompt");
+    expect(workflow).toContain("designer runs its permitted syntax command");
+    expect(workflow).toContain("independently enumerate draft concept files and rerun");
     expect(workflow).toContain("never aggregate candidate files into an intermediate file");
     expect(workflow).toContain("--input candidate=design/types.md");
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
@@ -415,6 +426,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       const url = new URL(path, skillRoot);
       const markdown = await text(url);
       for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
+        if (/^(?:reaction|view|former|computation):/.test(match[1]!)) continue;
         await expect(stat(new URL(match[1]!, url)), `${path}: ${match[1]}`).resolves.toBeDefined();
       }
     }
