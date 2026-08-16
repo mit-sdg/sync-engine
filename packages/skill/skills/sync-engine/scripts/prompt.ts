@@ -8,6 +8,7 @@ export const promptRoles = [
   "critic",
   "concept-worker",
   "application-worker",
+  "frontend-worker",
   "evidence-worker",
 ] as const;
 
@@ -18,6 +19,7 @@ const roleBudgets: Readonly<Record<PromptRole, number>> = {
   critic: 48 * 1024,
   "concept-worker": 24 * 1024,
   "application-worker": 48 * 1024,
+  "frontend-worker": 48 * 1024,
   "evidence-worker": 32 * 1024,
 };
 
@@ -107,7 +109,12 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     throw new PromptBuildError(`Unknown role: ${options.role}`);
   }
   const role = options.role as PromptRole;
-  const downstream = ["concept-worker", "application-worker", "evidence-worker"].includes(role);
+  const downstream = [
+    "concept-worker",
+    "application-worker",
+    "frontend-worker",
+    "evidence-worker",
+  ].includes(role);
   if (
     downstream &&
     (options.designRoot === undefined || options.expectedDesignDigest === undefined)

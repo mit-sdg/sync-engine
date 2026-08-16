@@ -13,7 +13,8 @@ framework itself.
 ```text
 brief → independent design → syntax → bounded independent criticism
 → approval or explicit preauthorization → concept implementation
-→ application implementation → independent evidence → required validation → handback
+→ application implementation → requested frontend → independent evidence
+→ required validation → handback
 ```
 
 ## Non-negotiable boundaries
@@ -21,7 +22,8 @@ brief → independent design → syntax → bounded independent criticism
 - Authored Markdown under `design/` is product and design authority. Generated output,
   implementation, analysis, and coordinator notes are not.
 - Use fresh native agents for design, criticism, and evidence, and separate bounded
-  roles for concept and application implementation. The coordinator writes only the
+  roles for concept, application, and requested frontend implementation. The
+  coordinator writes only the
   brief and temporary assignments/context, never role-owned design, production source,
   or tests. If a required role cannot launch, stop.
 - Use the coordinator's exact provider and model for every role, at that provider's

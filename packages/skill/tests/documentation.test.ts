@@ -33,13 +33,15 @@ function staticPrompt(roleSource: string, includes: Readonly<Record<string, stri
 }
 
 describe("compact sync-engine Agent Skill documents", () => {
-  test("ships three small semantic references and five role templates", async () => {
+  test("ships small semantic references and six role templates", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const http = await text(new URL("inputs/http.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(1.75 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
+    expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -50,6 +52,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "critic.md",
       "designer.md",
       "evidence-worker.md",
+      "frontend-worker.md",
     ]);
 
     const designer = await text(new URL("roles/designer.md", promptRoot));
@@ -102,6 +105,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       critic: 9 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
+      "frontend-worker": 2.5 * 1024,
       "evidence-worker": 2 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
@@ -189,9 +193,14 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("defines only the tiny include and input directive language", async () => {
     const allRoles = (
       await Promise.all(
-        ["designer", "critic", "concept-worker", "application-worker", "evidence-worker"].map(
-          (role) => text(new URL(`roles/${role}.md`, promptRoot)),
-        ),
+        [
+          "designer",
+          "critic",
+          "concept-worker",
+          "application-worker",
+          "frontend-worker",
+          "evidence-worker",
+        ].map((role) => text(new URL(`roles/${role}.md`, promptRoot))),
       )
     ).join("\n");
     const directives = [...allRoles.matchAll(/^<!-- ([^>]+) -->$/gm)].map(
@@ -216,6 +225,7 @@ describe("compact sync-engine Agent Skill documents", () => {
         "examples",
         "reference",
       ],
+      "frontend-worker": ["assignment", "brief", "public-interface", "examples", "reference"],
       "evidence-worker": ["assignment", "brief", "contracts", "public-interface", "existing-tests"],
     };
 
@@ -230,7 +240,12 @@ describe("compact sync-engine Agent Skill documents", () => {
   });
 
   test("forbids implementation roles from reading framework internals", async () => {
-    for (const role of ["concept-worker", "application-worker", "evidence-worker"]) {
+    for (const role of [
+      "concept-worker",
+      "application-worker",
+      "frontend-worker",
+      "evidence-worker",
+    ]) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
       expect(source).toContain(
         "Never inspect or search sync-engine framework implementation files",
@@ -300,7 +315,13 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(workflow).toContain("one normal-reasoning concept worker");
     expect(workflow).toContain("one normal-reasoning application worker");
+    expect(workflow).toContain("start one frontend worker");
+    expect(workflow).toContain("as a client of the assembled");
     expect(workflow).toContain("one fresh normal-reasoning evidence worker");
+
+    const frontend = await text(new URL("roles/frontend-worker.md", promptRoot));
+    expect(frontend).toContain("client of the application's endpoints");
+    expect(frontend).toContain("never reimplement or bypass");
     expect(workflow).toContain("split only for overflow or explicit parallelism");
     expect(workflow).toContain("Do not create a replacement agent");
     expect(workflow).toContain("design digest design");

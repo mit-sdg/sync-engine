@@ -46,6 +46,13 @@ requires nonempty unfenced prose without imposing a scenario count.
 | framework-internal read exclusion                              | all implementation templates; harness contract; bounded-phase workflow             |
 | contract blockers                                              | all implementation templates; `references/workflow.md#implement-in-bounded-phases` |
 
+## HTTP reference
+
+`prompts/inputs/http.md` compacts the `@mit-sdg/sync-engine-http` README, its public
+surface, and the message-board example's host, edge policy, and web client. Only the
+application and frontend workers receive it, as a `reference` input for web
+applications.
+
 ## Core concept-design guidance
 
 | Core `docs/user/design.md` section              | Destination                                                             |

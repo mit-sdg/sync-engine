@@ -213,6 +213,15 @@ completed concept public surfaces rather than complete internals, existing share
 wiring, and at most one useful example per mechanism. Its default budget is 48 KiB;
 split only for overflow or explicit parallelism.
 
+When the brief requests a frontend, start one frontend worker after application
+validation passes. It owns only assigned frontend paths and implements the requested
+form—browser, command-line, or another shell—strictly as a client of the assembled
+endpoints. Supply the brief, the assembled public interface, and at most one useful
+example per mechanism. For a web application, also pass the packaged HTTP reference
+`<skill-root>/prompts/inputs/http.md` as a `reference` input to the application and
+frontend workers; do not read it yourself. Its default budget is 48 KiB; split only
+for overflow or explicit parallelism.
+
 Finally start one fresh normal-reasoning evidence worker. Supply the brief,
 scenario-relevant approved contracts, assembled public interface, selected existing
 relevant tests, and focused commands—not the complete application. It may return that

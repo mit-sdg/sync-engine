@@ -96,6 +96,8 @@ export const releaseSourcePaths = [
   "packages/skill/skills/sync-engine/prompts/roles/critic.md",
   "packages/skill/skills/sync-engine/prompts/roles/concept-worker.md",
   "packages/skill/skills/sync-engine/prompts/roles/application-worker.md",
+  "packages/skill/skills/sync-engine/prompts/roles/frontend-worker.md",
+  "packages/skill/skills/sync-engine/prompts/inputs/http.md",
   "packages/skill/skills/sync-engine/prompts/roles/evidence-worker.md",
   "packages/skill/skills/sync-engine/prompts/templates/product-brief.md",
   catalogEntryIndexPath,
