@@ -5,6 +5,60 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.12] - 2026-08-16
+
+This beta adds a deterministic, self-contained Agent Skill prompt workflow and
+an assembly-independent design form check, and gives frontend implementation an
+explicit endpoint-only role.
+
+### Compatibility
+
+- Added `sync-engine check-design <paths...>` for an explicit mixed corpus of
+  concept, composition, and application-types Markdown. It applies the strict
+  concept parser, application-design form checks, and limited repair-oriented
+  Simple State Form checks without loading configuration, assembly, TypeScript,
+  or Git state.
+- Removed the narrower `sync-engine check-concepts` command. `check-design`
+  checks concept documents and also accepts application-design documents.
+- Renamed the catalog executable from `catalog` to `sync-engine-catalog`; the old
+  executable name is no longer installed.
+- The skill now includes deterministic product-brief, release-set, design-digest,
+  follow-up, and prompt-compilation commands. Its embedded TypeScript sources
+  bootstrap without installing application dependencies, while the npm package
+  also exposes the `sync-engine-skill` convenience executable.
+- Added a bounded frontend worker for briefs that request a browser, command-line,
+  or other shell. The worker consumes generated endpoint wire contracts and may
+  not import concepts, composition, assembly, or storage.
+
+### Migration
+
+- Replace `sync-engine check-concepts <paths...>` with
+  `sync-engine check-design <paths...>`. Treat its Simple State Form checks as
+  repair guidance only; config-based `sync-engine check` remains responsible for
+  selected-assembly links, coverage, source agreement, and TypeScript shapes.
+- Replace invocations of the removed `catalog` executable with
+  `sync-engine-catalog`.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.12` when they
+  are used together. Existing skill users should regenerate prompts through the
+  packaged compiler rather than carrying earlier role-reference text forward.
+
+### Generated formats
+
+- Core application manifests remain at version 1. Analysis application indexes,
+  impact traces, source indexes, and project snapshots remain at version 3.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.12`; no persisted-format version changes.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- Design form checking and skill prompt compilation are static tooling. They do
+  not add runtime schema validation, authorization, persistence, transactions,
+  or frontend trust guarantees; endpoint policies and operational controls
+  remain application responsibilities.
+
+[Release][1.0.0-beta.12] | [Changes since 1.0.0-beta.11][1.0.0-beta.12-compare]
+
 ## [1.0.0-beta.11] - 2026-08-15
 
 This beta adds a design-first Agent Skill and read-only analysis command, makes
@@ -965,6 +1019,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.12]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.12
+[1.0.0-beta.12-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.11...v1.0.0-beta.12
 [1.0.0-beta.11]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.11
 [1.0.0-beta.11-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.10...v1.0.0-beta.11
 [1.0.0-beta.10]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.10

@@ -909,6 +909,11 @@ async function verifySetupAndExamples(
     dependencies: {
       [core.workspace.packageName]: core.manifest.version,
     },
+    // Setup requires the exact published-style declaration. Resolve that
+    // declaration to the reviewed tarball while the release is still unpublished.
+    overrides: {
+      [core.workspace.packageName]: tarballSpecifier(setup, core.tarball),
+    },
     devDependencies: { "@types/node": "^24.0.0", typescript: "^6.0.0", "vite-plus": "0.2.6" },
   });
   run("bun", [resolve(installed, executable), "setup"], setup);
