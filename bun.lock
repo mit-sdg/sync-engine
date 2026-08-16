@@ -20,7 +20,7 @@
     },
     "packages/analysis": {
       "name": "@mit-sdg/sync-engine-analysis",
-      "version": "1.0.0-beta.11",
+      "version": "1.0.0-beta.12",
       "bin": {
         "sync-engine-analysis": "./dist/command.js",
       },
@@ -28,12 +28,12 @@
         "typescript": ">=6 <7",
       },
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.11",
+        "@mit-sdg/sync-engine": "1.0.0-beta.12",
       },
     },
     "packages/catalog": {
       "name": "@mit-sdg/sync-engine-catalog",
-      "version": "1.0.0-beta.11",
+      "version": "1.0.0-beta.12",
       "bin": {
         "sync-engine-catalog": "./dist/command.js",
       },
@@ -43,21 +43,21 @@
     },
     "packages/http": {
       "name": "@mit-sdg/sync-engine-http",
-      "version": "1.0.0-beta.11",
+      "version": "1.0.0-beta.12",
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.11",
+        "@mit-sdg/sync-engine": "1.0.0-beta.12",
       },
     },
     "packages/skill": {
       "name": "@mit-sdg/sync-engine-skill",
-      "version": "1.0.0-beta.11",
+      "version": "1.0.0-beta.12",
       "bin": {
         "sync-engine-skill": "./dist/command.js",
       },
       "dependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.11",
-        "@mit-sdg/sync-engine-analysis": "1.0.0-beta.11",
-        "@mit-sdg/sync-engine-catalog": "1.0.0-beta.11",
+        "@mit-sdg/sync-engine": "1.0.0-beta.12",
+        "@mit-sdg/sync-engine-analysis": "1.0.0-beta.12",
+        "@mit-sdg/sync-engine-catalog": "1.0.0-beta.12",
       },
     },
   },
@@ -635,8 +635,6 @@
     "@babel/core/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
-
-    "@mit-sdg/sync-engine-http/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
 
     "rolldown/@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
