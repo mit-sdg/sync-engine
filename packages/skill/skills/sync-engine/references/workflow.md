@@ -110,8 +110,10 @@ Enumerate draft concept files and run the installed parser from the application 
 bunx --no-install sync-engine check-concepts design/concepts/*.md
 ```
 
-Return diagnostics to the same designer. Parser failure blocks criticism. The
-coordinator does not repair design Markdown.
+Return diagnostics to the same designer in one file of at most 4 KiB containing only
+the parser output, affected paths, and repair request. Deliver that file directly
+through the harness; do not rebuild or resend the full designer prompt. Parser failure
+blocks criticism. The coordinator does not repair design Markdown.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Enumerate
 every concept and composition plus `types.md` through the candidate slot. Launch a fresh read-only

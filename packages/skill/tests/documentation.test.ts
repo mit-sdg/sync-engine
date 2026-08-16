@@ -325,6 +325,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("It never authors or\nrepairs concept/composition/type design");
     expect(workflow).toContain("Do not run a Vite+ migration");
     expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
+    expect(workflow).toContain("do not rebuild or resend the full designer prompt");
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
     expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
