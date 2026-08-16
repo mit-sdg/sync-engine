@@ -127,6 +127,7 @@ describe("release source facts", () => {
     });
     expect(projectedAnalysis.dependencies).toEqual({ typescript: ">=6 <7" });
     expect(JSON.parse(projected.get(skillManifest) ?? "").dependencies).toEqual({
+      "@mit-sdg/sync-engine": currentVersion,
       "@mit-sdg/sync-engine-analysis": currentVersion,
       "@mit-sdg/sync-engine-catalog": currentVersion,
     });

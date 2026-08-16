@@ -706,8 +706,13 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
   if (existsSync(resolve(consumer, "node_modules/@mit-sdg/sync-engine"))) {
     throw new Error("catalog-only installation unexpectedly installed core");
   }
-  const executable = catalog.manifest.bin?.catalog;
-  if (executable === undefined) throw new Error("catalog package does not provide catalog");
+  const executable = catalog.manifest.bin?.["sync-engine-catalog"];
+  if (executable === undefined) {
+    throw new Error("catalog package does not provide sync-engine-catalog");
+  }
+  if (catalog.manifest.bin?.catalog !== undefined) {
+    throw new Error("catalog package still exposes the ambiguous catalog command");
+  }
   const command = resolve(
     consumer,
     "node_modules",
@@ -731,10 +736,11 @@ async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>)
   const catalog = workspaceArtifact(artifacts, workspaceById("catalog"));
   const core = workspaceArtifact(artifacts, coreWorkspace);
   if (
+    skill.manifest.dependencies?.[core.workspace.packageName] !== core.manifest.version ||
     skill.manifest.dependencies?.[analysis.workspace.packageName] !== analysis.manifest.version ||
     skill.manifest.dependencies?.[catalog.workspace.packageName] !== catalog.manifest.version
   ) {
-    throw new Error("skill must depend on the exact matching analysis and catalog versions");
+    throw new Error("skill must depend on the exact matching core, analysis, and catalog versions");
   }
   await writePackageManifest(resolve(consumer, "package.json"), {
     name: "skill-only",
@@ -750,7 +756,12 @@ async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>)
     },
   });
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumer);
-  for (const required of ["sync-engine", "sync-engine-analysis", "catalog"]) {
+  for (const required of [
+    "sync-engine",
+    "sync-engine-analysis",
+    "sync-engine-catalog",
+    "sync-engine-skill",
+  ]) {
     if (!existsSync(resolve(consumer, "node_modules/.bin", required))) {
       throw new Error(`skill installation did not expose ${required}`);
     }
@@ -809,19 +820,39 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   const entry = await readFile(resolve(installed, "skills/sync-engine/SKILL.md"), "utf8");
   if (
     !entry.startsWith("---\nname: sync-engine\ndescription:") ||
-    !entry.includes("Native subagents are required")
+    !entry.includes("fresh native agents for design, criticism, and evidence")
   ) {
     throw new Error("skill package does not contain the required sync-engine Agent Skill");
   }
-  if (skill.manifest.bin !== undefined) {
-    throw new Error("documentation-only skill package unexpectedly declares an executable");
+  const skillExecutable = skill.manifest.bin?.["sync-engine-skill"];
+  if (skillExecutable === undefined) {
+    throw new Error("skill package does not provide sync-engine-skill");
   }
   const bin = resolve(
     consumer,
     "node_modules/.bin",
     process.platform === "win32" ? "sync-engine-skill.cmd" : "sync-engine-skill",
   );
-  if (existsSync(bin)) throw new Error("skill-only installation exposed an obsolete executable");
+  const brief = resolve(consumer, "design/brief.md");
+  await mkdir(dirname(brief), { recursive: true });
+  await writeFile(
+    brief,
+    `# Packed skill\n\n## Objective\n\nBuild a packed application.\n\n## Product decisions\n\nNone.\n\n## Visible success\n\n- The application starts.\n\n## Expected refusals\n\nNone.\n\n## Assumptions\n\nNone.\n\n## Non-goals\n\nNone.\n\n## Open decisions\n\nNone.\n`,
+  );
+  run(bin, ["brief", "check", brief], consumer);
+  const prompt = resolve(consumer, "designer.prompt.md");
+  run(
+    bin,
+    ["prompt", "build", "--role", "designer", "--input", `brief=${brief}`, "--output", prompt],
+    consumer,
+  );
+  const promptSource = await readFile(prompt, "utf8");
+  if (
+    !promptSource.includes("# Independent designer") ||
+    !promptSource.includes("# Packed skill")
+  ) {
+    throw new Error("packed skill compiler did not produce the designer prompt");
+  }
 }
 
 async function verifySetupAndExamples(

@@ -127,12 +127,13 @@ states, customization, or future-proofing that the requested capability does not
 need. A smaller complete mechanism is preferable to speculative behavior that creates
 new authority and failure cases.
 
-A principle is one concrete prose scenario that demonstrates the purpose. Start
-from empty state, perform setup through the concept's own actions, observe
-results through its queries, and include the refusals that distinguish the
-mechanism. Do not turn Principle into a container for subordinate reference
-sections or fenced notation. A principle that requires a peer action describes
-a workflow or exposes a wrong boundary.
+A principle uses one or more concise archetypal prose scenarios to demonstrate
+how the mechanism fulfills its purpose; it is not the complete specification.
+Include setup and enough actors, action occurrences, and observations to show the
+value. Include variants, errors, or refusals only when they are essential to the
+purpose. A principle may mention clearly external context, but the concept's State
+and Actions must not depend on a peer. Do not turn Principle into subordinate
+reference sections or fenced notation.
 
 [Gathering](../../examples/reading-circle/design/concepts/Gathering.md) is the
 throughline. It creates a named gathering, establishes its host as a member,

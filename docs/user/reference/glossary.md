@@ -182,9 +182,10 @@ behavior only.
 
 ## Principle
 
-A concrete behavioral sequence in a concept specification that demonstrates the
-concept's purpose from its initial state. A principle test runs the concept
-directly, without assembly; the specification text itself is not executable.
+One or more concise archetypal scenarios in a concept specification that demonstrate
+how the concept fulfills its purpose. A principle is not the complete specification.
+A principle test runs the concept directly, without assembly; the specification text
+itself is not executable.
 
 ## Query
 

@@ -3,12 +3,12 @@ import { resolve } from "node:path";
 import { CatalogRegistry } from "./registry.ts";
 import type { EntryManifest } from "./types.ts";
 
-const USAGE = `Usage: catalog <command> [arguments]
+const USAGE = `Usage: sync-engine-catalog <command> [arguments]
 
-  catalog list [concept|recipe]
-  catalog show <entry> [--raw]
-  catalog source <entry> <selector> [--raw]
-  catalog help`;
+  sync-engine-catalog list [concept|recipe]
+  sync-engine-catalog show <entry> [--raw]
+  sync-engine-catalog source <entry> <selector> [--raw]
+  sync-engine-catalog help`;
 
 function rawArgument(args: readonly string[], count: number): { values: string[]; raw: boolean } {
   const raw = args.at(-1) === "--raw";

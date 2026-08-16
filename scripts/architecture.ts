@@ -714,13 +714,14 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
       (workspace.declarationSnapshot === path ||
         knownWorkspaceAsset ||
         (workspace.requiredPackedFiles as readonly string[]).includes(workspaceRelative) ||
-        ["tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
+        ["plan.md", "tsconfig.json", "tsconfig.build.json"].includes(workspaceRelative) ||
         (workspaceRelative.startsWith("src/") && workspaceRelative.endsWith(".ts")) ||
         (workspaceRelative.startsWith("tests/") &&
           (workspaceRelative.endsWith(".ts") ||
             workspaceRelative.endsWith(".json") ||
             workspaceRelative.endsWith(".md") ||
-            workspaceRelative.endsWith(".mjs"))));
+            workspaceRelative.endsWith(".mjs") ||
+            workspaceRelative.endsWith(".txt"))));
     const known =
       (parts.length === 1 && allowedRootFiles.has(path)) ||
       (head === ".github" &&

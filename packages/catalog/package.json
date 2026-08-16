@@ -17,7 +17,7 @@
     "directory": "packages/catalog"
   },
   "bin": {
-    "catalog": "./dist/command.js"
+    "sync-engine-catalog": "./dist/command.js"
   },
   "files": [
     "CONTRIBUTING.md",

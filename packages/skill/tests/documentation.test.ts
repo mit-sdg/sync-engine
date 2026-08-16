@@ -1,14 +1,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
 
-const root = new URL("../", import.meta.url);
-const skillRoot = new URL("skills/sync-engine/", root);
-const entry = new URL("SKILL.md", skillRoot);
-const references = {
-  workflow: new URL("references/workflow.md", skillRoot),
-  design: new URL("references/design-roles.md", skillRoot),
-  implementation: new URL("references/implementation-roles.md", skillRoot),
-};
+const packageRoot = new URL("../", import.meta.url);
+const skillRoot = new URL("skills/sync-engine/", packageRoot);
+const promptRoot = new URL("prompts/", skillRoot);
 
 async function text(url: URL): Promise<string> {
   return readFile(url, "utf8");
@@ -26,200 +21,239 @@ async function filesBelow(directory: URL, prefix = ""): Promise<string[]> {
   return found.sort();
 }
 
-describe("sync-engine Agent Skill", () => {
-  test("requires native independent roles and pauses when they are unavailable", async () => {
-    const source = await text(entry);
-    expect(source).toMatch(/^---\nname: sync-engine\ndescription:/);
-    expect(source).toContain("applications using concept design and @mit-sdg/sync-engine");
-    expect(source).toContain("Native subagents are required");
-    expect(source).toContain("pause and tell the user");
-    expect(source).toContain("do not imitate independence with sequential\n  self-review");
-    expect(source).toContain("routine/normal reasoning");
-    for (const role of [
-      "design",
-      "criticism",
-      "concept implementation",
-      "integration",
-      "evidence",
-    ]) {
-      expect(source).toContain(role);
-    }
-  });
+function bytes(value: string): number {
+  return Buffer.byteLength(value, "utf8");
+}
 
-  test("offers assumption mode or an unbounded interactive design discussion", async () => {
-    const entrySource = await text(entry);
-    const workflow = await text(references.workflow);
-    expect(entrySource).toContain("discuss the design first (recommended)");
-    expect(entrySource).toContain("proceed with general assumptions");
-    expect(entrySource).toContain("one or\n   two material product questions per turn");
-    expect(workflow).toContain("Before setup, baseline work, or design");
-    expect(workflow).toContain("exactly one or two questions");
-    expect(workflow).toContain("concrete answer options");
-    expect(workflow).toContain("identify one recommended answer");
-    expect(workflow).toContain("continue discussing the design or move to a draft");
-    expect(workflow).toContain("do not impose a cumulative cap");
-    expect(workflow).toContain("Do not ask product-discovery questions");
-    expect(workflow).toContain("candidate Markdown makes them\n   reviewable");
-  });
+function staticPrompt(roleSource: string, design: string): string {
+  return roleSource.replace("<!-- include: ../common/design.md -->", design.trimEnd());
+}
 
-  test("closes and bounds designer context and output", async () => {
-    const source = await text(references.design);
-    expect(source).toContain("exact complete text directly in each applicable role prompt");
-    expect(source).toMatch(/no more than five concept\s+designs and two recipes/);
-    expect(source).toMatch(/Do not supply catalog\s+implementation source during design/);
-    for (const freedom of ["copy", "simplify", "split", "combine", "rename"]) {
-      expect(source).toContain(freedom);
-    }
-    expect(source).toContain("Exactly the application's `design/` directory");
-    expect(source).toContain("Markdown under that directory only");
-    expect(source).toContain("Complete `concepts/*.md`, `compositions/*.md`, and `types.md`");
-    expect(source).toContain("at most two unresolved product questions");
-    for (const forbidden of [
-      "application TypeScript",
-      "generated files",
-      "Git",
-      "package configuration",
-      "tests",
-      "framework implementation",
-      "framework API documentation",
-    ]) {
-      expect(source).toContain(forbidden);
-    }
-    expect(source).toContain("must not write `application.md`");
-  });
+describe("compact sync-engine Agent Skill documents", () => {
+  test("ships one small semantic core and five role templates", async () => {
+    const design = await text(new URL("common/design.md", promptRoot));
+    expect(bytes(design)).toBeLessThanOrEqual(8 * 1024);
 
-  test("uses the core parser and a fresh read-only critic before one user approval", async () => {
-    const source = await text(references.design);
-    expect(source).toContain("bunx sync-engine check-concepts design/concepts/*.md");
-    expect(source).toContain("Send each diagnostic back to the original\ndesigner subagent");
-    expect(source).toContain("create a fresh native critic subagent");
-    expect(source).toContain("is read-only");
-    expect(source).toContain("does not edit files or create a persistent report");
-    expect(source).toContain("at most two\ncritic-driven repair turns");
-    expect(source).toContain("links the actual Markdown");
-    expect(source).toContain("approve, revise, or discuss");
-    expect(source).toContain("recommend one next action");
-    expect(source).toContain("without a cumulative cap");
-    expect(source).toContain("user-directed discussion or revision rounds");
-    expect(source).toContain("rerun syntax and fresh criticism");
-  });
-
-  test("gives implementation roles narrow disjoint contexts", async () => {
-    const source = await text(references.implementation);
-    expect(source).toContain("run all independent concept workers\nconcurrently");
-    expect(source).toContain("that concept's approved specification");
-    expect(source).toContain("at most one selected catalog or local implementation example");
-    expect(source).toContain("exact `src/concepts/<name>/` directory and focused test paths");
-    expect(source).toContain("one worker for each\napproved `design/compositions/<name>.md`");
-    expect(source).toContain("only the concept specifications referenced by that document");
-    expect(source).toContain("No earlier worker\nmay opportunistically perform this role");
-    expect(source).toContain("only newly assigned\nobjective-driven scenario and test paths");
-    expect(source).toContain("must not edit\nproduction source");
-  });
-
-  test("requires renewed review for material design changes", async () => {
-    const workflow = await text(references.workflow);
-    const implementation = await text(references.implementation);
-    expect(workflow).toContain("show the changed design to the user");
-    expect(workflow).toContain("obtain\nrenewed approval");
-    expect(implementation).toContain(
-      "No worker may weaken, reinterpret, or silently edit approved Markdown",
+    const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
+      path.endsWith(".md"),
     );
-    expect(implementation).toMatch(/obtain renewed\s+approval before resuming affected workers/);
-  });
-
-  test("defines safe setup, bounded start baselines, and concise acceptance", async () => {
-    const source = await text(references.workflow);
-    expect(source).toContain("initialize or reuse a Bun package");
-    expect(source).toContain("install that same exact version with Bun");
-    expect(source).toContain("Run the installed `sync-engine setup`");
-    expect(source).toContain("Run `bun run start` as a bounded smoke baseline");
-    expect(source).toContain("documented readiness signal");
-    expect(source).toContain("request graceful shutdown");
-    expect(source).toContain("Do not rerun setup merely to impose default files or scripts");
-    expect(source).toContain("Acceptance closes the conversation only");
-  });
-
-  test("ships only the documentation workflow and no obsolete support machinery", async () => {
-    const manifest = JSON.parse(await text(new URL("package.json", root))) as {
-      bin?: unknown;
-      exports?: unknown;
-      files?: string[];
-      scripts?: unknown;
-    };
-    expect(manifest.bin).toBeUndefined();
-    expect(manifest.scripts).toBeUndefined();
-    expect(manifest.exports).toEqual({});
-    expect(manifest.files).toEqual(["LICENSE", "NOTICE", "README.md", "skills"]);
-    expect(await filesBelow(root)).toEqual([
-      "LICENSE",
-      "NOTICE",
-      "README.md",
-      "package.json",
-      "skills/sync-engine/SKILL.md",
-      "skills/sync-engine/references/design-roles.md",
-      "skills/sync-engine/references/implementation-roles.md",
-      "skills/sync-engine/references/workflow.md",
-      "tests/documentation.test.ts",
+    expect(roleFiles).toEqual([
+      "application-worker.md",
+      "concept-worker.md",
+      "critic.md",
+      "designer.md",
+      "evidence-worker.md",
     ]);
 
-    const shipped = [
-      await text(new URL("README.md", root)),
-      await text(entry),
-      await text(references.workflow),
-      await text(references.design),
-      await text(references.implementation),
-    ].join("\n");
-    for (const removed of [
-      "sync-engine-skill snapshot",
-      "sync-engine-skill object",
-      "sync-engine-skill spec",
-      "sync-engine-skill design-evidence",
-      "project-snapshot",
-      "spec-set",
-      "designDigest",
-      "worktreeDigest",
-    ]) {
-      expect(shipped).not.toContain(removed);
+    const designer = await text(new URL("roles/designer.md", promptRoot));
+    const critic = await text(new URL("roles/critic.md", promptRoot));
+    expect(designer).toContain("<!-- include: ../common/design.md -->");
+    expect(critic).toContain("<!-- include: ../common/design.md -->");
+    for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
+      expect(await text(new URL(`roles/${role}`, promptRoot))).not.toContain("<!-- include:");
     }
   });
 
-  test("installs matching context tools and limits analysis to eligible roles", async () => {
-    const manifest = JSON.parse(await text(new URL("package.json", root))) as {
+  test("reduces static designer and critic guidance by at least sixty percent", async () => {
+    const repositoryRoot = new URL("../../", packageRoot);
+    const oldDesign = await text(new URL("docs/user/design.md", repositoryRoot));
+    const grammar = await text(
+      new URL("docs/user/reference/concept-specification.md", repositoryRoot),
+    );
+    const review = await text(new URL("docs/user/guide/reviewing-a-design.md", repositoryRoot));
+    const compact = await text(new URL("common/design.md", promptRoot));
+    const designer = staticPrompt(await text(new URL("roles/designer.md", promptRoot)), compact);
+    const critic = staticPrompt(await text(new URL("roles/critic.md", promptRoot)), compact);
+
+    expect(bytes(designer)).toBeLessThanOrEqual(bytes(oldDesign + grammar) * 0.4);
+    expect(bytes(critic)).toBeLessThanOrEqual(bytes(oldDesign + grammar + review) * 0.4);
+  });
+
+  test("keeps semantic design rules direct and self-contained", async () => {
+    const design = await text(new URL("common/design.md", promptRoot));
+    for (const heading of [
+      "Useful independent concepts",
+      "State and ownership",
+      "Actions and lifecycle",
+      "Composition and failure",
+      "Authorization and external effects",
+      "Authored application design",
+    ]) {
+      expect(design).toContain(`## ${heading}`);
+    }
+    for (const rule of [
+      "one semantic owner",
+      "External types are generic and identities opaque",
+      "Race-sensitive and security-critical rules stay in the action",
+      "Expected domain rejection is a declared refusal",
+      "A reaction cannot make separate owners atomic",
+      "Request data is a claim, not\nauthentication",
+      "State is unparsed in version 1",
+      "Neither proves boundaries",
+    ]) {
+      expect(design).toContain(rule);
+    }
+
+    expect(design).toContain("Principle uses one or more short archetypal scenarios");
+    expect(design).toContain("refusals only when essential to the purpose");
+    expect(design).toContain("External context is allowed");
+    expect(design).not.toContain("Principle is one concrete scenario");
+  });
+
+  test("defines only the tiny include and input directive language", async () => {
+    const allRoles = (
+      await Promise.all(
+        ["designer", "critic", "concept-worker", "application-worker", "evidence-worker"].map(
+          (role) => text(new URL(`roles/${role}.md`, promptRoot)),
+        ),
+      )
+    ).join("\n");
+    const directives = [...allRoles.matchAll(/^<!-- ([^>]+) -->$/gm)].map(
+      (match) => match[1]?.split(":", 1)[0],
+    );
+    expect(new Set(directives)).toEqual(new Set(["include", "input", "input?"]));
+
+    expect(allRoles).not.toMatch(/\{\{|{%|frontmatter|condition:|loop:/);
+  });
+
+  test("gives every role narrow file inputs and mutation boundaries", async () => {
+    const expectedSlots: Record<string, string[]> = {
+      designer: ["brief", "existing-design", "catalog"],
+      critic: ["brief", "candidate", "catalog"],
+      "concept-worker": ["assignment", "specifications", "examples", "reference"],
+      "application-worker": [
+        "assignment",
+        "brief",
+        "design",
+        "concept-surfaces",
+        "shared-wiring",
+        "examples",
+        "reference",
+      ],
+      "evidence-worker": ["assignment", "brief", "contracts", "public-interface", "existing-tests"],
+    };
+
+    for (const [role, expected] of Object.entries(expectedSlots)) {
+      const source = await text(new URL(`roles/${role}.md`, promptRoot));
+      const slots = [...source.matchAll(/^<!-- input\??: ([a-z-]+) -->$/gm)].map(
+        (match) => match[1],
+      );
+      expect(slots).toEqual(expected);
+      expect(source).toMatch(/read-only|Read only|read and write paths|Inspect only/);
+    }
+  });
+
+  test("uses a compact brief without treating every open choice as blocking", async () => {
+    const template = await text(new URL("templates/product-brief.md", promptRoot));
+    expect(bytes(template)).toBeLessThan(2 * 1024);
+    for (const heading of [
+      "Objective",
+      "Product decisions",
+      "Visible success",
+      "Expected refusals",
+      "Assumptions",
+      "Non-goals",
+      "Open decisions",
+    ]) {
+      expect(template).toContain(`## ${heading}`);
+    }
+    expect(template).toContain("D1 — <Decision title> (User)");
+    expect(template).toContain("Open implementation choices may remain");
+    expect(template).not.toContain("Decision:**");
+  });
+
+  test("bounds automatic criticism and stops after success", async () => {
+    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    expect(workflow).toMatch(/Two critic\s+passes are the maximum automatic budget/);
+    expect(workflow).toContain("No material findings ends criticism immediately");
+    expect(workflow).toContain("Review more thoroughly");
+    expect(workflow).toContain("authorizes one more\ndesigner repair and fresh critic pass");
+    expect(workflow).toContain("Once required checks pass, hand back immediately");
+    expect(workflow).toContain("do not open another repair or criticism cycle");
+  });
+
+  test("uses one implementation worker per phase and independent evidence", async () => {
+    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    expect(workflow).toContain("one normal-reasoning concept worker");
+    expect(workflow).toContain("one normal-reasoning application worker");
+    expect(workflow).toContain("one fresh normal-reasoning evidence worker");
+    expect(workflow).toContain("split only for overflow or explicit parallelism");
+    expect(workflow).toContain("Do not create a replacement agent");
+
+    const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));
+    expect(evidence).toContain("existing evidence is sufficient");
+    expect(evidence).toContain("Do not edit production source");
+  });
+
+  test("packages one executable with the exact matching release set", async () => {
+    const manifest = JSON.parse(await text(new URL("package.json", packageRoot))) as {
       version: string;
+      bin: Record<string, string>;
+      exports: unknown;
+      files: string[];
       dependencies: Record<string, string>;
     };
+    expect(manifest.bin).toEqual({ "sync-engine-skill": "./dist/command.js" });
+    expect(manifest.exports).toEqual({});
+    expect(manifest.files).toEqual(["LICENSE", "NOTICE", "README.md", "dist", "skills"]);
     expect(manifest.dependencies).toEqual({
+      "@mit-sdg/sync-engine": manifest.version,
       "@mit-sdg/sync-engine-analysis": manifest.version,
       "@mit-sdg/sync-engine-catalog": manifest.version,
     });
-    const workflow = await text(references.workflow);
-    const design = await text(references.design);
-    const implementation = await text(references.implementation);
-    expect(workflow).toContain("sync-engine-analysis summary");
-    expect(workflow).toContain("Ordinary repository search and source reading is fallback only");
-    expect(workflow).toContain("outside the manifest");
-    expect(workflow).toContain("concrete compiler/runtime\nfailure");
-    expect(design).toContain("must not contain analysis results");
-    expect(design).toContain("must not\ninvoke `sync-engine-analysis`");
-    expect(implementation).toContain("exact context normally makes\nanalysis unnecessary");
-    expect(implementation).toContain("sync-engine-analysis search");
-    expect(implementation).toContain("sync-engine-analysis\ndiagnostics");
-    expect(implementation).not.toMatch(/concept worker[\s\S]{0,500}sync-engine-analysis search/);
+
+    const catalog = JSON.parse(await text(new URL("../catalog/package.json", packageRoot))) as {
+      bin: Record<string, string>;
+    };
+    expect(catalog.bin).toEqual({ "sync-engine-catalog": "./dist/command.js" });
+    expect(catalog.bin).not.toHaveProperty("catalog");
+  });
+
+  test("keeps harness guidance minimal and file-based", async () => {
+    const entry = await text(new URL("SKILL.md", skillRoot));
+    const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
+    const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
+    expect(entry).toContain("Paseo guide");
+    expect(contract).toContain("normal reasoning setting at launch");
+    expect(contract).toContain("deliver initial and follow-up prompts from files");
+    expect(paseo).toContain("Wait for a file-delivered assignment");
+    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file"');
+    expect(paseo).toContain("Never put generated prompt contents");
+  });
+
+  test("keeps source inventory coverage explicit", async () => {
+    const inventory = await text(new URL("SOURCES.md", promptRoot));
+    for (const source of [
+      "`references/workflow.md`",
+      "`references/design-roles.md`",
+      "`references/implementation-roles.md`",
+      "`docs/user/design.md`",
+      "`docs/user/reference/concept-specification.md`",
+      "`docs/user/guide/reviewing-a-design.md`",
+    ]) {
+      expect(inventory).toContain(source);
+    }
+    for (const canonSource of [
+      "background/concept-design-method.md",
+      "background/concept-specifications.md",
+      "background/concept-design-rubric.md",
+      "background/concept-design-types.md",
+      "background/concept-state-notation.md",
+      "background/concept-synchronizations.md",
+    ]) {
+      expect(inventory).toContain(canonSource);
+    }
+    expect(inventory).toContain("may use more than one archetypal scenario");
+    expect(inventory).toContain("independent review is\nthe decision gate");
   });
 
   test("keeps every packaged local Markdown link valid", async () => {
-    for (const path of [
-      "README.md",
-      "skills/sync-engine/SKILL.md",
-      "skills/sync-engine/references/workflow.md",
-      "skills/sync-engine/references/design-roles.md",
-      "skills/sync-engine/references/implementation-roles.md",
-    ]) {
-      const url = new URL(path, root);
+    const files = (await filesBelow(skillRoot)).filter((path) => path.endsWith(".md"));
+    for (const path of files) {
+      const url = new URL(path, skillRoot);
       const markdown = await text(url);
       for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
-        await expect(stat(new URL(match[1], url)), `${path}: ${match[1]}`).resolves.toBeDefined();
+        await expect(stat(new URL(match[1]!, url)), `${path}: ${match[1]}`).resolves.toBeDefined();
       }
     }
   });
