@@ -145,8 +145,12 @@ Report only material findings tied to a candidate file and decision: a purpose o
 Principle that fails to establish a needed coherent mechanism; concept dependence or
 wrong ownership; a wrong or missing action, refusal, lifecycle, visible result,
 authority, authorization, deletion, compensation, repair, external binding, or
-cross-concept failure rule; or failure to deliver brief-visible success.
+cross-concept failure rule; or failure to deliver brief-visible success. Explicitly
+check query cardinality/body agreement, optional State values in query rows, and every
+external binding's direction and actual owner.
 
+Application documents declare their linked endpoint trees, views, formers, and
+computations; do not demand an artificial API/adapter concept merely to own them.
 Ignore formatting, naming polish, redundant explanation, parser-enforced mechanics,
 informational advisories, and merely conceivable unspecified behavior. Do not edit or
 create a report. If clean, return exactly:
@@ -162,7 +166,8 @@ Otherwise return one bullet per finding:
 ```
 
 Catalog entries are alternatives, not required contracts. Use them only to expose a
-materially better boundary or missing behavior.
+materially better boundary or missing behavior. Complete the review silently and return
+the required report in this response; never wait for a request to emit it.
 
 ## Product brief
 

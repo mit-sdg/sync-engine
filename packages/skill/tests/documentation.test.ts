@@ -39,7 +39,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(1.5 * 1024);
-    expect(bytes(format)).toBeLessThanOrEqual(2 * 1024);
+    expect(bytes(format)).toBeLessThanOrEqual(2.25 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -60,6 +60,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     }
     expect(designer).toContain("<!-- include: ../common/concept-format.md -->");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
+    expect(critic).toContain("check query cardinality/body agreement");
+    expect(critic).toContain("do not demand an artificial API/adapter concept");
+    expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
       expect(await text(new URL(`roles/${role}`, promptRoot))).not.toContain("<!-- include:");
     }
@@ -93,7 +96,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
       designer: 10 * 1024,
-      critic: 8 * 1024,
+      critic: 8.25 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
       "evidence-worker": 2 * 1024,
@@ -162,6 +165,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "_items(owner: Person) : many (item: Item, title: String)",
       "Tasking.Owner is Person",
       "Notes.Task is Tasking.Task",
+      "codes are unique within an action",
+      "A `one` body always promises one row",
     ]) {
       expect(format).toContain(rule);
     }
@@ -261,6 +266,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const normalized = workflow.replace(/\s+/g, " ");
     expect(normalized).toContain("Two critic passes are the normal automatic budget");
     expect(normalized).toContain("No material findings ends criticism immediately");
+    expect(normalized).toContain("critic bullets verbatim plus only a neutral request");
+    expect(normalized).toContain("adds no diagnosis, interpretation, or proposed repair");
     expect(normalized).toContain(
       "Review more thoroughly” authorizes one more designer repair and fresh critic pass",
     );
@@ -369,6 +376,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo).toContain("Otherwise use provider\nmodel discovery once");
     expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
     expect(paseo).toContain("displayed `Mode` is not a valid child option");
+    expect(paseo).toContain("Launch every role without probing command help");
     expect(paseo).toContain("Wait for a file-delivered assignment");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
     expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');

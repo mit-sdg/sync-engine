@@ -22,10 +22,14 @@ model discovery once to select that exact model's advertised normal reasoning op
 do not inherit coordinator elevation or guess an option ID.
 
 Before creating a child, confirm delegation is allowed by repository instructions.
-Launch every role in the application workspace with explicit cached provider, model,
-normal reasoning, background mode, JSON output, and this fixed prompt:
+Launch every role without probing command help, using explicit cached values and this
+exact shape (omit `--mode`):
 
-> Wait for a file-delivered assignment. Do not inspect files, modify files, or begin work.
+```sh
+paseo run --provider <provider> --model <model> --thinking <normal> --cwd "$PWD" \
+  --background --json --title <role-title> \
+  "Wait for a file-delivered assignment. Do not inspect files, modify files, or begin work."
+```
 
 Capture the child identifier. If launch output does not attest resolved parent,
 provider, model, reasoning, and working directory, inspect the child once. Stop before

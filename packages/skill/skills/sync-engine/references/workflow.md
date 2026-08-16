@@ -150,8 +150,10 @@ the count in active coordinator state:
 
 1. Critic pass 1 reviews the candidate.
 2. No material findings ends criticism immediately.
-3. Material findings may return once to the designer. Rerun syntax after repair, then
-   launch fresh critic pass 2.
+3. Material findings may return once to the designer. The repair file contains the
+   critic bullets verbatim plus only a neutral request to resolve them; the coordinator
+   adds no diagnosis, interpretation, or proposed repair. Rerun syntax after repair,
+   then launch fresh critic pass 2.
 
 After pass 2, behavior depends on authorization mode:
 
