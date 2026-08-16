@@ -50,23 +50,31 @@ before implementation. Preauthorization requires explicit user language requesti
 autonomous continuation or no approval pauses. Ordinary instructions to implement do
 not imply preauthorization.
 
-Preauthorization still requires draft syntax and independent criticism. It stops only
-for an unresolved material decision or finding; the coordinator never approves its
-own design.
+Preauthorization still requires draft syntax and independent criticism. It stops for a
+blocking uncertainty with no safe conservative resolution; the coordinator never
+approves its own design.
 
 ### Criticism
 
-Two critic passes are the maximum automatic budget, not a mandatory count:
+Two critic passes are the normal automatic budget, not a mandatory count:
 
 ```text
 candidate → syntax → critic 1
   clean/informational only → review complete
-  material finding → designer repair → syntax → fresh critic 2 → review complete
+  material finding → designer repair → syntax → fresh critic 2
 ```
 
-After pass 2, unresolved material findings are shown to the user. The phrase “review
-more thoroughly,” used after the automatic budget, authorizes one additional
-repair-and-fresh-critic pass. Each further pass requires another explicit request.
+After pass 2, interactive mode shows unresolved material findings to the user. “Review
+more thoroughly” authorizes one additional repair-and-fresh-critic pass; each further
+pass requires another request.
+
+Preauthorization is also authorization to decide after pass 2. A blocker to safe
+coherent implementation or visible success gets another designer repair and fresh
+critic pass when a conservative resolution follows from the brief. Continue only while
+a named blocker is removed or narrowed; an unchanged blocker returns to the user. A
+nonblocking finding may be recorded under Open decisions and in the handback. Never
+defer missing authority, non-bypassable authorization, ownership, or brief-required
+behavior.
 
 A finding is material only when it affects concept ownership or independence; an
 action, refusal, lifecycle, or visible result; authority or authorization;

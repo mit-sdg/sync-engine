@@ -200,12 +200,19 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(template).not.toContain("Decision:**");
   });
 
-  test("bounds automatic criticism and stops after success", async () => {
+  test("bounds ordinary criticism and lets preauthorized work resolve blockers", async () => {
     const workflow = await text(new URL("references/workflow.md", skillRoot));
-    expect(workflow).toMatch(/Two critic\s+passes are the maximum automatic budget/);
-    expect(workflow).toContain("No material findings ends criticism immediately");
-    expect(workflow).toContain("Review more thoroughly");
-    expect(workflow).toContain("authorizes one more\ndesigner repair and fresh critic pass");
+    const normalized = workflow.replace(/\s+/g, " ");
+    expect(normalized).toContain("Two critic passes are the normal automatic budget");
+    expect(normalized).toContain("No material findings ends criticism immediately");
+    expect(normalized).toContain(
+      "Review more thoroughly” authorizes one more designer repair and fresh critic pass",
+    );
+    expect(normalized).toContain("do not ask permission merely because the count reached two");
+    expect(normalized).toContain("blocks safe coherent implementation or brief-visible success");
+    expect(normalized).toContain("If the same blocker returns unchanged, stop for the user");
+    expect(normalized).toContain("record it in the brief's Open decisions and final handback");
+    expect(normalized).toContain("Never defer missing authority, non-bypassable authorization");
     expect(workflow).toContain("Once required checks pass, hand back immediately");
     expect(workflow).toContain("do not open another repair or criticism cycle");
   });

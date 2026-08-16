@@ -98,26 +98,35 @@ bunx --no-install sync-engine check-concepts design/concepts/*.md
 Return diagnostics to the same designer. Parser failure blocks criticism. The
 coordinator does not repair design Markdown.
 
-After syntax passes, launch a fresh read-only normal-reasoning critic. Two critic
-passes are the maximum automatic budget. Maintain the critic count in active
-coordinator state:
+After syntax passes, launch a fresh read-only normal-reasoning critic. Two critic passes
+are the normal automatic budget. Maintain the count in active coordinator state:
 
 1. Critic pass 1 reviews the candidate.
 2. No material findings ends criticism immediately.
 3. Material findings may return once to the designer. Rerun syntax after repair, then
    launch fresh critic pass 2.
-4. After pass 2, stop automatic criticism and show remaining material findings to the
-   user.
 
-“Review more thoroughly,” requested after the automatic budget, authorizes one more
-designer repair and fresh critic pass. Each further pass requires another explicit
-request. Implementation diagnostics do not create critic passes unless they reveal a
-material contract mismatch.
+After pass 2, behavior depends on authorization mode:
 
-In interactive mode, link the current brief and authored design in one concise review
-and require explicit approval. In preauthorized mode, proceed without an artificial
-pause after syntax and independent review complete. Either mode stops for unresolved
-material uncertainty. The coordinator never approves its own design.
+- **Interactive:** show remaining material findings and stop. “Review more thoroughly”
+  authorizes one more designer repair and fresh critic pass; each further pass needs
+  another explicit request.
+- **Preauthorized:** do not ask permission merely because the count reached two.
+  Classify each remaining finding. If it blocks safe coherent implementation or
+  brief-visible success, and a conservative resolution follows from the brief, record
+  the assumption, repair through the same designer, rerun syntax, and launch a fresh
+  critic. Continue only for a named blocker with a concrete repair and only while each
+  pass removes or narrows it. If the same blocker returns unchanged, stop for the user.
+  A finding that does not block safe coherent implementation may remain open: record it
+  in the brief's Open decisions and final handback, then proceed without calling the
+  design clean. Never defer missing authority, non-bypassable authorization, ownership,
+  or behavior required for visible success.
+
+Implementation diagnostics do not create critic passes unless they expose a material
+contract mismatch. In interactive mode, link the brief and design and require explicit
+approval. In preauthorized mode, proceed without an artificial pause once no blocking
+finding remains. Either mode stops when a blocking uncertainty has no safe conservative
+resolution. The coordinator never approves its own design.
 
 ## Implement in bounded phases
 

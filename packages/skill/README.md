@@ -32,15 +32,19 @@ the application, and rejects a mixed installed release set.
 A normal run maintains a short `design/brief.md`, then performs:
 
 ```text
-independent design → syntax → up to two necessary critic passes
-→ approval or explicit preauthorization → concept implementation
+independent design → syntax → normal two-pass criticism
+→ approval or autonomous preauthorized resolution → concept implementation
 → application implementation → independent evidence → required validation → handback
 ```
 
 Criticism stops after the first clean pass. A second pass happens only after a material
-repair. Further review requires an explicit “review more thoroughly” request. Passing
-required checks hands back immediately; optional polish and informational findings do
-not create another cycle.
+repair. Interactive work needs an explicit “review more thoroughly” request for another
+pass. Preauthorized work instead repairs a remaining safe/coherent-implementation
+blocker autonomously while each pass makes progress, or records a nonblocking finding
+as an open decision for handback. It never defers authority, non-bypassable
+authorization, ownership, or brief-required behavior. Passing required checks hands
+back immediately; optional polish and informational findings do not create another
+cycle.
 
 The default uses one concept worker and one application worker rather than repeating
 role instructions for every concept and composition. A phase splits only for a prompt
