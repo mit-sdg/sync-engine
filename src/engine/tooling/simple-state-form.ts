@@ -174,7 +174,7 @@ function fieldIssues(
   const optionalIndex = tokens.findIndex(({ text }) => text === "optional");
   if (optionalIndex < 0) return [];
   const collectionIndex = tokens.findIndex(
-    ({ text }, index) => (text === "set" || text === "seq") && tokens[index + 1]?.text === "of",
+    ({ text }, index) => index > 0 && (text === "set" || text === "seq"),
   );
   if (collectionIndex >= 0) {
     return [

@@ -220,7 +220,13 @@ describe("deterministic prompt construction", () => {
 
   test("binds downstream prompts to the reviewed design digest", async () => {
     const setup = await fixture("# Designer\n<!-- input: brief -->\n");
-    for (const role of ["concept-worker", "application-worker", "evidence-worker"]) {
+    const downstreamRoles = [
+      "concept-worker",
+      "application-worker",
+      "frontend-worker",
+      "evidence-worker",
+    ];
+    for (const role of downstreamRoles) {
       await writeFile(
         resolve(setup.root, `roles/${role}.md`),
         `# ${role}\n<!-- input: assignment -->\n`,
@@ -240,7 +246,7 @@ describe("deterministic prompt construction", () => {
       }),
     ).rejects.toThrow("requires designRoot and expectedDesignDigest");
 
-    for (const role of ["concept-worker", "application-worker", "evidence-worker"]) {
+    for (const role of downstreamRoles) {
       const built = await buildPrompt({
         role,
         inputs: [{ slot: "assignment", path: assignment }],

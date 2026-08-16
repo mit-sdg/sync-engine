@@ -23,11 +23,13 @@ describe("limited Simple State Form validation", () => {
       "SSF_MISPLACED_OPTIONAL",
       "an optional revokedAt DateTime",
     );
-    issue(
-      "a set of Groups with\n  an optional members set of Person",
-      "SSF_OPTIONAL_COLLECTION",
-      "Remove `optional` from this field.",
-    );
+    for (const collection of ["set of Person", "seq Person"]) {
+      issue(
+        `a set of Groups with\n  an optional members ${collection}`,
+        "SSF_OPTIONAL_COLLECTION",
+        "Remove `optional` from this field.",
+      );
+    }
     issue(
       "a set of Sessions with\n  a optional revokedAt DateTime",
       "SSF_ARTICLE",

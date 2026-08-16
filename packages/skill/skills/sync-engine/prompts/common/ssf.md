@@ -2,7 +2,7 @@
 
 ```text
 schema := (setDecl | subsetDecl)*
-setDecl := [a|an] (element|set) [of] Type [with field+]
+setDecl := [a|an] (element|set|seq) [of] Type [with field+]
 subsetDecl := [a|an] Subtype (element|set) [of] (Type|Subtype) [with field+]
 field := [a|an] [optional] [name] (scalar|collection)
 scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)

@@ -36,8 +36,11 @@ versions or package managers. For a new application, setup completion is a hard 
 do not write the brief, inspect the catalog, or launch a role until `package.json`,
 `tsconfig.json`, and concept-free configuration exist.
 
-For an existing configured application, run the same release check before its documented
-baseline. Do not rerun setup merely to impose default files or scripts.
+For an existing configured application, inspect `package.json` once. If analysis or
+catalog is absent, install only those missing packages at the exact `release.json`
+version as development dependencies, then run the same release check before its
+documented baseline. Do not change an existing core version to force a match, and do
+not rerun setup merely to impose default files or scripts.
 
 A short-lived start must exit successfully. For a long-running start, wait for its
 documented readiness signal, request graceful shutdown, and require a successful exit.
@@ -183,7 +186,7 @@ After criticism and authorization close, digest every authored Markdown file und
 bun "<skill-root>/scripts/command.ts" design digest design
 ```
 
-Every concept, application, and evidence prompt build requires both
+Every concept, application, frontend, and evidence prompt build requires both
 `--design-root design` and `--design-digest <sha256>`. The compiler rejects drift.
 Include the digest in each temporary assignment and verify it before every diagnostic
 follow-up with `follow-up check`. Any design change invalidates the digest, downstream
@@ -200,6 +203,18 @@ imports. Supply any needed framework information through selected application ex
 and exact public API references. If those are insufficient, the worker returns a
 context blocker instead of searching internals. Put brief storage guarantees in
 implementation assignments, not concept State.
+
+The downstream compiler slot contract is:
+
+- `concept-worker`: required `assignment`, `specifications`; optional `examples`, `reference`;
+- `application-worker`: required `assignment`, `brief`, `design`, `concept-surfaces`,
+  `shared-wiring`; optional `examples`, `reference`;
+- `frontend-worker`: required `assignment`, `brief`, `public-interface`; optional
+  `examples`, `reference`; and
+- `evidence-worker`: required `assignment`, `brief`, `contracts`, `public-interface`;
+  optional `existing-tests`.
+
+Use each name as `--input <slot>=<path>` and repeat a slot for multiple files.
 
 Start one normal-reasoning concept worker for all approved concepts that fit the 24 KiB
 budget. It owns only assigned concept and focused test paths. Split into explicit

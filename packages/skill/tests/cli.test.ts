@@ -53,15 +53,30 @@ describe("sync-engine-skill command", () => {
     expect(initialized.stdout).toBe(
       "Brief template initialized. Fill placeholders before running brief check.\n",
     );
-    expect(await readFile(path, "utf8")).toBe(
-      await readFile(
-        resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
-        "utf8",
-      ),
+    const template = await readFile(
+      resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
+      "utf8",
     );
+    expect(await readFile(path, "utf8")).toBe(template);
     const repeated = run(["brief", "init", path], directory);
     expect(repeated.status).toBe(1);
     expect(repeated.stderr).toContain("Brief already exists");
+
+    const filled = template
+      .replace("<Product name>", "Product")
+      .replace("<One short paragraph describing the useful outcome.>", "Deliver the product.")
+      .replace(
+        "- **D1 — <Decision title> (User):** <Decision and only the reason needed to understand it.>",
+        "- **D1 — Scope (User):** Use one workspace.",
+      )
+      .replace("- <Externally observable successful behavior.>", "- A user completes the task.")
+      .replace("- <Expected denied or rejected behavior.>", "- Invalid input is rejected.")
+      .replace("- <Conservative assumption used to complete the design.>", "- Use local storage.")
+      .replace("- <Behavior intentionally outside scope.>", "- Hosted deployment.");
+    await writeFile(path, filled);
+    const checked = run(["brief", "check", path], directory);
+    expect(checked.status).toBe(0);
+    expect(checked.stdout).toContain("1 decisions, open decisions none");
   });
 
   test("validates a brief before an application release set is installed", async () => {

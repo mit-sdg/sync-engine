@@ -396,6 +396,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(workflow).toContain("Do not run a Vite+ migration");
     expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
+    expect(workflow).toContain(
+      "If analysis or\ncatalog is absent, install only those missing packages",
+    );
     expect(workflow).toContain("setup completion is a hard gate");
     expect(workflow).toContain("Run this command alone—do not chain a premature check");
     expect(workflow).toContain("Default to no catalog context");
@@ -404,6 +407,17 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("independently enumerate draft concept files and rerun");
     expect(workflow).toContain("never aggregate candidate files into an intermediate file");
     expect(workflow).toContain("--input candidate=design/types.md");
+    expect(workflow).toContain("Every concept, application, frontend, and evidence prompt build");
+    for (const slot of [
+      "specifications",
+      "concept-surfaces",
+      "shared-wiring",
+      "public-interface",
+      "contracts",
+      "existing-tests",
+    ]) {
+      expect(workflow).toContain(slot);
+    }
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
     expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");

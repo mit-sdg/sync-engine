@@ -24,7 +24,11 @@ export class BriefCheckError extends Error {
 }
 
 function substantive(lines: readonly string[]): string[] {
-  return lines.filter((line) => line.trim() !== "" && !/^<!--.*-->$/.test(line.trim()));
+  return lines
+    .join("\n")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .split("\n")
+    .filter((line) => line.trim() !== "");
 }
 
 export function checkBrief(source: string): CheckedBrief {
