@@ -179,22 +179,27 @@ The package adds one private TypeScript executable and no public JavaScript API:
 
 ```text
 packages/skill/
-  src/
-    command.ts
-    prompt.ts
-    brief.ts
+  skills/sync-engine/
+    scripts/
+      command.ts
+      prompt.ts
+      brief.ts
+    release.json
   dist/
   tsconfig.json
   tsconfig.build.json
 ```
 
-`package.json` exposes `sync-engine-skill` from `dist/command.js` and retains
-`exports: {}`. Use Bun/TypeScript and platform APIs only. Do not add a generic template
-or Markdown parsing dependency.
+The canonical compiler source travels inside the skill and uses Bun/TypeScript and
+platform APIs only. It can validate a brief and compile prompts before an application
+exists or installs dependencies. `package.json` also exposes the built
+`sync-engine-skill` convenience executable from `dist/command.js` and retains
+`exports: {}`. Do not add a generic template or Markdown parsing dependency.
 
-The CLI has two command paths:
+The CLI has three command paths:
 
 ```text
+sync-engine-skill release check [<application-directory>]
 sync-engine-skill brief check <brief>
 sync-engine-skill prompt build --role <role> --input <slot>=<path> ... --output <file>
 ```
@@ -255,9 +260,11 @@ roles receive at most one selected example per assigned mechanism when needed.
 
 ## Versions and tools
 
-The skill package depends on the exact matching versions of core, catalog, and
-analysis. Every CLI invocation checks that installed skill, core, catalog, and analysis
-versions are identical before doing work.
+The bundled `release.json` records the exact matching skill, core, catalog, and analysis
+versions. Brief validation and prompt construction use only bundled files, so they work
+before application dependencies exist. `release check` separately verifies an existing
+application's installed core, catalog, and analysis versions. A new application installs
+those exact releases but does not install the skill package.
 
 Remove the ambiguous `catalog` executable name. The catalog package exposes only
 `sync-engine-catalog`, and workflow commands invoke it with:

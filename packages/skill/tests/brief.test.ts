@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { BriefCheckError, checkBrief } from "../src/brief.ts";
+import { BriefCheckError, checkBrief } from "../skills/sync-engine/scripts/brief.ts";
 
 function brief(decisions = "- **D1 — Scope (Assumption):** Use one workspace.", open = "None.") {
   return `# Product

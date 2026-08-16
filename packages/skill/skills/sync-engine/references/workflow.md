@@ -9,10 +9,23 @@ Read repository instructions, inspect tracked and untracked work, and preserve u
 changes. Never commit, merge, rebase, reset, switch branches, create a nested
 repository, or otherwise alter Git history.
 
-For a new application, initialize or reuse a Bun package, require the exact matching
-`@mit-sdg/sync-engine` version, and run the installed `sync-engine setup`. For an
-existing configured application, do not rerun setup merely to impose default files or
-scripts. Run its documented baseline before design.
+Resolve `<skill-root>` once as the absolute directory containing the loaded `SKILL.md`.
+The bundled compiler is `bun "<skill-root>/scripts/command.ts"`; substitute the actual
+shell-quoted path in every command. Read `<skill-root>/release.json` for the exact
+compatible package versions.
+
+For a new application, initialize or reuse a Bun package. Install
+`@mit-sdg/sync-engine` at the exact release version and install matching
+`@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog` as development
+dependencies. Do not install the skill package into the application. Run the installed
+`sync-engine setup`, then verify the set with:
+
+```sh
+bun "<skill-root>/scripts/command.ts" release check .
+```
+
+For an existing configured application, run the same release check before its documented
+baseline. Do not rerun setup merely to impose default files or scripts.
 
 A short-lived start must exit successfully. For a long-running start, wait for its
 documented readiness signal, request graceful shutdown, and require a successful exit.
@@ -33,7 +46,7 @@ non-goals, and open decisions. Use `User` authority for requested or interactive
 settled decisions and `Assumption` for conservative coordinator choices. Run:
 
 ```sh
-bunx --no-install sync-engine-skill brief check design/brief.md
+bun "<skill-root>/scripts/command.ts" brief check design/brief.md
 ```
 
 Open implementation choices and out-of-scope behavior may remain. Ask a question only
@@ -60,8 +73,8 @@ For designer and critic prompts, select at most three relevant concept designs a
 recipe by default. Zero is valid. Broader catalog exploration requires an explicit
 user request. Catalog designs are alternatives, never mandatory names or contracts.
 
-Build prompts only with `sync-engine-skill prompt build` and deliver the output file
-through the selected harness guide. Do not concatenate prompts with Python, heredocs,
+Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
+the output file through the selected harness guide. Do not concatenate prompts with Python, heredocs,
 or shell strings. Put stable role content before dynamic inputs. A budget failure lists
 source contributions; select tighter context first and use an explicit `--max-bytes`
 only when the legitimate application material requires it.

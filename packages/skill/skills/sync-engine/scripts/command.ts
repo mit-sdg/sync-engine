@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,10 +10,20 @@ import { buildPrompt, type PromptInput } from "./prompt.ts";
 interface PackageManifest {
   readonly name?: string;
   readonly version?: string;
-  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly skill?: string;
+  readonly packages?: Readonly<Record<string, string>>;
 }
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+interface SkillRelease {
+  readonly skill: string;
+  readonly packages: Readonly<Record<string, string>>;
+}
+
+const commandDirectory = dirname(fileURLToPath(import.meta.url));
+const sourceSkillRoot = resolve(commandDirectory, "..");
+const skillRoot = existsSync(resolve(sourceSkillRoot, "release.json"))
+  ? sourceSkillRoot
+  : resolve(commandDirectory, "../skills/sync-engine");
 const packageNames = [
   "@mit-sdg/sync-engine",
   "@mit-sdg/sync-engine-catalog",
@@ -53,40 +64,50 @@ async function resolveManifest(
   throw new Error(`Cannot resolve installed package ${packageName}`);
 }
 
-async function validateReleaseSet(): Promise<string> {
-  const ownPath = resolve(packageRoot, "package.json");
-  const own = await manifestAt(ownPath);
-  if (own?.name !== "@mit-sdg/sync-engine-skill" || own.version === undefined) {
-    throw new Error(`Cannot read sync-engine-skill package version from ${ownPath}`);
+async function readSkillRelease(): Promise<SkillRelease> {
+  const path = resolve(skillRoot, "release.json");
+  const value = await manifestAt(path);
+  if (
+    typeof value?.skill !== "string" ||
+    typeof value.packages !== "object" ||
+    value.packages === null ||
+    Array.isArray(value.packages)
+  ) {
+    throw new Error(`Cannot read sync-engine skill release from ${path}`);
   }
-
-  const resolved: Array<{ name: string; version: string; path: string }> = [
-    { name: own.name, version: own.version, path: ownPath },
-  ];
   for (const packageName of packageNames) {
-    const dependency = own.dependencies?.[packageName];
-    if (dependency !== own.version) {
+    if (value.packages[packageName] !== value.skill) {
       throw new Error(
-        `${own.name} ${own.version} must depend on ${packageName} at that exact version; found ${dependency ?? "no dependency"}`,
+        `Skill release ${value.skill} must require ${packageName} at that exact version; found ${value.packages[packageName] ?? "no version"}`,
       );
     }
-    const found = await resolveManifest(packageName, [process.cwd(), packageRoot]);
+  }
+  return value as SkillRelease;
+}
+
+async function validateReleaseSet(release: SkillRelease, applicationRoot: string): Promise<string> {
+  const resolved: Array<{ name: string; version: string }> = [];
+  for (const packageName of packageNames) {
+    const found = await resolveManifest(packageName, [applicationRoot]);
     if (found.manifest.version === undefined) {
       throw new Error(`Installed package has no version: ${found.path}`);
     }
-    resolved.push({ name: packageName, version: found.manifest.version, path: found.path });
+    resolved.push({ name: packageName, version: found.manifest.version });
   }
 
-  const mixed = resolved.filter(({ version }) => version !== own.version);
-  if (mixed.length > 0) {
+  const mismatched = resolved.filter(({ name, version }) => version !== release.packages[name]);
+  if (mismatched.length > 0) {
     const versions = resolved.map(({ name, version }) => `${name}@${version}`).join(", ");
-    throw new Error(`Installed sync-engine release versions do not match: ${versions}`);
+    throw new Error(
+      `Installed sync-engine release does not match skill ${release.skill}: ${versions}`,
+    );
   }
-  return own.version;
+  return release.skill;
 }
 
 function usage(): string {
   return `Usage:
+  sync-engine-skill release check [<application-directory>]
   sync-engine-skill brief check <brief.md>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>... --output <path>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>... --stdout
@@ -160,11 +181,18 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
-  const version = await validateReleaseSet();
+  const release = await readSkillRelease();
+  if (args[0] === "release" && args[1] === "check" && args.length <= 3) {
+    const applicationRoot = resolve(args[2] ?? process.cwd());
+    const version = await validateReleaseSet(release, applicationRoot);
+    process.stdout.write(`Installed sync-engine release matches skill ${version}.\n`);
+    return;
+  }
+
   if (args[0] === "brief" && args[1] === "check" && args.length === 3) {
     const result = await checkBriefFile(args[2]!);
     process.stdout.write(
-      `Brief valid: ${result.bytes} bytes, ${result.decisions} decisions, open decisions ${result.openDecisions ? "present" : "none"}; release ${version}.\n`,
+      `Brief valid: ${result.bytes} bytes, ${result.decisions} decisions, open decisions ${result.openDecisions ? "present" : "none"}; release ${release.skill}.\n`,
     );
     return;
   }
@@ -174,14 +202,14 @@ async function run(args: readonly string[]): Promise<void> {
     const result = await buildPrompt({
       role: options.role,
       inputs: options.inputs,
-      promptRoot: resolve(packageRoot, "skills/sync-engine/prompts"),
+      promptRoot: resolve(skillRoot, "prompts"),
       maxBytes: options.maxBytes,
     });
     if (options.stdout) process.stdout.write(result.content);
     else await writeFile(resolve(options.output!), result.content, "utf8");
 
     const report = [
-      `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${version}.`,
+      `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
       ...result.sources.map(
         (source) =>
           `  ${source.kind} ${source.displayName}: ${source.bytes} bytes (${source.path})`,

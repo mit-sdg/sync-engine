@@ -26,25 +26,28 @@ brief → independent design → syntax → bounded independent criticism
 - Configure routine roles with the provider's normal reasoning setting at launch; do
   not repeat reasoning instructions in prompts.
 - Preserve unrelated work and Git history. Acceptance performs no Git operation.
-- Build every role prompt with the packaged compiler and deliver it from a file. Never
-  place generated Markdown in a shell argument.
+- Build every role prompt with the bundled `scripts/command.ts` compiler and deliver it
+  from a file. Never place generated Markdown in a shell argument.
 - Stop after required checks and objective evidence pass. Do not iterate for optional
   polish, informational findings, or an empty critic list.
 
 ## Run the workflow
 
-1. Read repository instructions and
+1. Resolve the skill root as the directory containing this `SKILL.md`. Invoke the
+   self-contained compiler with `bun <skill-root>/scripts/command.ts`; do not require
+   the application to install the skill package.
+2. Read repository instructions and
    [follow the coordinator workflow](references/workflow.md).
-2. Confirm the available native-agent harness satisfies the
+3. Confirm the available native-agent harness satisfies the
    [harness contract](references/harnesses/contract.md). When Paseo is available, read
    the short [Paseo guide](references/harnesses/paseo.md); do not search for other
    orchestration instructions.
-3. Maintain the compact `design/brief.md` from
+4. Maintain the compact `design/brief.md` from
    [the packaged template](prompts/templates/product-brief.md).
-4. Build only the current role prompt from `prompts/roles/`. Designer and critic share
+5. Build only the current role prompt from `prompts/roles/`. Designer and critic share
    the compact semantic rules in `prompts/common/design.md`; other roles receive only
    their declared files.
-5. Keep objective, decisions, current stage, critic count, and unresolved material
+6. Keep objective, decisions, current stage, critic count, and unresolved material
    issues in active coordinator context. Do not create workflow metadata or a workflow
    database.
 

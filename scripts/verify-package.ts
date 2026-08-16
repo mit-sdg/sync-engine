@@ -839,6 +839,7 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
     brief,
     `# Packed skill\n\n## Objective\n\nBuild a packed application.\n\n## Product decisions\n\nNone.\n\n## Visible success\n\n- The application starts.\n\n## Expected refusals\n\nNone.\n\n## Assumptions\n\nNone.\n\n## Non-goals\n\nNone.\n\n## Open decisions\n\nNone.\n`,
   );
+  run(bin, ["release", "check", consumer], consumer);
   run(bin, ["brief", "check", brief], consumer);
   const prompt = resolve(consumer, "designer.prompt.md");
   run(
@@ -852,6 +853,32 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
     !promptSource.includes("# Packed skill")
   ) {
     throw new Error("packed skill compiler did not produce the designer prompt");
+  }
+
+  const standalone = resolve(temporary, "standalone-skill");
+  const standaloneApplication = resolve(temporary, "standalone-skill-application");
+  await cp(resolve(installed, "skills/sync-engine"), standalone, { recursive: true });
+  await mkdir(standaloneApplication, { recursive: true });
+  const standaloneCommand = resolve(standalone, "scripts/command.ts");
+  run("bun", [standaloneCommand, "brief", "check", brief], standaloneApplication);
+  const standalonePrompt = resolve(standaloneApplication, "designer.prompt.md");
+  run(
+    "bun",
+    [
+      standaloneCommand,
+      "prompt",
+      "build",
+      "--role",
+      "designer",
+      "--input",
+      `brief=${brief}`,
+      "--output",
+      standalonePrompt,
+    ],
+    standaloneApplication,
+  );
+  if (!(await readFile(standalonePrompt, "utf8")).includes("# Packed skill")) {
+    throw new Error("standalone copied skill compiler did not produce the designer prompt");
   }
 }
 

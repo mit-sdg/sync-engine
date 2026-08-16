@@ -201,6 +201,19 @@ describe("compact sync-engine Agent Skill documents", () => {
       "@mit-sdg/sync-engine-analysis": manifest.version,
       "@mit-sdg/sync-engine-catalog": manifest.version,
     });
+    expect(JSON.parse(await text(new URL("release.json", skillRoot)))).toEqual({
+      skill: manifest.version,
+      packages: {
+        "@mit-sdg/sync-engine": manifest.version,
+        "@mit-sdg/sync-engine-analysis": manifest.version,
+        "@mit-sdg/sync-engine-catalog": manifest.version,
+      },
+    });
+    expect(await filesBelow(new URL("scripts/", skillRoot))).toEqual([
+      "brief.ts",
+      "command.ts",
+      "prompt.ts",
+    ]);
 
     const catalog = JSON.parse(await text(new URL("../catalog/package.json", packageRoot))) as {
       bin: Record<string, string>;
@@ -211,9 +224,13 @@ describe("compact sync-engine Agent Skill documents", () => {
 
   test("keeps harness guidance minimal and file-based", async () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
+    const workflow = await text(new URL("references/workflow.md", skillRoot));
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
     expect(entry).toContain("Paseo guide");
+    expect(entry).toContain("self-contained compiler");
+    expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
+    expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
     expect(contract).toContain("normal reasoning setting at launch");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
     expect(paseo).toContain("Wait for a file-delivered assignment");

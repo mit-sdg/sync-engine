@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { buildPrompt, PromptBuildError } from "../src/prompt.ts";
+import { buildPrompt, PromptBuildError } from "../skills/sync-engine/scripts/prompt.ts";
 
 const temporary: string[] = [];
 

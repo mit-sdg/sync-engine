@@ -131,6 +131,16 @@ describe("release source facts", () => {
       "@mit-sdg/sync-engine-analysis": currentVersion,
       "@mit-sdg/sync-engine-catalog": currentVersion,
     });
+    expect(
+      JSON.parse(projected.get("packages/skill/skills/sync-engine/release.json") ?? ""),
+    ).toEqual({
+      skill: currentVersion,
+      packages: {
+        "@mit-sdg/sync-engine": currentVersion,
+        "@mit-sdg/sync-engine-analysis": currentVersion,
+        "@mit-sdg/sync-engine-catalog": currentVersion,
+      },
+    });
     for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);
   });

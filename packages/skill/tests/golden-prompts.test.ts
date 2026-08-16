@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
-import { buildPrompt } from "../src/prompt.ts";
+import { buildPrompt } from "../skills/sync-engine/scripts/prompt.ts";
 
 const promptRoot = "packages/skill/skills/sync-engine/prompts";
 

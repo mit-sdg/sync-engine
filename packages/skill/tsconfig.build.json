@@ -5,8 +5,8 @@
     "noEmit": false,
     "outDir": "dist",
     "rewriteRelativeImportExtensions": true,
-    "rootDir": "src"
+    "rootDir": "skills/sync-engine/scripts"
   },
-  "include": ["src"],
+  "include": ["skills/sync-engine/scripts"],
   "exclude": ["tests"]
 }

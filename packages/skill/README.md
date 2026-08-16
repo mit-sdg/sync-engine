@@ -5,18 +5,27 @@ workflow for designing and building sync-engine applications. It keeps authored
 Markdown as design authority, separates concept and application implementation, and
 requires independent objective evidence.
 
-Install the exact beta and expose its skill directory to your Agent Skills loader:
+Install an exact published release into Pi, replacing `VERSION` with the desired beta:
 
 ```sh
-bun add --dev --exact @mit-sdg/sync-engine-skill@beta
+pi install npm:@mit-sdg/sync-engine-skill@VERSION
 ```
 
-```text
-node_modules/@mit-sdg/sync-engine-skill/skills/sync-engine
+For development from a checkout:
+
+```sh
+pi install /absolute/path/to/sync-engine/packages/skill
 ```
 
-The package pins the exact matching core, catalog, and analysis releases. Its commands
-reject a mixed installed release set.
+Pi discovers `skills/sync-engine/` in the package. Other Agent Skills loaders can point
+directly to that directory. Do not also copy the same skill into a second discovery
+location because duplicate names are ambiguous.
+
+The skill is self-contained: its prompt compiler and brief validator are TypeScript
+under `skills/sync-engine/scripts/` and require only Bun and platform APIs. A new
+application does not install the skill package. The workflow instead reads
+`release.json`, installs the exact matching core, catalog, and analysis releases into
+the application, and rejects a mixed installed release set.
 
 ## Workflow
 
@@ -43,20 +52,31 @@ small semantic design document; role templates declare their exact file inputs.
 
 ## Deterministic prompt commands
 
-Validate the compact product brief:
+Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. Validate the
+compact product brief without requiring application dependencies:
 
 ```sh
-bunx --no-install sync-engine-skill brief check design/brief.md
+bun "<skill-root>/scripts/command.ts" brief check design/brief.md
+```
+
+After installing application dependencies, verify their exact release:
+
+```sh
+bun "<skill-root>/scripts/command.ts" release check .
 ```
 
 Build a role prompt directly to a file:
 
 ```sh
-bunx --no-install sync-engine-skill prompt build \
+bun "<skill-root>/scripts/command.ts" prompt build \
   --role designer \
   --input brief=design/brief.md \
   --output /tmp/designer.prompt.md
 ```
+
+The npm package also exposes `sync-engine-skill` as a convenience command, but the
+workflow uses the bundled source path so copied skills and new applications bootstrap
+without a package-local binary.
 
 Templates support only static `include`, required `input`, and optional `input?`
 Markdown directives. The compiler normalizes line endings and final newlines, orders
