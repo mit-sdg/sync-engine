@@ -95,10 +95,10 @@ describe("generic design guidance", () => {
 
   test("documents the core-owned draft parser without evidence or application inspection", async () => {
     const reference = await source(conceptReferenceUrl);
-    expect(reference).toContain("sync-engine check-concepts design/concepts/*.md");
+    expect(reference).toContain("sync-engine check-design design/concepts/*.md");
     expect(reference).toContain("loads no application configuration or TypeScript source");
     expect(reference).toContain("writes nothing");
-    expect(reference).toContain("reports only concept grammar failures");
+    expect(reference).toContain("reports only authored-design form failures");
   });
 
   test("keeps generic guidance free of application-agent orchestration", async () => {

@@ -16,11 +16,12 @@ path restriction: registration follows the statically resolvable Markdown import
 Before implementation exists, parse explicit draft files with:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md
 ```
 
 This command loads no application configuration or TypeScript source, writes nothing,
-and reports only concept grammar failures. Config-based `sync-engine check` adds
+and reports only authored-design form failures; it also accepts composition and
+application-types documents in the same invocation. Config-based `sync-engine check` adds
 registration provenance and TypeScript agreement after implementation.
 
 ## Document grammar
@@ -77,9 +78,9 @@ external Person
 ## State
 
 ```state
-notes: set Note
-  author: Person
-  text: String
+a set of Notes with
+  an author Person
+  a text String
 ```
 
 ## Actions
@@ -301,7 +302,7 @@ or auto-detected.
 ## Author obligations
 
 Write the concept contract before its implementation and run `sync-engine
-check-concepts` over the draft. Keep the concept independent of application
+check-design` over the draft. Keep the concept independent of application
 composition, place every local invariant in its owning action and State description,
 and test behavior and storage guarantees separately. Then register the imported text,
 select the registration in a `conceptSet`, and run `sync-engine check` against the
