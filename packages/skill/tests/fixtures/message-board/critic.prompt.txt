@@ -112,9 +112,12 @@ behavior; review and test them.
 
 ## Assignment
 
-Review the complete syntax-passing candidate against the brief. Be read-only and use
-only supplied prompt material. Do not inspect source, generated files, Git, package
-configuration, tests, framework internals, API docs, or analysis output.
+Review the complete authored candidate against the brief: every concept and
+composition plus `types.md`. Concept grammar has passed; independently review
+composition decisions, links, bindings, and cross-concept behavior as well as concept
+semantics. Be read-only and use only supplied prompt material. Do not inspect source,
+generated files, Git, package configuration, tests, framework internals, API docs, or
+analysis output.
 
 Report only material findings tied to a candidate file and decision: a purpose or
 Principle that fails to establish a needed coherent mechanism; concept dependence or

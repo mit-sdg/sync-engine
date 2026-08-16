@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { requireDesignDigest } from "./design.ts";
 
 export const promptRoles = [
   "designer",
@@ -97,6 +98,8 @@ export interface BuildPromptOptions {
   readonly inputs: readonly PromptInput[];
   readonly promptRoot: string;
   readonly maxBytes?: number;
+  readonly designRoot?: string;
+  readonly expectedDesignDigest?: string;
 }
 
 export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPrompt> {
@@ -104,6 +107,24 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     throw new PromptBuildError(`Unknown role: ${options.role}`);
   }
   const role = options.role as PromptRole;
+  const downstream = ["concept-worker", "application-worker", "evidence-worker"].includes(role);
+  if (
+    downstream &&
+    (options.designRoot === undefined || options.expectedDesignDigest === undefined)
+  ) {
+    throw new PromptBuildError(
+      `Role ${role} requires designRoot and expectedDesignDigest from closed review`,
+    );
+  }
+  if (
+    !downstream &&
+    (options.designRoot !== undefined || options.expectedDesignDigest !== undefined)
+  ) {
+    throw new PromptBuildError(`Role ${role} does not accept a closed design digest`);
+  }
+  if (downstream) {
+    await requireDesignDigest(options.designRoot!, options.expectedDesignDigest!);
+  }
   const root = resolve(options.promptRoot);
   const templatePath = resolve(root, "roles", `${role}.md`);
   if (!inside(root, templatePath)) throw new PromptBuildError(`Role template escapes prompt root`);
@@ -192,6 +213,9 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
   }
 
   const content = normalizeMarkdown(renderedLines.join("\n"));
+  if (downstream) {
+    await requireDesignDigest(options.designRoot!, options.expectedDesignDigest!);
+  }
   const bytes = byteLength(content);
   const budget = options.maxBytes ?? roleBudgets[role];
   if (!Number.isSafeInteger(budget) || budget <= 0) {

@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
+import { digestDesign } from "../skills/sync-engine/scripts/design.ts";
 import { buildPrompt, PromptBuildError } from "../skills/sync-engine/scripts/prompt.ts";
 
 const temporary: string[] = [];
@@ -74,6 +75,33 @@ describe("deterministic prompt construction", () => {
     expect(result.content.indexOf("source: a.md")).toBeLessThan(
       result.content.indexOf("source: z.md"),
     );
+  });
+
+  test("keeps the brief separate from a multi-file critic candidate", async () => {
+    const setup = await fixture("# Designer\n<!-- input: brief -->\n");
+    await writeFile(
+      resolve(setup.root, "roles/critic.md"),
+      "# Critic\n<!-- input: brief -->\n<!-- input: candidate -->\n",
+    );
+    const brief = await setup.file("brief.md", "# Brief");
+    const concept = await setup.file("tasks.md", "# Tasks");
+    const composition = await setup.file("application.md", "# Application");
+    const types = await setup.file("types.md", "```types\n```");
+    const result = await buildPrompt({
+      role: "critic",
+      inputs: [
+        { slot: "brief", path: brief },
+        { slot: "candidate", path: concept },
+        { slot: "candidate", path: composition },
+        { slot: "candidate", path: types },
+      ],
+      promptRoot: setup.root,
+    });
+    expect(result.sources.filter(({ kind }) => kind === "input")).toHaveLength(4);
+    expect(result.content.match(/source: brief\.md/g)).toHaveLength(1);
+    for (const file of ["tasks.md", "application.md", "types.md"]) {
+      expect(result.content).toContain(`source: ${file}`);
+    }
   });
 
   test("omits an empty optional input without interpreting input directives", async () => {
@@ -188,6 +216,51 @@ describe("deterministic prompt construction", () => {
     expect(result.content).toContain("source: brief.md");
     expect(result.content).not.toContain(setup.root);
     expect(result.sources.at(-1)?.path).toBe(input);
+  });
+
+  test("binds downstream prompts to the reviewed design digest", async () => {
+    const setup = await fixture("# Designer\n<!-- input: brief -->\n");
+    for (const role of ["concept-worker", "application-worker", "evidence-worker"]) {
+      await writeFile(
+        resolve(setup.root, `roles/${role}.md`),
+        `# ${role}\n<!-- input: assignment -->\n`,
+      );
+    }
+    const assignment = await setup.file("assignment.md", "Implement the approved design.");
+    const design = resolve(setup.root, "design");
+    await mkdir(design);
+    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    const reviewed = await digestDesign(design);
+
+    await expect(
+      buildPrompt({
+        role: "application-worker",
+        inputs: [{ slot: "assignment", path: assignment }],
+        promptRoot: setup.root,
+      }),
+    ).rejects.toThrow("requires designRoot and expectedDesignDigest");
+
+    for (const role of ["concept-worker", "application-worker", "evidence-worker"]) {
+      const built = await buildPrompt({
+        role,
+        inputs: [{ slot: "assignment", path: assignment }],
+        promptRoot: setup.root,
+        designRoot: design,
+        expectedDesignDigest: reviewed.digest,
+      });
+      expect(built.content).toContain("Implement the approved design.");
+    }
+
+    await writeFile(resolve(design, "brief.md"), "# Changed brief\n");
+    await expect(
+      buildPrompt({
+        role: "application-worker",
+        inputs: [{ slot: "assignment", path: assignment }],
+        promptRoot: setup.root,
+        designRoot: design,
+        expectedDesignDigest: reviewed.digest,
+      }),
+    ).rejects.toThrow("Design digest changed");
   });
 
   test("reads generated output as UTF-8", async () => {

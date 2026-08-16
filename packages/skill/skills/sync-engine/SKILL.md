@@ -29,7 +29,8 @@ brief → independent design → syntax → bounded independent criticism
 - Implementation and evidence roles never inspect framework implementation source or
   installed package internals. Supply exact public references instead.
 - Build every role prompt with the bundled `scripts/command.ts` compiler and deliver it
-  from a file. Never place generated Markdown in a shell argument.
+  from a file. Bind downstream prompts and follow-ups to the reviewed design digest.
+  Never place generated Markdown in a shell argument.
 - Stop after required checks and objective evidence pass. Do not iterate for optional
   polish, informational findings, or an empty critic list.
 
@@ -53,5 +54,6 @@ brief → independent design → syntax → bounded independent criticism
    issues in active coordinator context. Do not create workflow metadata or a workflow
    database.
 
-The prompt compiler validates bytes and inputs. It does not choose product decisions,
-workflow stages, approval, criticism, repairs, or acceptance.
+The compiler validates bytes, inputs, release executables, follow-up size, and reviewed
+design identity. It does not choose product decisions, workflow stages, approval,
+criticism, repairs, or acceptance.

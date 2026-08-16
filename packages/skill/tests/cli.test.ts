@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,10 +12,30 @@ function run(args: readonly string[], cwd = process.cwd(), executable = command)
   return spawnSync("bun", [executable, ...args], { cwd, encoding: "utf8" });
 }
 
-async function writePackage(directory: string, name: string, version: string): Promise<void> {
+const executables: Record<string, string> = {
+  "@mit-sdg/sync-engine": "sync-engine",
+  "@mit-sdg/sync-engine-analysis": "sync-engine-analysis",
+  "@mit-sdg/sync-engine-catalog": "sync-engine-catalog",
+};
+
+async function writePackage(
+  directory: string,
+  name: string,
+  version: string,
+  executable = executables[name],
+): Promise<void> {
   const target = resolve(directory, "node_modules", name);
-  await mkdir(target, { recursive: true });
-  await writeFile(resolve(target, "package.json"), JSON.stringify({ name, version }));
+  const binTarget = "./dist/command.js";
+  await mkdir(resolve(target, "dist"), { recursive: true });
+  await writeFile(
+    resolve(target, "package.json"),
+    JSON.stringify({
+      name,
+      version,
+      bin: executable === undefined ? {} : { [executable]: binTarget },
+    }),
+  );
+  await writeFile(resolve(target, binTarget), "#!/usr/bin/env node\n");
 }
 
 afterEach(async () => {
@@ -91,6 +111,35 @@ describe("sync-engine-skill command", () => {
     expect(result.stderr).toContain("Prompt built: role designer");
   });
 
+  test("digests closed design and bounds diagnostic follow-ups", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-design-cli-"));
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design);
+    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    const digested = run(["design", "digest", design], directory);
+    expect(digested.status).toBe(0);
+    const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
+    expect(digest).toBeDefined();
+
+    const followUp = resolve(directory, "follow-up.md");
+    await writeFile(followUp, "Run `bun run test`.\n");
+    const checked = run(
+      ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
+      directory,
+    );
+    expect(checked.status).toBe(0);
+    expect(checked.stdout).toContain("Follow-up valid");
+
+    await writeFile(followUp, "x".repeat(4097));
+    expect(
+      run(
+        ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
+        directory,
+      ).stderr,
+    ).toContain("maximum is 4096");
+  });
+
   test("checks an installed application against the embedded release", async () => {
     const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-version-"));
     temporary.push(directory);
@@ -105,11 +154,51 @@ describe("sync-engine-skill command", () => {
     expect(valid.status).toBe(0);
     expect(valid.stdout).toBe("Installed sync-engine release matches skill 1.0.0-beta.11.\n");
 
+    await rm(resolve(directory, "node_modules/@mit-sdg/sync-engine-catalog/dist/command.js"));
+    const missingTarget = run(["release", "check", directory], directory);
+    expect(missingTarget.status).toBe(1);
+    expect(missingTarget.stderr).toContain("has missing or escaping target");
+    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.11");
+
     await writePackage(directory, "@mit-sdg/sync-engine", "0.0.0");
     const mixed = run(["release", "check", directory], directory);
     expect(mixed.status).toBe(1);
     expect(mixed.stderr).toContain("does not match skill 1.0.0-beta.11");
     expect(mixed.stderr).toContain("@mit-sdg/sync-engine@0.0.0");
+
+    await writePackage(directory, "@mit-sdg/sync-engine", "1.0.0-beta.11", "sync-engine");
+    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.11", "catalog");
+    const staleExecutable = run(["release", "check", directory], directory);
+    expect(staleExecutable.status).toBe(1);
+    expect(staleExecutable.stderr).toContain(
+      "does not expose required executable sync-engine-catalog",
+    );
+  });
+
+  test("does not accept an ancestor source package as an installed dependency", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-ancestor-"));
+    temporary.push(directory);
+    await mkdir(resolve(directory, "application"));
+    await writeFile(
+      resolve(directory, "package.json"),
+      JSON.stringify({
+        name: "@mit-sdg/sync-engine",
+        version: "1.0.0-beta.11",
+        bin: { "sync-engine": "./dist/command.js" },
+      }),
+    );
+    await mkdir(resolve(directory, "dist"));
+    await writeFile(resolve(directory, "dist/command.js"), "#!/usr/bin/env node\n");
+    for (const name of ["@mit-sdg/sync-engine-analysis", "@mit-sdg/sync-engine-catalog"]) {
+      await writePackage(resolve(directory, "application"), name, "1.0.0-beta.11");
+    }
+
+    const result = run(
+      ["release", "check", resolve(directory, "application")],
+      resolve(directory, "application"),
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Cannot resolve installed package @mit-sdg/sync-engine");
   });
 
   test("runs from a standalone copied skill without package installation", async () => {

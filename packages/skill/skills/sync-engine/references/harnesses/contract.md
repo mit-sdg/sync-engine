@@ -3,9 +3,11 @@
 The workflow requires a harness that can:
 
 - create fresh native agents for independent roles;
-- reuse the coordinator's exact provider and model with its normal reasoning setting at launch;
-- constrain each role to its assigned application read/write paths and exclude framework
-  source and installed package internals, rather than merely inspecting writes afterward;
+- expose the coordinator's exact provider and model, resolve that model's advertised
+  normal reasoning setting, and attest those values on every role launch;
+- enforce read and write denial outside each role's assigned application paths and exclude
+  framework source and installed package internals; assignment prose, a working directory,
+  and post-hoc write inspection are not confinement;
 - deliver initial and follow-up prompts from files without shell reinterpretation;
 - run independent batches concurrently when requested; and
 - wait for a specific agent with a bounded timeout.

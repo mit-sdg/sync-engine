@@ -65,10 +65,17 @@ compact product brief without requiring application dependencies:
 bun "<skill-root>/scripts/command.ts" brief check design/brief.md
 ```
 
-After installing application dependencies, verify their exact release:
+After installing application dependencies and before setup, verify their exact release
+and executable targets:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" release check .
+```
+
+After independent review and authorization close, capture the authored design identity:
+
+```sh
+bun "<skill-root>/scripts/command.ts" design digest design
 ```
 
 Build a role prompt directly to a file:
@@ -80,15 +87,20 @@ bun "<skill-root>/scripts/command.ts" prompt build \
   --output /tmp/designer.prompt.md
 ```
 
+Concept, application, and evidence prompt builds also require `--design-root design`
+and `--design-digest <sha256>`. Diagnostic follow-up files must pass `follow-up check`
+with the same design identity and the 4 KiB limit.
+
 The npm package also exposes `sync-engine-skill` as a convenience command, but the
 workflow uses the bundled source path so copied skills and new applications bootstrap
 without a package-local binary.
 
 Templates support only static `include`, required `input`, and optional `input?`
 Markdown directives. The compiler normalizes line endings and final newlines, orders
-input files deterministically, enforces role budgets, and reports sources, byte count,
-and SHA-256 outside prompt bytes. It does not choose product decisions, workflow
-stages, approval, criticism, repair, or acceptance.
+input files deterministically, enforces role budgets, binds downstream work to the
+reviewed design digest, and reports sources, byte count, and SHA-256 outside prompt
+bytes. It does not choose product decisions, workflow stages, approval, criticism,
+repair, or acceptance.
 
 Use file-based delivery in the agent harness. Generated Markdown must not be embedded
 in a shell argument.

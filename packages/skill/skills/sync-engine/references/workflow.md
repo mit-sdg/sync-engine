@@ -17,12 +17,14 @@ compatible package versions.
 For a new application, initialize or reuse a Bun package. Install
 `@mit-sdg/sync-engine` at the exact release version and install matching
 `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog` as development
-dependencies. Do not install the skill package into the application. Run the installed
-`sync-engine setup`, then verify the set with:
+dependencies. Do not install the skill package into the application. Before setup or
+catalog use, verify exact versions and executable targets with:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" release check .
 ```
+
+Only after that succeeds, run the installed `sync-engine setup`.
 
 For an existing configured application, run the same release check before its documented
 baseline. Do not rerun setup merely to impose default files or scripts.
@@ -64,8 +66,9 @@ request.
 
 ## Select compact context
 
-Resolve the exact installed skill, core, catalog, and analysis release. The catalog
-executable is only `sync-engine-catalog`; invoke it without package download:
+Resolve the exact installed skill, core, catalog, and analysis release. Catalog context
+is optional: zero entries is valid. When a relevant alternative is needed, use only the
+release-checked `sync-engine-catalog` executable without package download:
 
 ```sh
 bunx --no-install sync-engine-catalog list
@@ -73,8 +76,9 @@ bunx --no-install sync-engine-catalog show <entry> --raw
 ```
 
 For designer and critic prompts, select at most three relevant concept designs and one
-recipe by default. Zero is valid. Broader catalog exploration requires an explicit
-user request. Catalog designs are alternatives, never mandatory names or contracts.
+recipe by default. Broader catalog exploration requires an explicit user request.
+Catalog designs are alternatives, never mandatory names or contracts. Never repair,
+alias, or replace a missing catalog executable; release check must fail first.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
 the output file through the selected harness guide. Do not concatenate prompts with Python, heredocs,
@@ -98,8 +102,10 @@ bunx --no-install sync-engine check-concepts design/concepts/*.md
 Return diagnostics to the same designer. Parser failure blocks criticism. The
 coordinator does not repair design Markdown.
 
-After syntax passes, launch a fresh read-only normal-reasoning critic. Two critic passes
-are the normal automatic budget. Maintain the count in active coordinator state:
+After syntax passes, supply the brief only through its dedicated prompt slot. Enumerate
+every concept and composition plus `types.md` through the candidate slot. Launch a fresh read-only
+normal-reasoning critic. Two critic passes are the normal automatic budget. Maintain
+the count in active coordinator state:
 
 1. Critic pass 1 reviews the candidate.
 2. No material findings ends criticism immediately.
@@ -127,6 +133,21 @@ contract mismatch. In interactive mode, link the brief and design and require ex
 approval. In preauthorized mode, proceed without an artificial pause once no blocking
 finding remains. Either mode stops when a blocking uncertainty has no safe conservative
 resolution. The coordinator never approves its own design.
+
+After criticism and authorization close, digest every authored Markdown file under
+`design/` and keep the digest in active coordinator context:
+
+```sh
+bun "<skill-root>/scripts/command.ts" design digest design
+```
+
+Every concept, application, and evidence prompt build requires both
+`--design-root design` and `--design-digest <sha256>`. The compiler rejects drift.
+Include the digest in each temporary assignment and verify it before every diagnostic
+follow-up with `follow-up check`. Any design change invalidates the digest, downstream
+prompts, and conclusions: stop downstream work, rerun syntax and fresh criticism as
+applicable, complete authorization, then capture a new digest. Do not store a digest or
+other workflow metadata in the repository.
 
 ## Implement in bounded phases
 
@@ -157,18 +178,31 @@ relevant tests, and focused commands—not the complete application. It may retu
 existing evidence is sufficient. It may edit only assigned scenario/test paths.
 
 Return an ordinary implementation defect to the original worker with a file containing
-only the new diagnostic and affected command. Do not create a replacement agent or
-resend its full prompt. A mismatch is material when implementation requires a new
+only the new diagnostic, affected paths, and affected command. Before delivery require:
+
+```sh
+bun "<skill-root>/scripts/command.ts" follow-up check <file> \
+  --design-root design --design-digest <sha256>
+```
+
+Do not create a replacement agent or resend its full prompt. Concept workers run only
+assigned concept tests and a necessary focused type check. Application workers run
+focused source-agreement, artifact, integration, and bounded host checks for their
+assigned wiring. Evidence workers run assigned scenarios or tests, not a
+production-wide build chain. A mismatch is material when implementation requires a new
 owner, action, refusal, lifecycle, application policy, external type binding,
 cross-concept failure rule, or visible behavior. Return a material mismatch to design;
 never silently change approved Markdown.
 
 ## Validate once and stop
 
-Each worker runs focused validation before return. After evidence completes, run every
-application-owned source-agreement, artifact, typecheck, check, test, build,
-generation, and bounded host command required by the change. Never hand-edit generated
-output. After a repair, rerun only checks invalidated by that change.
+Each worker runs only its focused owned validation before return. After evidence
+completes, the coordinator runs the complete application-owned source-agreement,
+artifact, typecheck, check, test, build, generation, scenario, and bounded host chain.
+Run that complete acceptance chain once; never hand-edit generated output. If a final
+command fails, return its focused diagnostic to the original worker, rerun the affected
+focused command, then rerun every final check invalidated by the changed paths regardless
+of its position in the chain. Do not repeat unaffected final commands.
 
 Inspect complete status and relevant diffs, including untracked files. Verify that the
 brief and approved design were not silently changed and that all returned changes stay

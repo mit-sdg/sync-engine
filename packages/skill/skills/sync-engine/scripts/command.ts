@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { dirname, parse, resolve } from "node:path";
+import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkBriefFile } from "./brief.ts";
+import { digestDesign, requireDesignDigest } from "./design.ts";
 import { buildPrompt, type PromptInput } from "./prompt.ts";
 
 interface PackageManifest {
   readonly name?: string;
   readonly version?: string;
+  readonly bin?: string | Readonly<Record<string, string>>;
   readonly skill?: string;
   readonly packages?: Readonly<Record<string, string>>;
 }
@@ -24,11 +26,12 @@ const sourceSkillRoot = resolve(commandDirectory, "..");
 const skillRoot = existsSync(resolve(sourceSkillRoot, "release.json"))
   ? sourceSkillRoot
   : resolve(commandDirectory, "../skills/sync-engine");
-const packageNames = [
-  "@mit-sdg/sync-engine",
-  "@mit-sdg/sync-engine-catalog",
-  "@mit-sdg/sync-engine-analysis",
-] as const;
+const packageExecutables = {
+  "@mit-sdg/sync-engine": "sync-engine",
+  "@mit-sdg/sync-engine-catalog": "sync-engine-catalog",
+  "@mit-sdg/sync-engine-analysis": "sync-engine-analysis",
+} as const;
+const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
 
 function parent(path: string): string | undefined {
   const next = parse(path).dir;
@@ -50,10 +53,13 @@ async function resolveManifest(
   starts: readonly string[],
 ): Promise<{ path: string; manifest: PackageManifest }> {
   for (const start of starts) {
-    for (let directory: string | undefined = resolve(start); directory !== undefined;) {
-      const localPath = resolve(directory, "package.json");
-      const local = await manifestAt(localPath);
-      if (local?.name === packageName) return { path: localPath, manifest: local };
+    const applicationRoot = resolve(start);
+    for (let directory: string | undefined = applicationRoot; directory !== undefined;) {
+      if (directory === applicationRoot) {
+        const localPath = resolve(directory, "package.json");
+        const local = await manifestAt(localPath);
+        if (local?.name === packageName) return { path: localPath, manifest: local };
+      }
 
       const dependencyPath = resolve(directory, "node_modules", packageName, "package.json");
       const dependency = await manifestAt(dependencyPath);
@@ -85,13 +91,43 @@ async function readSkillRelease(): Promise<SkillRelease> {
   return value as SkillRelease;
 }
 
+function inside(root: string, path: string): boolean {
+  const child = relative(root, path);
+  return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
+}
+
+function requireExecutable(
+  packageName: keyof typeof packageExecutables,
+  path: string,
+  manifest: PackageManifest,
+): void {
+  const executable = packageExecutables[packageName];
+  const bins = typeof manifest.bin === "string" ? { [executable]: manifest.bin } : manifest.bin;
+  const target = bins?.[executable];
+  if (typeof target !== "string" || target.length === 0) {
+    throw new Error(`Installed ${packageName} does not expose required executable ${executable}`);
+  }
+  const packageRoot = dirname(path);
+  const executablePath = resolve(packageRoot, target);
+  if (
+    !inside(packageRoot, executablePath) ||
+    !existsSync(executablePath) ||
+    !statSync(executablePath).isFile()
+  ) {
+    throw new Error(
+      `Installed ${packageName} executable ${executable} has missing or escaping target ${target}`,
+    );
+  }
+}
+
 async function validateReleaseSet(release: SkillRelease, applicationRoot: string): Promise<string> {
-  const resolved: Array<{ name: string; version: string }> = [];
+  const resolved: Array<{ name: keyof typeof packageExecutables; version: string }> = [];
   for (const packageName of packageNames) {
     const found = await resolveManifest(packageName, [applicationRoot]);
     if (found.manifest.version === undefined) {
       throw new Error(`Installed package has no version: ${found.path}`);
     }
+    requireExecutable(packageName, found.path, found.manifest);
     resolved.push({ name: packageName, version: found.manifest.version });
   }
 
@@ -109,10 +145,14 @@ function usage(): string {
   return `Usage:
   sync-engine-skill release check [<application-directory>]
   sync-engine-skill brief check <brief.md>
+  sync-engine-skill design digest <design-directory>
+  sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>... --output <path>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>... --stdout
 
 Prompt options:
+  --design-root <directory>       Required for implementation and evidence roles
+  --design-digest <sha256>        Closed reviewed design digest for that directory
   --max-bytes <positive integer>  Override the role's default byte budget
 `;
 }
@@ -129,6 +169,8 @@ interface PromptArguments {
   readonly output?: string;
   readonly stdout: boolean;
   readonly maxBytes?: number;
+  readonly designRoot?: string;
+  readonly designDigest?: string;
 }
 
 function parsePromptArguments(args: readonly string[]): PromptArguments {
@@ -136,6 +178,8 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   let output: string | undefined;
   let stdout = false;
   let maxBytes: number | undefined;
+  let designRoot: string | undefined;
+  let designDigest: string | undefined;
   const inputs: PromptInput[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
@@ -156,6 +200,12 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
       index += 1;
     } else if (argument === "--stdout") {
       stdout = true;
+    } else if (argument === "--design-root") {
+      designRoot = takeValue(args, index, argument);
+      index += 1;
+    } else if (argument === "--design-digest") {
+      designDigest = takeValue(args, index, argument);
+      index += 1;
     } else if (argument === "--max-bytes") {
       const value = takeValue(args, index, argument);
       index += 1;
@@ -172,7 +222,7 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   if ((output === undefined) === !stdout) {
     throw new Error(`prompt build requires exactly one of --output or --stdout`);
   }
-  return { role, inputs, output, stdout, maxBytes };
+  return { role, inputs, output, stdout, maxBytes, designRoot, designDigest };
 }
 
 async function run(args: readonly string[]): Promise<void> {
@@ -197,6 +247,24 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
+  if (args[0] === "design" && args[1] === "digest" && args.length === 3) {
+    const result = await digestDesign(args[2]!);
+    process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
+    return;
+  }
+
+  if (args[0] === "follow-up" && args[1] === "check" && args.length === 7) {
+    if (args[3] !== "--design-root" || args[5] !== "--design-digest") {
+      throw new Error(`follow-up check requires --design-root then --design-digest`);
+    }
+    const content = await readFile(args[2]!, "utf8");
+    const bytes = Buffer.byteLength(content, "utf8");
+    if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
+    await requireDesignDigest(args[4]!, args[6]!);
+    process.stdout.write(`Follow-up valid: ${bytes} bytes; design ${args[6]}.\n`);
+    return;
+  }
+
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
     const result = await buildPrompt({
@@ -204,6 +272,8 @@ async function run(args: readonly string[]): Promise<void> {
       inputs: options.inputs,
       promptRoot: resolve(skillRoot, "prompts"),
       maxBytes: options.maxBytes,
+      designRoot: options.designRoot,
+      expectedDesignDigest: options.designDigest,
     });
     if (options.stdout) process.stdout.write(result.content);
     else await writeFile(resolve(options.output!), result.content, "utf8");

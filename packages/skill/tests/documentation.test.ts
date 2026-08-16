@@ -178,7 +178,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("never inspect framework implementation source");
     expect(workflow).toContain("Never include framework checkout source");
     expect(workflow).toContain("instead of searching internals");
-    expect(contract).toContain("exclude framework\n  source and installed package internals");
+    expect(contract).toContain("framework source and installed package internals");
+    expect(contract).toContain("assignment prose, a working directory");
   });
 
   test("uses a compact brief without treating every open choice as blocking", async () => {
@@ -213,6 +214,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain("If the same blocker returns unchanged, stop for the user");
     expect(normalized).toContain("record it in the brief's Open decisions and final handback");
     expect(normalized).toContain("Never defer missing authority, non-bypassable authorization");
+    expect(normalized).toContain("supply the brief only through its dedicated prompt slot");
+    expect(normalized).toContain("every concept and composition plus `types.md`");
     expect(workflow).toContain("Once required checks pass, hand back immediately");
     expect(workflow).toContain("do not open another repair or criticism cycle");
   });
@@ -227,6 +230,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("one fresh normal-reasoning evidence worker");
     expect(workflow).toContain("split only for overflow or explicit parallelism");
     expect(workflow).toContain("Do not create a replacement agent");
+    expect(workflow).toContain("design digest design");
+    expect(workflow).toContain("follow-up check <file>");
+    expect(workflow).toContain("every final check invalidated by the changed paths");
 
     const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));
     expect(evidence).toMatch(/existing\s+evidence is sufficient/);
@@ -260,6 +266,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(await filesBelow(new URL("scripts/", skillRoot))).toEqual([
       "brief.ts",
       "command.ts",
+      "design.ts",
       "prompt.ts",
     ]);
 
@@ -280,12 +287,13 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("coordinator's exact provider and model");
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
-    expect(contract).toContain("normal reasoning setting at launch");
+    expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
     expect(paseo).toContain("Pi `openai-codex/...` models still use `pi`, not `codex`");
     expect(paseo).toContain("Wait for a file-delivered assignment");
-    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file"');
-    expect(paseo).toContain("Never put generated prompt contents");
+    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
+    expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');
+    expect(paseo).toContain("Never put generated\nprompt contents");
   });
 
   test("keeps source inventory coverage explicit", async () => {

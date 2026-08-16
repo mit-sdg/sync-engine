@@ -32,8 +32,9 @@ Follow supplied types and existing application patterns; do not invent another
 framework layer. Keep concept invariants out of composition. Keep hosts thin; approved
 concepts and composition own observable policy unless an adapter is inert.
 
-Run assigned source-agreement, artifact, type, test, build, and host checks; repair
-wiring defects. Stop with a material contract blocker if implementation needs a new
+Run only assigned focused source-agreement, artifact, type, integration, and bounded
+host checks for this wiring; the coordinator owns the final complete acceptance chain.
+Repair wiring defects. Stop with a material contract blocker if implementation needs a new
 owner, action, refusal, lifecycle, application policy, external binding, cross-concept
 failure rule, or visible behavior. Never change approved design or concept contracts.
 
