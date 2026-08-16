@@ -83,6 +83,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     }
     for (const rule of [
       "one semantic owner",
+      "Runtime persistence belongs to implementation and evidence, not State",
       "External types are generic and identities opaque",
       "Race-sensitive and security-critical rules stay in the action",
       "Expected domain rejection is a declared refusal",
@@ -174,6 +175,9 @@ describe("compact sync-engine Agent Skill documents", () => {
 
   test("uses one implementation worker per phase and independent evidence", async () => {
     const workflow = await text(new URL("references/workflow.md", skillRoot));
+    expect(workflow).toContain(
+      "brief storage\nguarantees in implementation assignments, not concept State",
+    );
     expect(workflow).toContain("one normal-reasoning concept worker");
     expect(workflow).toContain("one normal-reasoning application worker");
     expect(workflow).toContain("one fresh normal-reasoning evidence worker");
@@ -229,10 +233,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
     expect(entry).toContain("Paseo guide");
     expect(entry).toContain("self-contained compiler");
+    expect(entry).toContain("coordinator's exact provider and model");
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
     expect(contract).toContain("normal reasoning setting at launch");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
+    expect(paseo).toContain("Pi `openai-codex/...` models still use `pi`, not `codex`");
     expect(paseo).toContain("Wait for a file-delivered assignment");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file"');
     expect(paseo).toContain("Never put generated prompt contents");

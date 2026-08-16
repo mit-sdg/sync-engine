@@ -3,7 +3,7 @@
 The workflow requires a harness that can:
 
 - create fresh native agents for independent roles;
-- select or confirm the provider's normal reasoning setting at launch;
+- reuse the coordinator's exact provider and model with its normal reasoning setting at launch;
 - assign a working directory and inspect returned changes against read/write bounds;
 - deliver initial and follow-up prompts from files without shell reinterpretation;
 - run independent batches concurrently when requested; and

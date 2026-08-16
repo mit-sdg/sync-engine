@@ -26,8 +26,8 @@ atomic owner, or reactions would reconstruct one operation.
 ## State and ownership
 
 State describes observable identities, relations, lifecycle, order, multiplicity, and
-invariants—not objects or storage—and supports every action. Assign each state relation
-and durable fact one semantic owner.
+invariants—not objects or storage—and supports every action. Assign one semantic owner
+to each relation. Runtime persistence belongs to implementation and evidence, not State.
 
 External types are generic and identities opaque. A concept may own relations on
 an external identity, but must not inspect or copy peer facts or infer shared state. For a
@@ -43,8 +43,8 @@ Race-sensitive and security-critical rules stay in the action that owns changed 
 
 Actions name significant domain occurrences or transitions, not generic writes; they
 need not change state. Make preconditions and effects explicit. Do not use optional or
-flag inputs to combine unrelated cases. Owner actions and durable transactions enforce
-local invariants, non-bypassable authorization, and race-sensitive decisions. Getters
+flag inputs to combine unrelated cases. Owner actions and transactions enforce local
+invariants, non-bypassable authorization, and race-sensitive decisions. Getters
 are queries; loop wrappers are not actions.
 
 Expected domain rejection is a declared refusal with a stable code; unexpected failure
@@ -53,9 +53,8 @@ unless another fact is recorded atomically; specify and test it. Queries have no
 effects; their `one`, `optional`, or `many` cardinality is observable.
 
 Cover relevant lifecycle. Distinguish reversal, compensation, deletion, and repetition.
-State whether repetition succeeds again, returns a prior result, or refuses. Durable
-deduplication atomically checks a caller operation identity; correlation is only
-tracing.
+State whether repetition succeeds again, returns a prior result, or refuses.
+Deduplication atomically checks a caller operation identity; correlation is only tracing.
 
 ## Composition and failure
 
@@ -111,8 +110,8 @@ each executable computation once.
 
 `check-concepts` proves grammar only. Config checking also proves shapes, bindings,
 links, computations, and source agreement. Neither proves boundaries, prose truth,
-State/storage agreement, persistence, transactions, durability, authorization, repair,
-or required behavior. Review and test those.
+implementation persistence or transactions, authorization, repair, or required
+behavior. Review and test those.
 
 ## Assignment
 

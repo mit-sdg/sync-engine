@@ -23,8 +23,8 @@ brief → independent design → syntax → bounded independent criticism
 - Use fresh native agents for design, criticism, and evidence. Keep concept and
   application implementation in separate bounded roles. Never imitate independent
   review with coordinator self-review.
-- Configure routine roles with the provider's normal reasoning setting at launch; do
-  not repeat reasoning instructions in prompts.
+- Use the coordinator's exact provider and model for every role, at that provider's
+  normal reasoning setting; do not repeat reasoning instructions in prompts.
 - Preserve unrelated work and Git history. Acceptance performs no Git operation.
 - Build every role prompt with the bundled `scripts/command.ts` compiler and deliver it
   from a file. Never place generated Markdown in a shell argument.

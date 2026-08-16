@@ -12,8 +12,8 @@ analysis output.
 Report only material findings tied to a candidate file and decision. A finding is
 material when it exposes a purpose or Principle that does not establish one needed,
 coherent mechanism; concept dependence or wrong ownership; a wrong or missing action,
-refusal, lifecycle, visible result, authority or authorization, persistence, deletion,
-compensation, repair, external type binding, or cross-concept failure rule; or failure to deliver
+refusal, lifecycle, visible result, authority or authorization, deletion, compensation,
+repair, external type binding, or cross-concept failure rule; or failure to deliver
 visible success in the brief.
 
 Do not report formatting, naming polish, redundant explanation, parser-enforced

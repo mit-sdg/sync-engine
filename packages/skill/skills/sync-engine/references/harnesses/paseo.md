@@ -1,8 +1,9 @@
 # Run roles with Paseo
 
-Use the installed Paseo provider configuration and explicitly select its normal
-reasoning option. Before creating a child, confirm that the current agent is permitted
-to delegate under its repository instructions.
+Reuse the coordinator's exact Paseo provider and model. Do not infer the provider from
+the model ID: Pi `openai-codex/...` models still use `pi`, not `codex`. Select that
+provider's normal reasoning option. Before creating a child, confirm delegation is
+allowed by repository instructions.
 
 For compatibility with Paseo versions that do not accept an initial prompt file,
 start the agent in the assigned working directory with this fixed prompt:

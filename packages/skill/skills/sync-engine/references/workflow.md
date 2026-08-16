@@ -119,7 +119,8 @@ material uncertainty. The coordinator never approves its own design.
 ## Implement in bounded phases
 
 Write each role's paths, commands, and return contract to a small temporary Markdown
-assignment file using filesystem APIs, not shell interpolation.
+assignment file using filesystem APIs, not shell interpolation. Put brief storage
+guarantees in implementation assignments, not concept State.
 
 Start one normal-reasoning concept worker for all approved concepts that fit the 24 KiB
 budget. It owns only assigned concept and focused test paths. Split into explicit
