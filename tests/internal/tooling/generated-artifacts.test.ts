@@ -212,9 +212,6 @@ export const vocabulary = declareVocabulary({
   sync-engine setup [directory]
     Complete a Bun package manifest and initialize missing concept-free application files.
 
-  sync-engine check-concepts <paths...>
-    Parse draft concept specifications without loading application code or configuration.
-
   sync-engine check-design <paths...>
     Check explicit authored-design Markdown without loading application code or configuration.
 

@@ -84,7 +84,7 @@ specification construction. The H1 names the reusable definition; the
 Before implementation, verify the draft grammar without loading an application:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md
 ```
 
 After registering the implementation, run config-based `sync-engine check` to add

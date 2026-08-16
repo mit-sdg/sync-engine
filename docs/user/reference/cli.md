@@ -17,7 +17,6 @@ files are written.
 | Command                                        | Result                                                                                | Writes files                                   |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files         | `package.json`, Bun install, missing templates |
-| `check-concepts <paths...>`                    | Parses explicit draft concept specifications without loading the application          | No                                             |
 | `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly           | No                                             |
 | `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                                             |
 | `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                                             |
@@ -85,23 +84,6 @@ Template writes are not one filesystem transaction. A filesystem failure reports
 many templates were written; existing application files remain untouched, and a later
 setup can complete the missing files.
 
-## `sync-engine check-concepts`
-
-```text
-sync-engine check-concepts <paths...>
-```
-
-Each operand is an explicit concept Markdown file. At least one path is required and
-options are not accepted. The command checks files in operand order with the strict
-version-1 concept parser. Success prints only the number of parsed files. The first
-missing, non-regular, unreadable, or invalid file produces a path-attributed error and
-exit status 1.
-
-This command does not discover files, load a generated config, inspect TypeScript or
-Git, compare revisions, compute evidence identities, or write files. It establishes
-syntax only. Use config-based `sync-engine check` after registration to check source
-provenance and TypeScript member agreement.
-
 ## `sync-engine check-design`
 
 ```text
@@ -115,7 +97,7 @@ files by their contents rather than their names or paths, checks them in operand
 and stops at the first missing, non-regular, unreadable, or invalid file. Success prints
 only the number of checked files.
 
-Concept documents must pass the same strict version-1 parser as `check-concepts`.
+Concept documents must pass the strict version-1 concept parser.
 Application-design documents use the same parser and assembly-independent validator as
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 

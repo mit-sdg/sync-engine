@@ -53,15 +53,6 @@ export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientReque
 === dist/command/artifacts.d.ts ===
 export declare function artifactsCommand(args: readonly string[]): Promise<void>;
 
-=== dist/command/check-concepts.d.ts ===
-export interface CheckedConceptSpecification {
-    readonly path: string;
-    readonly definition: string;
-}
-/** Parse explicit draft concept files without consulting an application or writing evidence. */
-export declare function checkConceptFiles(paths: readonly string[], root?: string): Promise<readonly CheckedConceptSpecification[]>;
-export declare function checkConceptsCommand(args: readonly string[]): Promise<void>;
-
 === dist/command/check-design.d.ts ===
 export interface CheckedDesignDocument {
     readonly path: string;
