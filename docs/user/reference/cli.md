@@ -17,7 +17,7 @@ files are written.
 | Command                                        | Result                                                                                | Writes files                                   |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files         | `package.json`, Bun install, missing templates |
-| `check-concepts <paths...>`                    | Parses explicit draft concept specifications without loading the application          | No                                             |
+| `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly           | No                                             |
 | `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                                             |
 | `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                                             |
 | `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                 | Yes                                            |
@@ -31,10 +31,11 @@ files are written.
 sync-engine setup [directory]
 ```
 
-The directory defaults to the current working directory and must already contain a
-valid `package.json`. Setup adds the installed package's canonical Bun
-`packageManager` when the field is absent. An existing `packageManager` must name Bun
-and is preserved. The command creates neither the directory nor package manifest.
+The directory defaults to the current working directory and must exist. When
+`package.json` is absent, setup creates a minimal private ES-module package. Otherwise
+the manifest must be valid JSON. Setup adds the installed package's canonical Bun
+`packageManager` when absent; an existing value must name Bun and is preserved. The
+command never creates the target directory.
 
 Setup validates dependency declarations across `dependencies`, `devDependencies`, and
 `peerDependencies`. Different declarations for the same managed package are a
@@ -42,8 +43,8 @@ conflict. It completes these missing managed fields:
 
 - adds the canonical Bun `packageManager` field;
 - adds the exact installed `@mit-sdg/sync-engine` version to `dependencies`;
-- adds an exact compatible TypeScript version to `devDependencies`;
-- adds an exact compatible `@types/node` version to `devDependencies`; and
+- adds the installed package's supported TypeScript range to `devDependencies`;
+- adds its supported `@types/bun` and `@types/node` ranges to `devDependencies`; and
 - adds missing `generate`, `check`, and `start` scripts.
 
 The standard scripts are:
@@ -57,8 +58,8 @@ The standard scripts are:
 ```
 
 An existing compatible dependency declaration is preserved in its existing section.
-The core declaration must equal the running core version; TypeScript and `@types/node`
-ranges must be subsets of the supported ranges. Every existing script is preserved,
+The core declaration must equal the running core version; TypeScript, `@types/bun`, and
+`@types/node` ranges must be subsets of the supported ranges. Every existing script is preserved,
 even when its command differs from the standard. Invalid fields, conflicting
 declarations, and incompatible ranges fail before `package.json` is written.
 
@@ -70,7 +71,8 @@ An unchanged manifest does not run installation, so an unchanged second invocati
 idempotent.
 
 Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
-`src/assembly.ts`, and `src/main.ts`. Its concept-free generated config contains
+`src/assembly.ts`, and `src/main.ts`. The generated `tsconfig.json` loads both Bun and
+Node ambient types. Its concept-free generated config contains
 `design: { version: 1, documents: [] }`. For each target, setup creates an absent file,
 verifies a byte-identical file, and leaves every other existing file unchanged as
 application-owned. It never merges or rewrites existing source, config, or tsconfig.
@@ -82,22 +84,50 @@ Template writes are not one filesystem transaction. A filesystem failure reports
 many templates were written; existing application files remain untouched, and a later
 setup can complete the missing files.
 
-## `sync-engine check-concepts`
+## `sync-engine check-design`
 
 ```text
-sync-engine check-concepts <paths...>
+sync-engine check-design <paths...>
 ```
 
-Each operand is an explicit concept Markdown file. At least one path is required and
-options are not accepted. The command checks files in operand order with the strict
-version-1 concept parser. Success prints only the number of parsed files. The first
-missing, non-regular, unreadable, or invalid file produces a path-attributed error and
-exit status 1.
+Each operand is an explicit Markdown file. At least one path is required and options
+are not accepted. Operands can mix concept specifications, composition documents, and
+application-types documents in any order or location. The command classifies valid
+files by their contents rather than their names or paths, checks them in operand order,
+and stops at the first missing, non-regular, unreadable, or invalid file. Success prints
+only the number of checked files.
 
-This command does not discover files, load a generated config, inspect TypeScript or
-Git, compare revisions, compute evidence identities, or write files. It establishes
-syntax only. Use config-based `sync-engine check` after registration to check source
-provenance and TypeScript member agreement.
+Concept documents must pass the strict version-1 concept parser.
+Application-design documents use the same parser and assembly-independent validator as
+config-based `check`. Before assembly, `check-design` proves only these form properties:
+
+- recognized SSF declarations and fields avoid repairable near-miss keywords, article
+  errors, misplaced or collection-valued `optional`, and a missing `with` before
+  indented fields; unrecognized State lines remain opaque;
+- typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
+  paths, and `computation:` links contain exact computation names;
+- `computations` declarations have valid signatures, distinct input names, balanced
+  type delimiters, and indented prose bodies;
+- application `types` fences contain only `concrete Name` declarations with prose or
+  direct `SelectedInstance.External is Target` bindings;
+- a binding target has either the concrete-name form or the concept-owned
+  `SelectedInstance.Type` form; and
+- computation names, concrete type names, and binding left sides are not duplicated
+  across the supplied application-design documents.
+
+The command does not discover additional files or require a complete corpus. Its SSF
+validation is an intentionally incomplete form check, not a State parser, schema, or
+semantic type check. It does not resolve typed links, binding left sides, or binding
+targets against selected instances or concept declarations. It also does not require
+declaration coverage, compare computation inputs with TypeScript, validate concept source agreement, or
+inspect ordinary prose and computation-body semantics. Those checks need the selected
+assembly and remain the job of config-based `sync-engine check`. In particular, a
+binding target is accepted by shape even when the concept or concrete declaration is
+outside the supplied partial corpus; rejecting it would make partial-corpus checks
+produce false positives.
+
+`check-design` reads no generated config, assembly, TypeScript project, or Git state and
+writes no files.
 
 ## `sync-engine check`
 

@@ -54,14 +54,13 @@ Create a Bun package and initialize the concept-free application files:
 ```sh
 mkdir workshop-app
 cd workshop-app
-bun init -y
-bun add --exact @mit-sdg/sync-engine@beta
 bunx --package @mit-sdg/sync-engine@beta sync-engine setup
 ```
 
-For a reproducible evaluation, replace `@beta` with a pinned version. `setup` adds
-missing compatible development dependencies and standard scripts, runs Bun
-installation after a manifest edit, and creates only absent source/config templates.
+For a reproducible evaluation, replace `@beta` with a pinned version. `setup` creates a
+minimal private module package when needed, adds compatible development dependencies
+and standard scripts, runs Bun installation after a manifest edit, and creates only
+absent source/config templates.
 It never overwrites existing source, config, or tsconfig.
 
 [Getting started](docs/user/guide/getting-started.md) verifies the empty application.

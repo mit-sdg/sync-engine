@@ -13,12 +13,15 @@ syntax, and narrows catalog examples to the memory implementation.
 
 ### Compatibility
 
-- Added the documentation-only `@mit-sdg/sync-engine-skill` package. Its native
-  subagent workflow covers interactive or assumption-based product discovery,
-  independent design and criticism, user review of the actual Markdown,
-  path-isolated implementation, evidence, validation, and final acceptance. It
-  depends on the exact matching analysis and catalog packages and has no runtime
-  JavaScript API.
+- Added `@mit-sdg/sync-engine-skill` with a compact native-agent workflow for a
+  Markdown product brief, independent design and bounded criticism, separated concept
+  and application implementation, objective evidence, and stop-after-success
+  validation. Its skill directory embeds the TypeScript brief validator and deterministic
+  file-based prompt compiler so a new application can bootstrap before installing
+  dependencies. A release manifest pins the matching core, analysis, and catalog
+  packages, with no public JavaScript API or workflow database.
+- Renamed the catalog executable from ambiguous `catalog` to
+  `sync-engine-catalog`. The old executable name is no longer installed.
 - `@mit-sdg/sync-engine-analysis` now installs the read-only
   `sync-engine-analysis` command. It obtains the configured V1 manifest through
   core and provides bounded `summary`, `search`, `describe`, `sources`, `impact`,

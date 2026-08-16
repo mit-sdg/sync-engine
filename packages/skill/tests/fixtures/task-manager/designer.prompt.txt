@@ -1,0 +1,324 @@
+# Independent designer
+
+# Design rules
+
+Design only the brief; parser success does not prove quality.
+
+## Useful independent concepts
+
+A concept owns one coherent mechanism: purpose, state, actions, queries. Layout,
+workflow, and shared identity do not define boundaries. Purpose states one evaluable
+need, predicts behavior without methods or peers, and rules out at least one
+plausible design.
+
+Principle uses one or more short archetypal scenarios showing the mechanism's value,
+not a full specification. Include variants, errors, or refusals only when essential to
+the purpose. External context is allowed; peer behavior is not concept-owned.
+
+Every element serves purpose and brief. Concepts never call, import, or require peers.
+Split a concept that mixes distinct purposes, lifecycles, authorities, state, failures,
+or reuse; combine only when parts are useless alone, an invariant needs one atomic
+owner, or reactions would reconstruct one operation.
+
+## State and ownership
+
+State records observable identity, relations, lifecycle, order, multiplicity, and
+invariants—not storage. Each relation has one semantic owner. Runtime persistence
+belongs to implementation and evidence, not State. Write State only in Simple State
+Form.
+
+External types are generic and identities opaque; relate but never inspect peer facts.
+For a necessary copy of a peer fact, state its authority, updates, staleness,
+divergence detection, and repair; mark historical snapshots. All behavior follows from
+owned state, inputs, and explicit non-peer environment; otherwise change ownership,
+inputs, environment, or policy. Race-sensitive and security-critical rules
+stay in the action owning changed state.
+
+## Actions and lifecycle
+
+Actions name domain occurrences or transitions, not generic writes. Declare
+preconditions and effects; avoid case flags. Owner actions and transactions enforce
+local invariants and non-bypassable authorization, and resolve races. Getters are
+queries; loops are not actions.
+
+Expected domain rejection is a declared refusal with a stable code; other failure is a
+fault. State the post-refusal state: a refusal never partially applies the requested
+transition, though it may atomically record a separate declared fact. Queries have no
+effects. Every query has an indented prose body stating rows, unknown/empty case, and
+stable `many` ordering.
+
+Cover each applicable lifecycle stage—creation, completion, expiry, retention,
+reversal, compensation, deletion, or permanence—and add no CRUD symmetry the
+mechanism lacks. Repetition succeeds again, returns a prior result, or refuses.
+Deduplication atomically checks the caller's operation identity; a correlation id is
+only a trace token.
+
+## Composition and failure
+
+Only composition coordinates concepts. One reaction is one trigger-condition-effect
+decision. Stages express causality; independent consequences get separate reactions;
+named siblings are cases, not priority.
+
+Composition owns cross-concept policy, workflow, context, adaptation, notification,
+compensation, and repair—not owner invariants, mutation, race decisions, or
+reconstructed operations. Pass-through reactions reveal a bad split or missing action.
+
+A reaction cannot make separate owners atomic. For each cross-concept relation, state
+its owners, violation, repair and whether it is automatic, permitted false interval,
+and failure outcome. If no
+false interval is safe, combine ownership or transact. Decide relevant cycle
+termination, bounded fan-out/partial effects, idempotency, causal order, and stale
+reads. Never assume rollback, cancellation, or exactly-once execution.
+
+## Authorization and external effects
+
+For each protected effect identify actor, authenticated identity, resource, fact
+owners, condition, and enforcement point. Request data is a claim, not authentication.
+Composition may deny early; owner actions enforce non-bypassable rules.
+
+Command/process/filesystem/clock/network are concepts only with observable choices,
+state, lifecycle, expected problems, or useful tests; otherwise adapt thinly and keep
+policy in composition.
+
+## Authored application design
+
+Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paired with
+`src/compositions/*.ts`. Deviations need a benefit and explicit mapping.
+
+A definition may have many instances. Bind each external type once to a nonempty
+concrete or selected concept-owned type. Reject chains, external targets, missing or
+duplicate bindings, unresolved names, and unused concretes. Binding conveys identity,
+not ownership, validation, or TypeScript equivalence. State gets only a limited SSF
+form check; review its meaning manually.
+
+Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
+wildcards. Cover each authored endpoint/reaction tree, named view/former; declare
+each executable computation once.
+
+`check-design` proves grammar and authored form only. Config checking proves shapes,
+bindings, links, computations, source agreement. Neither proves boundaries, prose
+truth, persistence, transactions, authorization, repair, or required behavior; review
+and test.
+
+# Simple State Form (SSF)
+
+```text
+schema := (setDecl | subsetDecl)*
+setDecl := [a|an] (element|set|seq) [of] Type [with field+]
+subsetDecl := [a|an] Subtype (element|set) [of] (Type|Subtype) [with field+]
+field := [a|an] [optional] [name] (scalar|collection)
+scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
+collection := (set|seq) [of] scalar
+primitive := Number | String | Flag | Date | DateTime
+```
+
+One declaration per line; indent fields. Types/subtypes/parameters start uppercase,
+fields lowercase, enum values all-uppercase. Identifiers start with a letter then use
+letters/digits/`_`. Consistent singular/plural type names are equivalent.
+
+A field name may be omitted only for an object/parameter scalar or collection; infer
+lowercase singular/plural from its type. Names are unique through an acyclic subset
+hierarchy. Collections are never `optional` (empty means absent). No nested collections
+or unions.
+
+Sets introduce identities—never add ID fields. Subsets classify existing parent members,
+may overlap, and add relations. `element` has exactly one member. Scalar, optional, set,
+and seq mean one, zero-or-one, zero-or-more, and ordered zero-or-more. Declaration
+direction implies no storage, navigation, or ownership of referenced identities.
+Standalone invariant sentences such as
+`at most one Membership has each gathering and member pair` may follow the
+declarations inside the fence.
+
+```state
+a set of Items with
+  a title String
+  an optional dueAt DateTime
+  a members set of Person
+  a status of OPEN or DONE
+
+a Completed set of Items with
+  a completedAt DateTime
+
+an element Settings with
+  a retentionDays Number
+
+at most one Item has each title
+```
+
+# Exact authored formats
+
+Each concept has one gerund identifier H1 naming its mechanism (`# Tasking`, never
+`# Tasks` or `# Task Management`) and these H2s, in order;
+no other headings or fences:
+
+````text
+# Tasking
+
+## Purpose
+Unfenced prose.
+
+## Principle
+Unfenced prose.
+
+## Types
+```types
+external Person
+  Optional explanation.
+```
+
+## State
+```state
+<SSF declarations>
+```
+
+## Actions
+```actions
+create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
+  where title is valid
+  then
+    create the item
+    return item
+  where title is invalid
+  then
+    refuse INVALID_TITLE "A valid title is required."
+
+delete(item: Item) : return ()
+  where true
+  then
+    delete the item
+    return
+```
+
+## Queries
+```queries
+_items(owner: Person) : many (item: Item, title: String)
+  Returns the owner's items, returns no rows when none exist, and orders by Item identity.
+```
+````
+
+Types contains only `external Name` declarations or is empty. State uses supplied SSF;
+the fence may end with invariant sentences.
+Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
+results, and one or more `where`/`then` branches. `where` and `then` have equal
+indentation; each branch body is deeper. Terminal success returns exactly declared
+names. Empty results use `: return ()` and bare `return`, never `return ()` or a
+standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
+within an action and never shared across actions. Return declared names only:
+`return account`, never prose such as `return the session account`.
+
+Action names start with a letter; queries start `_`. Query resolution precedes the
+named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional State
+values as optional row fields, for example `dueAt?: DateTime`. A `one` body always
+promises one row; only `optional` may say no row.
+
+Application `design/types.md` uses one `types` fence. Concrete definitions and direct
+external bindings have this direction:
+
+```types
+concrete Person
+  Stable application identity.
+
+Tasking.Owner is Person
+Notes.Task is Tasking.Task
+```
+
+The binding left side is `SelectedInstance.External`; the right side is a concrete or
+selected concept-owned type. Concept files contain no application links or computations.
+
+Each composition document has one nonempty H1 and decision prose. References are actual
+Markdown links to application declarations—not bare `view:` lines, routes, or
+concept actions:
+
+```md
+Editing [refreshes content](reaction:Forum.posts.RefreshDerivedContent).
+The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
+Visibility follows the [readability policy](view:Forum.posts.Readable).
+```
+
+Declare each executable computation once with an indented body, in the using
+composition document or in `design/types.md` when shared:
+
+```computations
+normalizeTitle(raw: String) : String
+  Produces the canonical task title used by endpoint adaptation.
+```
+
+Prose may use `[normalization](computation:normalizeTitle)`. Routes stay in prose; link
+targets are exact dotted source paths.
+
+## Assignment
+
+Create the smallest complete concept design satisfying the brief. Work from mechanism
+and ownership, not endpoint/resource nouns. Explore alternatives mentally; write only
+the strongest design. Resolve brief-required behavior now. Mark only truly unspecified,
+nonblocking product choices as `Open decision:` with a safe provisional choice.
+
+You are the fresh design author, independent of implementation. Do not read or change
+source, tests, generated artifacts, dependencies, framework internals, or prior agent
+history. Read only supplied files and write only the design paths below.
+
+After writing the design files, run only this read-only syntax command:
+
+```sh
+bunx --no-install sync-engine check-design design/concepts/*.md \
+  design/compositions/*.md design/types.md
+```
+
+Repair reported problems and rerun until it passes. Do not inspect CLI or package
+internals. The coordinator will rerun the same gate independently.
+
+## Files
+
+Create or revise only:
+
+- `design/concepts/*.md` for reusable concept definitions;
+- `design/compositions/*.md` for application decisions and exact intended
+  `reaction:`, `view:`, `former:`, and `computation:` links; and
+- `design/types.md` for application `concrete` declarations and `is` bindings.
+
+Create no index, `application.md`, memo, report, progress file, or workflow metadata.
+Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.
+
+## Return
+
+Return changed paths and at most two brief-material questions. Nothing else.
+
+## Product brief
+
+<!-- source: packages/skill/tests/fixtures/task-manager/brief.md -->
+
+# Shared task manager
+
+## Objective
+
+Build a shared task manager for assigning work with deadlines.
+
+## Product decisions
+
+- **D1 — Team scope (Assumption):** Use one shared workspace.
+
+## Visible success
+
+- A member can create and assign a task.
+
+## Expected refusals
+
+- A task cannot be assigned to an unknown member.
+
+## Assumptions
+
+- One server instance hosts the workspace.
+
+## Non-goals
+
+- Billing and attachments.
+
+## Open decisions
+
+None.
+
+## Existing design
+
+
+
+## Catalog candidates

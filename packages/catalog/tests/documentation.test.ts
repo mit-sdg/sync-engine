@@ -5,9 +5,9 @@ describe("catalog documentation", () => {
   test("documents the complete read-only command contract", async () => {
     const reference = await readFile(new URL("../public-surface.md", import.meta.url), "utf8");
     for (const term of [
-      "catalog list",
-      "catalog show",
-      "catalog source",
+      "sync-engine-catalog list",
+      "sync-engine-catalog show",
+      "sync-engine-catalog source",
       "--raw",
       "stdout",
       "never writes",
@@ -20,7 +20,13 @@ describe("catalog documentation", () => {
       "rename",
     ])
       expect(reference).toContain(term);
-    for (const removed of ["catalog add", "catalog.lock", "generated.ts", "src/concept-set.ts"])
+    for (const removed of [
+      "`catalog` executable",
+      "sync-engine-catalog add",
+      "catalog.lock",
+      "generated.ts",
+      "src/concept-set.ts",
+    ])
       expect(reference).not.toContain(removed);
   });
 

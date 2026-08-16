@@ -127,12 +127,13 @@ states, customization, or future-proofing that the requested capability does not
 need. A smaller complete mechanism is preferable to speculative behavior that creates
 new authority and failure cases.
 
-A principle is one concrete prose scenario that demonstrates the purpose. Start
-from empty state, perform setup through the concept's own actions, observe
-results through its queries, and include the refusals that distinguish the
-mechanism. Do not turn Principle into a container for subordinate reference
-sections or fenced notation. A principle that requires a peer action describes
-a workflow or exposes a wrong boundary.
+A principle uses one or more concise archetypal prose scenarios to demonstrate
+how the mechanism fulfills its purpose; it is not the complete specification.
+Include setup and enough actors, action occurrences, and observations to show the
+value. Include variants, errors, or refusals only when they are essential to the
+purpose. A principle may mention clearly external context, but the concept's State
+and Actions must not depend on a peer. Do not turn Principle into subordinate
+reference sections or fenced notation.
 
 [Gathering](../../examples/reading-circle/design/concepts/Gathering.md) is the
 throughline. It creates a named gathering, establishes its host as a member,
@@ -147,14 +148,18 @@ lifecycle stage of each managed entity, and any order, multiplicity, or invarian
 that changes behavior. Tables, documents, indexes, caches, and serialization
 formats are implementation choices unless they alter the observable contract.
 
-The required `State` fence is normalized and retained but remains unparsed until
-Simple State Form has a final grammar. Registration derives no schema or
-validator from it. See [`State`](reference/concept-specification.md#state).
-Names introduced by State and conventional names used in operation signatures
-do not require declarations in the external-only Types fence. Record owned facts
-in State and put each enforced invariant or value refinement in the action branch
-that checks it. Do not compensate for deferred SSF parsing with local type
-aliases, a heuristic type scan, or a private notation dialect.
+The required `State` fence is normalized and retained but remains unparsed. Authors
+must nevertheless use Simple State Form (SSF): set, sequence, singleton, and subset
+declarations with indented relation fields; implicit set identity rather than synthetic
+ID fields; capitalized types, lowercase field names, uppercase enumeration values, and
+SSF primitives. Registration derives no schema from it. `check-design` rejects a small
+published set of recognized, mechanically repairable SSF form errors while leaving
+unrecognized lines opaque. See [`State`](reference/concept-specification.md#state).
+Names introduced by State and conventional names used in operation signatures do not
+require declarations in the external-only Types fence. Record owned facts in State and
+put each enforced invariant or value refinement in the action branch that checks it.
+Do not compensate for deferred authoritative SSF parsing with local type aliases, a
+heuristic type scan, or a private notation dialect.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning
@@ -220,9 +225,11 @@ specify and test that effect; the action implementation or backing store must
 provide any transaction needed to make it atomic.
 
 Queries read state without side effects. Their `one`, `optional`, or `many`
-promise is a domain cardinality claim, not a performance hint. The promise
-determines whether composition can require one row, tolerate absence, or fan out.
-[Query semantics](reference/semantics.md#queries) defines runtime checking and caching.
+promise is a domain cardinality claim, not a performance hint. Every authored query has
+an indented body stating what it answers, its unknown or empty case, and deterministic
+ordering for `many`; the signature alone is incomplete. The promise determines whether
+composition can require one row, tolerate absence, or fan out. [Query
+semantics](reference/semantics.md#queries) defines runtime checking and caching.
 
 Cover each applicable lifecycle stage: creation, use, completion, expiry,
 retention, reversal, deletion, or deliberate permanence. Do not add CRUD
@@ -292,7 +299,8 @@ the gathering's existence, and creating a gathering establishes its host's
 membership as one invariant-preserving transition. A reaction would turn that
 transition into two independently failing actions.
 
-Use a familiar concept name only when its observable choices, lifecycle, and
+Name a concept with a gerund describing its mechanism—`Tasking`, not `Tasks`; `Noting`,
+not `Notes`. Use a familiar name only when its observable choices, lifecycle, and
 refusals match that mechanism. Otherwise narrow or rename it. A candidate
 suitable in every domain is often a utility or data structure. Test change
 containment by naming likely changes and the concepts or rules each would touch.

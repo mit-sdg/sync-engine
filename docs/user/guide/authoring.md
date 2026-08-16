@@ -60,8 +60,10 @@ with this exact top-level structure:
 Declare concept-external parameters in the sole `types` fence. The fence may be
 empty: concept-owned identities, conventional values, and refinements used in
 State or operation signatures are not additional Types declarations. Put one
-raw `state` fence in State and express enforced refinements in the owning action
-branches. Declare at least one structured action with explicit branches, and put
+SSF `state` fence in State, use `check-design` for its limited repairable form checks,
+and review the remaining State manually because version 1 does not parse it. Express
+enforced refinements in the owning action branches. Declare at least one
+structured action with explicit branches, and put
 the sole `queries` fence in Queries even when it is empty. Do not add subsection
 headings, fenced blocks in Purpose or Principle, application typed links, or
 computations.
@@ -83,7 +85,7 @@ specification construction. The H1 names the reusable definition; the
 Before implementation, verify the draft grammar without loading an application:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md
 ```
 
 After registering the implementation, run config-based `sync-engine check` to add
@@ -171,6 +173,17 @@ is one bare type. Use an optional `computation:invitationMailText` link when
 another passage refers to it. Do not put computations in concept
 specifications.
 
+Before implementation, form-check the complete authored corpus without loading
+an application:
+
+```sh
+sync-engine check-design design/concepts/*.md design/compositions/*.md design/types.md
+```
+
+This preassembly check accepts a partial corpus and therefore checks form and
+supplied-corpus duplicates, not link resolution, application type closure, or
+coverage. The config-based check adds those assembly-dependent proofs.
+
 ## 6. Register explicit design URLs
 
 Add a required versioned design block to the default export of
@@ -250,9 +263,11 @@ by the old format.
 
 1. Rewrite every concept file into the six strict ordered sections.
 2. Replace prose Types with explicit `external` declarations.
-3. Preserve State in one raw fence; do not translate it into an invented SSF
-   dialect.
-4. Rewrite action branches and query result rows into the structured grammar.
+3. Rewrite State in the published SSF notation without inventing a private dialect;
+   run `check-design` for limited repairable form checks and review the remaining State
+   manually because version 1 does not parse it.
+4. Rewrite action branches and query result rows into the structured grammar, and give
+   every query an explanatory body.
 5. Replace vocabulary edges and executable Markdown imports with `types` fences
    using `concrete` and `is` in registered application documents.
 6. Remove composition `spec` imports and add exact typed links to registered

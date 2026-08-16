@@ -53,6 +53,17 @@ describe("generic design guidance", () => {
     }
   });
 
+  test("treats Principle as concise archetypal explanation rather than exhaustive specification", async () => {
+    const design = await source(designUrl);
+    const review = await source(reviewUrl);
+    expect(design).toContain("one or more concise archetypal prose scenarios");
+    expect(design).toContain("it is not the complete specification");
+    expect(design).toContain("variants, errors, or refusals only when they are essential");
+    expect(design).toContain("may mention clearly external context");
+    expect(review).toContain("one or more concise\n  archetypal scenarios");
+    expect(review).not.toContain("Principle is one concrete scenario");
+  });
+
   test("uses Syncpress and Commons as the requested boundary lessons", async () => {
     const design = await source(designUrl);
     for (const term of [
@@ -84,10 +95,10 @@ describe("generic design guidance", () => {
 
   test("documents the core-owned draft parser without evidence or application inspection", async () => {
     const reference = await source(conceptReferenceUrl);
-    expect(reference).toContain("sync-engine check-concepts design/concepts/*.md");
+    expect(reference).toContain("sync-engine check-design design/concepts/*.md");
     expect(reference).toContain("loads no application configuration or TypeScript source");
     expect(reference).toContain("writes nothing");
-    expect(reference).toContain("reports only concept grammar failures");
+    expect(reference).toContain("reports only authored-design form failures");
   });
 
   test("keeps generic guidance free of application-agent orchestration", async () => {

@@ -34,16 +34,17 @@ Only explicit local `file:` URLs participate in checker coverage.
 
 A concept is not justified merely because it matches an entity, table, class, package,
 service, endpoint, or screen. Ask what useful capability would be lost if the concept
-did not exist and whether the concept can demonstrate that capability without a peer.
+did not exist and whether the concept owns a complete mechanism without depending on a
+peer.
 
-| Criterion          | Evidence required                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Purpose            | Names one useful capability and the loss or failure it prevents, without listing methods                     |
-| Principle          | Starts from understandable state and demonstrates the purpose with only this concept's actions and queries   |
-| Independence       | Names no peer API or peer-owned fact and treats external identities as opaque                                |
-| Completeness       | Can perform its own meaningful lifecycle rather than relying on reactions to reconstruct one owner operation |
-| Restraint          | Contains no behavior, customization, or lifecycle state outside the current objective                        |
-| Change containment | A likely change to this mechanism touches this concept while an unrelated change does not                    |
+| Criterion          | Evidence required                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Purpose            | Names one useful capability and the loss or failure it prevents, without listing methods                                    |
+| Principle          | Uses concise archetypal scenarios with enough setup and occurrences to demonstrate how the mechanism fulfills its purpose   |
+| Independence       | State and Actions name no peer API or peer-owned fact; external identities stay opaque and Principle marks external context |
+| Completeness       | Can perform its own meaningful lifecycle rather than relying on reactions to reconstruct one owner operation                |
+| Restraint          | Contains no behavior, customization, or lifecycle state outside the current objective                                       |
+| Change containment | A likely change to this mechanism touches this concept while an unrelated change does not                                   |
 
 Trace each purpose commitment into Principle, State, actions, queries, and refusals.
 Trace every state member and action back to the purpose. Reject a broad noun owner
@@ -171,30 +172,37 @@ condition, and enforcement point. A request-body identifier is a claim, not
 authentication. Composition may provide early policy denial, but an owner action must
 still enforce any rule that direct calls cannot bypass.
 
-## 8. Validate the strict concept grammar
+## 8. Validate the preassembly forms
 
-Before implementation, parse the explicit draft files without loading application
-code:
+Before implementation, parse the explicit design corpus without loading application
+code or configuration:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md design/compositions/*.md design/types.md
 ```
+
+This command checks strict concept syntax and the form of composition links,
+computations, and application types. It deliberately leaves resolution and coverage
+for config-based `sync-engine check` because the supplied corpus can be partial.
 
 For every concept, also verify manually that:
 
 - one H1 names the reusable definition rather than an application instance;
 - Purpose, Principle, Types, State, Actions, and Queries occur exactly once, in that
   order, with no subordinate headings;
-- Purpose and Principle are unfenced prose, and Principle is one concrete scenario
-  rather than a container for reference material;
+- Purpose and Principle are unfenced prose, and Principle uses one or more concise
+  archetypal scenarios rather than becoming a complete specification or a container
+  for reference material;
 - Types contains one `types` fence with only explicit `external` declarations;
   concept-owned and conventional names do not need local declarations;
-- State contains one raw `state` fence and does not claim that version 1 validates
-  SSF;
+- State contains one raw `state` fence and follows SSF declaration, identity, type,
+  multiplicity, naming, and indentation rules; `check-design` validates only its
+  published set of recognized repairable forms, so review the remainder manually;
 - every action has explicit `where`/`then` branches and one terminal return or refusal
   per branch;
 - action results and query rows use parenthesized named fields;
-- query prose adds only meaning not already evident from State and signature;
+- every query has indented prose stating what it answers, its unknown or empty case,
+  and deterministic ordering for `many`;
 - concept files contain no application links or computations; and
 - each refusal sentence states the same rule as its branch condition.
 

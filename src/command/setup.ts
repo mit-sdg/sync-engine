@@ -152,19 +152,11 @@ function rangeWithin(candidate: string, supported: string): boolean {
   }
 }
 
-function exactMinimum(range: string, label: string): string {
-  const minimum = semver.minVersion(range)?.version;
-  if (minimum === undefined) {
-    throw new Error(`sync-engine setup: the installed package has an invalid ${label} range.`);
-  }
-  return minimum;
-}
-
 function ensureDependency(
   manifest: Record<string, unknown>,
   name: string,
   destination: "dependencies" | "devDependencies",
-  exact: string,
+  required: string,
   compatible: (range: string) => boolean,
 ): boolean {
   const declared = requirements(manifest, name);
@@ -174,11 +166,11 @@ function ensureDependency(
   if (declared.length > 0) {
     const range = declared[0]?.range ?? "";
     if (!compatible(range)) {
-      throw new Error(`sync-engine setup: ${name} ${range} is incompatible with ${exact}.`);
+      throw new Error(`sync-engine setup: ${name} ${range} is incompatible with ${required}.`);
     }
     return false;
   }
-  dependencySection(manifest, destination, true)![name] = exact;
+  dependencySection(manifest, destination, true)![name] = required;
   return true;
 }
 
@@ -213,12 +205,11 @@ interface PackageRequirements {
   version: string;
   packageManager: string;
   typescriptRange: string;
+  bunTypesRange: string;
   nodeTypesRange: string;
 }
 
 function updateManifest(manifest: Record<string, unknown>, required: PackageRequirements): boolean {
-  const typescriptVersion = exactMinimum(required.typescriptRange, "TypeScript");
-  const nodeTypesVersion = exactMinimum(required.nodeTypesRange, "@types/node");
   let changed = false;
   if (manifest.packageManager === undefined) {
     manifest.packageManager = required.packageManager;
@@ -233,11 +224,15 @@ function updateManifest(manifest: Record<string, unknown>, required: PackageRequ
       (range) => range === required.version,
     ) || changed;
   changed =
-    ensureDependency(manifest, "typescript", "devDependencies", typescriptVersion, (range) =>
+    ensureDependency(manifest, "typescript", "devDependencies", required.typescriptRange, (range) =>
       rangeWithin(range, required.typescriptRange),
     ) || changed;
   changed =
-    ensureDependency(manifest, "@types/node", "devDependencies", nodeTypesVersion, (range) =>
+    ensureDependency(manifest, "@types/bun", "devDependencies", required.bunTypesRange, (range) =>
+      rangeWithin(range, required.bunTypesRange),
+    ) || changed;
+  changed =
+    ensureDependency(manifest, "@types/node", "devDependencies", required.nodeTypesRange, (range) =>
       rangeWithin(range, required.nodeTypesRange),
     ) || changed;
   changed = ensureScripts(manifest) || changed;
@@ -277,25 +272,22 @@ export async function setupProject(
     throw new Error(`sync-engine setup: directory does not exist: ${directory}`);
   }
   const packagePath = resolve(root, "package.json");
-  if (!existsSync(packagePath)) {
-    throw new Error(
-      `sync-engine setup: ${directory} has no package.json. Create a Bun package first with \`bun init -y\`.`,
-    );
-  }
-  const manifestSource = await readFile(packagePath, "utf8");
-  const manifest = packageObject(manifestSource, relative(process.cwd(), packagePath));
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {
     version: string;
     packageManager: string;
     dependencies: { typescript: string };
-    devDependencies: { "@types/node": string };
+    devDependencies: { "@types/bun": string; "@types/node": string };
   };
+  const manifest = existsSync(packagePath)
+    ? packageObject(await readFile(packagePath, "utf8"), relative(process.cwd(), packagePath))
+    : { private: true, type: "module" };
   const manifestUpdated = updateManifest(manifest, {
     version: packageManifest.version,
     packageManager: packageManifest.packageManager,
     typescriptRange: packageManifest.dependencies.typescript,
+    bunTypesRange: packageManifest.devDependencies["@types/bun"],
     nodeTypesRange: packageManifest.devDependencies["@types/node"],
   });
 

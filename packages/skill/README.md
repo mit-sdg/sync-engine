@@ -1,79 +1,125 @@
 # @mit-sdg/sync-engine-skill
 
-`@mit-sdg/sync-engine-skill` gives a coding agent a human-reviewed workflow for
-designing and building a sync-engine application. It uses independent native
-subagents for design, criticism, implementation, integration, and evidence. If an
-agent harness cannot create native subagents, the workflow pauses rather than
-simulating an independent review.
+`@mit-sdg/sync-engine-skill` gives coding agents a compact, independently reviewed
+workflow for designing and building sync-engine applications. It keeps authored
+Markdown as design authority, separates concept and application implementation, and
+requires independent objective evidence.
 
-Install the exact beta and expose its skill directory to your Agent Skills loader:
+Install an exact published release into Pi, replacing `VERSION` with the desired beta:
 
 ```sh
-bun add --dev --exact @mit-sdg/sync-engine-skill@beta
+pi install npm:@mit-sdg/sync-engine-skill@VERSION
 ```
+
+For development from a checkout:
+
+```sh
+pi install /absolute/path/to/sync-engine/packages/skill
+```
+
+Pi discovers `skills/sync-engine/` in the package. Other Agent Skills loaders can point
+directly to that directory. Do not also copy the same skill into a second discovery
+location because duplicate names are ambiguous.
+
+The skill is self-contained: its prompt compiler and brief validator are TypeScript
+under `skills/sync-engine/scripts/` and require only Bun and platform APIs. A new
+application does not install the skill package. The workflow instead reads
+`release.json`, installs the exact matching core, catalog, and analysis releases into
+the application, and rejects a mixed installed release set.
+
+## Workflow
+
+A normal run maintains a short `design/brief.md`, then performs:
 
 ```text
-node_modules/@mit-sdg/sync-engine-skill/skills/sync-engine
+independent design → syntax → normal two-pass criticism
+→ approval or autonomous preauthorized resolution → concept implementation
+→ application implementation → independent evidence → required validation → handback
 ```
 
-The skill package depends on the exact matching releases of
-`@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog`, so installation
-also exposes the read-only `sync-engine-analysis` and `catalog` context tools. These
-dependencies are for the agent workflow; they do not change ordinary `sync-engine
-setup` applications.
+Criticism stops after the first clean pass. A second pass happens only after a material
+repair. Interactive work needs an explicit “review more thoroughly” request for another
+pass. Preauthorized work instead repairs a remaining safe/coherent-implementation
+blocker autonomously while each pass makes progress, or records a nonblocking finding
+as an open decision for handback. It never defers authority, non-bypassable
+authorization, ownership, or brief-required behavior. Passing required checks hands
+back immediately; optional polish and informational findings do not create another
+cycle.
 
-The entrypoint is [`skills/sync-engine/SKILL.md`](skills/sync-engine/SKILL.md).
-A normal run first asks whether you want to discuss the design (recommended) or let
-the agent proceed with general assumptions. It then establishes a working start
-baseline. In discussion mode, the agent asks one or two option-based questions per
-turn, recommends an answer to each, and periodically checks whether you want to keep
-discussing or move to a draft; there is no preset round limit. The workflow then
-produces a complete Markdown design, obtains an independent criticism and user
-approval, and builds through path-isolated workers.
+The default uses one concept worker and one application worker rather than repeating
+role instructions for every concept and composition. A phase splits only for a prompt
+budget or explicit user-requested parallelism. Implementation and evidence workers are
+restricted to assigned application paths and supplied public references; they never
+inspect framework source or installed package internals.
 
-## The review you receive
+Start with [`skills/sync-engine/SKILL.md`](skills/sync-engine/SKILL.md). The coordinator
+workflow and harness guides are linked there. Designer and critic prompts share one
+small semantic design document; role templates declare their exact file inputs.
 
-Before implementation, the agent links the actual files under:
+## Deterministic prompt commands
 
-```text
-design/concepts/*.md
-design/compositions/*.md
-design/types.md
+Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. Initialize
+then validate the compact product brief without requiring application dependencies:
+
+```sh
+bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+# Fill the template.
+bun "<skill-root>/scripts/command.ts" brief check design/brief.md
 ```
 
-The review briefly states the objective, proposed concept capabilities, composition
-decisions, alternatives, non-goals, open concerns, and syntax/criticism status. You
-approve or revise that Markdown once; routine registration and host wiring do not add
-another checkpoint. A material design change during implementation returns to the
-same review before work resumes.
+For an empty directory, read `release.json` and first write a minimal private module
+package whose `packageManager` uses its exact Bun version. Do not run a Vite+ migration
+or choose another package manager. After installing application dependencies and before
+setup, verify their exact release and executable targets:
 
-After implementation, the agent lists the implementation areas, exact validation
-outcome, known limits, and asks you to accept, revise, or request more evidence.
-Acceptance does not perform a Git operation.
+```sh
+bun "<skill-root>/scripts/command.ts" release check .
+bunx --no-install sync-engine setup
+```
 
-## What is packaged
+Setup supplies the supported TypeScript, Bun and Node declarations, standard scripts,
+and concept-free configuration; do not probe or downgrade toolchain versions. After
+independent review and authorization close, capture the authored design identity:
 
-This remains a documentation-only Agent Skill: the skill package itself ships no
-executable, JavaScript API, project scanner, workflow database, or generated evidence
-format. Its installed analysis dependency supplies the separate read-only context
-command. Draft concept
-syntax is checked by the installed core `sync-engine check-concepts` command because
-the concept grammar belongs to sync-engine. Ordinary application files and the
-coordinator's active context carry the work.
+```sh
+bun "<skill-root>/scripts/command.ts" design digest design
+```
 
-The role contracts are:
+Build a role prompt directly to a file:
 
-- [Coordinator workflow](skills/sync-engine/references/workflow.md)
-- [Independent design roles](skills/sync-engine/references/design-roles.md)
-- [Isolated implementation roles](skills/sync-engine/references/implementation-roles.md)
+```sh
+bun "<skill-root>/scripts/command.ts" prompt build \
+  --role designer \
+  --input brief=design/brief.md \
+  --output /tmp/designer.prompt.md
+```
 
-The coordinator uses analysis first to select a bounded application inventory and
-focused integration/evidence context. Designer and critic prompts remain closed and
-analysis-free; isolated concept workers normally remain analysis-free as well.
-Repository search and source reading are limited to unavailable, incomplete, or
-ambiguous analysis, files outside the manifest, and concrete compiler/runtime failure
-investigation. Analysis output remains internal and is not pasted into design or
-final reviews.
+Concept, application, and evidence prompt builds also require `--design-root design`
+and `--design-digest <sha256>`. Diagnostic follow-up files must pass `follow-up check`
+with the same design identity and the 4 KiB limit.
 
-Generic concept boundaries, authoring rules, and the concept grammar live in the
-installed core package under `docs/user/`, not in this skill.
+The npm package also exposes `sync-engine-skill` as a convenience command, but the
+workflow uses the bundled source path so copied skills and new applications bootstrap
+without a package-local binary.
+
+Templates support only static `include`, required `input`, and optional `input?`
+Markdown directives. The compiler normalizes line endings and final newlines, orders
+input files deterministically, enforces role budgets, binds downstream work to the
+reviewed design digest, and reports sources, byte count, and SHA-256 outside prompt
+bytes. It does not choose product decisions, workflow stages, approval, criticism,
+repair, or acceptance.
+
+Use file-based delivery in the agent harness. Generated Markdown must not be embedded
+in a shell argument.
+
+## Matching context tools
+
+Use the unambiguous installed catalog command without downloads:
+
+```sh
+bunx --no-install sync-engine-catalog list
+bunx --no-install sync-engine-catalog show concept/commenting --raw
+```
+
+`sync-engine-analysis` remains coordinator-only bounded context selection. Designer and
+critic prompts never receive analysis output or instructions.

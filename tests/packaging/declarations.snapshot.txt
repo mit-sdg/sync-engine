@@ -53,14 +53,14 @@ export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientReque
 === dist/command/artifacts.d.ts ===
 export declare function artifactsCommand(args: readonly string[]): Promise<void>;
 
-=== dist/command/check-concepts.d.ts ===
-export interface CheckedConceptSpecification {
+=== dist/command/check-design.d.ts ===
+export interface CheckedDesignDocument {
     readonly path: string;
-    readonly definition: string;
+    readonly kind: "concept" | "application";
 }
-/** Parse explicit draft concept files without consulting an application or writing evidence. */
-export declare function checkConceptFiles(paths: readonly string[], root?: string): Promise<readonly CheckedConceptSpecification[]>;
-export declare function checkConceptsCommand(args: readonly string[]): Promise<void>;
+/** Check explicit authored-design files without consulting an assembly or project state. */
+export declare function checkDesignFiles(paths: readonly string[], root?: string): Promise<readonly CheckedDesignDocument[]>;
+export declare function checkDesignCommand(args: readonly string[]): Promise<void>;
 
 === dist/command/check.d.ts ===
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
@@ -4702,6 +4702,12 @@ export interface ApplicationDesignIssue {
     message: string;
     location?: DesignSourceLocation;
 }
+export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
+    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING";
+    location: DesignSourceLocation;
+};
+/** Check corpus-wide authored forms that do not require a selected assembly. */
+export declare function validateAuthoredApplicationDesignForm(documents: readonly AuthoredApplicationDesignDocument[]): ApplicationDesignFormIssue[];
 /**
  * Check parsed documents against the exact selected assembly inventory. The
  * validator returns all independently actionable issues and performs no I/O.
@@ -5161,6 +5167,21 @@ export declare function declarationGroups(fence: MarkdownFence): readonly {
     body: readonly DesignSourceLine[];
 }[];
 export declare function indentedBody(lines: readonly DesignSourceLine[]): string;
+
+=== dist/engine/tooling/simple-state-form.d.ts ===
+import type { DesignSourceLocation, MarkdownFence } from "./markdown-design-source.ts";
+export type SimpleStateFormIssueCode = "SSF_ARTICLE" | "SSF_MISPLACED_OPTIONAL" | "SSF_MISSING_WITH" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION";
+export interface SimpleStateFormIssue {
+    readonly code: SimpleStateFormIssueCode;
+    readonly message: string;
+    readonly suggestion: string;
+    readonly location: DesignSourceLocation;
+}
+/**
+ * Validate only deterministic, mechanically repairable SSF forms. Unrecognized
+ * lines remain opaque so this checker does not define a complete State dialect.
+ */
+export declare function validateSimpleStateForm(fence: MarkdownFence): readonly SimpleStateFormIssue[];
 
 === dist/engine/tooling/typescript-shapes.d.ts ===
 import ts from "typescript";

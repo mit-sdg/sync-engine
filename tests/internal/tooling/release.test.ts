@@ -127,8 +127,24 @@ describe("release source facts", () => {
     });
     expect(projectedAnalysis.dependencies).toEqual({ typescript: ">=6 <7" });
     expect(JSON.parse(projected.get(skillManifest) ?? "").dependencies).toEqual({
+      "@mit-sdg/sync-engine": currentVersion,
       "@mit-sdg/sync-engine-analysis": currentVersion,
       "@mit-sdg/sync-engine-catalog": currentVersion,
+    });
+    expect(
+      JSON.parse(projected.get("packages/skill/skills/sync-engine/release.json") ?? ""),
+    ).toEqual({
+      skill: currentVersion,
+      toolchain: {
+        bun: "1.3.14",
+        node: ">=24 <25",
+        typescript: ">=6 <7",
+      },
+      packages: {
+        "@mit-sdg/sync-engine": currentVersion,
+        "@mit-sdg/sync-engine-analysis": currentVersion,
+        "@mit-sdg/sync-engine-catalog": currentVersion,
+      },
     });
     for (const [path, source] of projected) sources.set(path, source);
     expect(checkRelease(sources)).toEqual([]);

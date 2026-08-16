@@ -15,10 +15,14 @@
     "url": "https://github.com/mit-sdg/sync-engine",
     "directory": "packages/skill"
   },
+  "bin": {
+    "sync-engine-skill": "./dist/command.js"
+  },
   "files": [
     "LICENSE",
     "NOTICE",
     "README.md",
+    "dist",
     "skills"
   ],
   "type": "module",
@@ -29,6 +33,7 @@
     "tag": "beta"
   },
   "dependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.11",
     "@mit-sdg/sync-engine-analysis": "1.0.0-beta.11",
     "@mit-sdg/sync-engine-catalog": "1.0.0-beta.11"
   },

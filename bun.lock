@@ -35,7 +35,7 @@
       "name": "@mit-sdg/sync-engine-catalog",
       "version": "1.0.0-beta.11",
       "bin": {
-        "catalog": "./dist/command.js",
+        "sync-engine-catalog": "./dist/command.js",
       },
       "devDependencies": {
         "@node-rs/argon2": "2.0.2",
@@ -51,7 +51,11 @@
     "packages/skill": {
       "name": "@mit-sdg/sync-engine-skill",
       "version": "1.0.0-beta.11",
+      "bin": {
+        "sync-engine-skill": "./dist/command.js",
+      },
       "dependencies": {
+        "@mit-sdg/sync-engine": "1.0.0-beta.11",
         "@mit-sdg/sync-engine-analysis": "1.0.0-beta.11",
         "@mit-sdg/sync-engine-catalog": "1.0.0-beta.11",
       },

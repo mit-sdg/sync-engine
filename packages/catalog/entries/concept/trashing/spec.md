@@ -24,8 +24,8 @@ external Item
 a set of Dispositions with
   an item Item
   a status DispositionStatus
-  a trashedAt optional DateTime
-  a purgedAt optional DateTime
+  an optional trashedAt DateTime
+  an optional purgedAt DateTime
 
 at most one Disposition has each Item
 ```
