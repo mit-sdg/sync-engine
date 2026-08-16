@@ -35,7 +35,9 @@ Only after that succeeds, run the installed `sync-engine setup`. Setup owns the 
 scripts, TypeScript, Bun and Node type declarations, `tsconfig.json`, and concept-free
 configuration. Do not install or downgrade those toolchain packages manually. If setup's
 installation fails, stop and report that bootstrap failure instead of probing alternate
-versions or package managers.
+versions or package managers. For a new application, setup completion is a hard gate:
+do not write the brief, inspect the catalog, or launch a role until `package.json`,
+`tsconfig.json`, and concept-free configuration exist.
 
 For an existing configured application, run the same release check before its documented
 baseline. Do not rerun setup merely to impose default files or scripts.
@@ -86,9 +88,10 @@ bunx --no-install sync-engine-catalog list
 bunx --no-install sync-engine-catalog show <entry> --raw
 ```
 
-For designer and critic prompts, select at most three relevant concept designs and one
-recipe by default. Broader catalog exploration requires an explicit user request.
-Catalog designs are alternatives, never mandatory names or contracts. Never repair,
+Default to no catalog context. Add one entry only when a named design uncertainty is not
+resolved by the brief and compact rules; never browse merely to gather examples. A hard
+maximum is three concept designs and one recipe, and broader exploration requires an
+explicit user request. Catalog designs are alternatives, never mandatory names or contracts. Never repair,
 alias, or replace a missing catalog executable; release check must fail first.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
@@ -99,7 +102,15 @@ only when the legitimate application material requires it.
 
 ## Design and criticism
 
-Launch one fresh normal-reasoning designer with `prompts/roles/designer.md`. Enforce its
+Launch one fresh normal-reasoning designer with `prompts/roles/designer.md`. Build its
+prompt directly without reading templates:
+
+```sh
+bun "<skill-root>/scripts/command.ts" prompt build --role designer \
+  --input brief=design/brief.md --output <prompt-file>
+```
+
+Add a selected catalog file only when the rule above requires it. Enforce the designer's
 closed `design/` working boundary. `design/brief.md` is read-only. If the designer
 returns at most two material questions, settle them, update the brief, and send a small
 file containing only the answers to the same designer.
@@ -117,7 +128,15 @@ blocks criticism. The coordinator does not repair design Markdown.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Pass
 `types.md` and every concept/composition file as repeated `--input candidate=<path>`
-arguments to `prompt build`; never aggregate candidate files into an intermediate file.
+arguments to `prompt build`; never aggregate candidate files into an intermediate file:
+
+```sh
+bun "<skill-root>/scripts/command.ts" prompt build --role critic \
+  --input brief=design/brief.md --input candidate=design/types.md \
+  --input candidate=design/concepts/<name>.md \
+  --input candidate=design/compositions/<name>.md --output <prompt-file>
+```
+
 Launch a fresh read-only normal-reasoning critic. Two critic passes are the normal
 automatic budget. Maintain
 the count in active coordinator state:

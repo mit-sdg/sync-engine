@@ -48,9 +48,8 @@ brief → independent design → syntax → bounded independent criticism
    orchestration instructions.
 4. Maintain the compact `design/brief.md` from
    [the packaged template](prompts/templates/product-brief.md).
-5. Build only the current role prompt from `prompts/roles/`. Designer and critic share
-   the compact semantic rules in `prompts/common/design.md`; other roles receive only
-   their declared files.
+5. Build only the current role prompt with the compiler. Do not read role templates or
+   common prompt files yourself; the compiler expands them for the delegated agent.
 6. Keep objective, decisions, current stage, critic count, and unresolved material
    issues in active coordinator context. Do not create workflow metadata or a workflow
    database.
