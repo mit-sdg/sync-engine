@@ -159,8 +159,12 @@ a short designer-only block. `common/design.md` targets 5–6 KiB and fails revi
 8 KiB.
 
 Routine concept and application API essentials live directly in their role templates.
-An optional `reference` input supplies an uncommon exact-release API excerpt when the
-approved design needs it. Coordinators do not rebuild API packs for ordinary work.
+An optional `reference` input supplies an uncommon exact-release public API excerpt
+when the approved design needs it. Coordinators do not rebuild API packs for ordinary
+work. Implementation and evidence workers never inspect framework checkout source,
+installed package internals, source maps, or files reached by tracing imports. Missing
+public context is a blocker returned to the coordinator, not permission to search
+internals.
 
 `prompts/SOURCES.md` is a plain source-section-to-prompt-heading inventory. It records
 where every current normative rule went and which examples, rationale, or repetition

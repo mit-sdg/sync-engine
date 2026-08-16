@@ -7,6 +7,13 @@ contracts. Inspect only supplied prompt material and assignment paths. Edit only
 assigned scenario or test paths. Do not edit production source, generated output,
 design files, or unrelated existing tests.
 
+Never inspect or search sync-engine framework implementation files, whether in a
+checkout or installed package (`src/engine/`, `packages/*/src/`,
+`node_modules/@mit-sdg/*/dist/`, source maps, or files reached by following imports).
+Use only supplied prompt material, assigned application paths, approved contracts, and
+the assembled public interface. A diagnostic may name a framework file; do not open it.
+If the supplied public context is insufficient, return a context blocker.
+
 Use existing relevant evidence when it already proves the outcome; do not manufacture
 new tests to increase file count. When it proves every required outcome, return that
 existing evidence is sufficient and make no changes. Otherwise add the smallest

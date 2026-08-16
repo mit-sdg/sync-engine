@@ -44,7 +44,9 @@ not create another cycle.
 
 The default uses one concept worker and one application worker rather than repeating
 role instructions for every concept and composition. A phase splits only for a prompt
-budget or explicit user-requested parallelism.
+budget or explicit user-requested parallelism. Implementation and evidence workers are
+restricted to assigned application paths and supplied public references; they never
+inspect framework source or installed package internals.
 
 Start with [`skills/sync-engine/SKILL.md`](skills/sync-engine/SKILL.md). The coordinator
 workflow and harness guides are linked there. Designer and critic prompts share one

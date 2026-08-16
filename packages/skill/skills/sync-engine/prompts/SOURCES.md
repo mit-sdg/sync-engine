@@ -43,6 +43,7 @@ requires nonempty unfenced prose without imposing a scenario count.
 | `references/implementation-roles.md` concept isolation         | `references/workflow.md#implement-in-bounded-phases`; concept-worker template      |
 | composition and integration isolation                          | application-worker template                                                        |
 | evidence isolation                                             | evidence-worker template                                                           |
+| framework-internal read exclusion                              | all implementation templates; harness contract; bounded-phase workflow             |
 | contract blockers                                              | all implementation templates; `references/workflow.md#implement-in-bounded-phases` |
 
 ## Core concept-design guidance

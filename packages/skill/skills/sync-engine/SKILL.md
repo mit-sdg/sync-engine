@@ -26,6 +26,8 @@ brief → independent design → syntax → bounded independent criticism
 - Use the coordinator's exact provider and model for every role, at that provider's
   normal reasoning setting; do not repeat reasoning instructions in prompts.
 - Preserve unrelated work and Git history. Acceptance performs no Git operation.
+- Implementation and evidence roles never inspect framework implementation source or
+  installed package internals. Supply exact public references instead.
 - Build every role prompt with the bundled `scripts/command.ts` compiler and deliver it
   from a file. Never place generated Markdown in a shell argument.
 - Stop after required checks and objective evidence pass. Do not iterate for optional

@@ -144,6 +144,27 @@ describe("compact sync-engine Agent Skill documents", () => {
     }
   });
 
+  test("forbids implementation roles from reading framework internals", async () => {
+    for (const role of ["concept-worker", "application-worker", "evidence-worker"]) {
+      const source = await text(new URL(`roles/${role}.md`, promptRoot));
+      expect(source).toContain(
+        "Never inspect or search sync-engine framework implementation files",
+      );
+      expect(source).toContain("node_modules/@mit-sdg/*/dist/");
+      expect(source).toContain("files reached by following imports");
+      expect(source).toContain("do not open it");
+      expect(source).toContain("return a context blocker");
+    }
+
+    const entry = await text(new URL("SKILL.md", skillRoot));
+    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
+    expect(entry).toContain("never inspect framework implementation source");
+    expect(workflow).toContain("Never include framework checkout source");
+    expect(workflow).toContain("instead of searching internals");
+    expect(contract).toContain("exclude framework\n  source and installed package internals");
+  });
+
   test("uses a compact brief without treating every open choice as blocking", async () => {
     const template = await text(new URL("templates/product-brief.md", promptRoot));
     expect(bytes(template)).toBeLessThan(2 * 1024);
@@ -176,7 +197,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("uses one implementation worker per phase and independent evidence", async () => {
     const workflow = await text(new URL("references/workflow.md", skillRoot));
     expect(workflow).toContain(
-      "brief storage\nguarantees in implementation assignments, not concept State",
+      "brief storage guarantees in\nimplementation assignments, not concept State",
     );
     expect(workflow).toContain("one normal-reasoning concept worker");
     expect(workflow).toContain("one normal-reasoning application worker");

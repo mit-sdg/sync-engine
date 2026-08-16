@@ -7,6 +7,13 @@ read and write paths. Approved Markdown is read-only and authoritative. Do not i
 or edit compositions, registration, assembly, configuration, hosts, generated output,
 unassigned concepts, or unrelated tests.
 
+Never inspect or search sync-engine framework implementation files, whether in a
+checkout or installed package (`src/engine/`, `packages/*/src/`,
+`node_modules/@mit-sdg/*/dist/`, source maps, or files reached by following imports).
+Use only supplied prompt material, assigned application paths, selected examples, and
+exact public API references. A diagnostic may name a framework file; do not open it.
+If the supplied public context is insufficient, return a context blocker.
+
 An implementation is an ordinary TypeScript class; no engine base class is required.
 Implement each specified action as a method taking one named input object and returning
 the specified named result object. Implement `_` queries with the declared row shape

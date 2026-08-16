@@ -3,7 +3,11 @@
 Reuse the coordinator's exact Paseo provider and model. Do not infer the provider from
 the model ID: Pi `openai-codex/...` models still use `pi`, not `codex`. Select that
 provider's normal reasoning option. Before creating a child, confirm delegation is
-allowed by repository instructions.
+allowed by repository instructions. Launch implementation roles only in the application
+workspace, never a sync-engine framework checkout. A working directory alone is not a
+read boundary: the file-delivered assignment must enumerate allowed application paths
+and forbid framework source, installed package internals, source maps, and import
+tracing.
 
 For compatibility with Paseo versions that do not accept an initial prompt file,
 start the agent in the assigned working directory with this fixed prompt:

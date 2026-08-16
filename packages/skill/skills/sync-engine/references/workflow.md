@@ -34,9 +34,12 @@ baseline.
 
 Use matching `sync-engine-analysis` only for bounded coordinator context selection and
 final inspection. Keep raw analysis output internal. Repository search and broader
-source reading are fallback for unavailable, incomplete, or ambiguous analysis, files
-outside its manifest, or a concrete compiler/runtime failure. Never give analysis
-output or instructions to the designer or critic.
+application source reading are fallback for unavailable, incomplete, or ambiguous
+analysis and files outside its manifest. Framework implementation source and installed
+package internals are never implementation-role context. If a concrete framework
+compiler or runtime failure requires internal investigation, stop this application
+workflow and report it as a separate framework issue. Never give analysis output or
+instructions to the designer or critic.
 
 ## Maintain the product brief
 
@@ -119,8 +122,13 @@ material uncertainty. The coordinator never approves its own design.
 ## Implement in bounded phases
 
 Write each role's paths, commands, and return contract to a small temporary Markdown
-assignment file using filesystem APIs, not shell interpolation. Put brief storage
-guarantees in implementation assignments, not concept State.
+assignment file using filesystem APIs, not shell interpolation. Enumerate exact allowed
+application read and write paths. Never include framework checkout source, installed
+package contents, build output, source maps, or paths reached by following framework
+imports. Supply any needed framework information through selected application examples
+and exact public API references. If those are insufficient, the worker returns a
+context blocker instead of searching internals. Put brief storage guarantees in
+implementation assignments, not concept State.
 
 Start one normal-reasoning concept worker for all approved concepts that fit the 24 KiB
 budget. It owns only assigned concept and focused test paths. Split into explicit
