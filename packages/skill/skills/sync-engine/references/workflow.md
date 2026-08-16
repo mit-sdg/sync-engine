@@ -115,9 +115,11 @@ the parser output, affected paths, and repair request. Deliver that file directl
 through the harness; do not rebuild or resend the full designer prompt. Parser failure
 blocks criticism. The coordinator does not repair design Markdown.
 
-After syntax passes, supply the brief only through its dedicated prompt slot. Enumerate
-every concept and composition plus `types.md` through the candidate slot. Launch a fresh read-only
-normal-reasoning critic. Two critic passes are the normal automatic budget. Maintain
+After syntax passes, supply the brief only through its dedicated prompt slot. Pass
+`types.md` and every concept/composition file as repeated `--input candidate=<path>`
+arguments to `prompt build`; never aggregate candidate files into an intermediate file.
+Launch a fresh read-only normal-reasoning critic. Two critic passes are the normal
+automatic budget. Maintain
 the count in active coordinator state:
 
 1. Critic pass 1 reviews the candidate.

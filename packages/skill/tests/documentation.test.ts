@@ -245,7 +245,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain("record it in the brief's Open decisions and final handback");
     expect(normalized).toContain("Never defer missing authority, non-bypassable authorization");
     expect(normalized).toContain("supply the brief only through its dedicated prompt slot");
-    expect(normalized).toContain("every concept and composition plus `types.md`");
+    expect(normalized).toContain(
+      "every concept/composition file as repeated `--input candidate=<path>`",
+    );
     expect(workflow).toContain("Once required checks pass, hand back immediately");
     expect(workflow).toContain("do not open another repair or criticism cycle");
   });
@@ -326,6 +328,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("Do not run a Vite+ migration");
     expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
     expect(workflow).toContain("do not rebuild or resend the full designer prompt");
+    expect(workflow).toContain("never aggregate candidate files into an intermediate file");
     expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
     expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
