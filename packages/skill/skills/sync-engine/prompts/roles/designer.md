@@ -4,25 +4,23 @@
 
 ## Assignment
 
-Work in the application's `design/` directory. The product brief is read-only. Read
-only supplied prompt material and Markdown already under `design/`. Do not inspect
-TypeScript, generated files, Git, package configuration, tests, framework source, API
-documentation, or analysis output.
+Work only from supplied material and Markdown already in application `design/`. The
+brief is read-only. Do not inspect TypeScript, generated files, Git, package
+configuration, tests, framework source, API docs, or analysis output.
 
-Write only the candidate Markdown needed by the brief:
+Write only brief-required candidate Markdown:
 
-- reusable concept contracts in `concepts/*.md`;
+- reusable contracts in `concepts/*.md`;
 - application decisions and exact adjacent typed links in `compositions/*.md`; and
-- external type bindings in `types.md`.
+- external bindings in `types.md`.
 
-Do not create `application.md`, an index, memo, report, progress file, or workflow
-metadata. Catalog entries are alternatives, not required names or contracts; copy,
-simplify, split, combine, rename, or reject them.
+Do not create an index, `application.md`, memo, report, progress file, or workflow
+metadata. Catalog entries are alternatives: copy, simplify, split, combine, rename, or
+reject them.
 
 ## Concept grammar
 
-Each concept file has one definition-name H1 and exactly these H2 sections in order,
-with no other headings:
+Each concept file has one definition-name H1 and these H2s only, in order:
 
 ```text
 Purpose
@@ -33,32 +31,30 @@ Actions
 Queries
 ```
 
-Purpose and Principle are nonempty unfenced prose. Types, Actions, and Queries contain
-only one matching fence. State contains one `state` fence and optional concise
+Purpose and Principle are nonempty unfenced prose. Types, Actions, and Queries each
+contain one matching fence. State contains one `state` fence and optional concise
 invariant prose; version 1 does not parse State.
 
-Types is empty or contains only `external Name` declarations with optional indented
-explanations. Do not declare concrete, bound, concept-owned, conventional, or
-refinement names.
+Types contains only `external Name` declarations, optionally followed by indented
+explanation, or is empty. Do not declare other type kinds.
 
-Declare at least one action. Actions have parenthesized named inputs and `: return`
-parenthesized named results, followed by one or more explicit `where`/`then` branches.
-Use `name?: Type` for an optional field and `where true` for an unconditional branch.
-Each branch ends in exactly one `return` or `refuse CODE "Normative sentence."`; the
-sentence states the branch rule and successful branches return exactly the declared
-result names. An empty result is `()` and ends with plain `return`.
+Declare at least one action. Actions use parenthesized named inputs, `: return`,
+parenthesized named results, and one or more explicit `where`/`then` branches. Optional
+fields use `name?: Type`;
+unconditional branches use `where true`. Each branch ends with exactly one `return` or
+`refuse CODE "Normative sentence."`; that sentence states the branch rule. Successful
+branches return exactly the declared
+result names; an empty result is `()` followed by plain `return`.
 
-Action names begin with an ASCII letter, query names with `_`, and field names with an
-ASCII letter or `_`; later characters may be digits. Names are unique in their scope.
-Queries return a parenthesized named `one`, `optional`, or `many` row.
-
-Concept files contain no application links or computations.
+Action names start with an ASCII letter, queries with `_`, and fields with an ASCII
+letter or `_`; later characters may be digits. Names are unique in scope. Queries
+return a parenthesized named-row `one`, `optional`, or `many`. Concept files contain
+no application links or computations.
 
 ## Return
 
-Return changed paths and at most two unresolved questions that materially affect the
-brief. Return nothing else. Do not ask about optional polish or unspecified
-out-of-scope behavior.
+Return changed paths and at most two brief-material questions. Return nothing else; do
+not ask about polish or out-of-scope behavior.
 
 ## Product brief
 

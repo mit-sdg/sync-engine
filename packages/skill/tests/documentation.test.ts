@@ -69,6 +69,21 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(critic)).toBeLessThanOrEqual(bytes(oldDesign + grammar + review) * 0.4);
   });
 
+  test("keeps optimized static role guidance bounded", async () => {
+    const design = await text(new URL("common/design.md", promptRoot));
+    const limits: Record<string, number> = {
+      designer: 8 * 1024,
+      critic: 7.25 * 1024,
+      "concept-worker": 2.25 * 1024,
+      "application-worker": 2.75 * 1024,
+      "evidence-worker": 2 * 1024,
+    };
+    for (const [role, limit] of Object.entries(limits)) {
+      const source = await text(new URL(`roles/${role}.md`, promptRoot));
+      expect(bytes(staticPrompt(source, design))).toBeLessThanOrEqual(limit);
+    }
+  });
+
   test("keeps semantic design rules direct and self-contained", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
     for (const heading of [
@@ -81,6 +96,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     ]) {
       expect(design).toContain(`## ${heading}`);
     }
+    const normalizedDesign = design.replace(/\s+/g, " ");
     for (const rule of [
       "one semantic owner",
       "Runtime persistence belongs to implementation and evidence, not State",
@@ -92,12 +108,12 @@ describe("compact sync-engine Agent Skill documents", () => {
       "State is unparsed in version 1",
       "Neither proves boundaries",
     ]) {
-      expect(design).toContain(rule);
+      expect(normalizedDesign).toContain(rule.replace(/\s+/g, " "));
     }
 
-    expect(design).toContain("Principle uses one or more short archetypal scenarios");
-    expect(design).toContain("refusals only when essential to the purpose");
-    expect(design).toContain("External context is allowed");
+    expect(normalizedDesign).toContain("Principle uses one or more short archetypal scenarios");
+    expect(normalizedDesign).toContain("refusals only when essential to the purpose");
+    expect(normalizedDesign).toContain("External context is allowed");
     expect(design).not.toContain("Principle is one concrete scenario");
   });
 
@@ -206,7 +222,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("Do not create a replacement agent");
 
     const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));
-    expect(evidence).toContain("existing evidence is sufficient");
+    expect(evidence).toMatch(/existing\s+evidence is sufficient/);
     expect(evidence).toContain("Do not edit production source");
   });
 

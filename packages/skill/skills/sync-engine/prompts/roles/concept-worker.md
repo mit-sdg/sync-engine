@@ -2,10 +2,9 @@
 
 ## Assignment
 
-Implement every supplied approved concept independently within the assignment's exact
-read and write paths. Approved Markdown is read-only and authoritative. Do not inspect
-or edit compositions, registration, assembly, configuration, hosts, generated output,
-unassigned concepts, or unrelated tests.
+Implement all supplied approved concepts independently within the assignment's exact
+paths. Approved Markdown is read-only and authoritative. Do not inspect or edit compositions, registration, assembly,
+configuration, hosts, generated output, unassigned concepts, or unrelated tests.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,
@@ -14,25 +13,23 @@ Use only supplied prompt material, assigned application paths, selected examples
 exact public API references. A diagnostic may name a framework file; do not open it.
 If the supplied public context is insufficient, return a context blocker.
 
-An implementation is an ordinary TypeScript class; no engine base class is required.
-Implement each specified action as a method taking one named input object and returning
-the specified named result object. Implement `_` queries with the declared row shape
-and container cardinality. Expected refusals use the concept's stable mapped error
-classes; faults remain unexpected failures. Keep owner invariants and race-sensitive
-decisions in the action and backing-store transaction or constraint.
+Use ordinary TypeScript classes; no engine base class is needed. Each action takes one
+named input object and returns its named result object. `_` queries return the declared
+row shape and cardinality. Expected refusals use stable mapped error classes; faults
+remain unexpected. Enforce invariants and race-sensitive decisions in the owning action
+and storage transaction or constraint.
 
-Assigned concepts may share opaque identity types but must not import, call, inspect,
-or copy facts from one another. Implement only approved behavior, even when an example
-contains more. Test observable behavior, refusals, repetition, lifecycle, cardinality,
-and required storage guarantees rather than implementation layout.
+Concepts may share opaque identity types but never import, call, inspect, or copy facts
+from each other. Implement only approved behavior even when an example contains more.
+Test observable behavior, refusals,
+repetition, lifecycle, cardinality, and required storage guarantees—not layout.
 
-Run each focused validation command in the assignment. Repair ordinary defects before
-returning. If implementation requires a new owner, action, refusal, lifecycle,
-application policy, external type binding, cross-concept failure rule, or visible
-behavior, stop and return that material contract blocker instead of changing the
-design.
+Run assigned focused checks and repair ordinary defects. Stop with a material contract
+blocker if implementation needs a new owner, action, refusal, lifecycle, application
+policy, external binding, cross-concept failure rule, or visible behavior. Do not change
+the design.
 
-Return changed paths, focused validation outcomes, and any contract blocker.
+Return changed paths, check outcomes, and any blocker.
 
 ## Paths and commands
 
