@@ -33,11 +33,13 @@ function staticPrompt(roleSource: string, includes: Readonly<Record<string, stri
 }
 
 describe("compact sync-engine Agent Skill documents", () => {
-  test("ships two small semantic references and five role templates", async () => {
+  test("ships three small semantic references and five role templates", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
+    const format = await text(new URL("common/concept-format.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(1.5 * 1024);
+    expect(bytes(format)).toBeLessThanOrEqual(2 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -56,6 +58,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(role).toContain("<!-- include: ../common/design.md -->");
       expect(role).toContain("<!-- include: ../common/ssf.md -->");
     }
+    expect(designer).toContain("<!-- include: ../common/concept-format.md -->");
+    expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
       expect(await text(new URL(`roles/${role}`, promptRoot))).not.toContain("<!-- include:");
     }
@@ -70,7 +74,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     const review = await text(new URL("docs/user/guide/reviewing-a-design.md", repositoryRoot));
     const compact = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
-    const includes = { "../common/design.md": compact, "../common/ssf.md": ssf };
+    const format = await text(new URL("common/concept-format.md", promptRoot));
+    const includes = {
+      "../common/design.md": compact,
+      "../common/ssf.md": ssf,
+      "../common/concept-format.md": format,
+    };
     const designer = staticPrompt(await text(new URL("roles/designer.md", promptRoot)), includes);
     const critic = staticPrompt(await text(new URL("roles/critic.md", promptRoot)), includes);
 
@@ -81,8 +90,9 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("keeps optimized static role guidance bounded", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
+    const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 9 * 1024,
+      designer: 10 * 1024,
       critic: 8 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
@@ -95,6 +105,7 @@ describe("compact sync-engine Agent Skill documents", () => {
           staticPrompt(source, {
             "../common/design.md": design,
             "../common/ssf.md": ssf,
+            "../common/concept-format.md": format,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -139,6 +150,20 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Declaration direction implies no storage, navigation, or ownership",
     ]) {
       expect(ssf).toContain(rule);
+    }
+    const format = (await text(new URL("common/concept-format.md", promptRoot))).replace(
+      /\s+/g,
+      " ",
+    );
+    for (const rule of [
+      "```types external Person",
+      "create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
+      "delete(item: Item) : return ()",
+      "_items(owner: Person) : many (item: Item, title: String)",
+      "Tasking.Owner is Person",
+      "Notes.Task is Tasking.Task",
+    ]) {
+      expect(format).toContain(rule);
     }
 
     expect(normalizedDesign).toContain("Principle uses one or more short archetypal scenarios");

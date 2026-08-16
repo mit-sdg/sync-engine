@@ -74,13 +74,13 @@ requires nonempty unfenced prose without imposing a scenario count.
 | Core `docs/user/reference/concept-specification.md` section | Destination                                                                                           |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Recommended layout and draft command                        | designer template; coordinator design stage                                                           |
-| Document grammar                                            | `prompts/roles/designer.md#concept-format`                                                            |
+| Document grammar                                            | `prompts/common/concept-format.md`                                                                    |
 | Complete example                                            | Removed; parser supplies exact mechanical feedback                                                    |
-| Types                                                       | designer grammar; common authored application design                                                  |
+| Types                                                       | `common/concept-format.md`; common authored application design                                        |
 | State                                                       | designer format; `common/design.md#state-and-ownership`; `common/ssf.md`                              |
-| Actions                                                     | designer grammar; common actions and lifecycle                                                        |
-| Queries                                                     | designer grammar; common actions and lifecycle                                                        |
-| Names and type expressions                                  | designer grammar                                                                                      |
+| Actions                                                     | `common/concept-format.md`; common actions and lifecycle                                              |
+| Queries                                                     | `common/concept-format.md`; common actions and lifecycle                                              |
+| Names and type expressions                                  | `common/concept-format.md`                                                                            |
 | Agreement with TypeScript                                   | common authored application design; final validation                                                  |
 | Definition and instance identity                            | common authored application design; application-worker routine API essentials; final source agreement |
 | Source provenance                                           | common authored application design; final source agreement                                            |

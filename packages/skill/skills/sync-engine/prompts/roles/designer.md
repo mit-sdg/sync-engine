@@ -4,6 +4,8 @@
 
 <!-- include: ../common/ssf.md -->
 
+<!-- include: ../common/concept-format.md -->
+
 ## Assignment
 
 Create the smallest complete concept design satisfying the brief. Work from mechanism
@@ -27,24 +29,6 @@ Create or revise only:
 
 Create no index, `application.md`, memo, report, progress file, or workflow metadata.
 Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.
-
-## Concept format
-
-Each concept has one definition-name H1 and these H2s only, in order: Purpose,
-Principle, Types, State, Actions, Queries. Purpose and Principle are nonempty unfenced
-prose. Types, State, Actions, and Queries each have one matching fence. Types contains
-only `external Name` declarations (with optional indented prose) or is empty. State uses
-supplied SSF; manually review it because version 1 does not parse it.
-
-Declare at least one action. Use parenthesized named inputs, `: return`, parenthesized
-named results, and explicit `where`/`then` branches. Use `where true` when unconditional.
-Each branch ends in `return name1, name2` using exactly its declared result names, or
-`refuse CODE "Normative sentence."`. For `: return ()`, use bare `return`—never
-`return ()` or a standalone `()`.
-
-Action names start with a letter; queries start `_`. Queries return parenthesized named
-rows with `one`, `optional`, or `many`, followed by an indented body covering answer,
-absence, and ordering. Concept files contain no application links or computations.
 
 ## Return
 

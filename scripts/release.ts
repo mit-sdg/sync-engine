@@ -91,6 +91,7 @@ export const releaseSourcePaths = [
   "packages/skill/skills/sync-engine/prompts/SOURCES.md",
   "packages/skill/skills/sync-engine/prompts/common/design.md",
   "packages/skill/skills/sync-engine/prompts/common/ssf.md",
+  "packages/skill/skills/sync-engine/prompts/common/concept-format.md",
   "packages/skill/skills/sync-engine/prompts/roles/designer.md",
   "packages/skill/skills/sync-engine/prompts/roles/critic.md",
   "packages/skill/skills/sync-engine/prompts/roles/concept-worker.md",
