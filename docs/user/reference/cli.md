@@ -18,6 +18,7 @@ files are written.
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files         | `package.json`, Bun install, missing templates |
 | `check-concepts <paths...>`                    | Parses explicit draft concept specifications without loading the application          | No                                             |
+| `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly           | No                                             |
 | `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                                             |
 | `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                                             |
 | `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                 | Yes                                            |
@@ -100,6 +101,47 @@ This command does not discover files, load a generated config, inspect TypeScrip
 Git, compare revisions, compute evidence identities, or write files. It establishes
 syntax only. Use config-based `sync-engine check` after registration to check source
 provenance and TypeScript member agreement.
+
+## `sync-engine check-design`
+
+```text
+sync-engine check-design <paths...>
+```
+
+Each operand is an explicit Markdown file. At least one path is required and options
+are not accepted. Operands can mix concept specifications, composition documents, and
+application-types documents in any order or location. The command classifies valid
+files by their contents rather than their names or paths, checks them in operand order,
+and stops at the first missing, non-regular, unreadable, or invalid file. Success prints
+only the number of checked files.
+
+Concept documents must pass the same strict version-1 parser as `check-concepts`.
+Application-design documents use the same parser and assembly-independent validator as
+config-based `check`. Before assembly, `check-design` proves only these form properties:
+
+- typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
+  paths, and `computation:` links contain exact computation names;
+- `computations` declarations have valid signatures, distinct input names, balanced
+  type delimiters, and indented prose bodies;
+- application `types` fences contain only `concrete Name` declarations with prose or
+  direct `SelectedInstance.External is Target` bindings;
+- a binding target has either the concrete-name form or the concept-owned
+  `SelectedInstance.Type` form; and
+- computation names, concrete type names, and binding left sides are not duplicated
+  across the supplied application-design documents.
+
+The command does not discover additional files or require a complete corpus. It does
+not resolve typed links, binding left sides, or binding targets against selected
+instances or concept declarations. It also does not require declaration coverage,
+compare computation inputs with TypeScript, validate concept source agreement, or
+inspect ordinary prose and computation-body semantics. Those checks need the selected
+assembly and remain the job of config-based `sync-engine check`. In particular, a
+binding target is accepted by shape even when the concept or concrete declaration is
+outside the supplied partial corpus; rejecting it would make partial-corpus checks
+produce false positives.
+
+`check-design` reads no generated config, assembly, TypeScript project, or Git state and
+writes no files.
 
 ## `sync-engine check`
 

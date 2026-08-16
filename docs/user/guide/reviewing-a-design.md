@@ -172,14 +172,18 @@ condition, and enforcement point. A request-body identifier is a claim, not
 authentication. Composition may provide early policy denial, but an owner action must
 still enforce any rule that direct calls cannot bypass.
 
-## 8. Validate the strict concept grammar
+## 8. Validate the preassembly forms
 
-Before implementation, parse the explicit draft files without loading application
-code:
+Before implementation, parse the explicit design corpus without loading application
+code or configuration:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md design/compositions/*.md design/types.md
 ```
+
+This command checks strict concept syntax and the form of composition links,
+computations, and application types. It deliberately leaves resolution and coverage
+for config-based `sync-engine check` because the supplied corpus can be partial.
 
 For every concept, also verify manually that:
 

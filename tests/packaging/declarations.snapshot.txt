@@ -62,6 +62,15 @@ export interface CheckedConceptSpecification {
 export declare function checkConceptFiles(paths: readonly string[], root?: string): Promise<readonly CheckedConceptSpecification[]>;
 export declare function checkConceptsCommand(args: readonly string[]): Promise<void>;
 
+=== dist/command/check-design.d.ts ===
+export interface CheckedDesignDocument {
+    readonly path: string;
+    readonly kind: "concept" | "application";
+}
+/** Check explicit authored-design files without consulting an assembly or project state. */
+export declare function checkDesignFiles(paths: readonly string[], root?: string): Promise<readonly CheckedDesignDocument[]>;
+export declare function checkDesignCommand(args: readonly string[]): Promise<void>;
+
 === dist/command/check.d.ts ===
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
@@ -4702,6 +4711,12 @@ export interface ApplicationDesignIssue {
     message: string;
     location?: DesignSourceLocation;
 }
+export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
+    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING";
+    location: DesignSourceLocation;
+};
+/** Check corpus-wide authored forms that do not require a selected assembly. */
+export declare function validateAuthoredApplicationDesignForm(documents: readonly AuthoredApplicationDesignDocument[]): ApplicationDesignFormIssue[];
 /**
  * Check parsed documents against the exact selected assembly inventory. The
  * validator returns all independently actionable issues and performs no I/O.

@@ -215,6 +215,9 @@ export const vocabulary = declareVocabulary({
   sync-engine check-concepts <paths...>
     Parse draft concept specifications without loading application code or configuration.
 
+  sync-engine check-design <paths...>
+    Check explicit authored-design Markdown without loading application code or configuration.
+
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.
     pin        Regenerate the assembled read-back and wire contract.

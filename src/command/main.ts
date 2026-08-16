@@ -4,6 +4,7 @@ import { artifactsCommand } from "./artifacts.ts";
 import { setupProject } from "./setup.ts";
 import { checkCommand } from "./check.ts";
 import { checkConceptsCommand } from "./check-concepts.ts";
+import { checkDesignCommand } from "./check-design.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
@@ -13,6 +14,9 @@ const usage = `Usage: sync-engine <command> [arguments]
 
   sync-engine check-concepts <paths...>
     Parse draft concept specifications without loading application code or configuration.
+
+  sync-engine check-design <paths...>
+    Check explicit authored-design Markdown without loading application code or configuration.
 
   sync-engine artifacts <command> [--config path]
     check      Verify the assembled read-back and wire contract against the assembly.
@@ -72,6 +76,11 @@ async function main(): Promise<void> {
 
   if (topic === "check-concepts") {
     await checkConceptsCommand(rest);
+    return;
+  }
+
+  if (topic === "check-design") {
+    await checkDesignCommand(rest);
     return;
   }
 

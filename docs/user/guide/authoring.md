@@ -172,6 +172,17 @@ is one bare type. Use an optional `computation:invitationMailText` link when
 another passage refers to it. Do not put computations in concept
 specifications.
 
+Before implementation, form-check the complete authored corpus without loading
+an application:
+
+```sh
+sync-engine check-design design/concepts/*.md design/compositions/*.md design/types.md
+```
+
+This preassembly check accepts a partial corpus and therefore checks form and
+supplied-corpus duplicates, not link resolution, application type closure, or
+coverage. The config-based check adds those assembly-dependent proofs.
+
 ## 6. Register explicit design URLs
 
 Add a required versioned design block to the default export of

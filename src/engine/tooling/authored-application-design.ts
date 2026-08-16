@@ -370,6 +370,53 @@ export interface ApplicationDesignIssue {
   location?: DesignSourceLocation;
 }
 
+export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
+  code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING";
+  location: DesignSourceLocation;
+};
+
+/** Check corpus-wide authored forms that do not require a selected assembly. */
+export function validateAuthoredApplicationDesignForm(
+  documents: readonly AuthoredApplicationDesignDocument[],
+): ApplicationDesignFormIssue[] {
+  const issues: ApplicationDesignFormIssue[] = [];
+  const computations = new Set<string>();
+  const concreteTypes = new Set<string>();
+  const bindings = new Set<string>();
+
+  for (const document of documents) {
+    for (const computation of document.computations) {
+      if (computations.has(computation.name)) {
+        issues.push({
+          code: "DUPLICATE_COMPUTATION",
+          message: `computation ${JSON.stringify(computation.name)} has more than one authored definition.`,
+          location: computation.location,
+        });
+      } else computations.add(computation.name);
+    }
+    for (const declaration of document.concreteTypes) {
+      if (concreteTypes.has(declaration.name)) {
+        issues.push({
+          code: "DUPLICATE_CONCRETE_TYPE",
+          message: `concrete type ${JSON.stringify(declaration.name)} has more than one application declaration.`,
+          location: declaration.location,
+        });
+      } else concreteTypes.add(declaration.name);
+    }
+    for (const binding of document.bindings) {
+      const key = `${binding.instance}.${binding.external}`;
+      if (bindings.has(key)) {
+        issues.push({
+          code: "DUPLICATE_TYPE_BINDING",
+          message: `external type ${JSON.stringify(key)} has more than one application binding.`,
+          location: binding.location,
+        });
+      } else bindings.add(key);
+    }
+  }
+  return issues;
+}
+
 function fieldShape(fields: readonly { name: string; optional: boolean }[]): string {
   return [...fields]
     .sort((left, right) => left.name.localeCompare(right.name))
@@ -385,7 +432,7 @@ export function validateAuthoredApplicationDesign(
   documents: readonly AuthoredApplicationDesignDocument[],
   selected: SelectedApplicationDesign,
 ): ApplicationDesignIssue[] {
-  const issues: ApplicationDesignIssue[] = [];
+  const issues: ApplicationDesignIssue[] = [...validateAuthoredApplicationDesignForm(documents)];
   const corpus = documents;
   const selectedByKind: Record<Exclude<DesignLinkKind, "computation">, Set<string>> = {
     reaction: new Set(selected.reactions),
@@ -423,14 +470,7 @@ export function validateAuthoredApplicationDesign(
   const authoredComputations = new Map<string, AuthoredComputation>();
   for (const computation of corpus.flatMap(({ computations: declared }) => declared)) {
     const previous = authoredComputations.get(computation.name);
-    if (previous !== undefined) {
-      issues.push({
-        code: "DUPLICATE_COMPUTATION",
-        message: `computation ${JSON.stringify(computation.name)} has more than one authored definition.`,
-        location: computation.location,
-      });
-      continue;
-    }
+    if (previous !== undefined) continue;
     authoredComputations.set(computation.name, computation);
     const executable = computations.get(computation.name);
     if (executable === undefined) {
@@ -464,14 +504,7 @@ export function validateAuthoredApplicationDesign(
   );
   const concrete = new Map<string, ConcreteTypeDeclaration>();
   for (const declaration of corpus.flatMap(({ concreteTypes }) => concreteTypes)) {
-    if (concrete.has(declaration.name)) {
-      issues.push({
-        code: "DUPLICATE_CONCRETE_TYPE",
-        message: `concrete type ${JSON.stringify(declaration.name)} has more than one application declaration.`,
-        location: declaration.location,
-      });
-      continue;
-    }
+    if (concrete.has(declaration.name)) continue;
     concrete.set(declaration.name, declaration);
   }
 
@@ -480,13 +513,7 @@ export function validateAuthoredApplicationDesign(
   for (const binding of corpus.flatMap(({ bindings: declared }) => declared)) {
     const externals = concepts.get(binding.instance);
     const key = `${binding.instance}.${binding.external}`;
-    if (bindings.has(key)) {
-      issues.push({
-        code: "DUPLICATE_TYPE_BINDING",
-        message: `external type ${JSON.stringify(key)} has more than one application binding.`,
-        location: binding.location,
-      });
-    } else if (externals !== undefined && externals.has(binding.external)) {
+    if (!bindings.has(key) && externals !== undefined && externals.has(binding.external)) {
       bindings.set(key, binding);
     }
     if (externals === undefined || !externals.has(binding.external)) {
