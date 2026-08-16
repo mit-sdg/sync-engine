@@ -3,8 +3,9 @@
 ## Assignment
 
 Implement all supplied approved concepts independently within the assignment's exact
-paths. Approved Markdown is read-only and authoritative. Do not inspect or edit compositions, registration, assembly,
-configuration, hosts, generated output, unassigned concepts, or unrelated tests.
+paths. Approved Markdown is read-only and authoritative. Do not inspect or edit
+compositions, registration, assembly, configuration, hosts, generated output,
+unassigned concepts, or unrelated tests.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,
@@ -21,8 +22,8 @@ and storage transaction or constraint.
 
 Concepts may share opaque identity types but never import, call, inspect, or copy facts
 from each other. Implement only approved behavior even when an example contains more.
-Test observable behavior, refusals,
-repetition, lifecycle, cardinality, and required storage guarantees—not layout.
+Test observable behavior, refusals, repetition, lifecycle, cardinality, and required
+storage guarantees—not layout.
 
 Run assigned focused checks and repair ordinary defects. Stop with a material contract
 blocker if implementation needs a new owner, action, refusal, lifecycle, application

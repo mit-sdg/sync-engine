@@ -38,8 +38,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
-    expect(bytes(ssf)).toBeLessThanOrEqual(1.5 * 1024);
-    expect(bytes(format)).toBeLessThanOrEqual(3 * 1024);
+    expect(bytes(ssf)).toBeLessThanOrEqual(1.75 * 1024);
+    expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -59,7 +59,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(role).toContain("<!-- include: ../common/ssf.md -->");
     }
     expect(designer).toContain("<!-- include: ../common/concept-format.md -->");
-    expect(designer).toContain("bunx --no-install sync-engine check-concepts design/concepts/*.md");
+    expect(designer).toContain("bunx --no-install sync-engine check-design design/concepts/*.md");
     expect(designer).toContain("coordinator will rerun the same gate independently");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
     expect(critic).toContain("check query cardinality/body agreement");
@@ -98,8 +98,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 11 * 1024,
-      critic: 8.25 * 1024,
+      designer: 11.5 * 1024,
+      critic: 9 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
       "evidence-worker": 2 * 1024,
@@ -362,13 +362,17 @@ describe("compact sync-engine Agent Skill documents", () => {
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
     expect(entry).toContain("Paseo guide");
     expect(entry).toContain("self-contained compiler");
-    expect(entry).toContain("never substitutes for a role");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "writes only the brief and temporary assignments/context, never role-owned design, production source, or tests",
+    );
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
     expect(entry).toContain("do not\n   read or recreate the packaged template directly");
     expect(entry).toContain("coordinator's exact provider and model");
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
-    expect(workflow).toContain("It never authors or\nrepairs concept/composition/type design");
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "coordinator writes only the brief, temporary assignment/context files, and setup's documented concept-free scaffold",
+    );
     expect(workflow).toContain("Do not run a Vite+ migration");
     expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
     expect(workflow).toContain("setup completion is a hard gate");

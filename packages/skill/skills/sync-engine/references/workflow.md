@@ -1,11 +1,9 @@
 # Coordinator workflow
 
 This reference owns product decisions, stage transitions, role launches, validation,
-and handback. Compiled role prompts own delegated boundaries and outputs. The coordinator
-may author only the brief and temporary assignment/context files. It never authors or
-repairs concept/composition/type design, production source, or tests; setup may create
-its documented concept-free scaffold. If a required role cannot launch, stop rather than
-substituting coordinator work.
+and handback; compiled role prompts own delegated boundaries and outputs. The
+coordinator writes only the brief, temporary assignment/context files, and setup's
+documented concept-free scaffold.
 
 ## Start safely
 
@@ -21,10 +19,9 @@ versions and canonical toolchain facts.
 In an empty application directory, create only a minimal `package.json` before invoking
 Bun: a name, `private: true`, `type: "module"`, and `packageManager` using the exact Bun
 version in `release.json`. Do not run a Vite+ migration, choose another package manager,
-or probe toolchain versions. For a new application, initialize or reuse that Bun package. Install
-`@mit-sdg/sync-engine` at the exact release version and install matching
-`@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog` as development
-dependencies. Do not install the skill package into the application. Before setup or
+or probe toolchain versions. Install `@mit-sdg/sync-engine` at the exact release
+version and matching `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog`
+as development dependencies. Do not install the skill package into the application. Before setup or
 catalog use, verify exact versions and executable targets with:
 
 ```sh
@@ -48,13 +45,12 @@ A timeout, missing readiness condition, forced kill, or nonzero exit is a failed
 baseline.
 
 Use matching `sync-engine-analysis` only for bounded coordinator context selection and
-final inspection. Keep raw analysis output internal. Repository search and broader
-application source reading are fallback for unavailable, incomplete, or ambiguous
-analysis and files outside its manifest. Framework implementation source and installed
-package internals are never implementation-role context. If a concrete framework
-compiler or runtime failure requires internal investigation, stop this application
-workflow and report it as a separate framework issue. Never give analysis output or
-instructions to the designer or critic.
+final inspection. Keep raw analysis output internal; never give it or its instructions
+to the designer or critic. Repository search and broader application source reading are
+fallback for unavailable, incomplete, or ambiguous analysis and files outside its
+manifest. If a concrete framework compiler or runtime failure requires internal
+investigation, stop this application workflow and report it as a separate framework
+issue.
 
 ## Maintain the product brief
 
@@ -65,10 +61,10 @@ Run this command alone—do not chain a premature check:
 bun "<skill-root>/scripts/command.ts" brief init design/brief.md
 ```
 
-Read the initialized file, replace its placeholders from the user's request and
-decisions, then check it. Keep it brief.
-Use `User` authority for requested or interactively settled decisions and `Assumption`
-for conservative coordinator choices. Validate once after filling it:
+Read the initialized file and replace its placeholders from the user's request and
+decisions, keeping it brief. Use `User` authority for requested or interactively
+settled decisions and `Assumption` for conservative coordinator choices. Validate once
+after filling it:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief check design/brief.md
@@ -86,31 +82,32 @@ request.
 
 ## Select compact context
 
-Resolve the exact installed skill, core, catalog, and analysis release. Catalog context
-is optional: zero entries is valid. When a relevant alternative is needed, use only the
-release-checked `sync-engine-catalog` executable without package download:
+Resolve the exact installed skill, core, catalog, and analysis release.
+Default to no catalog context: zero entries is valid. When a relevant alternative is
+needed, use only the release-checked `sync-engine-catalog` executable without package
+download:
 
 ```sh
 bunx --no-install sync-engine-catalog list
 bunx --no-install sync-engine-catalog show <entry> --raw
 ```
 
-Default to no catalog context. Add one entry only when a named design uncertainty is not
-resolved by the brief and compact rules; never browse merely to gather examples. A hard
-maximum is three concept designs and one recipe, and broader exploration requires an
-explicit user request. Catalog designs are alternatives, never mandatory names or contracts. Never repair,
+Add one entry only when a named design uncertainty is not resolved by the brief and
+compact rules; never browse merely to gather examples. The hard maximum is three
+concept designs and one recipe; broader exploration requires an explicit user request.
+Catalog designs are alternatives, never mandatory names or contracts. Never repair,
 alias, or replace a missing catalog executable; release check must fail first.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
-the output file through the selected harness guide. Do not concatenate prompts with Python, heredocs,
-or shell strings. Put stable role content before dynamic inputs. A budget failure lists
+the output file through the selected harness guide. Do not concatenate prompts with
+Python, heredocs, or shell strings. Put stable role content before dynamic inputs. A
+budget failure lists
 source contributions; select tighter context first and use an explicit `--max-bytes`
 only when the legitimate application material requires it.
 
 ## Design and criticism
 
-Launch one fresh normal-reasoning designer with `prompts/roles/designer.md`. Build its
-prompt directly without reading templates:
+Build the designer prompt directly and launch one fresh normal-reasoning designer:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role designer \
@@ -123,17 +120,18 @@ returns at most two material questions, settle them, update the brief, and send 
 file containing only the answers to the same designer.
 
 The designer runs its permitted syntax command and repairs syntax before returning.
-Then independently enumerate draft concept files and rerun the installed parser from
-the application root:
+Then independently enumerate draft concept files and rerun the installed design form
+check from the application root:
 
 ```sh
-bunx --no-install sync-engine check-concepts design/concepts/*.md
+bunx --no-install sync-engine check-design design/concepts/*.md \
+  design/compositions/*.md design/types.md
 ```
 
 Return diagnostics to the same designer in one file of at most 4 KiB containing only
-the parser output, affected paths, and repair request. Deliver that file directly
-through the harness; do not rebuild or resend the full designer prompt. Parser failure
-blocks criticism. The coordinator does not repair design Markdown.
+the check output, affected paths, and repair request. Deliver that file directly
+through the harness; do not rebuild or resend the full designer prompt. Form-check
+failure blocks criticism. The coordinator does not repair design Markdown.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Pass
 `types.md` and every concept/composition file as repeated `--input candidate=<path>`
@@ -147,8 +145,7 @@ bun "<skill-root>/scripts/command.ts" prompt build --role critic \
 ```
 
 Launch a fresh read-only normal-reasoning critic. Two critic passes are the normal
-automatic budget. Maintain
-the count in active coordinator state:
+automatic budget:
 
 1. Critic pass 1 reviews the candidate.
 2. No material findings ends criticism immediately.
@@ -191,8 +188,7 @@ Every concept, application, and evidence prompt build requires both
 Include the digest in each temporary assignment and verify it before every diagnostic
 follow-up with `follow-up check`. Any design change invalidates the digest, downstream
 prompts, and conclusions: stop downstream work, rerun syntax and fresh criticism as
-applicable, complete authorization, then capture a new digest. Do not store a digest or
-other workflow metadata in the repository.
+applicable, complete authorization, then capture a new digest.
 
 ## Implement in bounded phases
 
@@ -241,9 +237,9 @@ never silently change approved Markdown.
 
 ## Validate once and stop
 
-Each worker runs only its focused owned validation before return. After evidence
-completes, the coordinator runs the complete application-owned source-agreement,
-artifact, typecheck, check, test, build, generation, scenario, and bounded host chain.
+After evidence completes, the coordinator runs the complete application-owned
+source-agreement, artifact, typecheck, check, test, build, generation, scenario, and
+bounded host chain.
 Run that complete acceptance chain once; never hand-edit generated output. If a final
 command fails, return its focused diagnostic to the original worker, rerun the affected
 focused command, then rerun every final check invalidated by the changed paths regardless

@@ -49,20 +49,20 @@ _items(owner: Person) : many (item: Item, title: String)
 ```
 ````
 
-Types contains only `external Name` declarations or is empty. State uses supplied SSF.
+Types contains only `external Name` declarations or is empty. State uses supplied SSF;
+the fence may end with invariant sentences.
 Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared
 names. Empty results use `: return ()` and bare `return`, never `return ()` or a
 standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
-within an action. Return declared names only: `return account`, never prose such as
-`return the session account`.
+within an action and never shared across actions. Return declared names only:
+`return account`, never prose such as `return the session account`.
 
 Action names start with a letter; queries start `_`. Query resolution precedes the
 named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional State
 values as optional row fields, for example `dueAt?: DateTime`. A `one` body always
-promises one row; only `optional` may say no row. Every query body covers its answer,
-absence, and deterministic `many` ordering.
+promises one row; only `optional` may say no row.
 
 Application `design/types.md` uses one `types` fence. Concrete definitions and direct
 external bindings have this direction:
@@ -88,7 +88,8 @@ The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
 Visibility follows the [readability policy](view:Forum.posts.Readable).
 ```
 
-Declare each executable computation once with an indented body:
+Declare each executable computation once with an indented body, in the using
+composition document or in `design/types.md` when shared:
 
 ```computations
 normalizeTitle(raw: String) : String

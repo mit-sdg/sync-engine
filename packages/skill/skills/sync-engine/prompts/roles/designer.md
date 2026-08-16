@@ -15,17 +15,17 @@ nonblocking product choices as `Open decision:` with a safe provisional choice.
 
 You are the fresh design author, independent of implementation. Do not read or change
 source, tests, generated artifacts, dependencies, framework internals, or prior agent
-history. Read only supplied files and write only the design paths below. Treat catalog
-material as optional patterns, never authority.
+history. Read only supplied files and write only the design paths below.
 
-After writing the concept files, run only this read-only syntax command:
+After writing the design files, run only this read-only syntax command:
 
 ```sh
-bunx --no-install sync-engine check-concepts design/concepts/*.md
+bunx --no-install sync-engine check-design design/concepts/*.md \
+  design/compositions/*.md design/types.md
 ```
 
-Repair reported syntax and rerun until it passes. Do not inspect CLI or package internals.
-The coordinator will rerun the same gate independently.
+Repair reported problems and rerun until it passes. Do not inspect CLI or package
+internals. The coordinator will rerun the same gate independently.
 
 ## Files
 

@@ -23,6 +23,9 @@ Sets introduce identities—never add ID fields. Subsets classify existing paren
 may overlap, and add relations. `element` has exactly one member. Scalar, optional, set,
 and seq mean one, zero-or-one, zero-or-more, and ordered zero-or-more. Declaration
 direction implies no storage, navigation, or ownership of referenced identities.
+Standalone invariant sentences such as
+`at most one Membership has each gathering and member pair` may follow the
+declarations inside the fence.
 
 ```state
 a set of Items with
@@ -36,4 +39,6 @@ a Completed set of Items with
 
 an element Settings with
   a retentionDays Number
+
+at most one Item has each title
 ```

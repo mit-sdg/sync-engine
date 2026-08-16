@@ -7,20 +7,27 @@
 ## Assignment
 
 Review the complete authored candidate against the brief: every concept and
-composition plus `types.md`. Concept grammar has passed; independently review
-composition decisions, links, bindings, and cross-concept behavior as well as concept
-semantics. Be read-only and use only supplied prompt material. Do not inspect source,
-generated files, Git, package configuration, tests, framework internals, API docs, or
-analysis output.
+composition plus `types.md`. Concept grammar and authored design form have passed;
+typed links are not yet resolved against source. Be read-only and use only supplied
+prompt material. Do not inspect source, generated files, Git, package configuration,
+tests, framework internals, API docs, or analysis output.
 
-Report only material findings tied to a candidate file and decision: a purpose or
-Principle that fails to establish a needed coherent mechanism; concept dependence or
-wrong ownership; a wrong or missing action, refusal, lifecycle, visible result,
-authority, authorization, deletion, compensation, repair, external binding, or
-cross-concept failure rule; or failure to deliver brief-visible success. Explicitly
-check query cardinality/body agreement, optional State values in query rows, and every
-external binding's direction and actual owner. Reject bare typed-link text, route-shaped
-targets, and concept actions presented as application endpoint/view declarations.
+Check in this order; report only material findings tied to a candidate file and
+decision:
+
+1. Scope: reject behavior the brief does not need; verify brief-visible success and
+   expected refusals are deliverable.
+2. Concepts: each purpose and Principle establishes a needed coherent mechanism, not
+   an entity, endpoint, or screen.
+3. Ownership: peer dependence, interpreted or copied peer facts, duplicate authority.
+4. Actions: refusals, post-refusal state, lifecycle, repetition, deletion,
+   compensation, repair; check query cardinality/body agreement and optional State
+   values in query rows.
+5. Composition: reaction pressure, cross-concept failure rules, authorization
+   enforcement points, visible results.
+6. Application documents: every external binding's direction and actual owner.
+   Reject bare typed-link text, route-shaped targets, and concept actions presented
+   as application endpoint/view declarations.
 
 Application documents declare their linked endpoint trees, views, formers, and
 computations; do not demand an artificial API/adapter concept merely to own them.

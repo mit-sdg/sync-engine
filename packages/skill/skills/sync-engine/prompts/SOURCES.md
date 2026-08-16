@@ -101,6 +101,9 @@ requires nonempty unfenced prose without imposing a scenario count.
 | Verify implemented variant                        | application worker; final validation       |
 | Trace objective-driven scenarios                  | evidence-worker template                   |
 
+The critic template orders its review walk after this guide's design-time steps; the
+rules each step applies remain in the common design prompt.
+
 The semantic comparison must also inspect source paragraphs outside headings. A table
 row proves destination coverage, not preservation of meaning; independent review is
 the decision gate.
