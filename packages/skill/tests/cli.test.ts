@@ -51,7 +51,7 @@ describe("sync-engine-skill command", () => {
     const initialized = run(["brief", "init", path], directory);
     expect(initialized.status).toBe(0);
     expect(initialized.stdout).toBe(
-      "Brief template initialized: design/brief.md. Fill placeholders before running brief check.\n",
+      "Brief template initialized. Fill placeholders before running brief check.\n",
     );
     expect(await readFile(path, "utf8")).toBe(
       await readFile(

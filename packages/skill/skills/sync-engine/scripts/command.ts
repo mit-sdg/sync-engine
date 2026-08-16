@@ -255,7 +255,7 @@ async function run(args: readonly string[]): Promise<void> {
     );
     await writeFile(path, template, { encoding: "utf8", flag: "wx" });
     process.stdout.write(
-      `Brief template initialized: ${relative(process.cwd(), path)}. Fill placeholders before running brief check.\n`,
+      "Brief template initialized. Fill placeholders before running brief check.\n",
     );
     return;
   }
