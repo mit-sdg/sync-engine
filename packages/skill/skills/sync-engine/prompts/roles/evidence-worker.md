@@ -3,14 +3,15 @@
 ## Assignment
 
 Test the assembled application against the brief and approved contracts. Inspect only
-supplied prompt material and assignment paths. Edit only assigned scenarios or tests.
+supplied prompt material and assignment paths. Do not read, write, inspect, search, or
+traverse other repository paths. Edit only assigned scenarios or tests.
 Do not edit production source, generated output, design, or unrelated tests.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,
 `node_modules/@mit-sdg/*/dist/`, source maps, or files reached by following imports).
-Use only supplied prompt material, assigned application paths, approved contracts, and
-the assembled public interface. A diagnostic may name a framework file; do not open it.
+Use only approved contracts and the assembled public interface. A diagnostic may name a
+framework file; do not open it.
 If the supplied public context is insufficient, return a context blocker.
 
 Use existing evidence when it already proves every required outcome; return that

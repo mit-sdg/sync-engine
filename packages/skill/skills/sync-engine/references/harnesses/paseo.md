@@ -1,10 +1,10 @@
 # Run roles with Paseo
 
-Paseo `--cwd` and assignment prose are not confinement. Before an
-implementation or evidence role, verify that the provider or harness enforces read and
-write denial outside assigned application paths, including framework source, installed
-package internals, source maps, and traced imports. Without it, continue design and criticism but
-stop before that role.
+Paseo `--cwd` and assignment prose are not enforcement. Use provider or harness read and
+write denial outside assigned application paths when available. Regardless, launch
+implementation and evidence roles with narrow assignments and explicit instructions not
+to read, write, inspect, search, or traverse outside them, including framework source,
+installed package internals, source maps, and traced imports.
 
 Inspect the coordinator exactly once through `$PASEO_AGENT_ID`:
 

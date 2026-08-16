@@ -2,7 +2,7 @@
 name: sync-engine
 description: Design and build applications using concept design and @mit-sdg/sync-engine through compact independent review, bounded implementation roles, and objective evidence.
 license: Apache-2.0
-compatibility: Requires filesystem and shell access, Bun, and native agents with file-based prompts; implementation and evidence also require enforced filesystem boundaries.
+compatibility: Requires filesystem and shell access, Bun, and native agents with file-based prompts; downstream roles use best-effort assigned-path discipline.
 ---
 
 # Sync-engine application workflow
@@ -30,9 +30,9 @@ brief → independent design → syntax → bounded independent criticism
   normal reasoning setting; do not repeat reasoning instructions in prompts.
 - Preserve unrelated work. Only the coordinator may change Git's index, refs, or history
   on a direct, explicit human-user request; see the workflow for scope.
-- Implementation and evidence roles require enforced boundaries; they never inspect
-  framework implementation source or installed package internals. Supply exact public
-  references.
+- Downstream implementation and evidence roles receive narrow assigned paths and explicit
+  path-discipline instructions; they never inspect framework implementation source or
+  installed package internals. Supply exact public references.
 - Build every role prompt with the self-contained compiler `scripts/command.ts` and
   deliver it from a file. Bind downstream prompts and follow-ups to the reviewed design
   digest. Never place generated Markdown in a shell argument.

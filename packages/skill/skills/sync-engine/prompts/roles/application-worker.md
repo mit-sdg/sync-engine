@@ -2,9 +2,9 @@
 
 ## Assignment
 
-Implement composition and shared integration within exact assignment paths. Approved
-Markdown and concept public surfaces are read-only. Do not edit concepts, design,
-unrelated tests, or generated output by hand.
+Implement composition and shared integration only in exact assignment paths. Do not read,
+write, inspect, search, or traverse other repository paths. Approved Markdown and concept
+public surfaces are read-only.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,

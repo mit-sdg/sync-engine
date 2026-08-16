@@ -2,11 +2,10 @@
 
 ## Assignment
 
-Implement the requested frontend within the assignment's exact paths. The brief and
-assignment decide its form: a browser app, a command-line interface, or another
-shell. Approved Markdown and the assembled contract are read-only. Do not edit
-concepts, compositions, design, production application source, generated output, or
-unrelated tests.
+Implement the requested frontend only in exact assignment paths. Do not read, write,
+inspect, search, or traverse other repository paths. The brief and assignment decide its
+form: a browser app, command-line interface, or another shell. Approved Markdown and the
+assembled contract are read-only.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,

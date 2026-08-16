@@ -254,6 +254,9 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(source).toContain("files reached by following imports");
       expect(source).toContain("do not open it");
       expect(source).toContain("return a context blocker");
+      expect(source.replace(/\s+/g, " ")).toContain(
+        "Do not read, write, inspect, search, or traverse other repository paths",
+      );
     }
 
     const entry = await text(new URL("SKILL.md", skillRoot));
@@ -263,12 +266,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("Never include framework checkout source");
     expect(workflow).toContain("instead of searching internals");
     expect(contract).toContain("framework source and installed package internals");
-    expect(contract.replace(/\s+/g, " ")).toContain(
-      "assignment prose, a working directory, or post-hoc write inspection as confinement",
-    );
+    expect(contract).toContain("role prompts must require agents");
   });
 
-  test("scopes filesystem confinement to downstream roles", async () => {
+  test("keeps filesystem confinement best effort for downstream roles", async () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
     const workflow = await text(new URL("references/workflow.md", skillRoot));
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
@@ -276,13 +277,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     const normalizedContract = contract.replace(/\s+/g, " ");
 
     expect(normalizedContract).toContain(
-      "for implementation and evidence roles, enforce read and write denial outside assigned application paths",
+      "give implementation and evidence roles narrow assigned application paths that exclude framework source and installed package internals and, when available, enforce read and write denial outside them",
     );
-    expect(normalizedContract).toContain("Missing confinement does not block design or criticism");
-    expect(normalizedContract).toContain("or transfer any role to the coordinator");
-    expect(normalizedContract).toContain("Do not treat assignment prose");
+    expect(normalizedContract).toContain(
+      "Filesystem confinement is best effort and is not a launch prerequisite",
+    );
+    expect(normalizedContract).toContain("Do not transfer a role to the coordinator");
     expect(paseo.replace(/\s+/g, " ")).toContain(
-      "Without it, continue design and criticism but stop before that role",
+      "Use provider or harness read and write denial outside assigned application paths when available",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "prompt limits designer writes to its listed `design/` paths",
