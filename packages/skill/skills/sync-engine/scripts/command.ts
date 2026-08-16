@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, statSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkBriefFile } from "./brief.ts";
@@ -149,6 +149,7 @@ async function validateReleaseSet(release: SkillRelease, applicationRoot: string
 function usage(): string {
   return `Usage:
   sync-engine-skill release check [<application-directory>]
+  sync-engine-skill brief init <brief.md>
   sync-engine-skill brief check <brief.md>
   sync-engine-skill design digest <design-directory>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
@@ -241,6 +242,19 @@ async function run(args: readonly string[]): Promise<void> {
     const applicationRoot = resolve(args[2] ?? process.cwd());
     const version = await validateReleaseSet(release, applicationRoot);
     process.stdout.write(`Installed sync-engine release matches skill ${version}.\n`);
+    return;
+  }
+
+  if (args[0] === "brief" && args[1] === "init" && args.length === 3) {
+    const path = resolve(args[2]!);
+    if (existsSync(path)) throw new Error(`Brief already exists: ${args[2]}`);
+    await mkdir(dirname(path), { recursive: true });
+    const template = await readFile(
+      resolve(skillRoot, "prompts/templates/product-brief.md"),
+      "utf8",
+    );
+    await writeFile(path, template, { encoding: "utf8", flag: "wx" });
+    process.stdout.write(`Brief template initialized: ${relative(process.cwd(), path)}.\n`);
     return;
   }
 

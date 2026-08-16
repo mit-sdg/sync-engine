@@ -58,10 +58,12 @@ small semantic design document; role templates declare their exact file inputs.
 
 ## Deterministic prompt commands
 
-Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. Validate the
-compact product brief without requiring application dependencies:
+Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. Initialize
+then validate the compact product brief without requiring application dependencies:
 
 ```sh
+bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+# Fill the template.
 bun "<skill-root>/scripts/command.ts" brief check design/brief.md
 ```
 

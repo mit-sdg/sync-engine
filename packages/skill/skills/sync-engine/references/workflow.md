@@ -58,10 +58,15 @@ instructions to the designer or critic.
 
 ## Maintain the product brief
 
-Create and update `design/brief.md` from the user's request and decisions. Keep it
-brief: objective, product decisions, visible success, expected refusals, assumptions,
-non-goals, and open decisions. Use `User` authority for requested or interactively
-settled decisions and `Assumption` for conservative coordinator choices. Run:
+Initialize a new brief from the packaged template; never guess or recreate its grammar:
+
+```sh
+bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+```
+
+Then edit only its placeholders from the user's request and decisions. Keep it brief.
+Use `User` authority for requested or interactively settled decisions and `Assumption`
+for conservative coordinator choices. Validate once after filling it:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief check design/brief.md

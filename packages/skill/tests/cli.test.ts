@@ -44,6 +44,24 @@ afterEach(async () => {
 });
 
 describe("sync-engine-skill command", () => {
+  test("initializes the exact packaged brief template without replacing a brief", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-brief-init-"));
+    temporary.push(directory);
+    const path = resolve(directory, "design/brief.md");
+    const initialized = run(["brief", "init", path], directory);
+    expect(initialized.status).toBe(0);
+    expect(initialized.stdout).toBe("Brief template initialized: design/brief.md.\n");
+    expect(await readFile(path, "utf8")).toBe(
+      await readFile(
+        resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
+        "utf8",
+      ),
+    );
+    const repeated = run(["brief", "init", path], directory);
+    expect(repeated.status).toBe(1);
+    expect(repeated.stderr).toContain("Brief already exists");
+  });
+
   test("validates a brief before an application release set is installed", async () => {
     const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-"));
     temporary.push(directory);

@@ -325,6 +325,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
     expect(entry).toContain("coordinator's exact provider and model");
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
+    expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
     expect(workflow).toContain("It never authors or\nrepairs concept/composition/type design");
     expect(workflow).toContain("Do not run a Vite+ migration");
     expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
