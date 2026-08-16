@@ -50,7 +50,9 @@ describe("sync-engine-skill command", () => {
     const path = resolve(directory, "design/brief.md");
     const initialized = run(["brief", "init", path], directory);
     expect(initialized.status).toBe(0);
-    expect(initialized.stdout).toBe("Brief template initialized: design/brief.md.\n");
+    expect(initialized.stdout).toBe(
+      "Brief template initialized: design/brief.md. Fill placeholders before running brief check.\n",
+    );
     expect(await readFile(path, "utf8")).toBe(
       await readFile(
         resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),

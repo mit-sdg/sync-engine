@@ -58,13 +58,15 @@ instructions to the designer or critic.
 
 ## Maintain the product brief
 
-Initialize a new brief from the packaged template; never guess or recreate its grammar:
+Initialize a new brief from the packaged template; never guess or recreate its grammar.
+Run this command alone—do not chain a premature check:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief init design/brief.md
 ```
 
-Then edit only its placeholders from the user's request and decisions. Keep it brief.
+Read the initialized file, replace its placeholders from the user's request and
+decisions, then check it. Keep it brief.
 Use `User` authority for requested or interactively settled decisions and `Assumption`
 for conservative coordinator choices. Validate once after filling it:
 

@@ -330,6 +330,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("Do not run a Vite+ migration");
     expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
     expect(workflow).toContain("setup completion is a hard gate");
+    expect(workflow).toContain("Run this command alone—do not chain a premature check");
     expect(workflow).toContain("Default to no catalog context");
     expect(workflow).toContain("do not rebuild or resend the full designer prompt");
     expect(workflow).toContain("never aggregate candidate files into an intermediate file");
