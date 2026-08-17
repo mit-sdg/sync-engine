@@ -36,8 +36,7 @@ stay in the action owning changed state.
 
 Actions name domain occurrences or transitions, not generic writes. Declare
 preconditions and effects; avoid case flags. Owner actions and transactions enforce
-local invariants and non-bypassable authorization, and resolve races. Getters are
-queries; loops are not actions.
+local invariants. Getters are queries; loops are not actions.
 
 Expected domain rejection is a declared refusal with a stable code; other failure is a
 fault. State the post-refusal state: a refusal never partially applies the requested
@@ -124,25 +123,25 @@ One declaration/alias per line; indent fields. Type/Subtype/Alias/Parameter star
 uppercase ASCII and fieldName lowercase; tails use ASCII letters, digits, or `_`. VALUE
 starts uppercase; its tail uses only uppercase ASCII letters, digits, or `_`. OPAQUE_LINE
 means standalone non-structural invariant prose. Omit fieldName only for `named` or an
-inferred named collection; SSF lowercases that exact name's first character. Enums need
-an explicit field name.
+inferred named collection, never an enum; SSF lowercases that exact name's first
+character.
 
 SSF owns exact structures/subsets and accepted aliases. Named State fields and
 action/query input/result types supply alias candidates. One is owned only if vendored
-`plur` pluralizes it or one unique non-element structure or subset to the other exact
-spelling. SSF generates no candidate or transitive/third spelling. Exact
-declarations win; externals, primitives, elements, and ambiguous candidates get no
-automatic alias.
+`plur` pluralizes it to the exact spelling of one unique non-element structure or
+subset, or that spelling to it. SSF generates no candidate or transitive/third
+spelling. Exact declarations win; externals, primitives, elements, and ambiguous
+candidates get no automatic alias.
 
-Explicit aliases handle synonyms/ambiguity and override automatic evidence. Targets are
-unique valid structures/subsets, never aliases. Parents accept structures, subsets, or
-either alias. Normalization rejects unresolved/external/primitive/invalid-alias parents,
-duplicate/ambiguous structures, self-parents, and cycles; forward chains work.
+Use explicit aliases for synonyms/ambiguity; they override automatic evidence. Targets
+are unique valid structures/subsets, never aliases. Parents accept structures, subsets,
+or either alias. Normalization rejects unresolved/external/primitive/invalid-alias
+parents, duplicate/ambiguous structures, self-parents, and cycles; forward chains work.
 
 Structures/explicit aliases/externals/primitives share one exact State namespace. Fields
 are unique per declaration; VALUEs per enum. Unresolved field values are legal
 conventional/refinement references, not owned binding targets. Malformed
-structural-looking lines fail; standalone non-structural invariants stay opaque and
+structural-looking lines fail; standalone non-structural invariants stay opaque,
 retained, not proved.
 
 Collections are never `optional` (empty means absent) or nested; named-type unions are

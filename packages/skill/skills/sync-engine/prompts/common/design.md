@@ -34,8 +34,7 @@ stay in the action owning changed state.
 
 Actions name domain occurrences or transitions, not generic writes. Declare
 preconditions and effects; avoid case flags. Owner actions and transactions enforce
-local invariants and non-bypassable authorization, and resolve races. Getters are
-queries; loops are not actions.
+local invariants. Getters are queries; loops are not actions.
 
 Expected domain rejection is a declared refusal with a stable code; other failure is a
 fault. State the post-refusal state: a refusal never partially applies the requested
