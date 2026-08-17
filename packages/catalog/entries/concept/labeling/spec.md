@@ -35,6 +35,8 @@ a set of Applications with
 
 within one Scope each Label name is unique
 at most one Application has each label and item pair
+
+alias Label for Labels
 ```
 
 ## Actions

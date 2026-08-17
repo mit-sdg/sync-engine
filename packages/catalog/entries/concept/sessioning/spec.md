@@ -25,6 +25,8 @@ external Subject
 a set of Sessions with
   a subject Subject
   an expiresAt DateTime
+
+alias Session for Sessions
 ```
 
 ## Actions

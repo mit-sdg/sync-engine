@@ -19,6 +19,8 @@ Creating a label establishes one record with that label.
 ```state
 a set of Records with
   a label String
+
+alias Record for Records
 ```
 
 ## Actions

@@ -24,6 +24,8 @@ a set of Entries with
   a name String
 
 at most one Entry has each name
+
+alias Entry for Entries
 ```
 
 ## Actions

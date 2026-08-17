@@ -35,6 +35,8 @@ a seq of Alerts with
   an open Flag
 
 at most one Alert has each recipient and cause pair
+
+alias Alert for Alerts
 ```
 
 ## Actions

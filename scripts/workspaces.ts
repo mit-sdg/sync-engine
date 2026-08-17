@@ -58,13 +58,12 @@ export const workspaceCatalog = [
       "SUPPORT.md",
       "package.json",
     ],
-    packageBudget: { files: 425, packedBytes: 520_000, unpackedBytes: 1_720_000 },
+    packageBudget: { files: 438, packedBytes: 520_000, unpackedBytes: 1_723_000 },
     assets: [
       { source: "src/command/setup", destination: "dist/command/setup" },
       {
         source: "packages/ssf/dist",
         destination: "dist/engine/tooling/ssf-package",
-        exclude: ["vendor/irregular-plurals.d.ts"],
       },
     ],
     bins: ["dist/command/main.js"],
@@ -232,7 +231,7 @@ export const workspaceCatalog = [
     copiesExamples: false,
     publication: "private",
     requiredPackedFiles: ["README.md", "package.json", "dist/index.js", "dist/index.d.ts"],
-    packageBudget: { files: 8, packedBytes: 15_000, unpackedBytes: 70_000 },
+    packageBudget: { files: 20, packedBytes: 20_000, unpackedBytes: 100_000 },
     assets: [],
     bins: [],
   },

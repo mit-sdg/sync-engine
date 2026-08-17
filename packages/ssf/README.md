@@ -1,8 +1,8 @@
 # Simple State Form (SSF)
 
 Simple State Form (SSF) is the State language for a concept specification. It is a
-small English-like notation for declaring a concept's State. Write one declaration
-per line. Put a declaration's fields on the following indented lines.
+small English-like notation for structural State declarations. Write one declaration
+or alias per top-level line. Put a declaration's fields on following indented lines.
 
 ```state
 a set of Items with
@@ -17,17 +17,20 @@ a Completed set of Items with
 an element Settings with
   a retentionDays Number
 
+alias Item for Items
+
 at most one Item has each title
 ```
 
-## Declarations
+## Grammar
 
 The bounded structural grammar is:
 
 ```text
-schema := (setDecl | subsetDecl)*
+schema := (setDecl | subsetDecl | aliasDecl)*
 setDecl := (a|an) (element|set|seq) [of] Type [with field+]
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype) [with field+]
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with field+]
+aliasDecl := alias Alias for (Type|Subtype)
 field := [a|an] [optional] [name] (scalar|collection)
 scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
 collection := (set|seq) [of] scalar
@@ -35,18 +38,41 @@ primitive := Number | String | Flag | Date | DateTime
 ```
 
 A top-level declaration uses `a set of Items`, `a seq of Items`, or
-`an element Settings`. The `of` after a structural keyword is optional. A
-declaration with fields ends its first line with `with`; each field follows on
-its own indented line.
+`an element Settings`. The `of` after a structural keyword is optional. A declaration
+with fields ends its first line with `with`.
 
-A subset declaration names existing members of a parent:
-`a Completed set of Items`. A subset may use `set` or `element`, but not `seq`.
-It may declare fields with the same `with` form.
+A subset declaration, such as `a Completed set of Items`, classifies members of an
+existing parent. A subset may use `set` or `element`, but not `seq`. Every parent must
+resolve by exact spelling to a unique structural identity or subset in the same State.
+Forward references, exact explicit parent aliases, and chains are valid; external
+parameters, primitives, unresolved or invalid aliases, self-parenting, and cycles are not.
+
+## Exact aliases
+
+An alias explicitly adds one exact owned spelling:
+
+```state
+a set of People
+
+alias Person for People
+```
+
+The canonical syntax is exactly `alias Alias for Target`. The alias name and target
+begin with uppercase ASCII letters. The target may occur before or after the alias but
+must be a unique, valid structural identity or subset. An alias cannot target another
+alias, so alias chains and alias cycles are impossible. A subset parent may use an exact
+alias; graph validation normalizes that edge to the alias's structural target. Alias names share the type
+namespace with structural declarations, external parameters, primitives, and other
+aliases and must be unique.
+
+Aliases are the only way to add another owned spelling; SSF never derives one. A field,
+action, or query that mentions `Person` does not make `Person` an alias for `People`;
+author the alias declaration when both exact spellings are intended to denote the same
+owned type.
 
 ## Fields
 
-A field may have an explicit lowercase name. The name comes before its value
-form:
+A field may have an explicit lowercase name before its value form:
 
 ```state
   a title String
@@ -56,92 +82,81 @@ form:
   a status of OPEN or DONE
 ```
 
-An indented field may omit its article. `optional` still precedes the field
-name. When the field has an article, `optional` immediately follows it, as in
-`an optional owner Person`. It does not follow the name.
+An indented field may omit its article. `optional` precedes the field name and, when
+an article is present, immediately follows it: `an optional owner Person`. Collections
+are never optional; an empty collection represents absence.
 
-A field name may be omitted when its value supplies a named type or parameter.
-SSF lowercases the first character of that name:
+A field name may be omitted when its value supplies a named type. SSF lowercases only
+the first character of that exact type spelling:
 
 ```state
   a Profile
   a set of Options
 ```
 
-These fields are named `profile` and `options`. Enumerations do not supply an
-inferred field name.
+These fields are named `profile` and `options`. Enumerations do not supply inferred
+field names. Effective field names, including inferred names, must be unique within one
+declaration. The same field name may occur in a different declaration.
 
-A collection field uses `set` or `seq`, with an optional `of`. Its elements are
-scalars. Collections cannot contain collections. Named-type unions are not part
-of SSF; `or` occurs only between enumeration values. An enumeration has at least
-two uppercase values, as in `of OPEN or DONE`.
+A collection uses `set` or `seq`, with optional `of`, and cannot contain another
+collection. Named-type unions are not part of SSF. `or` occurs only between at least
+two enumeration values. Each value must be unique within that one enumeration; the
+same value may occur in another field or enum.
 
-The primitive spellings are `Number`, `String`, `Flag`, `Date`, and `DateTime`.
+## Names and namespaces
+
+Type, parameter, declaration, subset, alias, target, and parent names begin with an
+uppercase ASCII letter. Field names begin with a lowercase ASCII letter. Remaining
+characters may be ASCII letters, digits, or `_`. Enumeration values begin with an
+uppercase ASCII letter and otherwise use uppercase ASCII letters, digits, or `_`.
+
+Structural declaration names are unique across the whole State. They must not exactly
+collide with an external parameter or one of the five SSF primitives. Alias names use
+the same whole-State namespace. Field names are local to one declaration. Enumeration
+values are local to one enumeration.
+
+All joins use exact authored spelling. Nothing is case-folded, inflected, corrected, or
+silently generated.
+
+## Reference boundary
+
+SSF classifies every parsed named reference as owned, external, primitive, or
+unresolved. Contexts that require ownership are closed: subset parents must resolve to
+valid structural declarations or their explicit aliases, alias targets must resolve
+directly to valid structural declarations, and application qualified
+binding targets must resolve to an owned structural or alias spelling of the selected
+instance.
+
+State field value names remain an intentionally open authored namespace. A field may
+refer to an owned identity, external parameter, primitive, conventional value type, or
+concept-local refinement. Therefore an unresolved field value is retained and
+classified as unresolved but is not itself an SSF error. It does not become owned and
+cannot be used as a qualified binding target. Action and query signature types are also
+not required to occur in State and never contribute ownership.
 
 ## State meaning
 
-A top-level set or sequence introduces identities. An element declaration has
-one member. Fields declare relations on those identities. Do not add ID fields
-for them. A scalar field relates a member to a scalar value or another identity.
-A collection field relates it to a set or sequence of values.
+A top-level set or sequence introduces identities. An element declaration has one
+member. Fields declare relations on those identities; do not add ID fields for them. A
+scalar field relates a member to a scalar value or another identity. A collection field
+relates it to a set or sequence of values.
 
-Collections are never optional. An empty collection represents absence. Scalar
-fields may be optional.
+A subset introduces no identity. Subsets may overlap, and subset fields add relations
+for classified members. Which side declares a relation implies nothing about storage,
+navigation, or ownership.
 
-A subset classifies members already introduced by its parent. It does not
-introduce new identities. Subsets may overlap, and subset fields add relations
-for the classified members. Which side declares a relation implies nothing
-about storage, navigation, or ownership.
+## Opaque prose and canonical form
 
-## Names and exact spellings
+A prose line such as `at most one Item has each title` remains opaque text. SSF does
+not interpret or prove it. A line beginning like a declaration, alias, or indented
+field must complete that structural form; malformed structural-looking lines receive
+source-located diagnostics rather than becoming prose.
 
-Type, parameter, declaration, subset, and parent names begin with an uppercase
-ASCII letter. Field names begin with a lowercase ASCII letter. Their remaining
-characters may be ASCII letters, digits, or `_`. Enumeration values use only
-uppercase ASCII letters, digits, and `_`, and begin with a letter.
+Canonical top-level declarations use `a set`, `a seq`, or `an element`. A subset puts
+`a` or `an` before its subtype. Fields require `with` on their declaration. Structural
+keywords are exactly `set`, `seq`, and `element`; `array`, `list`, `sequence`, and
+`sequences` are diagnosed near misses for `seq`, and `singleton` for `element`.
 
-Declaration and subset spellings remain exactly as authored. SSF does not
-normalize a declared name to a guessed singular. A collection name gains a
-singular or plural spelling only when that exact second spelling is also
-authored as a State field type or in an action or query signature of the same
-specification.
-
-English inflection, including irregular pairs such as `Mouse` and `Mice`, can
-relate those two authored spellings. It never creates a third spelling. With
-only `a set of Mice`, the parser does not invent `Mouse`; the second name must
-appear in the specification. Element names remain exact even when another
-spelling appears elsewhere.
-
-## Opaque prose and malformed structure
-
-A prose line such as `at most one Item has each title` remains opaque text. SSF
-does not interpret or prove it.
-
-A line that begins like a declaration or indented field must complete that
-structural form. Missing parts, extra trailing words, and other incomplete forms
-are malformed rather than opaque. These lines are malformed:
-
-```state
-a set of Records with garbage
-  a owner
-```
-
-## Canonical form
-
-The form check requires top-level declarations to use `a set`, `a seq`, or
-`an element`. A subset puts `a` or `an` before its subtype, as in
-`a Completed set` or `an Open set`. For a field with an article, the check
-requires `optional` immediately after the article and before the field name. The
-canonical form is `an optional owner Person`. A collection cannot use
-`optional`.
-
-The check also requires `with` before indented fields. The structural keywords
-are exactly `set`, `seq`, and `element`. It treats `array`, `list`, `sequence`,
-and `sequences` as near misses for `seq`, and `singleton` as a near miss for
-`element`.
-
-## Scope
-
-SSF proves bounded structural declarations and the exact owned type names they
-evidence. It does not prove invariant prose, define storage, or establish
-behavior.
+SSF proves bounded structural declarations, their graph integrity, and their exact
+owned type inventory. It does not prove opaque invariants, field-value refinement
+meaning, behavior, storage layout, or implementation semantics.

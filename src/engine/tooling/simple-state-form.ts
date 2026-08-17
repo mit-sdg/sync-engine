@@ -64,8 +64,11 @@ export function parseSimpleStateForm(
 }
 
 /** Validate deterministic, mechanically repairable SSF forms through the private parser. */
-export function validateSimpleStateForm(fence: MarkdownFence): readonly SimpleStateFormIssue[] {
-  return validatePackageSimpleStateForm(sourceOf(fence)).map((diagnostic) =>
+export function validateSimpleStateForm(
+  fence: MarkdownFence,
+  options: SsfParseOptions = {},
+): readonly SimpleStateFormIssue[] {
+  return validatePackageSimpleStateForm(sourceOf(fence), options).map((diagnostic) =>
     adaptIssue(fence, diagnostic),
   );
 }

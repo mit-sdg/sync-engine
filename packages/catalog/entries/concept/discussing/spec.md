@@ -38,6 +38,9 @@ a seq of Responses with
   an addedAt DateTime
 
 at most one open Discussion has each Subject
+
+alias Discussion for Discussions
+alias Response for Responses
 ```
 
 ## Actions

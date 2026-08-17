@@ -82,6 +82,8 @@ external Person
 a set of Notes with
   an author Person
   a text String
+
+alias Note for Notes
 ```
 
 ## Actions
@@ -152,29 +154,38 @@ resolution; that view is not part of the public concept-specification IR.
 
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
-The parser recognizes set, sequence, element, and subset declarations; their
-indented fields and multiplicities; structural keywords; and SSF identifier and
-article placement. Structural declaration and subset names remain exact. A collection
-name gains a singular/plural equivalent only when that exact second spelling occurs in
-a parsed State field type or action/query type expression in the same specification;
-this includes evidenced irregular pairs such as `Mouse`/`Mice` without inventing names
-such as `Chaose` from `Chaoses`. Element names remain exact. Fields and subset parents
-provide references or evidence but do not independently introduce owned types.
+The parser recognizes set, sequence, element, subset, explicit alias, and field
+declarations, including multiplicity, identifier, article, and graph constraints.
+Structural names remain exact. An additional owned spelling must be authored explicitly
+as `alias Alias for Target`; fields and action/query signatures never add aliases or
+other owned names. Alias targets must be unique valid structural declarations and may
+occur before or after the alias. Alias chains are rejected. Subset parents likewise resolve independent of declaration order and may name a
+structural identity, subset, or exact explicit alias for one. Alias parent edges
+normalize to structural targets before cycle checks. External parameters, primitives,
+invalid aliases, unresolved parents, self-parenting, and cycles fail with source-located
+diagnostics.
 
-A line that begins like a declaration or an indented field but is incomplete, has
-trailing tokens, or otherwise misses the grammar fails with a source-located diagnostic.
-This is intentionally not a prose semantics parser. Standalone invariant
-sentences that do not masquerade as malformed structure remain opaque text. The parser
-does not prove those invariants, action conditions or effects, query meaning,
-storage layout, State/storage agreement, or implementation behavior. It also
-does not require every conventional or refinement name in an operation signature
-to appear in State.
+Structural declaration and alias names share one whole-State namespace with external
+parameters and SSF primitives. Effective field names are unique within one declaration,
+and enum values are unique within one enum. The same field name in distinct declarations
+and the same enum value in distinct enums remain valid.
 
-Config-based application checking uses the owned-name inventory for one specific
-proof: a qualified external-binding target must name a type owned by the target
-instance's definition. Checked manifests persist that exact-spelling inventory, and
-validation independently rederives it from the included State and member signatures. An external parameter is not an owned type and cannot be
-a binding target. State changes continue to affect canonical design digests.
+A line that begins like a declaration, alias, or indented field but misses the grammar
+fails with a source-located diagnostic. Standalone invariant
+sentences remain opaque.
+State field value names are intentionally open because they may denote conventional or
+concept-local refinement types: an unresolved value reference is retained and
+classified as unresolved, but is not an SSF error and never becomes owned. Operation
+signature types likewise need not occur in State. The parser does not prove invariants,
+refinement meaning, action conditions or effects, query meaning, storage layout,
+State/storage agreement, or implementation behavior.
+
+Config-based checking uses the exact owned-name inventory for one proof: a
+qualified external-binding target must name a structural declaration or explicit alias owned by
+the selected target instance's definition. Checked manifests persist that inventory,
+and validation independently rederives it from included State alone. External,
+primitive, and unresolved names cannot be binding targets. State changes continue to
+affect canonical design digests.
 
 ## `Actions`
 

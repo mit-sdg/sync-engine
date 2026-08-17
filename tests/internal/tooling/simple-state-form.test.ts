@@ -62,12 +62,12 @@ describe("limited Simple State Form validation", () => {
       "an element Settings with",
     );
     issue(
-      "Completed set of Items",
+      "a set of Items\n\nCompleted set of Items",
       "SSF_ARTICLE",
       "Use `a Completed set of Items` or `an Completed set of Items`.",
     );
     issue(
-      "Open set of Items",
+      "a set of Items\n\nOpen set of Items",
       "SSF_ARTICLE",
       "Use `a Open set of Items` or `an Open set of Items`.",
     );
@@ -104,8 +104,8 @@ describe("limited Simple State Form validation", () => {
     ["canonical declarations", "a set of Items with\n  an optional dueAt DateTime"],
     ["canonical article-less optional", "a set of Items with\n  optional dueAt DateTime"],
     ["canonical sequence", "a seq of Items with\n  a members set of Person"],
-    ["canonical subset", "an Open set of Items"],
-    ["either subset article", "a Hour set of Items\nan Hour set of Items"],
+    ["canonical subset", "a set of Items\n\nan Open set of Items"],
+    ["either subset article", "a set of Items\n\na Hour set of Items\nan Honest set of Items"],
     ["invariant prose", "a set of Items with\n  a title String\n\nat most one Item has each title"],
     ["opaque no-state prose", "no durable state"],
     ["opaque function state", "a read function\n  read () -> DateTime"],

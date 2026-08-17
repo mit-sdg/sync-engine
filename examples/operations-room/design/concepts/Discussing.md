@@ -33,6 +33,9 @@ a seq of Responses with
   a discussion Discussion
   an author Person
   a text String
+
+alias Discussion for Discussions
+alias Response for Responses
 ```
 
 ## Actions

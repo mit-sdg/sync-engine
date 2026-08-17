@@ -2,7 +2,7 @@
 
 ```instances
 instantiate Linking with
-  Target is Targeting.Records
+  Target is Targeting.Record
 
 instantiate Targeting
 ```

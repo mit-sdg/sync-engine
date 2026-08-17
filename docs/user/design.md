@@ -174,10 +174,10 @@ The required `State` fence uses Simple State Form (SSF): set, sequence, singleto
 and subset declarations with indented relation fields; implicit set identity rather
 than synthetic ID fields; capitalized types, lowercase field names, uppercase
 enumeration values, and SSF primitives. A bounded structural parser checks these
-declarations, relates only exact evidenced collection spellings, records subset structure,
-and inventories nonexternal type names introduced by declaration subjects, subset
-parents, and structural fields. That inventory
-lets config-based checking prove qualified external-binding targets. See
+declarations, validates exact explicit aliases and subset graphs, and inventories only
+nonexternal structural and alias names. Fields and operation signatures do not add
+owned names. That inventory lets config-based checking prove qualified external-binding
+targets. See
 [`State`](reference/concept-specification.md#state).
 
 The parser deliberately does not interpret standalone invariant sentences or other

@@ -21,6 +21,8 @@ room; a second close is refused because the room is no longer open.
 ```state
 a set of Rooms with
   a name String
+
+alias Room for Rooms
 ```
 
 ## Actions

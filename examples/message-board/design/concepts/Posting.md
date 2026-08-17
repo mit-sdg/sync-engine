@@ -25,6 +25,8 @@ external Author
 a seq of Posts with
   an author Author
   a content String
+
+alias Post for Posts
 ```
 
 ## Actions

@@ -33,6 +33,8 @@ a set of Invitations with
   an optional decidedAt DateTime
 
 at most one pending Invitation has each target and invitee pair
+
+alias Invitation for Invitations
 ```
 
 ## Actions

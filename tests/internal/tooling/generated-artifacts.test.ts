@@ -143,7 +143,7 @@ describe("generated application artifacts", () => {
         configUrl,
       );
     await expect(renderGenerated(application("design"))).resolves.toMatchObject({
-      specification: expect.stringContaining("`Target` is `Targeting.Records`"),
+      specification: expect.stringContaining("`Target` is `Targeting.Record`"),
     });
     await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
       'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
@@ -165,7 +165,7 @@ describe("generated application artifacts", () => {
     );
   }, 15_000);
 
-  test("manifest validation rejects a digest-valid target plus forged owned inventory", async () => {
+  test("manifest validation independently rejects stale and forged owned inventories", async () => {
     const resolved = resolveApplication(
       {
         ...packagingApplication,
@@ -180,11 +180,18 @@ describe("generated application artifacts", () => {
     const target = mitigating.bindings.find(({ external }) => external === "Room")!.target;
     if (target.kind !== "qualified") throw new Error("fixture Room binding is not qualified");
     expect(`${target.instance}.${target.type}`).toBe("Rooming.Room");
-    target.type = "DefinitelyNotOwned";
     const rooming = manifest.design.concepts.find(({ definition }) => definition === "Rooming")!;
-    rooming.ownedTypes = [...rooming.ownedTypes, "DefinitelyNotOwned"].sort();
-    manifest.digest = applicationManifestDigest(manifest);
+    expect(rooming.ownedTypes).toContain("Room");
 
+    rooming.ownedTypes = rooming.ownedTypes.filter((name) => name !== "Room");
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /ownedTypes.*does not equal the inventory independently derived/,
+    );
+
+    rooming.ownedTypes = [...rooming.ownedTypes, "DefinitelyNotOwned", "Room"].sort();
+    target.type = "DefinitelyNotOwned";
+    manifest.digest = applicationManifestDigest(manifest);
     expect(() => validateApplicationManifest(manifest)).toThrow(
       /ownedTypes.*does not equal the inventory independently derived/,
     );

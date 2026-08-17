@@ -61,18 +61,22 @@ export async function checkDesignFiles(
       if (!(await stat(absolute)).isFile()) throw new Error("path is not a regular file");
       const markdown = await readFile(absolute, "utf8");
       let conceptError: unknown;
-      let isConcept = false;
+      let concept: ReturnType<typeof parseSpec> | undefined;
       try {
-        parseSpec(markdown);
-        isConcept = true;
+        concept = parseSpec(markdown);
       } catch (error) {
         conceptError = error;
       }
-      if (isConcept) {
+      if (concept !== undefined) {
         const stateFence = scanDesignMarkdown(markdown, label).fences.find(
           ({ info }) => info === "state",
         );
-        const stateIssues = stateFence === undefined ? [] : validateSimpleStateForm(stateFence);
+        const stateIssues =
+          stateFence === undefined
+            ? []
+            : validateSimpleStateForm(stateFence, {
+                externalTypes: concept.externalTypes.map(({ name }) => name),
+              });
         if (stateIssues.length > 0) throw new Error(describeSimpleStateFormIssues(stateIssues));
         checked.push({ path: label, kind: "concept" });
         continue;

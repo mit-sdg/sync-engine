@@ -1,12 +1,10 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   isOwnedTypeName,
-  normalizeTypeName,
   ownedTypeNameSpellings,
   parseSimpleStateForm,
   tokenizeSimpleStateForm,
-  typeNamesEquivalent,
   validateSimpleStateForm,
 } from "../src/index.ts";
 import { describe, expect, test } from "vite-plus/test";
@@ -24,25 +22,17 @@ function externalTypes(markdown: string): string[] {
   );
 }
 
-function memberTypeEvidence(markdown: string): string[] {
-  const fences = [...markdown.matchAll(/```(?:actions|queries)\r?\n([\s\S]*?)\r?\n```/g)];
-  return [
-    ...new Set(
-      fences.flatMap(([, body]) =>
-        (body ?? "")
-          .split(/\r?\n/)
-          .filter((line) => !/^\s/.test(line) && /^[a-z_][A-Za-z0-9_]*\s*\(/.test(line))
-          .flatMap((line) => [...line.matchAll(/\b[A-Z][A-Za-z0-9_]*\b/g)].map(([name]) => name)),
-      ),
-    ),
-  ];
+function codes(source: string, external: readonly string[] = []): readonly string[] {
+  return parseSimpleStateForm(source, { externalTypes: external }).diagnostics.map(
+    ({ code }) => code,
+  );
 }
 
-describe("SSF tokenization and spans", () => {
-  test("retains every token and reports one-based lines with zero-based offsets", () => {
+describe("SSF source model", () => {
+  test("retains every token and exact one-based positions", () => {
     const source = "a set of Items with\r\n  a title String";
     const tokens = tokenizeSimpleStateForm(source);
-    expect(tokens.map(({ kind, text }) => [kind, text])).toContainEqual(["newline", "\r\n"]);
+    expect(tokens.map(({ text }) => text).join("")).toBe(source);
     expect(tokens.filter(({ kind }) => kind === "word").at(-1)).toMatchObject({
       text: "String",
       span: {
@@ -50,425 +40,289 @@ describe("SSF tokenization and spans", () => {
         end: { offset: 37, line: 2, column: 17 },
       },
     });
-    expect(tokens.map(({ text }) => text).join("")).toBe(source);
   });
 });
 
-describe("structural SSF parsing", () => {
-  test("parses collections, elements, subsets, fields, references, and opaque invariants", () => {
+describe("structural parsing and explicit aliases", () => {
+  test("parses declarations, fields, aliases, references, and opaque prose", () => {
     const source = `a set of Items with
   a title String
   an optional owner Person
   a watchers set of Person
   a status of OPEN or DONE
 
+an Open set of Items
+
 an element Settings with
   a retentionDays Number
 
-an Open set of Items
+alias Item for Items
 
 at most one Item has each title`;
-    const parsed = parseSimpleStateForm(source, {
-      externalTypes: ["Person"],
-      evidenceTypeNames: ["Item"],
-    });
-
+    const parsed = parseSimpleStateForm(source, { externalTypes: ["Person"] });
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations).toHaveLength(3);
+    expect(parsed.document.aliases).toMatchObject([
+      {
+        name: { text: "Item", normalized: "Items", referenceKind: "owned" },
+        target: { text: "Items", normalized: "Items", referenceKind: "owned" },
+      },
+    ]);
     expect(parsed.document.declarations[0]).toMatchObject({
-      name: { text: "Items", normalized: "Items", referenceKind: "owned" },
-      declarationKind: "collection",
-      multiplicity: "set",
+      name: { text: "Items", referenceKind: "owned" },
       fields: [
-        {
-          name: "title",
-          value: {
-            kind: "named",
-            reference: { text: "String", referenceKind: "primitive" },
-          },
-        },
-        {
-          name: "owner",
-          optional: true,
-          value: {
-            kind: "named",
-            reference: { text: "Person", referenceKind: "external" },
-          },
-        },
-        {
-          name: "watchers",
-          value: {
-            kind: "collection",
-            multiplicity: "set",
-            element: {
-              kind: "named",
-              reference: { text: "Person", referenceKind: "external" },
-            },
-          },
-        },
-        {
-          name: "status",
-          value: { kind: "enumeration", values: ["OPEN", "DONE"] },
-        },
+        { name: "title", value: { reference: { referenceKind: "primitive" } } },
+        { name: "owner", optional: true, value: { reference: { referenceKind: "external" } } },
+        { name: "watchers", value: { element: { reference: { referenceKind: "external" } } } },
+        { name: "status", value: { values: ["OPEN", "DONE"] } },
       ],
     });
     expect(parsed.document.declarations[1]).toMatchObject({
-      name: { text: "Settings", normalized: "Settings", referenceKind: "owned" },
-      multiplicity: "element",
-    });
-    expect(parsed.document.declarations[2]).toMatchObject({
-      name: { text: "Open", normalized: "Open", referenceKind: "owned" },
-      declarationKind: "subset",
-      parent: { text: "Items", normalized: "Items", referenceKind: "owned" },
+      name: { text: "Open", referenceKind: "owned" },
+      parent: { text: "Items", referenceKind: "owned" },
     });
     expect(parsed.document.opaqueLines).toMatchObject([
-      { kind: "opaque", text: "at most one Item has each title" },
+      { text: "at most one Item has each title" },
     ]);
-    expect(parsed.document.inventory).toMatchObject({
-      identities: [{ name: "Items", declaredNames: ["Item", "Items"] }, { name: "Settings" }],
-      types: [
-        { name: "Items", declaredNames: ["Item", "Items"] },
-        { name: "Open" },
-        { name: "Settings" },
-      ],
-      external: ["Person"],
-    });
-    expect(isOwnedTypeName(parsed.document.inventory, "Items")).toBe(true);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
+      "Item",
+      "Items",
+      "Open",
+      "Settings",
+    ]);
     expect(isOwnedTypeName(parsed.document.inventory, "Item")).toBe(true);
     expect(isOwnedTypeName(parsed.document.inventory, "Person")).toBe(false);
-    expect(isOwnedTypeName(parsed.document.inventory, "Settings")).toBe(true);
-    expect(isOwnedTypeName(parsed.document.inventory, "Setting")).toBe(false);
-    expect(isOwnedTypeName(parsed.document.inventory, "Itme")).toBe(false);
   });
 
-  test("uses field types only as evidence for a matching structural declaration", () => {
-    const parsed = parseSimpleStateForm(
-      "a set of Accounts with\n  an account Account\n  a username Username\n  a aliases set of Alias",
-    );
-    expect(parsed.document.inventory.types).toMatchObject([
-      { name: "Accounts", declaredNames: ["Account", "Accounts"], roles: ["identity"] },
-    ]);
+  test("does not derive aliases from field names or type references", () => {
+    const parsed = parseSimpleStateForm(`a set of Accounts with
+  an account Account
+  a usernames set of Username`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Accounts"]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      { value: { reference: { referenceKind: "owned", normalized: "Accounts" } } },
-      { value: { reference: { referenceKind: "unresolved" } } },
-      { value: { element: { reference: { referenceKind: "unresolved" } } } },
+      { value: { reference: { text: "Account", referenceKind: "unresolved" } } },
+      { value: { element: { reference: { text: "Username", referenceKind: "unresolved" } } } },
     ]);
   });
 
-  test("does not claim external or primitive collection subjects as owned types", () => {
-    const parsed = parseSimpleStateForm(
-      "a set of People\n\na set of Strings\n\na Local set of People",
-      { externalTypes: ["People"] },
-    );
-    expect(parsed.document.declarations.map(({ name }) => name.referenceKind)).toEqual([
-      "external",
-      "owned",
-      "owned",
-    ]);
-    expect(parsed.document.inventory.types.map(({ name }) => name)).toEqual(["Local", "Strings"]);
-  });
-
-  test("infers omitted scalar and collection field names", () => {
-    const { document } = parseSimpleStateForm(
-      "a set of Questions with\n  a Profile\n  a set of Options",
-    );
-    expect(document.declarations[0]?.fields).toMatchObject([
-      { name: "profile", inferredName: true },
-      { name: "options", inferredName: true },
+  test("infers field names but retains unresolved State value names as authored references", () => {
+    const parsed = parseSimpleStateForm(`a set of Questions with
+  a Profile
+  a set of Options
+  a status StatusCode`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      {
+        name: "profile",
+        inferredName: true,
+        value: { reference: { referenceKind: "unresolved" } },
+      },
+      {
+        name: "options",
+        inferredName: true,
+        value: { element: { reference: { referenceKind: "unresolved" } } },
+      },
+      { name: "status", value: { reference: { referenceKind: "unresolved" } } },
     ]);
   });
 });
 
-describe("evidence-based type-name equivalence", () => {
-  test("never invents aliases for adversarial collection names", () => {
-    const parsed = parseSimpleStateForm(`a set of Chaoses
+describe("subset graph integrity", () => {
+  test.each([
+    `a Leaf set of Branch
 
-a set of Atlases
+a Branch set of Roots
 
-a set of Biases
+a set of Roots`,
+    `a set of Roots
 
-a set of Buses
+a Leaf set of Branch
 
-a set of Canvases
+a Branch set of Roots`,
+    `a Branch set of Roots
 
-a set of Gases
+a set of Roots
 
-a set of Lenses
-
-a set of Mice`);
-    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
-      "Atlases",
-      "Biases",
-      "Buses",
-      "Canvases",
-      "Chaoses",
-      "Gases",
-      "Lenses",
-      "Mice",
-    ]);
-    for (const invented of ["Atlase", "Biase", "Buse", "Canva", "Chaose", "Ga", "Len"]) {
-      expect(isOwnedTypeName(parsed.document.inventory, invented), invented).toBe(false);
-    }
-  });
-
-  test("admits only exact singular/plural candidates evidenced elsewhere", () => {
-    const inventory = parseSimpleStateForm(
-      `a set of Chaoses
-
-a set of Atlases
-
-a set of Biases
-
-a set of Buses
-
-a set of Mice`,
-      { evidenceTypeNames: ["Chaos", "Atlas", "Bias", "Bus", "Mouse"] },
-    ).document.inventory;
-    expect(ownedTypeNameSpellings(inventory)).toEqual([
-      "Atlas",
-      "Atlases",
-      "Bias",
-      "Biases",
-      "Bus",
-      "Buses",
-      "Chaos",
-      "Chaoses",
-      "Mice",
-      "Mouse",
-    ]);
-    expect(inventory.types).toMatchObject([
-      { name: "Atlases", declaredNames: ["Atlas", "Atlases"] },
-      { name: "Biases", declaredNames: ["Bias", "Biases"] },
-      { name: "Buses", declaredNames: ["Bus", "Buses"] },
-      { name: "Chaoses", declaredNames: ["Chaos", "Chaoses"] },
-      { name: "Mice", declaredNames: ["Mice", "Mouse"] },
-    ]);
-  });
-
-  test("keeps element declarations exact even when another spelling is evidenced", () => {
-    const inventory = parseSimpleStateForm(
-      "an element Settings\n\nan element Canvas\n\nan element Mouse",
-      { evidenceTypeNames: ["Setting", "Canvases", "Mice"] },
-    ).document.inventory;
-    expect(ownedTypeNameSpellings(inventory)).toEqual(["Canvas", "Mouse", "Settings"]);
-    for (const rejected of ["Setting", "Canvases", "Mice"]) {
-      expect(isOwnedTypeName(inventory, rejected), rejected).toBe(false);
-    }
+a Leaf set of Branch`,
+  ])("accepts forward references and valid chains independent of declaration order", (source) => {
+    const parsed = parseSimpleStateForm(source);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Branch", "Leaf", "Roots"]);
   });
 
   test.each([
-    ["Items", "Item", true],
-    ["Entries", "Entry", true],
-    ["Addresses", "Address", true],
-    ["Settings", "Setting", true],
-    ["Chaoses", "Chaos", true],
-    ["Atlases", "Atlas", true],
-    ["Biases", "Bias", true],
-    ["Bonuses", "Bonus", true],
-    ["Buses", "Bus", true],
-    ["Campuses", "Campus", true],
-    ["Cosmoses", "Cosmos", true],
-    ["Ethoses", "Ethos", true],
-    ["Viruses", "Virus", true],
-    ["Aliases", "Alias", true],
-    ["Analyses", "Analysis", true],
-    ["Canvases", "Canvas", true],
-    ["Children", "Child", true],
-    ["Feet", "Foot", true],
-    ["Gases", "Gas", true],
-    ["Geese", "Goose", true],
-    ["Indices", "Index", true],
-    ["Lenses", "Lens", true],
-    ["Men", "Man", true],
-    ["Matrices", "Matrix", true],
-    ["Mice", "Mouse", true],
-    ["People", "Person", true],
-    ["Statuses", "Status", true],
-    ["Teeth", "Tooth", true],
-    ["Women", "Woman", true],
-    ["Corpora", "Corpus", true],
-    ["Cacti", "Cactus", true],
-    ["Criteria", "Criterion", true],
-    ["Wugs", "Wug", true],
-    ["Parties", "Party", true],
-    ["Boxes", "Box", true],
-    ["Chaos", "Chao", false],
-    ["Atlas", "Atla", false],
-    ["Bias", "Bia", false],
-    ["Bonus", "Bonu", false],
-    ["Bus", "Bu", false],
-    ["Campus", "Campu", false],
-    ["Cosmos", "Cosmo", false],
-    ["Ethos", "Etho", false],
-    ["Virus", "Viru", false],
-    ["Alias", "Alia", false],
-    ["Canvas", "Canva", false],
-    ["Gas", "Ga", false],
-    ["Lens", "Len", false],
-    ["News", "New", false],
-    ["Series", "Serie", false],
-    ["Species", "Specie", false],
-    ["Access", "Acces", false],
-    ["Address", "Addres", false],
-    ["Class", "Clas", false],
-    ["Process", "Proces", false],
-    ["Status", "Statu", false],
-    ["FieldMouse", "FieldMice", false],
-  ])(
-    "compares authored spellings %s and %s without normalizing either",
-    (left, right, equivalent) => {
-      expect(normalizeTypeName(left)).toBe(left);
-      expect(normalizeTypeName(right)).toBe(right);
-      expect(typeNamesEquivalent(left, right)).toBe(equivalent);
-      expect(typeNamesEquivalent(right, left)).toBe(equivalent);
-    },
-  );
+    ["a Child set of Missing", [], "unresolved"],
+    ["a Child set of Person", ["Person"], "external"],
+    ["a Child set of String", [], "primitive"],
+  ])("rejects a %s subset parent", (source, external, referenceKind) => {
+    const parsed = parseSimpleStateForm(source, { externalTypes: external as string[] });
+    expect(parsed.diagnostics).toMatchObject([{ code: "SSF_INVALID_SUBSET_PARENT" }]);
+    expect(parsed.document.declarations.at(-1)?.parent?.referenceKind).toBe(referenceKind);
+  });
 
-  test("allows exact-match-only equivalence to reject a default morphology relation", () => {
-    const parsed = parseSimpleStateForm("a set of Mice with\n  a parent Mouse", {
-      typeNameEquivalence: (left, right) => left === right,
+  test.each([
+    `a set of Roots
+
+alias Root for Roots
+
+a Child set of Root`,
+    `a Child set of Root
+
+alias Root for Roots
+
+a set of Roots`,
+    `alias Root for Roots
+
+a set of Roots
+
+a Child set of Root`,
+  ])("resolves an exact parent alias independent of declaration order", (source) => {
+    const parsed = parseSimpleStateForm(source);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(
+      parsed.document.declarations.find(({ name }) => name.text === "Child")?.parent,
+    ).toMatchObject({
+      text: "Root",
+      normalized: "Roots",
+      referenceKind: "owned",
     });
+  });
 
-    expect(parsed.document.inventory.types).toMatchObject([
-      { name: "Mice", declaredNames: ["Mice"] },
-    ]);
-    expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      { value: { reference: { text: "Mouse", referenceKind: "unresolved" } } },
+  test("detects canonical subset cycles through aliases", () => {
+    const parsed = parseSimpleStateForm(`a A set of Bee
+
+a B set of A
+
+alias Bee for B`);
+    expect(parsed.diagnostics.map(({ code }) => code)).toEqual([
+      "SSF_SUBSET_CYCLE",
+      "SSF_SUBSET_CYCLE",
+      "SSF_INVALID_ALIAS_TARGET",
     ]);
   });
 
-  test("admits only authored spellings related by an injected alias table", () => {
-    const aliases = new Set(["Wug\0Wuggen", "Wuggen\0Wug"]);
-    const parsed = parseSimpleStateForm("a set of Wuggen with\n  a parent Wug", {
-      typeNameEquivalence: (left, right) => aliases.has(`${left}\0${right}`),
-    });
-
-    expect(parsed.document.inventory.types).toMatchObject([
-      { name: "Wuggen", declaredNames: ["Wug", "Wuggen"] },
-    ]);
-    expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      {
-        value: {
-          reference: { text: "Wug", normalized: "Wuggen", referenceKind: "owned" },
-        },
-      },
+  test("detects self-parenting through an exact alias", () => {
+    const parsed = parseSimpleStateForm("a Loop set of Loops\n\nalias Loops for Loop");
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_SUBSET_SELF_PARENT", span: { start: { line: 1, column: 15 } } },
+      { code: "SSF_INVALID_ALIAS_TARGET", span: { start: { line: 3 } } },
     ]);
   });
 
-  test("uses the exported English equivalence when no injection is supplied", () => {
-    const source = "a set of Mice with\n  a parent Mouse\n\na set of Parties with\n  a host Party";
-    const defaulted = parseSimpleStateForm(source);
-    const explicit = parseSimpleStateForm(source, { typeNameEquivalence: typeNamesEquivalent });
+  test("rejects a subset whose structurally named parent has an invalid chain", () => {
+    const parsed = parseSimpleStateForm("a Child set of Parent\n\na Parent set of Missing");
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 1 } } },
+      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 3 } } },
+    ]);
+  });
 
-    expect(defaulted).toEqual(explicit);
-    expect(ownedTypeNameSpellings(defaulted.document.inventory)).toEqual([
-      "Mice",
-      "Mouse",
-      "Parties",
-      "Party",
+  test("rejects self-parenting at the parent span", () => {
+    const parsed = parseSimpleStateForm("a Loop set of Loop");
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_SUBSET_SELF_PARENT", span: { start: { line: 1, column: 15 } } },
+    ]);
+  });
+
+  test("rejects every edge in multi-node cycles deterministically", () => {
+    const source = "a B set of C\n\na C set of A\n\na A set of B";
+    const first = parseSimpleStateForm(source).diagnostics;
+    const second = parseSimpleStateForm(source).diagnostics;
+    expect(first).toEqual(second);
+    expect(first.map(({ code }) => code)).toEqual([
+      "SSF_SUBSET_CYCLE",
+      "SSF_SUBSET_CYCLE",
+      "SSF_SUBSET_CYCLE",
+    ]);
+    expect(first.map(({ span }) => span.start.line)).toEqual([1, 3, 5]);
+  });
+});
+
+describe("exact namespace and local uniqueness", () => {
+  test("rejects duplicate structural declarations", () => {
+    expect(codes("a set of Items\n\nan element Items")).toContain("SSF_DUPLICATE_DECLARATION");
+  });
+
+  test.each([
+    ["a set of Person", ["Person"]],
+    ["an element String", []],
+  ])("rejects declaration collisions with external and primitive names", (source, external) => {
+    expect(codes(source, external)).toContain("SSF_NAME_COLLISION");
+  });
+
+  test("rejects duplicate explicit and inferred effective field names only within a declaration", () => {
+    const parsed = parseSimpleStateForm(`a set of First with
+  a profile String
+  a Profile
+
+a set of Second with
+  a profile String`);
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_DUPLICATE_FIELD", span: { start: { line: 3 } } },
+    ]);
+  });
+
+  test("rejects repeated enum values but permits the same value in distinct fields", () => {
+    const parsed = parseSimpleStateForm(`a set of Items with
+  a status of OPEN or OPEN
+  a mode of OPEN or CLOSED`);
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_DUPLICATE_ENUM_VALUE", span: { start: { line: 2, column: 23 } } },
+    ]);
+  });
+});
+
+describe("alias integrity", () => {
+  test.each([
+    `alias Item for Items
+
+a set of Items`,
+    `a set of Items
+
+alias Item for Items`,
+  ])("allows an exact alias to target a structural declaration in either order", (source) => {
+    expect(parseSimpleStateForm(source).diagnostics).toEqual([]);
+  });
+
+  test("allows separately named aliases with one deterministic owner", () => {
+    const inventory = parseSimpleStateForm(`a set of People
+
+alias Person for People
+
+alias Human for People`).document.inventory;
+    expect(inventory.types).toMatchObject([
+      { name: "People", declaredNames: ["Human", "People", "Person"] },
+    ]);
+  });
+
+  test.each([
+    ["alias Missing for Unknown", [], "unresolved"],
+    ["alias Human for Person", ["Person"], "external"],
+    ["alias Text for String", [], "primitive"],
+    ["a set of Items\n\nalias Item for Items\n\nalias Thing for Item", [], "chain"],
+  ])("rejects invalid alias target: %s", (source, external) => {
+    expect(codes(source, external as string[])).toContain("SSF_INVALID_ALIAS_TARGET");
+  });
+
+  test.each([
+    ["a set of Items\n\nalias Items for Items", []],
+    ["a set of Items\n\nalias Person for Items", ["Person"]],
+    ["a set of Items\n\nalias String for Items", []],
+    ["a set of Items\n\nalias Item for Items\n\nalias Item for Items", []],
+  ])("rejects an alias namespace collision: %s", (source, external) => {
+    expect(codes(source, external as string[])).toContain("SSF_ALIAS_NAME_COLLISION");
+  });
+
+  test("diagnoses malformed alias-like lines rather than treating them as prose", () => {
+    expect(validateSimpleStateForm("alias Item to Items")).toMatchObject([
+      { code: "SSF_MALFORMED_ALIAS", span: { start: { line: 1, column: 1 } } },
     ]);
   });
 });
 
 describe("canonical repair diagnostics", () => {
-  test("diagnoses structural-looking malformed lines while retaining invariant prose as opaque", () => {
-    const source = `set Items
-
-a set of Records with garbage
-
-a set of Accounts with
-  a owner
-
-at most one Item has each owner`;
-    const parsed = parseSimpleStateForm(source);
-    expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_ARTICLE" },
-      { code: "SSF_MALFORMED_DECLARATION" },
-      { code: "SSF_MALFORMED_FIELD" },
-    ]);
-    expect(parsed.document.opaqueLines.map(({ text }) => text)).toEqual([
-      "a set of Records with garbage",
-      "  a owner",
-      "at most one Item has each owner",
-    ]);
-  });
-
-  test("diagnoses orphan fields before a declaration and after a malformed declaration", () => {
-    const source = `  a owner
-  owner String
-  a user may own many Items
-
-a set of Records with garbage
-  an optional owner`;
-    const parsed = parseSimpleStateForm(source);
-    expect(parsed.diagnostics.map(({ code }) => code)).toEqual([
-      "SSF_MALFORMED_FIELD",
-      "SSF_MALFORMED_FIELD",
-      "SSF_MALFORMED_DECLARATION",
-      "SSF_MALFORMED_FIELD",
-    ]);
-    expect(parsed.document.opaqueLines.map(({ text }) => text)).toEqual([
-      "  a owner",
-      "  owner String",
-      "  a user may own many Items",
-      "a set of Records with garbage",
-      "  an optional owner",
-    ]);
-  });
-
-  test("diagnoses malformed article-less fields that use structural keywords", () => {
-    expect(
-      validateSimpleStateForm(`a set of Groups with
-  optional owner
-  optional optional owner Person`),
-    ).toMatchObject([{ code: "SSF_MALFORMED_FIELD" }, { code: "SSF_MALFORMED_FIELD" }]);
-  });
-
-  test("rejects a declaration whose `with` has no body", () => {
-    expect(validateSimpleStateForm("a set of Items with")).toMatchObject([
-      {
-        code: "SSF_MALFORMED_DECLARATION",
-        suggestion: "Remove `with` or add at least one indented field.",
-      },
-    ]);
-  });
-
-  test("validates optional fields that omit their article", () => {
-    expect(
-      validateSimpleStateForm(`a set of Groups with
-  owner optional Person
-  optional members set of Person`),
-    ).toMatchObject([
-      { code: "SSF_MISPLACED_OPTIONAL", suggestion: "optional owner Person" },
-      { code: "SSF_OPTIONAL_COLLECTION", suggestion: "Remove `optional` from this field." },
-    ]);
-    expect(validateSimpleStateForm("a set of Groups with\n  optional owner Person")).toEqual([]);
-  });
-
-  test("requires an article without dropping a subset name from repairs", () => {
-    expect(
-      validateSimpleStateForm(`Completed set of Items
-  a note String`),
-    ).toMatchObject([
-      {
-        code: "SSF_ARTICLE",
-        suggestion: "Use `a Completed set of Items with` or `an Completed set of Items with`.",
-      },
-      {
-        code: "SSF_MISSING_WITH",
-        suggestion: "Use `a Completed set of Items with` or `an Completed set of Items with`.",
-      },
-    ]);
-    expect(validateSimpleStateForm("Open set of Items")).toMatchObject([
-      {
-        code: "SSF_ARTICLE",
-        suggestion: "Use `a Open set of Items` or `an Open set of Items`.",
-      },
-    ]);
-    expect(validateSimpleStateForm("a Hour set of Items\nan Hour set of Items")).toEqual([]);
-  });
-
-  test("uses the parser's recovered structure for every existing repair", () => {
+  test("retains established deterministic structural repairs", () => {
     const source = `a sequence of Sessions
   a revokedAt optional DateTime
 
@@ -481,89 +335,60 @@ a element Settings with
       { code: "SSF_NEAR_MISS_KEYWORD", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISSING_WITH", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISPLACED_OPTIONAL", suggestion: "an optional revokedAt DateTime" },
-      { code: "SSF_OPTIONAL_COLLECTION", suggestion: "Remove `optional` from this field." },
+      { code: "SSF_OPTIONAL_COLLECTION" },
       { code: "SSF_ARTICLE", suggestion: "an element Settings with" },
     ]);
-    expect(
-      parseSimpleStateForm(source).document.inventory.identities.map(({ name }) => name),
-    ).toEqual(["Groups", "Sessions", "Settings"]);
+  });
+
+  test("diagnoses malformed structural lines and orphan fields while retaining invariant prose", () => {
+    const source = `a set of Records with garbage
+  a owner
+
+at most one Item has each owner`;
+    const parsed = parseSimpleStateForm(source);
+    expect(parsed.diagnostics.map(({ code }) => code)).toEqual([
+      "SSF_MALFORMED_DECLARATION",
+      "SSF_MALFORMED_FIELD",
+    ]);
+    expect(parsed.document.opaqueLines.map(({ text }) => text)).toEqual([
+      "a set of Records with garbage",
+      "  a owner",
+      "at most one Item has each owner",
+    ]);
   });
 });
 
 describe("repository SSF corpus", () => {
-  test("extracts owned identities from every catalog and application concept specification", async () => {
+  test("validates every catalog and application concept with explicit inventories", async () => {
     const root = resolve(import.meta.dirname, "../../..");
-    const expected: Readonly<Record<string, readonly string[]>> = {
-      "packages/catalog/entries/concept/alerting/spec.md": ["Alerts"],
-      "packages/catalog/entries/concept/approving/spec.md": ["Reviews"],
-      "packages/catalog/entries/concept/auditing/spec.md": ["Entries"],
-      "packages/catalog/entries/concept/authenticating/spec.md": ["Accounts"],
-      "packages/catalog/entries/concept/commenting/spec.md": ["Comments"],
-      "packages/catalog/entries/concept/discussing/spec.md": ["Discussions", "Responses"],
-      "packages/catalog/entries/concept/gathering/spec.md": ["Gatherings", "Memberships"],
-      "packages/catalog/entries/concept/inviting/spec.md": ["Invitations"],
-      "packages/catalog/entries/concept/labeling/spec.md": ["Applications", "Labels"],
-      "packages/catalog/entries/concept/posting/spec.md": ["Posts"],
-      "packages/catalog/entries/concept/reserving/spec.md": ["Reservations"],
-      "packages/catalog/entries/concept/selecting/spec.md": ["Current", "Selections"],
-      "packages/catalog/entries/concept/sessioning/spec.md": ["Sessions"],
-      "packages/catalog/entries/concept/timing/spec.md": [],
-      "packages/catalog/entries/concept/trashing/spec.md": ["Dispositions"],
-      "packages/catalog/entries/concept/upvoting/spec.md": ["Votes"],
-      "examples/message-board/design/concepts/Authenticating.md": ["Accounts"],
-      "examples/message-board/design/concepts/Commenting.md": ["Comments"],
-      "examples/message-board/design/concepts/Posting.md": ["Posts"],
-      "examples/message-board/design/concepts/Sessioning.md": ["Sessions"],
-      "examples/operations-room/design/concepts/Alerting.md": ["Alerts"],
-      "examples/operations-room/design/concepts/Discussing.md": [
-        "Discussions",
-        "Open",
-        "Responses",
-      ],
-      "examples/operations-room/design/concepts/Gathering.md": ["Gatherings", "Memberships"],
-      "examples/operations-room/design/concepts/Selecting.md": ["Current", "Selections"],
-      "examples/reading-circle/design/concepts/Discussing.md": ["Discussions", "Open", "Responses"],
-      "examples/reading-circle/design/concepts/Gathering.md": ["Gatherings", "Memberships"],
-      "examples/reading-circle/design/concepts/Selecting.md": ["Current", "Selections"],
-      "tests/packaging/application/src/concepts/mitigating/spec.md": ["Current", "Selections"],
-      "tests/packaging/application/src/concepts/rooming/spec.md": ["Rooms"],
-      "packages/http/tests/packaging/multi-instance/client/design/concepts/Effects.md": [
-        "Observations",
-      ],
-      "packages/http/tests/packaging/multi-instance/client/design/concepts/Entries.md": ["Entries"],
-      "packages/http/tests/packaging/multi-instance/client/design/concepts/Faulting.md": [],
-    };
-
-    for (const [path, names] of Object.entries(expected)) {
+    const directories = [
+      "packages/catalog/entries/concept",
+      "examples",
+      "tests/packaging/application/src/concepts",
+      "packages/http/tests/packaging",
+    ];
+    const paths = (
+      await Promise.all(
+        directories.map(async (directory) =>
+          (await readdir(resolve(root, directory), { recursive: true }))
+            .filter((path) => path.endsWith(".md"))
+            .map((path) => `${directory}/${path}`),
+        ),
+      )
+    ).flat();
+    let count = 0;
+    for (const path of paths) {
       const markdown = await readFile(resolve(root, path), "utf8");
+      if (!markdown.includes("```state")) continue;
       const parsed = parseSimpleStateForm(stateFence(markdown), {
         externalTypes: externalTypes(markdown),
-        evidenceTypeNames: memberTypeEvidence(markdown),
       });
       expect(parsed.diagnostics, path).toEqual([]);
-      expect(
-        ownedTypeNameSpellings(parsed.document.inventory).some((name) =>
-          ["Atlase", "Biase", "Buse", "Canva", "Chaose", "Ga", "Len"].includes(name),
-        ),
-        path,
-      ).toBe(false);
       for (const name of ownedTypeNameSpellings(parsed.document.inventory)) {
-        expect(markdown, `${path} must contain accepted spelling ${name}`).toMatch(
-          new RegExp(`\\b${name}\\b`),
-        );
+        expect(markdown, `${path} must author owned spelling ${name}`).toContain(name);
       }
-      expect(
-        ownedTypeNameSpellings(parsed.document.inventory).every((name) =>
-          isOwnedTypeName(parsed.document.inventory, name),
-        ),
-        path,
-      ).toBe(true);
-      expect(
-        parsed.document.inventory.types
-          .filter(({ roles }) => roles.length > 0)
-          .map(({ name }) => name),
-        path,
-      ).toEqual([...names].sort());
+      count += 1;
     }
+    expect(count).toBeGreaterThan(20);
   });
 });

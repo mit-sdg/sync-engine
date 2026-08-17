@@ -34,6 +34,8 @@ a set of Reviews with
   an optional reason String
 
 at most one pending Review has each Subject
+
+alias Review for Reviews
 ```
 
 ## Actions

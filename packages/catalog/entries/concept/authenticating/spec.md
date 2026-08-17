@@ -26,6 +26,8 @@ a set of Accounts with
   a username Username
   a salt Salt
   a passwordVerifier Secret
+
+alias Account for Accounts
 ```
 
 ## Actions

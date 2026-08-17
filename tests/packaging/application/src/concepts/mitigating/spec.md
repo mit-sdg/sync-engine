@@ -25,6 +25,8 @@ a set of Selections with
   a mitigation String
 
 a Current set of Selections
+
+alias Selection for Selections
 ```
 
 ## Actions

@@ -31,6 +31,8 @@ a set of Reservations with
   an optional endedAt DateTime
 
 at most one active or fulfilled Reservation has each Resource
+
+alias Reservation for Reservations
 ```
 
 ## Actions

@@ -1,28 +1,30 @@
 # Simple State Form (SSF)
 
 ```text
-schema := (setDecl | subsetDecl)*
 setDecl := (a|an) (element|set|seq) [of] Type [with field+]
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype) [with field+]
-field := [a|an] [optional] [name] (scalar|collection)
-scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
-collection := (set|seq) [of] scalar
+subsetDecl := (a|an) Subtype (element|set) [of] Parent [with field+]
+aliasDecl := alias Alias for Target
+field := [a|an] [optional] [name] (Type | primitive | enum | collection)
+collection := (set|seq) [of] (Type | primitive | enum)
 primitive := Number | String | Flag | Date | DateTime
 ```
 
-Use one declaration per line and indent fields. Types start uppercase, fields lowercase,
-enums uppercase; identifiers use letters/digits/`_`. Declaration and subset spellings
-are exact. A collection spelling is related to a singular/plural spelling only when the
-second exact name also appears in a State field type or action/query signature in this
-specification. `element` names remain exact. The parser never invents an owned name.
-It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
-remain opaque prose.
+Use one declaration or alias per line; indent fields. Types start uppercase,
+fields lowercase, and names are exact. Only `alias Alias for Target` adds ownership.
+Alias targets are unique structural declarations, never aliases. Subset parents may
+name structures or exact aliases. Forward references work; unresolved, external,
+primitive, invalid-alias, self, and cyclic parents fail after alias normalization.
 
-Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
-means absent). No nested collections or unions. Sets introduce identities—never add ID
-fields. Subsets classify existing parent members, may overlap, and add relations;
-`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
-invariant, not a proved behavior.
+The parser inventories structural identity/type names and explicit aliases; it never
+invents an owned name. Structural and alias names share a State-wide namespace. Field names are unique per declaration and enum values per enum. Unresolved State field
+values remain legal conventional/refinement references, but are not owned binding
+targets. Malformed structural-looking lines fail; standalone invariants remain opaque
+prose.
+
+Collections are never `optional` (empty means absent). No nested collections or unions.
+Sets introduce identities—never add ID fields. Subsets classify existing parent members,
+may overlap, and add relations; `element` has one member. Which side declares a relation
+implies no storage, navigation, or ownership.
 
 ```state
 a set of Items with
@@ -31,11 +33,11 @@ a set of Items with
   a members set of Person
   a status of OPEN or DONE
 
-a Completed set of Items with
-  a completedAt DateTime
+a Completed set of Items
 
-an element Settings with
-  a retentionDays Number
+an element Settings
+
+alias Item for Items
 
 at most one Item has each title
 ```

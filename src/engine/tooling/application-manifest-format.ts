@@ -6,7 +6,6 @@ import type {
   ConceptImplementationProvenanceIR,
   ConceptSpecificationIR,
   FormerNodeIR,
-  SpecificationTypeIR,
   PatternIR,
   ReactionIR,
   TriggerIR,
@@ -39,26 +38,12 @@ const DIAGNOSTIC_CODES = [
   "ORDER_SENSITIVE_FORMER",
 ] as const;
 
-function specificationTypeNames(type: SpecificationTypeIR): string[] {
-  if (type.kind === "named") {
-    return [type.name, ...type.arguments.flatMap(specificationTypeNames)];
-  }
-  return type.kind === "union" ? type.members.flatMap(specificationTypeNames) : [];
-}
-
-/** Derive the exact SSF-owned names carried in the manifest through the SSF package. */
+/** Derive exact structural declaration and explicit alias names through the SSF package. */
 export function specificationOwnedTypeNames(
   specification: ConceptSpecificationIR,
 ): readonly string[] {
-  const evidenceTypeNames = [...specification.actions, ...specification.queries].flatMap(
-    (member) => [
-      ...member.parameters.flatMap(({ type }) => specificationTypeNames(type)),
-      ...member.result.fields.flatMap(({ type }) => specificationTypeNames(type)),
-    ],
-  );
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
-    evidenceTypeNames,
   });
   if (parsed.diagnostics.length > 0) {
     throw new Error(
@@ -1438,7 +1423,7 @@ function assertManifestCrossFields(data: DataRecord): void {
       if (!sameCanonicalValue(item.ownedTypes, authoritativeOwnedTypes)) {
         fail(
           `$.design.concepts[${index}].ownedTypes`,
-          "does not equal the inventory independently derived from specification State and member signatures",
+          "does not equal the inventory independently derived from specification State declarations and explicit aliases",
         );
       }
       for (const [instanceIndex, instance] of array(

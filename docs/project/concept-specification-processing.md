@@ -66,36 +66,43 @@ There is no legacy parser or format auto-detection.
 ### State has a bounded structural parser
 
 The workspace-private, unpublished `packages/ssf` package owns SSF tokenization,
-canonical structural diagnostics, evidence-based type-name joins, and structured State IR.
-It remains `private: true`, has no release-owned publication entry, and has no
-dependency on sync-engine Markdown or source-location types. It returns text spans or
-line/column offsets, and the tooling adapter maps those spans from the exact normalized
-State-body origin retained by the concept parser to `DesignSourceLocation`; leading
-blank fence lines therefore do not shift diagnostics. Keep this parser as the one implementation used both for
-repair diagnostics and checked-model owned-name extraction; do not recreate a second
-repair parser under `src/engine/tooling`. The manifest decoder has a deliberately
-independent, security-boundary derivation from already parsed specification IR so it
-does not trust a persisted inventory.
+grammar, exact-name resolution, graph and namespace validation, diagnostics, and
+structured State IR. Its former monolith is split into source, grammar, name/model,
+resolution, and facade modules. It remains `private: true`, has no release-owned
+publication entry, and has no dependency on sync-engine Markdown or source-location
+types. It returns exact text spans and line/column offsets; the tooling adapter maps
+those spans from the normalized State-body origin retained by the concept parser to
+`DesignSourceLocation`, so leading blank fence lines do not shift diagnostics. Keep
+this parser as the one implementation used for repair diagnostics and checked-model
+owned-name extraction; do not recreate a parser under `src/engine/tooling`.
 
-The parser increment is deliberately bounded. It authoritatively parses structural
-set, sequence, element, subset, and field declarations and records subset structure.
-Declaration and subset spellings remain exact. A non-element declaration acquires a
-singular/plural alias only when that exact candidate is evidenced by a State field type
-or parsed action/query type expression in the same specification. Fields and subset
-parents do not independently introduce owned types. Element names remain exact. Structural-looking malformed declarations and fields produce diagnostics;
-truly standalone invariant sentences remain opaque. The concept IR continues to
-preserve the complete normalized State text. The parser must not claim to prove those sentences,
-conditions, effects, query meaning, storage layout, State/storage agreement, or
-implementation semantics.
+The parser authoritatively handles structural set, sequence, element, subset, alias,
+and field declarations. Structural and alias spellings remain exact. The only way to
+add an owned spelling is `alias Alias for Target`; field and operation-signature
+mentions never contribute ownership. Alias targets must be unique valid structural
+declarations, and alias chains are rejected. Subset parents resolve after all structures and aliases are parsed, so forward
+references, exact parent aliases, and valid chains work while unresolved, external,
+primitive, invalid-alias, self, and cyclic parents fail at their authored spans. Parent
+alias edges normalize to their structural targets before cycle validation.
+Whole-State type names, declaration-local effective field names, and enumeration-local
+values have separately enforced uniqueness scopes.
 
-Config-based binding validation uses only the established owned-name inventory. A
-qualified target must name an owned type of the selected target instance's definition;
-an external parameter is independently invalid. Checked manifests persist the sorted
-accepted owned-name inventory. Their codec independently rederives the authoritative
-inventory from the included full specification, requires exact canonical equality, and
-validates every qualified target against the derived fact. This proof does not imply that every
-action/query type must be declared in State: conventional and refinement names remain
-valid in operation signatures under the public contract.
+State field value names are deliberately open: the parser classifies owned, external,
+primitive, and unresolved references, but unresolved conventional or refinement names
+remain legal. This boundary does not make them owned. Structural-looking malformed
+statements produce diagnostics; standalone invariant sentences remain opaque. The
+concept IR preserves the complete normalized State text. The parser does not prove
+those sentences, field refinements, conditions, effects, query meaning, storage layout,
+State/storage agreement, or implementation semantics.
+
+Config-based binding validation uses only the derived exact owned-name inventory. A
+qualified target must name a structural declaration or explicit alias of the selected
+target instance's definition; an external, primitive, or unresolved name is invalid.
+Checked manifests persist the sorted inventory. Their codec independently rederives it
+from the included State alone, requires exact canonical equality, and validates every
+qualified target against that derived fact. Action and query signature types are not
+required to occur in State: conventional and refinement names remain valid there and
+never affect ownership.
 
 ## Static source agreement
 

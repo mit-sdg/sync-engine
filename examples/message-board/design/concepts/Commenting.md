@@ -31,6 +31,8 @@ a seq of Comments with
   a target Target
   an author Author
   a content Content
+
+alias Comment for Comments
 ```
 
 ## Actions

@@ -161,7 +161,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Collections are never `optional`",
       "No nested collections or unions",
       "Which side declares a relation implies no storage, navigation, or ownership",
-      "inventories structural identity/type names",
+      "inventories structural identity/type names and explicit aliases",
       "never invents an owned name",
       "remain opaque prose",
     ]) {

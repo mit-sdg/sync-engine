@@ -4569,7 +4569,7 @@ export {};
 === dist/engine/tooling/application-manifest-format.d.ts ===
 import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
-/** Derive the exact SSF-owned names carried in the manifest through the SSF package. */
+/** Derive exact structural declaration and explicit alias names through the SSF package. */
 export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
@@ -4709,8 +4709,8 @@ export interface SelectedConceptDesign {
     externalTypes: readonly string[];
     /**
      * Optional integration result from the structured-SSF owner. Supply the complete
-     * normalized owned-name inventory for the selected definition (including accepted
-     * singular/plural and subset names). Configured application checking always supplies
+     * normalized owned-name inventory for the selected definition (including structural,
+     * subset, and explicit alias names). Configured application checking always supplies
      * this inventory; omission supports isolated form/validator use and makes no ownership
      * claim.
      */
@@ -4815,8 +4815,8 @@ export interface OwnedTypeNameContext {
 }
 /**
  * SSF integration seam. The integrator supplies the complete normalized owned-name
- * inventory for this definition, including accepted singular/plural equivalents and
- * subset names. Configured application checking always installs the private SSF
+ * inventory for this definition, including structural, subset, and explicit alias
+ * names. Configured application checking always installs the private SSF
  * adapter; `undefined` exists only for isolated validator use that makes no ownership
  * claim.
  */
@@ -5226,12 +5226,38 @@ export declare function simpleStateFormLocation(fence: MarkdownFence, position: 
 /** Parse structural SSF and adapt package-local diagnostic spans to Markdown locations. */
 export declare function parseSimpleStateForm(fence: MarkdownFence, options?: SsfParseOptions): ParsedSimpleStateForm;
 /** Validate deterministic, mechanically repairable SSF forms through the private parser. */
-export declare function validateSimpleStateForm(fence: MarkdownFence): readonly SimpleStateFormIssue[];
+export declare function validateSimpleStateForm(fence: MarkdownFence, options?: SsfParseOptions): readonly SimpleStateFormIssue[];
+
+=== dist/engine/tooling/ssf-package/grammar.d.ts ===
+import type { ParsedAlias, ParsedDeclaration, ParsedStatement, SourceLine, SsfDiagnostic } from "./model.ts";
+export interface GrammarResult {
+    readonly declarations: readonly ParsedDeclaration[];
+    readonly aliases: readonly ParsedAlias[];
+    readonly statements: readonly ParsedStatement[];
+    readonly diagnostics: readonly SsfDiagnostic[];
+}
+export declare function parseGrammar(lines: readonly SourceLine[]): GrammarResult;
+
+=== dist/engine/tooling/ssf-package/graph-validation.d.ts ===
+import type { ParsedAlias, ParsedDeclaration, SsfDiagnostic } from "./model.ts";
+export interface ResolutionFacts {
+    readonly validStructuralNames: ReadonlySet<string>;
+    readonly validAliases: ReadonlyMap<string, string>;
+}
+/** Resolve order-independent alias and subset graphs and report every invalid edge. */
+export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, diagnostics: SsfDiagnostic[]): ResolutionFacts;
 
 === dist/engine/tooling/ssf-package/index.d.ts ===
-export { isOwnedTypeName, parseSimpleStateForm, tokenizeSimpleStateForm, typeNamesEquivalent, normalizeTypeName, ownedTypeNameSpellings, validateSimpleStateForm, type SsfCollectionFieldType, type SsfDeclaration, type SsfDiagnostic, type SsfDiagnosticCode, type SsfDocument, type SsfEnumerationFieldType, type SsfField, type SsfFieldType, type SsfMultiplicity, type SsfNamedFieldType, type SsfOpaqueLine, type SsfOwnedType, type SsfParseOptions, type SsfParseResult, type SsfPosition, type SsfReferenceKind, type SsfSpan, type SsfStatement, type SsfToken, type SsfTokenKind, type SsfTypeInventory, type SsfTypeName, type SsfTypeReference, } from "./simple-state-form.ts";
+export { isOwnedTypeName, ownedTypeNameSpellings, parseSimpleStateForm, validateSimpleStateForm, } from "./simple-state-form.ts";
+export { tokenizeSimpleStateForm } from "./source.ts";
+export type { SsfAlias, SsfCollectionFieldType, SsfDeclaration, SsfDiagnostic, SsfDiagnosticCode, SsfDocument, SsfEnumerationFieldType, SsfField, SsfFieldType, SsfMultiplicity, SsfNamedFieldType, SsfOpaqueLine, SsfOwnedType, SsfParseOptions, SsfParseResult, SsfPosition, SsfReferenceKind, SsfSpan, SsfStatement, SsfToken, SsfTokenKind, SsfTypeInventory, SsfTypeName, SsfTypeReference, } from "./model.ts";
 
-=== dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
+=== dist/engine/tooling/ssf-package/local-validation.d.ts ===
+import type { ParsedAlias, ParsedDeclaration, SsfDiagnostic } from "./model.ts";
+/** Validate exact type namespaces and declaration-local field/enum scopes. */
+export declare function localIntegrityDiagnostics(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>): readonly SsfDiagnostic[];
+
+=== dist/engine/tooling/ssf-package/model.d.ts ===
 export interface SsfPosition {
     /** Zero-based UTF-16 offset in the supplied State text. */
     readonly offset: number;
@@ -5250,7 +5276,7 @@ export interface SsfToken {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export type SsfDiagnosticCode = "SSF_ARTICLE" | "SSF_MISPLACED_OPTIONAL" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION";
+export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_OPTIONAL" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT";
 export interface SsfDiagnostic {
     readonly code: SsfDiagnosticCode;
     readonly message: string;
@@ -5260,7 +5286,7 @@ export interface SsfDiagnostic {
 export interface SsfTypeName {
     /** Spelling retained from the State text. */
     readonly text: string;
-    /** Exact structural declaration spelling used for declaration and reference joins. */
+    /** Exact owned structural name used for declaration and reference joins. */
     readonly normalized: string;
 }
 export type SsfReferenceKind = "external" | "owned" | "primitive" | "unresolved";
@@ -5300,31 +5326,33 @@ export interface SsfOpaqueLine {
 }
 export interface SsfDeclaration {
     readonly kind: "declaration";
-    /** The introduced or referenced set/type name. */
     readonly name: SsfTypeReference;
     readonly declarationKind: "collection" | "subset";
     readonly multiplicity: SsfMultiplicity;
-    /** Present only on subset declarations. */
     readonly parent?: SsfTypeReference;
     readonly fields: readonly SsfField[];
-    /** Indented lines outside the bounded structural grammar are retained losslessly. */
     readonly opaqueBody: readonly SsfOpaqueLine[];
     readonly span: SsfSpan;
     readonly signatureSpan: SsfSpan;
 }
-export type SsfStatement = SsfDeclaration | SsfOpaqueLine;
+/** An exact additional owned spelling for one structural declaration. */
+export interface SsfAlias {
+    readonly kind: "alias";
+    readonly name: SsfTypeReference;
+    readonly target: SsfTypeReference;
+    readonly span: SsfSpan;
+}
+export type SsfStatement = SsfDeclaration | SsfAlias | SsfOpaqueLine;
 export interface SsfOwnedType {
     /** Exact spelling of the structural State declaration. */
     readonly name: string;
-    /** Exact authored spellings evidenced as this type; no spelling is generated into this list. */
+    /** The declaration spelling and its exact explicit aliases. */
     readonly declaredNames: readonly string[];
     readonly roles: readonly ("identity" | "subset")[];
     readonly declarationSpans: readonly SsfSpan[];
 }
 export interface SsfTypeInventory {
-    /** Definition-owned identities introduced by top-level set, sequence, or element declarations. */
     readonly identities: readonly SsfOwnedType[];
-    /** All definition-owned binding targets, including subset names. */
     readonly types: readonly SsfOwnedType[];
     readonly external: readonly string[];
     readonly primitives: readonly string[];
@@ -5332,38 +5360,114 @@ export interface SsfTypeInventory {
 export interface SsfDocument {
     readonly statements: readonly SsfStatement[];
     readonly declarations: readonly SsfDeclaration[];
+    readonly aliases: readonly SsfAlias[];
     readonly opaqueLines: readonly SsfOpaqueLine[];
     readonly inventory: SsfTypeInventory;
 }
 export interface SsfParseOptions {
     /** Opaque parameter names declared by the containing concept specification. */
     readonly externalTypes?: readonly string[];
-    /** Exact type spellings parsed elsewhere in the same specification's action/query contract. */
-    readonly evidenceTypeNames?: readonly string[];
-    /** Relates two exact authored spellings; never causes a name to be generated. */
-    readonly typeNameEquivalence?: (left: string, right: string) => boolean;
 }
 export interface SsfParseResult {
     readonly document: SsfDocument;
     readonly diagnostics: readonly SsfDiagnostic[];
 }
+export interface SourceLine {
+    readonly text: string;
+    readonly line: number;
+    readonly start: number;
+    readonly end: number;
+    readonly tokens: readonly SsfToken[];
+}
+export interface ParsedReference {
+    readonly text: string;
+    readonly span: SsfSpan;
+}
+export interface ParsedEnumeration {
+    readonly kind: "enumeration";
+    readonly values: readonly string[];
+    readonly valueReferences: readonly ParsedReference[];
+    readonly span: SsfSpan;
+}
+export interface ParsedNamed {
+    readonly kind: "named";
+    readonly reference: ParsedReference;
+}
+export interface ParsedCollection {
+    readonly kind: "collection";
+    readonly multiplicity: "set" | "sequence";
+    readonly element: ParsedNamed | ParsedEnumeration;
+    readonly span: SsfSpan;
+}
+export type ParsedFieldType = ParsedNamed | ParsedEnumeration | ParsedCollection;
+export interface ParsedField {
+    readonly name: string;
+    readonly nameSpan: SsfSpan;
+    readonly inferredName: boolean;
+    readonly optional: boolean;
+    readonly value: ParsedFieldType;
+    readonly span: SsfSpan;
+}
+export interface ParsedDeclaration {
+    readonly kind: "declaration";
+    readonly name: ParsedReference;
+    readonly declarationKind: "collection" | "subset";
+    readonly multiplicity: SsfMultiplicity;
+    readonly parent?: ParsedReference;
+    readonly fields: ParsedField[];
+    readonly opaqueBody: SsfOpaqueLine[];
+    span: SsfSpan;
+    readonly signatureSpan: SsfSpan;
+    readonly signature: SourceLine;
+    readonly structuralIndex: number;
+    readonly authoredStructural: string;
+    readonly hasWith: boolean;
+}
+export interface ParsedAlias {
+    readonly kind: "alias";
+    readonly name: ParsedReference;
+    readonly target: ParsedReference;
+    readonly span: SsfSpan;
+}
+export type ParsedStatement = ParsedDeclaration | ParsedAlias | SsfOpaqueLine;
+
+=== dist/engine/tooling/ssf-package/names.d.ts ===
+export declare const TYPE_NAME: RegExp;
+export declare const FIELD_NAME: RegExp;
+export declare const ENUM_VALUE: RegExp;
+export declare const PRIMITIVES: readonly ["Date", "DateTime", "Flag", "Number", "String"];
+export declare const PRIMITIVE_NAMES: ReadonlySet<string>;
+export declare function inferredFieldName(type: string): string;
+
+=== dist/engine/tooling/ssf-package/resolution.d.ts ===
+import type { GrammarResult } from "./grammar.ts";
+import type { SsfDiagnostic, SsfDocument, SsfParseOptions } from "./model.ts";
+export declare function resolveGrammar(grammar: GrammarResult, options: SsfParseOptions): {
+    document: SsfDocument;
+    diagnostics: readonly SsfDiagnostic[];
+};
+
+=== dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
+import type { SsfParseOptions, SsfParseResult, SsfTypeInventory } from "./model.ts";
+/** Test an exact structural declaration or explicit alias against the owned inventory. */
+export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
+/** Enumerate exact structural declaration and explicit alias spellings. */
+export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
+/** Parse and validate the bounded structural SSF grammar. */
+export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
+/** Return deterministic, source-located SSF diagnostics. */
+export declare function validateSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult["diagnostics"];
+
+=== dist/engine/tooling/ssf-package/source.d.ts ===
+import type { SourceLine, SsfOpaqueLine, SsfPosition, SsfSpan, SsfToken } from "./model.ts";
+export declare function position(offset: number, line: number, column: number): SsfPosition;
+export declare function span(start: SsfPosition, end: SsfPosition): SsfSpan;
 /** Tokenize all State text without discarding whitespace or source ranges. */
 export declare function tokenizeSimpleStateForm(source: string): readonly SsfToken[];
-/** Exact-name normalization: SSF never materializes a guessed singular spelling. */
-export declare function normalizeTypeName(name: string): string;
-/**
- * Compare two exact authored spellings. Morphology may relate the two supplied
- * values, but this function never returns or admits a third, generated spelling.
- */
-export declare function typeNamesEquivalent(left: string, right: string): boolean;
-/** Test an exact evidenced spelling against the definition-owned inventory. */
-export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
-/** Enumerate only exact authored spellings evidenced for definition-owned State types. */
-export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
-/** Parse the bounded structural SSF grammar while retaining other State lines as opaque text. */
-export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
-/** Return only deterministic, mechanically repairable canonical-form diagnostics. */
-export declare function validateSimpleStateForm(source: string): readonly SsfDiagnostic[];
+export declare function sourceLines(source: string, tokens: readonly SsfToken[]): readonly SourceLine[];
+export declare function lineSpan(line: SourceLine): SsfSpan;
+export declare function opaqueLine(line: SourceLine): SsfOpaqueLine;
+export declare function words(line: SourceLine): readonly string[];
 
 === dist/engine/tooling/typescript-shapes.d.ts ===
 import ts from "typescript";

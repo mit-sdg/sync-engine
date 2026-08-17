@@ -29,6 +29,8 @@ a seq of Comments with
   an author Author
   a text String
   an addedAt DateTime
+
+alias Comment for Comments
 ```
 
 ## Actions

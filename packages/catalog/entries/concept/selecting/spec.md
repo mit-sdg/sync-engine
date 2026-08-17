@@ -30,6 +30,8 @@ a set of Selections with
   an item Item
 
 a Current set of Selections
+
+alias Selection for Selections
 ```
 
 ## Actions
