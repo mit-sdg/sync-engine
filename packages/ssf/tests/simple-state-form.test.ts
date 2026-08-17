@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import {
   isOwnedTypeName,
   normalizeTypeName,
+  ownedTypeNameSpellings,
   parseSimpleStateForm,
   tokenizeSimpleStateForm,
   typeNamesEquivalent,
@@ -117,6 +118,21 @@ at most one Item has each title`;
     expect(isOwnedTypeName(parsed.document.inventory, "Itme")).toBe(false);
   });
 
+  test("inventories non-external structural field types as owned vocabulary", () => {
+    const parsed = parseSimpleStateForm(
+      "a set of Accounts with\n  a username Username\n  a aliases set of Alias",
+    );
+    expect(parsed.document.inventory.types).toMatchObject([
+      { name: "Account", roles: ["identity"] },
+      { name: "Alias", roles: [] },
+      { name: "Username", roles: [] },
+    ]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      { value: { reference: { referenceKind: "owned" } } },
+      { value: { element: { reference: { referenceKind: "owned" } } } },
+    ]);
+  });
+
   test("does not claim external or primitive collection subjects as owned types", () => {
     const parsed = parseSimpleStateForm(
       "a set of People\n\na set of Strings\n\na Local set of People",
@@ -142,6 +158,24 @@ at most one Item has each title`;
 });
 
 describe("type-name normalization", () => {
+  test("enumerates canonical, regular, exceptional, authored, and subset spellings", () => {
+    const inventory = parseSimpleStateForm(
+      "an element Entry\n\nan element Person\n\nan Analysis set of Entries",
+    ).document.inventory;
+    expect(ownedTypeNameSpellings(inventory)).toEqual([
+      "Analyses",
+      "Analysis",
+      "Entries",
+      "Entry",
+      "People",
+      "Person",
+      "Persons",
+    ]);
+    expect(
+      ownedTypeNameSpellings(inventory).every((name) => isOwnedTypeName(inventory, name)),
+    ).toBe(true);
+  });
+
   test.each([
     ["Items", "Item"],
     ["Entries", "Entry"],
@@ -228,7 +262,9 @@ describe("repository SSF corpus", () => {
         externalTypes: externalTypes(markdown),
       });
       expect(
-        parsed.document.inventory.types.map(({ name }) => name),
+        parsed.document.inventory.types
+          .filter(({ roles }) => roles.length > 0)
+          .map(({ name }) => name),
         path,
       ).toEqual([...names].sort());
     }

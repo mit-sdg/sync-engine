@@ -464,8 +464,9 @@ export interface SelectedConceptDesign {
   /**
    * Optional integration result from the structured-SSF owner. Supply the complete
    * normalized owned-name inventory for the selected definition (including accepted
-   * singular/plural and subset names). Until supplied, qualified targets retain the
-   * beta selected-instance, non-external check and do not claim ownership proof.
+   * singular/plural and subset names). Configured application checking always supplies
+   * this inventory; omission supports isolated form/validator use and makes no ownership
+   * claim.
    */
   ownedTypes?: readonly string[];
 }

@@ -237,8 +237,8 @@ method. The host owns floor selection and lifecycle.
 `RegisteredConcept.specification` is the machine-readable version-1
 `ConceptSpec` extracted from the strict ordered Purpose, Principle, Types, State,
 Actions, and Queries sections. It retains external declarations, normalized full
-State text and bounded structural SSF IR, structured action branches and
-outcomes, query choices, and source locations. Config-based checking compares
+State text, structured action branches and outcomes, query choices, and source
+locations. Config-based checking compares
 member, input, action-result, query-row, return-name, optionality, and refusal
 shapes with resolvable TypeScript source. It also uses SSF-owned names to prove
 qualified external-binding targets. Query choices are enforced when a reaction,
@@ -544,8 +544,7 @@ The application manifest has format `sync-engine.application-manifest`, version
 reset replaces the version-1 schema in place; earlier beta shapes and prior
 versions are rejected without upconversion. It
 contains executable application and wire facts plus structured concept
-contracts, full State text and structural IR, authored definition/instance
-declarations and external bindings, resolved application types, computation
+contracts, full State text, authored definition/instance declarations and external bindings, resolved application types, computation
 signatures, registered design source locations, normalized-source digests, implementation provenance, validators, and diagnostics. It excludes
 runtime functions, constructor arguments, resources, object identity,
 occurrences, timestamps, and other runtime state.
@@ -575,16 +574,15 @@ Failures identify the offending `$` path. `parseApplicationManifest(...)`
 performs the same checks after JSON parsing and returns data in canonical record-key
 order; neither function imports application code or a manifest-producing config.
 `parseConceptSpecification(...)` exposes the same structured, source-located
-contract used by registration. It enforces the exact section order, parses
-external declarations, bounded structural SSF State, and structured
-action/query choices, and retains full State text. It inventories SSF-owned type
-names but does not interpret standalone invariants or prose semantics or turn
-authored types into runtime schemas.
+contract used by registration. It enforces the exact section order, parses external
+declarations and structured action/query choices, and retains full State text. Private
+config and form-check tooling separately parses bounded SSF structure and inventories
+owned type names; neither layer interprets standalone invariants or prose semantics or
+turns authored types into runtime schemas.
 
 Each concept inventory may carry a `sync-engine.concept-specification`
 version-1 subtree with the definition name, external types, normalized full
-State and structural IR, structured actions and queries, refusals, and source
-locations. Selected application inventories separately retain authored instance
+State text, structured actions and queries, refusals, and source locations. Selected application inventories separately retain authored instance
 declarations, definition names, external bindings, and their source locations.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,

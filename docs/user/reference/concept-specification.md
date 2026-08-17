@@ -147,15 +147,16 @@ type universe nor requires every named type to have a declaration.
 
 `State` contains exactly one `state` fence. The concept parser normalizes and
 retains its full contents in concept-specification IR and application manifests.
-A bounded SSF parser also produces structural State IR.
+Private tooling also parses a bounded structural view for form checks and owned-name
+resolution; that view is not part of the public concept-specification IR.
 
 Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
 The parser recognizes set, sequence, element, and subset declarations; their
 indented fields and multiplicities; structural keywords; and SSF identifier and
 article placement. It normalizes consistent singular and plural type names,
-records subset relationships, and inventories the identity/type names introduced
-by the definition. Malformed structural declarations fail with source-located
+records subset relationships, and inventories nonexternal type names introduced by
+declaration subjects, subset parents, and structural fields. Malformed structural declarations fail with source-located
 canonical-form diagnostics.
 
 This is intentionally not a prose semantics parser. Standalone invariant

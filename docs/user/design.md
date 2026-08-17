@@ -175,7 +175,8 @@ and subset declarations with indented relation fields; implicit set identity rat
 than synthetic ID fields; capitalized types, lowercase field names, uppercase
 enumeration values, and SSF primitives. A bounded structural parser checks these
 declarations, normalizes singular and plural type names, records subset structure,
-and inventories the identity and type names the definition owns. That inventory
+and inventories nonexternal type names introduced by declaration subjects, subset
+parents, and structural fields. That inventory
 lets config-based checking prove qualified external-binding targets. See
 [`State`](reference/concept-specification.md#state).
 

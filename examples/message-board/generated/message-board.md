@@ -27,7 +27,7 @@ Defined in [Authenticating](../design/concepts/Authenticating.md), line 1.
 
 #### Instances
 
-- `Authenticating` — instance of `Authenticating` — [Message Board Application Types](../design/types.md), line 14.
+- `Authenticating` — instance of `Authenticating` — [Message Board Application Types](../design/types.md), line 22.
 
 ### Commenting
 
@@ -46,13 +46,10 @@ Defined in [Commenting](../design/concepts/Commenting.md), line 1.
 
 #### Instances
 
-- `Commenting` — instance of `Commenting` — [Message Board Application Types](../design/types.md), line 15.
-  - `Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 27.
-    Comments are attributed to account usernames.
+- `Commenting` — instance of `Commenting` — [Message Board Application Types](../design/types.md), line 30.
+  - `Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 31.
   - `Content` is `CommentContent` — [Message Board Application Types](../design/types.md), line 33.
-    The board stores comment text as Commenting's opaque content value.
-  - `Target` is `Posting.Post` — [Message Board Application Types](../design/types.md), line 30.
-    Every board comment attaches to a published post.
+  - `Target` is `Posting.Post` — [Message Board Application Types](../design/types.md), line 32.
 
 ### Posting
 
@@ -70,9 +67,8 @@ Defined in [Posting](../design/concepts/Posting.md), line 1.
 
 #### Instances
 
-- `Posting` — instance of `Posting` — [Message Board Application Types](../design/types.md), line 16.
-  - `Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 24.
-    Published posts are attributed to account usernames.
+- `Posting` — instance of `Posting` — [Message Board Application Types](../design/types.md), line 27.
+  - `Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 28.
 
 ### Sessioning
 
@@ -92,15 +88,14 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Instances
 
-- `Sessioning` — instance of `Sessioning` — [Message Board Application Types](../design/types.md), line 17.
-  - `Subject` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 21.
-    A session identifies the account username whose credentials were accepted.
+- `Sessioning` — instance of `Sessioning` — [Message Board Application Types](../design/types.md), line 24.
+  - `Subject` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 25.
 
 ## Application types
 
 Concrete types:
 
-- `CommentContent` — [Message Board Application Types](../design/types.md), line 9.
+- `CommentContent` — [Message Board Application Types](../design/types.md), line 17.
 
 ## Formers
 

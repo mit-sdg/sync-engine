@@ -24,11 +24,9 @@ Defined in [Alerting](../design/concepts/Alerting.md), line 1.
 
 #### Instances
 
-- `Alerting` — instance of `Alerting` — [Operations Room Application Types](../design/types.md), line 19.
+- `Alerting` — instance of `Alerting` — [Operations Room Application Types](../design/types.md), line 37.
   - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 38.
-    Alert recipients are operations-room people.
-  - `Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 41.
-    An alert identifies the mitigation selection that raised it.
+  - `Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 39.
 
 ### Discussing
 
@@ -50,11 +48,9 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 
 #### Instances
 
-- `Discussing` — instance of `Discussing` — [Operations Room Application Types](../design/types.md), line 18.
+- `Discussing` — instance of `Discussing` — [Operations Room Application Types](../design/types.md), line 33.
   - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 35.
-    Discussion responses are authored by operations-room people.
-  - `Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 32.
-    A discussion belongs to one particular mitigation selection.
+  - `Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 34.
 
 ### Gathering
 
@@ -78,9 +74,8 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 
 #### Instances
 
-- `Gathering` — instance of `Gathering` — [Operations Room Application Types](../design/types.md), line 16.
-  - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 23.
-    Hosts and room members are operations-room people.
+- `Gathering` — instance of `Gathering` — [Operations Room Application Types](../design/types.md), line 26.
+  - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 27.
 
 ### Selecting
 
@@ -99,18 +94,16 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 
 #### Instances
 
-- `Selecting` — instance of `Selecting` — [Operations Room Application Types](../design/types.md), line 17.
-  - `Item` is `Mitigation` — [Operations Room Application Types](../design/types.md), line 29.
-    The selectable items are incident mitigations.
-  - `Scope` is `Gathering.Gathering` — [Operations Room Application Types](../design/types.md), line 26.
-    Each room has its own current mitigation.
+- `Selecting` — instance of `Selecting` — [Operations Room Application Types](../design/types.md), line 29.
+  - `Item` is `Mitigation` — [Operations Room Application Types](../design/types.md), line 31.
+  - `Scope` is `Gathering.Gathering` — [Operations Room Application Types](../design/types.md), line 30.
 
 ## Application types
 
 Concrete types:
 
-- `Mitigation` — [Operations Room Application Types](../design/types.md), line 11.
-- `Person` — [Operations Room Application Types](../design/types.md), line 8.
+- `Mitigation` — [Operations Room Application Types](../design/types.md), line 21.
+- `Person` — [Operations Room Application Types](../design/types.md), line 18.
 
 ## Views
 

@@ -297,6 +297,25 @@ export function isOwnedTypeName(inventory: SsfTypeInventory, name: string): bool
   return inventory.types.some((owned) => owned.name === normalized);
 }
 
+/**
+ * Enumerate every identifier spelling accepted by the shared singular/plural
+ * normalizer for the definition-owned inventory. This is the list-valued adapter
+ * used by sync-engine's authored-instance validation seam.
+ */
+export function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[] {
+  const names = new Set<string>();
+  for (const owned of inventory.types) {
+    names.add(owned.name);
+    for (const declared of owned.declaredNames) names.add(declared);
+    for (const [spelling, normalized] of SINGULAR_EXCEPTIONS) {
+      if (normalized === owned.name) names.add(spelling);
+    }
+    const regularPlural = pluralizeNormalizedTypeName(owned.name);
+    if (normalizeTypeName(regularPlural) === owned.name) names.add(regularPlural);
+  }
+  return [...names].sort();
+}
+
 function pluralizeNormalizedTypeName(name: string): string {
   if (/[^AEIOU]y$/.test(name)) return `${name.slice(0, -1)}ies`;
   if (/(?:ch|sh|ss|x|z|us)$/.test(name)) return `${name}es`;
@@ -694,10 +713,24 @@ function inventoryEntry(
   normalized: string,
   declarations: readonly ParsedDeclaration[],
 ): SsfOwnedType {
+  const introducedReferences = declarations.flatMap((declaration) => [
+    declaration.name,
+    ...(declaration.parent === undefined ? [] : [declaration.parent]),
+    ...declaration.fields.flatMap(({ value }) =>
+      value.kind === "named"
+        ? [value.reference]
+        : value.kind === "collection" && value.element.kind === "named"
+          ? [value.element.reference]
+          : [],
+    ),
+  ]);
   const matching = declarations.filter(({ name }) => normalizeTypeName(name.text) === normalized);
+  const references = introducedReferences.filter(
+    ({ text }) => normalizeTypeName(text) === normalized,
+  );
   return {
     name: normalized,
-    declaredNames: [...new Set(matching.map(({ name }) => name.text))],
+    declaredNames: [...new Set(references.map(({ text }) => text))],
     roles: [
       ...new Set(
         matching.map(({ declarationKind }) =>
@@ -705,7 +738,7 @@ function inventoryEntry(
         ),
       ),
     ],
-    declarationSpans: matching.map(({ name }) => name.span),
+    declarationSpans: references.map(({ span }) => span),
   };
 }
 
@@ -760,13 +793,20 @@ export function parseSimpleStateForm(
 
   const external = new Set((options.externalTypes ?? []).map(normalizeTypeName));
   const ownedNames = new Set<string>();
-  for (const declaration of parsedDeclarations) {
-    const normalized = normalizeTypeName(declaration.name.text);
-    if (declaration.declarationKind === "subset") {
-      if (!external.has(normalized) && !PRIMITIVE_KEYS.has(normalized)) ownedNames.add(normalized);
-    } else if (!external.has(normalized) && !PRIMITIVE_KEYS.has(normalized)) {
-      ownedNames.add(normalized);
+  const includeOwnedReference = ({ text }: ParsedReference): void => {
+    const normalized = normalizeTypeName(text);
+    if (!external.has(normalized) && !PRIMITIVE_KEYS.has(normalized)) ownedNames.add(normalized);
+  };
+  const includeOwnedFieldType = (value: ParsedFieldType): void => {
+    if (value.kind === "named") includeOwnedReference(value.reference);
+    else if (value.kind === "collection" && value.element.kind === "named") {
+      includeOwnedReference(value.element.reference);
     }
+  };
+  for (const declaration of parsedDeclarations) {
+    includeOwnedReference(declaration.name);
+    if (declaration.parent !== undefined) includeOwnedReference(declaration.parent);
+    for (const field of declaration.fields) includeOwnedFieldType(field.value);
   }
   const declarations: SsfDeclaration[] = parsedDeclarations.map((declaration) => ({
     kind: "declaration",

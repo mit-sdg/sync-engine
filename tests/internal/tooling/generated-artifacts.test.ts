@@ -12,6 +12,7 @@ import { vocabulary } from "@sync-engine/advanced";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
+import { applicationConceptSet as ownedTypeVocabulary } from "./fixtures/generated-artifacts/owned-types/vocabulary.ts";
 import {
   checkGenerated,
   inspectGenerated,
@@ -34,6 +35,14 @@ const conceptFreeModule = new URL(
   import.meta.url,
 );
 const conceptFreeVocabulary = vocabulary({ concepts: {}, computations: {} });
+const ownedTypeModule = new URL(
+  "./fixtures/generated-artifacts/owned-types/vocabulary.ts",
+  import.meta.url,
+);
+const ownedTypeDesign = (name: "design" | "invalid-design") => ({
+  version: 1 as const,
+  documents: [new URL(`./fixtures/generated-artifacts/owned-types/${name}.md`, import.meta.url)],
+});
 const fixtureDesign = (documents: readonly string[] = []) => ({
   version: 1 as const,
   documents: documents.map(
@@ -106,6 +115,25 @@ describe("generated application artifacts", () => {
     expect(rendered).toContain("when RequestBoundary.request");
     expect(rendered).toContain("RequestBoundary.respond (");
   }, 15_000);
+
+  test("proves qualified targets with the private SSF inventory for advanced vocabularies", async () => {
+    const application = (design: "design" | "invalid-design") =>
+      resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
+          title: "Owned targets",
+          design: ownedTypeDesign(design),
+          conceptSet: { module: ownedTypeModule },
+        },
+        configUrl,
+      );
+    await expect(renderGenerated(application("design"))).resolves.toMatchObject({
+      specification: expect.stringContaining("`Target` is `Targeting.Records`"),
+    });
+    await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
+      'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
+    );
+  });
 
   test("assembles once while checking the exact generated application", async () => {
     let assemblies = 0;

@@ -13,7 +13,7 @@ one generated config:
 
 | Input                             | Machine-readable contribution                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Registered concept specifications | Definition identity, external parameters, full State plus bounded structural IR, actions/queries, and provenance    |
+| Registered concept specifications | Definition identity, external parameters, full State text, actions/queries, and provenance                          |
 | Registered application documents  | Links, computations, concrete types, complete instances, inline/detached bindings, normalized source, and locations |
 
 The executable assembly supplies selected concept instances, authored reaction
@@ -53,8 +53,7 @@ Its version-1 IR retains:
 - concept-definition name;
 - Purpose and Principle;
 - ordered external declarations and their optional explanations;
-- normalized full State fence text and bounded structural SSF IR;
-- definition-owned identity/type names with singular/plural normalization and subset structure;
+- normalized full State fence text;
 - structured action inputs and named result rows;
 - structured branches and terminal return/refusal outcomes;
 - query inputs, cardinality, named rows, and optional prose bodies; and
@@ -77,8 +76,8 @@ repair diagnostics and owned-name extraction; do not recreate a second parser un
 
 The parser increment is deliberately bounded. It authoritatively parses structural
 set, sequence, element, subset, and field declarations; normalizes consistent
-singular/plural forms; records subset structure; and inventories names the definition
-owns. It preserves the complete normalized State text. Standalone invariant sentences
+singular/plural forms; records subset structure; and inventories nonexternal type names
+introduced by declaration subjects, subset parents, and structural fields. It preserves the complete normalized State text. Standalone invariant sentences
 and admitted prose remain opaque. The parser must not claim to prove those sentences,
 conditions, effects, query meaning, storage layout, State/storage agreement, or
 implementation semantics.
@@ -210,8 +209,8 @@ application document, not only extracted links. A prose-only change changes the
 input digest.
 
 The application manifest remains `sync-engine.application-manifest`, version
-`1` under the intentional pre-1.0 beta reset. It retains full State and bounded
-structural IR, structured declarations, authored definition/instance provenance,
+`1` under the intentional pre-1.0 beta reset. It retains full State text, structured
+action/query declarations, authored definition/instance provenance,
 instance-owned normalized bindings, application-type resolution, source locations,
 and design digests. The earlier beta version-1 shape and prior versions are
 rejected without upconversion.

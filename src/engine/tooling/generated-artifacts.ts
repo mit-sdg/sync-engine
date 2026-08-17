@@ -26,6 +26,7 @@ import {
 } from "./concept-source-discovery.ts";
 import { typeScriptSourceContext, type TypeScriptSourceContext } from "./typescript-shapes.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
+import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 
@@ -262,6 +263,12 @@ async function prepareConfiguredDesign(
       url: pathToFileURL(specPath),
       content: specText,
     })),
+    resolveOwnedTypeNames: ({ specification }) =>
+      ownedTypeNameSpellings(
+        parseSimpleStateForm(specification.state.body, {
+          externalTypes: specification.externalTypes.map(({ name }) => name),
+        }).document.inventory,
+      ),
     resolveComputationInputs: ({ computations }) => {
       const names = computations.map(({ name }) => name);
       const key = names.join("\0");

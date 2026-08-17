@@ -660,8 +660,8 @@ no decoder for the earlier beta shape or any prior version. Upgrading across the
 reset requires regenerating all manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
-authored application instance declarations and bindings, full concept State and
-bounded structural IR, resolved application types, executable application
+authored application instance declarations and bindings, full concept State text,
+resolved application types, executable application
 identities, implementation provenance, registered design source locations, and
 normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.

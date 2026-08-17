@@ -285,8 +285,8 @@ Prints canonical JSON for `sync-engine.application-manifest`, version `1`. This
 pre-1.0 beta reset replaces the version-1 schema in place: earlier beta shapes
 and prior versions are rejected and have no compatibility decoder.
 
-The manifest retains normalized full concept State and bounded structural IR,
-structured concept declarations, authored definition/instance identities and
+The manifest retains normalized full concept State text, structured concept
+action/query declarations, authored definition/instance identities and
 bindings, resolved application types, application declaration identities,
 computation signatures, source locations,
 and digests over registered design contents. It excludes executable functions,
@@ -307,8 +307,8 @@ Prints generated Markdown read-back. It shows:
 
 It does not copy application prose, Purpose, Principle, full State text,
 action/query bodies, adjacent binding explanations, or computation bodies.
-Concept State and structural IR remain in the manifest and digest even though
-the State body is omitted from read-back.
+Concept State remains in the manifest and digest even though the State body is omitted
+from read-back.
 
 ### `wire`
 

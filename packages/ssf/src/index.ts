@@ -4,6 +4,7 @@ export {
   tokenizeSimpleStateForm,
   typeNamesEquivalent,
   normalizeTypeName,
+  ownedTypeNameSpellings,
   validateSimpleStateForm,
   type SsfCollectionFieldType,
   type SsfDeclaration,

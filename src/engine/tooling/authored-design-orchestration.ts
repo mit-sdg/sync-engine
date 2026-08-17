@@ -98,7 +98,9 @@ export interface OwnedTypeNameContext {
 /**
  * SSF integration seam. The integrator supplies the complete normalized owned-name
  * inventory for this definition, including accepted singular/plural equivalents and
- * subset names. Returning `undefined` retains selected-qualified-nonexternal checking.
+ * subset names. Configured application checking always installs the private SSF
+ * adapter; `undefined` exists only for isolated validator use that makes no ownership
+ * claim.
  */
 export type ResolveOwnedTypeNames = (
   context: OwnedTypeNameContext,

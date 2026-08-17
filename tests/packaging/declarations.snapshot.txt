@@ -4709,8 +4709,9 @@ export interface SelectedConceptDesign {
     /**
      * Optional integration result from the structured-SSF owner. Supply the complete
      * normalized owned-name inventory for the selected definition (including accepted
-     * singular/plural and subset names). Until supplied, qualified targets retain the
-     * beta selected-instance, non-external check and do not claim ownership proof.
+     * singular/plural and subset names). Configured application checking always supplies
+     * this inventory; omission supports isolated form/validator use and makes no ownership
+     * claim.
      */
     ownedTypes?: readonly string[];
 }
@@ -4812,7 +4813,9 @@ export interface OwnedTypeNameContext {
 /**
  * SSF integration seam. The integrator supplies the complete normalized owned-name
  * inventory for this definition, including accepted singular/plural equivalents and
- * subset names. Returning `undefined` retains selected-qualified-nonexternal checking.
+ * subset names. Configured application checking always installs the private SSF
+ * adapter; `undefined` exists only for isolated validator use that makes no ownership
+ * claim.
  */
 export type ResolveOwnedTypeNames = (context: OwnedTypeNameContext) => readonly string[] | undefined | Promise<readonly string[] | undefined>;
 /** Equality is over canonical specification content with source positions removed. */
@@ -5222,7 +5225,7 @@ export declare function parseSimpleStateForm(fence: MarkdownFence, options?: Ssf
 export declare function validateSimpleStateForm(fence: MarkdownFence): readonly SimpleStateFormIssue[];
 
 === dist/engine/tooling/ssf-package/index.d.ts ===
-export { isOwnedTypeName, parseSimpleStateForm, tokenizeSimpleStateForm, typeNamesEquivalent, normalizeTypeName, validateSimpleStateForm, type SsfCollectionFieldType, type SsfDeclaration, type SsfDiagnostic, type SsfDiagnosticCode, type SsfDocument, type SsfEnumerationFieldType, type SsfField, type SsfFieldType, type SsfMultiplicity, type SsfNamedFieldType, type SsfOpaqueLine, type SsfOwnedType, type SsfParseOptions, type SsfParseResult, type SsfPosition, type SsfReferenceKind, type SsfSpan, type SsfStatement, type SsfToken, type SsfTokenKind, type SsfTypeInventory, type SsfTypeName, type SsfTypeReference, } from "./simple-state-form.ts";
+export { isOwnedTypeName, parseSimpleStateForm, tokenizeSimpleStateForm, typeNamesEquivalent, normalizeTypeName, ownedTypeNameSpellings, validateSimpleStateForm, type SsfCollectionFieldType, type SsfDeclaration, type SsfDiagnostic, type SsfDiagnosticCode, type SsfDocument, type SsfEnumerationFieldType, type SsfField, type SsfFieldType, type SsfMultiplicity, type SsfNamedFieldType, type SsfOpaqueLine, type SsfOwnedType, type SsfParseOptions, type SsfParseResult, type SsfPosition, type SsfReferenceKind, type SsfSpan, type SsfStatement, type SsfToken, type SsfTokenKind, type SsfTypeInventory, type SsfTypeName, type SsfTypeReference, } from "./simple-state-form.ts";
 
 === dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
 export interface SsfPosition {
@@ -5347,6 +5350,12 @@ export declare function normalizeTypeName(name: string): string;
 export declare function typeNamesEquivalent(left: string, right: string): boolean;
 /** Test an authored spelling against the normalized definition-owned inventory. */
 export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
+/**
+ * Enumerate every identifier spelling accepted by the shared singular/plural
+ * normalizer for the definition-owned inventory. This is the list-valued adapter
+ * used by sync-engine's authored-instance validation seam.
+ */
+export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
 /** Parse the bounded structural SSF grammar while retaining other State lines as opaque text. */
 export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
 /** Return only deterministic, mechanically repairable canonical-form diagnostics. */

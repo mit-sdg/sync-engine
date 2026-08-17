@@ -284,8 +284,8 @@ The generated config is the tooling root for one application variant. Its
 authored corpus. Any registered document may contain application `types`,
 `instances`, or `bindings` fences. Selected concept registrations supply imported concept
 Markdown. Tooling resolves these local sources, uses the workspace-private
-`packages/ssf` parser for bounded structural State IR and owned names, parses the
-authored application contracts, joins them with the exact selected assembly's
+`packages/ssf` parser to check bounded structural State forms and derive owned names,
+parses the authored application contracts, joins them with the exact selected assembly's
 non-core instance/definition facts, and checks complete bindings and declaration
 coverage. Runtime assembly remains independent
 of authored Markdown availability.
@@ -293,8 +293,7 @@ of authored Markdown availability.
 `src/engine/tooling/inspection.ts` projects one assembly into executable app IR,
 concept inventories, input contracts, and diagnostic read-back. Design
 processing augments those facts with authored concept definition/instance
-provenance, full State and bounded structural IR, instance-owned external
-bindings, resolved application types, exact authored declaration links,
+provenance, full State text, instance-owned external bindings, resolved application types, exact authored declaration links,
 computation signatures, normalized document provenance, and source locations.
 The manifest schema remains `sync-engine.application-manifest` version 1 during
 the beta reset; the earlier beta shape and prior versions are not decoded.

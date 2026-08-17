@@ -28,11 +28,9 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 
 #### Instances
 
-- `Discussing` — instance of `Discussing` — [Reading Circle Application Types](../design/types.md), line 18.
-  - `Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 34.
-    Discussion responses are authored by reading-circle people.
-  - `Subject` is `Selecting.Selection` — [Reading Circle Application Types](../design/types.md), line 31.
-    A discussion belongs to one particular reading selection.
+- `Discussing` — instance of `Discussing` — [Reading Circle Application Types](../design/types.md), line 31.
+  - `Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 33.
+  - `Subject` is `Selecting.Selection` — [Reading Circle Application Types](../design/types.md), line 32.
 
 ### Gathering
 
@@ -56,9 +54,8 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 
 #### Instances
 
-- `Gathering` — instance of `Gathering` — [Reading Circle Application Types](../design/types.md), line 16.
-  - `Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 22.
-    Circle hosts and members are reading-circle people.
+- `Gathering` — instance of `Gathering` — [Reading Circle Application Types](../design/types.md), line 24.
+  - `Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 25.
 
 ### Selecting
 
@@ -77,18 +74,16 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 
 #### Instances
 
-- `Selecting` — instance of `Selecting` — [Reading Circle Application Types](../design/types.md), line 17.
-  - `Item` is `Reading` — [Reading Circle Application Types](../design/types.md), line 28.
-    The selectable items are readings.
-  - `Scope` is `Gathering.Gathering` — [Reading Circle Application Types](../design/types.md), line 25.
-    Each circle has its own current reading.
+- `Selecting` — instance of `Selecting` — [Reading Circle Application Types](../design/types.md), line 27.
+  - `Item` is `Reading` — [Reading Circle Application Types](../design/types.md), line 29.
+  - `Scope` is `Gathering.Gathering` — [Reading Circle Application Types](../design/types.md), line 28.
 
 ## Application types
 
 Concrete types:
 
-- `Person` — [Reading Circle Application Types](../design/types.md), line 8.
-- `Reading` — [Reading Circle Application Types](../design/types.md), line 11.
+- `Person` — [Reading Circle Application Types](../design/types.md), line 16.
+- `Reading` — [Reading Circle Application Types](../design/types.md), line 19.
 
 ## Views
 
