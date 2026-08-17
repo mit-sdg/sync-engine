@@ -284,7 +284,7 @@ The generated config is the tooling root for one application variant. Its
 authored corpus. Any registered document may contain application `types`,
 `instances`, or `bindings` fences. Selected concept registrations supply imported concept
 Markdown. Tooling resolves these local sources, uses the workspace-private
-`packages/ssf` parser to check bounded structural State forms and derive owned names,
+`packages/ssf` parser to check bounded structural State forms and derive exact, evidenced owned names,
 parses the authored application contracts, joins them with the exact selected assembly's
 non-core instance/definition facts, and checks complete bindings and declaration
 coverage. Runtime assembly remains independent

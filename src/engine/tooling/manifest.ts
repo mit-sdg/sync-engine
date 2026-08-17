@@ -62,7 +62,7 @@ export interface ManifestConceptDefinitionV1 {
   definition: string;
   source?: string;
   specification: ConceptSpecificationIR;
-  /** Accepted canonical singular/plural spellings of definition-owned State types. */
+  /** Exact authored spellings independently derivable as definition-owned State types. */
   ownedTypes: string[];
   instances: {
     name: string;

@@ -1051,6 +1051,11 @@ describe("application impact analysis", () => {
     malformed.digest = "stale";
     expect(() => indexApplication(malformed)).toThrow(/canonical digest/);
 
+    const forgedOwnedTypes = authoredFixture().manifest;
+    forgedOwnedTypes.design.concepts[0]!.ownedTypes = ["Invented"];
+    redigest(forgedOwnedTypes);
+    expect(() => indexApplication(forgedOwnedTypes)).toThrow(/ownedTypes.*independently derived/);
+
     const firstManifest = fixture();
     const firstIndex = indexApplication(firstManifest);
     const malformedIndex = structuredClone(firstIndex);

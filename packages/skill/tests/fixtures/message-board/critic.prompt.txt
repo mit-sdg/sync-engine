@@ -112,10 +112,11 @@ primitive := Number | String | Flag | Date | DateTime
 ```
 
 Use one declaration per line and indent fields. Types start uppercase, fields lowercase,
-enums uppercase; identifiers use letters/digits/`_`. Collection subjects use
-conservative singular/plural pairs, including irregulars. `element` and scalar names are
-exact even when ending in `s`. The parser records subsets and inventories owned
-identity/type names. Malformed structural-looking lines fail; standalone invariants
+enums uppercase; identifiers use letters/digits/`_`. Declaration and subset spellings
+are exact. A collection spelling is related to a singular/plural spelling only when the
+second exact name also appears in a State field type or action/query signature in this
+specification. `element` names remain exact. The parser never invents an owned name.
+It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
 remain opaque prose.
 
 Omit a field name only for an object/parameter. Collections are never `optional` (empty

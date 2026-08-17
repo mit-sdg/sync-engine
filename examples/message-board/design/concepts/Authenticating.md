@@ -30,7 +30,7 @@ a set of Accounts with
 ## Actions
 
 ```actions
-register (username: Username, password: Password) : return (username: Username)
+register (username: Username, password: Password) : return (username: Account)
   where username is not 3 to 32 letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
@@ -45,7 +45,7 @@ register (username: Username, password: Password) : return (username: Username)
     add a new account with username, a fresh salt, and a verifier derived from password and that salt
     return username
 
-authenticate (username: Username, password: Password) : return (username: Username)
+authenticate (username: Username, password: Password) : return (username: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."

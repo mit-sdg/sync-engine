@@ -161,11 +161,11 @@ describe("generated application artifacts", () => {
       configUrl,
     );
     await expect(renderGenerated(application)).rejects.toThrow(
-      /concept definition "Malformed" has invalid structural SSF State:.*\[SSF_MALFORMED_DECLARATION\]/s,
+      /concept definition "Malformed" has invalid structural SSF State:\n- line 22, column 1: \[SSF_MALFORMED_DECLARATION\]/,
     );
   }, 15_000);
 
-  test("manifest validation rejects a digest-valid qualified target absent from SSF ownership", async () => {
+  test("manifest validation rejects a digest-valid target plus forged owned inventory", async () => {
     const resolved = resolveApplication(
       {
         ...packagingApplication,
@@ -181,10 +181,12 @@ describe("generated application artifacts", () => {
     if (target.kind !== "qualified") throw new Error("fixture Room binding is not qualified");
     expect(`${target.instance}.${target.type}`).toBe("Rooming.Room");
     target.type = "DefinitelyNotOwned";
+    const rooming = manifest.design.concepts.find(({ definition }) => definition === "Rooming")!;
+    rooming.ownedTypes = [...rooming.ownedTypes, "DefinitelyNotOwned"].sort();
     manifest.digest = applicationManifestDigest(manifest);
 
     expect(() => validateApplicationManifest(manifest)).toThrow(
-      /target\.type.*does not name an SSF-owned type/,
+      /ownedTypes.*does not equal the inventory independently derived/,
     );
   }, 15_000);
 

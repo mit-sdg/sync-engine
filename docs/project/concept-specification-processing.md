@@ -66,20 +66,23 @@ There is no legacy parser or format auto-detection.
 ### State has a bounded structural parser
 
 The workspace-private, unpublished `packages/ssf` package owns SSF tokenization,
-canonical structural diagnostics, type-name normalization, and structured State IR.
+canonical structural diagnostics, evidence-based type-name joins, and structured State IR.
 It remains `private: true`, has no release-owned publication entry, and has no
 dependency on sync-engine Markdown or source-location types. It returns text spans or
-line/column offsets, and the tooling adapter maps those spans to
-`DesignSourceLocation`. Keep this parser as the one implementation used both for
-repair diagnostics and owned-name extraction; do not recreate a second parser under
-`src/engine/tooling`.
+line/column offsets, and the tooling adapter maps those spans from the exact normalized
+State-body origin retained by the concept parser to `DesignSourceLocation`; leading
+blank fence lines therefore do not shift diagnostics. Keep this parser as the one implementation used both for
+repair diagnostics and checked-model owned-name extraction; do not recreate a second
+repair parser under `src/engine/tooling`. The manifest decoder has a deliberately
+independent, security-boundary derivation from already parsed specification IR so it
+does not trust a persisted inventory.
 
 The parser increment is deliberately bounded. It authoritatively parses structural
-set, sequence, element, subset, and field declarations; applies conservative
-collection-aware singular/plural equivalence; records subset structure; and inventories
-nonexternal type names introduced by declaration subjects, subset parents, and
-structural fields. Element and scalar names are preserved rather than blindly
-singularized. Structural-looking malformed declarations and fields produce diagnostics;
+set, sequence, element, subset, and field declarations and records subset structure.
+Declaration and subset spellings remain exact. A non-element declaration acquires a
+singular/plural alias only when that exact candidate is evidenced by a State field type
+or parsed action/query type expression in the same specification. Fields and subset
+parents do not independently introduce owned types. Element names remain exact. Structural-looking malformed declarations and fields produce diagnostics;
 truly standalone invariant sentences remain opaque. The concept IR continues to
 preserve the complete normalized State text. The parser must not claim to prove those sentences,
 conditions, effects, query meaning, storage layout, State/storage agreement, or
@@ -88,8 +91,9 @@ implementation semantics.
 Config-based binding validation uses only the established owned-name inventory. A
 qualified target must name an owned type of the selected target instance's definition;
 an external parameter is independently invalid. Checked manifests persist the sorted
-accepted owned-name inventory, and their codec validates every qualified target against
-that canonical fact. This proof does not imply that every
+accepted owned-name inventory. Their codec independently rederives the authoritative
+inventory from the included full specification, requires exact canonical equality, and
+validates every qualified target against the derived fact. This proof does not imply that every
 action/query type must be declared in State: conventional and refinement names remain
 valid in operation signatures under the public contract.
 
@@ -159,8 +163,10 @@ Validation combines the complete configured corpus and enforces:
 Declaration order has no semantics. Direct qualified targets resolve independently,
 so cyclic instance dependencies are valid when every edge ends at an owned type.
 External-to-external edges remain invalid, including cycles, because they would be
-aliases with no direct concrete or owned target. Placement errors take precedence over
-duplicate and missing-binding cascades; zero-external instances have no placement.
+aliases with no direct concrete or owned target. For a definition with external
+parameters, one mixed-placement diagnostic suppresses duplicate, unknown, missing, and
+target-resolution cascades until placement is repaired. Zero-external instances have no
+placement mode and each supplied binding is instead diagnosed as unknown.
 
 The containing document's prose is included in digests and may also contain typed
 links and computation fences. An instances-only document is valid application

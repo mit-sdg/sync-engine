@@ -24,6 +24,20 @@ function externalTypes(markdown: string): string[] {
   );
 }
 
+function memberTypeEvidence(markdown: string): string[] {
+  const fences = [...markdown.matchAll(/```(?:actions|queries)\r?\n([\s\S]*?)\r?\n```/g)];
+  return [
+    ...new Set(
+      fences.flatMap(([, body]) =>
+        (body ?? "")
+          .split(/\r?\n/)
+          .filter((line) => !/^\s/.test(line) && /^[a-z_][A-Za-z0-9_]*\s*\(/.test(line))
+          .flatMap((line) => [...line.matchAll(/\b[A-Z][A-Za-z0-9_]*\b/g)].map(([name]) => name)),
+      ),
+    ),
+  ];
+}
+
 describe("SSF tokenization and spans", () => {
   test("retains every token and reports one-based lines with zero-based offsets", () => {
     const source = "a set of Items with\r\n  a title String";
@@ -54,12 +68,15 @@ an element Settings with
 an Open set of Items
 
 at most one Item has each title`;
-    const parsed = parseSimpleStateForm(source, { externalTypes: ["Person"] });
+    const parsed = parseSimpleStateForm(source, {
+      externalTypes: ["Person"],
+      evidenceTypeNames: ["Item"],
+    });
 
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations).toHaveLength(3);
     expect(parsed.document.declarations[0]).toMatchObject({
-      name: { text: "Items", normalized: "Item", referenceKind: "owned" },
+      name: { text: "Items", normalized: "Items", referenceKind: "owned" },
       declarationKind: "collection",
       multiplicity: "set",
       fields: [
@@ -102,14 +119,18 @@ at most one Item has each title`;
     expect(parsed.document.declarations[2]).toMatchObject({
       name: { text: "Open", normalized: "Open", referenceKind: "owned" },
       declarationKind: "subset",
-      parent: { text: "Items", normalized: "Item", referenceKind: "owned" },
+      parent: { text: "Items", normalized: "Items", referenceKind: "owned" },
     });
     expect(parsed.document.opaqueLines).toMatchObject([
       { kind: "opaque", text: "at most one Item has each title" },
     ]);
     expect(parsed.document.inventory).toMatchObject({
-      identities: [{ name: "Item" }, { name: "Settings" }],
-      types: [{ name: "Item" }, { name: "Open" }, { name: "Settings" }],
+      identities: [{ name: "Items", declaredNames: ["Item", "Items"] }, { name: "Settings" }],
+      types: [
+        { name: "Items", declaredNames: ["Item", "Items"] },
+        { name: "Open" },
+        { name: "Settings" },
+      ],
       external: ["Person"],
     });
     expect(isOwnedTypeName(parsed.document.inventory, "Items")).toBe(true);
@@ -120,18 +141,17 @@ at most one Item has each title`;
     expect(isOwnedTypeName(parsed.document.inventory, "Itme")).toBe(false);
   });
 
-  test("inventories non-external structural field types as owned vocabulary", () => {
+  test("uses field types only as evidence for a matching structural declaration", () => {
     const parsed = parseSimpleStateForm(
-      "a set of Accounts with\n  a username Username\n  a aliases set of Alias",
+      "a set of Accounts with\n  an account Account\n  a username Username\n  a aliases set of Alias",
     );
     expect(parsed.document.inventory.types).toMatchObject([
-      { name: "Account", roles: ["identity"] },
-      { name: "Alias", roles: [] },
-      { name: "Username", roles: [] },
+      { name: "Accounts", declaredNames: ["Account", "Accounts"], roles: ["identity"] },
     ]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      { value: { reference: { referenceKind: "owned" } } },
-      { value: { element: { reference: { referenceKind: "owned" } } } },
+      { value: { reference: { referenceKind: "owned", normalized: "Accounts" } } },
+      { value: { reference: { referenceKind: "unresolved" } } },
+      { value: { element: { reference: { referenceKind: "unresolved" } } } },
     ]);
   });
 
@@ -142,10 +162,10 @@ at most one Item has each title`;
     );
     expect(parsed.document.declarations.map(({ name }) => name.referenceKind)).toEqual([
       "external",
-      "primitive",
+      "owned",
       "owned",
     ]);
-    expect(parsed.document.inventory.types.map(({ name }) => name)).toEqual(["Local"]);
+    expect(parsed.document.inventory.types.map(({ name }) => name)).toEqual(["Local", "Strings"]);
   });
 
   test("infers omitted scalar and collection field names", () => {
@@ -159,15 +179,15 @@ at most one Item has each title`;
   });
 });
 
-describe("type-name normalization", () => {
-  test("uses structural kind and never invents names from singular elements ending in s", () => {
-    const parsed = parseSimpleStateForm(`an element Canvas
+describe("evidence-based type-name equivalence", () => {
+  test("never invents aliases for adversarial collection names", () => {
+    const parsed = parseSimpleStateForm(`a set of Chaoses
 
-an element Gas
+a set of Atlases
 
-an element Lens
+a set of Biases
 
-an element Mouse
+a set of Buses
 
 a set of Canvases
 
@@ -176,74 +196,90 @@ a set of Gases
 a set of Lenses
 
 a set of Mice`);
-    expect(parsed.document.inventory.types.map(({ name }) => name)).toEqual([
-      "Canvas",
-      "Gas",
-      "Lens",
-      "Mouse",
-    ]);
-    expect(parsed.document.inventory.types.flatMap(({ declaredNames }) => declaredNames)).toEqual([
-      "Canvas",
-      "Canvases",
-      "Gas",
-      "Gases",
-      "Lens",
-      "Lenses",
-      "Mouse",
-      "Mice",
-    ]);
     expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
-      "Canvas",
+      "Atlases",
+      "Biases",
+      "Buses",
       "Canvases",
-      "Gas",
+      "Chaoses",
       "Gases",
-      "Lens",
       "Lenses",
       "Mice",
-      "Mouse",
     ]);
-    for (const invented of ["Canva", "Ga", "Len"]) {
+    for (const invented of ["Atlase", "Biase", "Buse", "Canva", "Chaose", "Ga", "Len"]) {
       expect(isOwnedTypeName(parsed.document.inventory, invented), invented).toBe(false);
     }
-    expect(typeNamesEquivalent("Mouse", "Mice")).toBe(true);
-    expect(typeNamesEquivalent("Canvas", "Canva")).toBe(false);
-    expect(typeNamesEquivalent("Gas", "Ga")).toBe(false);
-    expect(typeNamesEquivalent("Lens", "Len")).toBe(false);
   });
 
-  test("enumerates canonical, regular, exceptional, authored, and subset spellings", () => {
+  test("admits only exact singular/plural candidates evidenced elsewhere", () => {
     const inventory = parseSimpleStateForm(
-      "an element Entry\n\nan element Person\n\nan Analysis set of Entries",
+      `a set of Chaoses
+
+a set of Atlases
+
+a set of Biases
+
+a set of Buses
+
+a set of Mice`,
+      { evidenceTypeNames: ["Chaos", "Atlas", "Bias", "Bus", "Mouse"] },
     ).document.inventory;
     expect(ownedTypeNameSpellings(inventory)).toEqual([
-      "Analyses",
-      "Analysis",
-      "Entries",
-      "Entry",
-      "People",
-      "Person",
+      "Atlas",
+      "Atlases",
+      "Bias",
+      "Biases",
+      "Bus",
+      "Buses",
+      "Chaos",
+      "Chaoses",
+      "Mice",
+      "Mouse",
     ]);
-    expect(
-      ownedTypeNameSpellings(inventory).every((name) => isOwnedTypeName(inventory, name)),
-    ).toBe(true);
+    expect(inventory.types).toMatchObject([
+      { name: "Atlases", declaredNames: ["Atlas", "Atlases"] },
+      { name: "Biases", declaredNames: ["Bias", "Biases"] },
+      { name: "Buses", declaredNames: ["Bus", "Buses"] },
+      { name: "Chaoses", declaredNames: ["Chaos", "Chaoses"] },
+      { name: "Mice", declaredNames: ["Mice", "Mouse"] },
+    ]);
+  });
+
+  test("keeps element declarations exact even when another spelling is evidenced", () => {
+    const inventory = parseSimpleStateForm(
+      "an element Settings\n\nan element Canvas\n\nan element Mouse",
+      { evidenceTypeNames: ["Setting", "Canvases", "Mice"] },
+    ).document.inventory;
+    expect(ownedTypeNameSpellings(inventory)).toEqual(["Canvas", "Mouse", "Settings"]);
+    for (const rejected of ["Setting", "Canvases", "Mice"]) {
+      expect(isOwnedTypeName(inventory, rejected), rejected).toBe(false);
+    }
   });
 
   test.each([
-    ["Items", "Item"],
-    ["Entries", "Entry"],
-    ["Addresses", "Address"],
-    ["Statuses", "Status"],
-    ["Settings", "Setting"],
-    ["Status", "Status"],
-    ["Alias", "Alias"],
-    ["Aliases", "Alias"],
-    ["Analysis", "Analysis"],
-    ["News", "News"],
-    ["Series", "Series"],
-  ])("normalizes %s to %s", (authored, normalized) => {
-    expect(normalizeTypeName(authored)).toBe(normalized);
-    expect(typeNamesEquivalent(authored, normalized)).toBe(true);
-  });
+    ["Items", "Item", true],
+    ["Entries", "Entry", true],
+    ["Addresses", "Address", true],
+    ["Statuses", "Status", true],
+    ["Settings", "Setting", true],
+    ["Aliases", "Alias", true],
+    ["Analyses", "Analysis", true],
+    ["Mice", "Mouse", true],
+    ["Chaoses", "Chaos", true],
+    ["Atlases", "Atlas", true],
+    ["Biases", "Bias", true],
+    ["Buses", "Bus", true],
+    ["Canvas", "Canva", false],
+    ["Gas", "Ga", false],
+    ["Lens", "Len", false],
+  ])(
+    "compares authored spellings %s and %s without normalizing either",
+    (left, right, equivalent) => {
+      expect(normalizeTypeName(left)).toBe(left);
+      expect(normalizeTypeName(right)).toBe(right);
+      expect(typeNamesEquivalent(left, right)).toBe(equivalent);
+    },
+  );
 });
 
 describe("canonical repair diagnostics", () => {
@@ -269,6 +305,29 @@ at most one Item has each owner`;
     ]);
   });
 
+  test("diagnoses orphan fields before a declaration and after a malformed declaration", () => {
+    const source = `  a owner
+  owner String
+  a user may own many Items
+
+a set of Records with garbage
+  an optional owner`;
+    const parsed = parseSimpleStateForm(source);
+    expect(parsed.diagnostics.map(({ code }) => code)).toEqual([
+      "SSF_MALFORMED_FIELD",
+      "SSF_MALFORMED_FIELD",
+      "SSF_MALFORMED_DECLARATION",
+      "SSF_MALFORMED_FIELD",
+    ]);
+    expect(parsed.document.opaqueLines.map(({ text }) => text)).toEqual([
+      "  a owner",
+      "  owner String",
+      "  a user may own many Items",
+      "a set of Records with garbage",
+      "  an optional owner",
+    ]);
+  });
+
   test("uses the parser's recovered structure for every existing repair", () => {
     const source = `a sequence of Sessions
   a revokedAt optional DateTime
@@ -286,7 +345,7 @@ a element Settings with`;
     ]);
     expect(
       parseSimpleStateForm(source).document.inventory.identities.map(({ name }) => name),
-    ).toEqual(["Group", "Session", "Settings"]);
+    ).toEqual(["Groups", "Sessions", "Settings"]);
   });
 });
 
@@ -294,39 +353,43 @@ describe("repository SSF corpus", () => {
   test("extracts owned identities from every catalog and application concept specification", async () => {
     const root = resolve(import.meta.dirname, "../../..");
     const expected: Readonly<Record<string, readonly string[]>> = {
-      "packages/catalog/entries/concept/alerting/spec.md": ["Alert"],
-      "packages/catalog/entries/concept/approving/spec.md": ["Review"],
-      "packages/catalog/entries/concept/auditing/spec.md": ["Entry"],
-      "packages/catalog/entries/concept/authenticating/spec.md": ["Account"],
-      "packages/catalog/entries/concept/commenting/spec.md": ["Comment"],
-      "packages/catalog/entries/concept/discussing/spec.md": ["Discussion", "Response"],
-      "packages/catalog/entries/concept/gathering/spec.md": ["Gathering", "Membership"],
-      "packages/catalog/entries/concept/inviting/spec.md": ["Invitation"],
-      "packages/catalog/entries/concept/labeling/spec.md": ["Application", "Label"],
-      "packages/catalog/entries/concept/posting/spec.md": ["Post"],
-      "packages/catalog/entries/concept/reserving/spec.md": ["Reservation"],
-      "packages/catalog/entries/concept/selecting/spec.md": ["Current", "Selection"],
-      "packages/catalog/entries/concept/sessioning/spec.md": ["Session"],
+      "packages/catalog/entries/concept/alerting/spec.md": ["Alerts"],
+      "packages/catalog/entries/concept/approving/spec.md": ["Reviews"],
+      "packages/catalog/entries/concept/auditing/spec.md": ["Entries"],
+      "packages/catalog/entries/concept/authenticating/spec.md": ["Accounts"],
+      "packages/catalog/entries/concept/commenting/spec.md": ["Comments"],
+      "packages/catalog/entries/concept/discussing/spec.md": ["Discussions", "Responses"],
+      "packages/catalog/entries/concept/gathering/spec.md": ["Gatherings", "Memberships"],
+      "packages/catalog/entries/concept/inviting/spec.md": ["Invitations"],
+      "packages/catalog/entries/concept/labeling/spec.md": ["Applications", "Labels"],
+      "packages/catalog/entries/concept/posting/spec.md": ["Posts"],
+      "packages/catalog/entries/concept/reserving/spec.md": ["Reservations"],
+      "packages/catalog/entries/concept/selecting/spec.md": ["Current", "Selections"],
+      "packages/catalog/entries/concept/sessioning/spec.md": ["Sessions"],
       "packages/catalog/entries/concept/timing/spec.md": [],
-      "packages/catalog/entries/concept/trashing/spec.md": ["Disposition"],
-      "packages/catalog/entries/concept/upvoting/spec.md": ["Vote"],
-      "examples/message-board/design/concepts/Authenticating.md": ["Account"],
-      "examples/message-board/design/concepts/Commenting.md": ["Comment"],
-      "examples/message-board/design/concepts/Posting.md": ["Post"],
-      "examples/message-board/design/concepts/Sessioning.md": ["Session"],
-      "examples/operations-room/design/concepts/Alerting.md": ["Alert"],
-      "examples/operations-room/design/concepts/Discussing.md": ["Discussion", "Open", "Response"],
-      "examples/operations-room/design/concepts/Gathering.md": ["Gathering", "Membership"],
-      "examples/operations-room/design/concepts/Selecting.md": ["Current", "Selection"],
-      "examples/reading-circle/design/concepts/Discussing.md": ["Discussion", "Open", "Response"],
-      "examples/reading-circle/design/concepts/Gathering.md": ["Gathering", "Membership"],
-      "examples/reading-circle/design/concepts/Selecting.md": ["Current", "Selection"],
-      "tests/packaging/application/src/concepts/mitigating/spec.md": ["Current", "Selection"],
-      "tests/packaging/application/src/concepts/rooming/spec.md": ["Room"],
-      "packages/http/tests/packaging/multi-instance/client/design/concepts/Effects.md": [
-        "Observation",
+      "packages/catalog/entries/concept/trashing/spec.md": ["Dispositions"],
+      "packages/catalog/entries/concept/upvoting/spec.md": ["Votes"],
+      "examples/message-board/design/concepts/Authenticating.md": ["Accounts"],
+      "examples/message-board/design/concepts/Commenting.md": ["Comments"],
+      "examples/message-board/design/concepts/Posting.md": ["Posts"],
+      "examples/message-board/design/concepts/Sessioning.md": ["Sessions"],
+      "examples/operations-room/design/concepts/Alerting.md": ["Alerts"],
+      "examples/operations-room/design/concepts/Discussing.md": [
+        "Discussions",
+        "Open",
+        "Responses",
       ],
-      "packages/http/tests/packaging/multi-instance/client/design/concepts/Entries.md": ["Entry"],
+      "examples/operations-room/design/concepts/Gathering.md": ["Gatherings", "Memberships"],
+      "examples/operations-room/design/concepts/Selecting.md": ["Current", "Selections"],
+      "examples/reading-circle/design/concepts/Discussing.md": ["Discussions", "Open", "Responses"],
+      "examples/reading-circle/design/concepts/Gathering.md": ["Gatherings", "Memberships"],
+      "examples/reading-circle/design/concepts/Selecting.md": ["Current", "Selections"],
+      "tests/packaging/application/src/concepts/mitigating/spec.md": ["Current", "Selections"],
+      "tests/packaging/application/src/concepts/rooming/spec.md": ["Rooms"],
+      "packages/http/tests/packaging/multi-instance/client/design/concepts/Effects.md": [
+        "Observations",
+      ],
+      "packages/http/tests/packaging/multi-instance/client/design/concepts/Entries.md": ["Entries"],
       "packages/http/tests/packaging/multi-instance/client/design/concepts/Faulting.md": [],
     };
 
@@ -334,12 +397,20 @@ describe("repository SSF corpus", () => {
       const markdown = await readFile(resolve(root, path), "utf8");
       const parsed = parseSimpleStateForm(stateFence(markdown), {
         externalTypes: externalTypes(markdown),
+        evidenceTypeNames: memberTypeEvidence(markdown),
       });
       expect(parsed.diagnostics, path).toEqual([]);
       expect(
-        parsed.document.inventory.types.some(({ name }) => ["Canva", "Ga", "Len"].includes(name)),
+        ownedTypeNameSpellings(parsed.document.inventory).some((name) =>
+          ["Atlase", "Biase", "Buse", "Canva", "Chaose", "Ga", "Len"].includes(name),
+        ),
         path,
       ).toBe(false);
+      for (const name of ownedTypeNameSpellings(parsed.document.inventory)) {
+        expect(markdown, `${path} must contain accepted spelling ${name}`).toMatch(
+          new RegExp(`\\b${name}\\b`),
+        );
+      }
       expect(
         ownedTypeNameSpellings(parsed.document.inventory).every((name) =>
           isOwnedTypeName(parsed.document.inventory, name),

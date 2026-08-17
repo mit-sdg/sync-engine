@@ -31,7 +31,7 @@ a set of Accounts with
 ## Actions
 
 ```actions
-register (username: Username, password: Password) : return (username: Username)
+register (username: Username, password: Password) : return (username: Account)
   where username is not 3 to 32 ASCII letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
@@ -46,7 +46,7 @@ register (username: Username, password: Password) : return (username: Username)
     add a new Account with username, a fresh salt, and a verifier derived from password and that salt
     return username
 
-authenticate (username: Username, password: Password) : return (username: Username)
+authenticate (username: Username, password: Password) : return (username: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
@@ -54,7 +54,7 @@ authenticate (username: Username, password: Password) : return (username: Userna
   then
     return username
 
-changePassword (username: Username, currentPassword: Password, newPassword: Password) : return (username: Username)
+changePassword (username: Username, currentPassword: Password, newPassword: Password) : return (username: Account)
   where newPassword is shorter than 8 characters or longer than 128 characters
   then
     refuse WEAK_PASSWORD "A password must contain 8 to 128 characters."
@@ -66,7 +66,7 @@ changePassword (username: Username, currentPassword: Password, newPassword: Pass
     replace the Account salt and verifier using newPassword and a fresh salt
     return username
 
-unregister (username: Username, password: Password) : return (username: Username)
+unregister (username: Username, password: Password) : return (username: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."

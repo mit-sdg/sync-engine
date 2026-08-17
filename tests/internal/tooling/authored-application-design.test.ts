@@ -355,7 +355,7 @@ formatName(person: Person) : String
     );
   });
 
-  test("reports mixed placement together with independently actionable semantic gaps", () => {
+  test("uses mixed placement as the sole binding-mode diagnostic for external definitions", () => {
     const mixed = parseApplicationDesignDocument(
       `# Mixed
 
@@ -366,6 +366,7 @@ concrete Person
 
 \`\`\`instances
 instantiate Commenting as Comments with
+  User is Person
   User is Person
 \`\`\`
 
@@ -389,7 +390,7 @@ Comments.User is Person
           },
         ],
       }).map(({ code }) => code),
-    ).toEqual(["MIXED_BINDING_PLACEMENT", "MISSING_EXTERNAL_BINDING"]);
+    ).toEqual(["MIXED_BINDING_PLACEMENT"]);
   });
 
   test("treats zero-external bindings as unknown without inventing a placement mode", () => {
@@ -407,7 +408,7 @@ instantiate Timing with
 \`\`\`
 
 \`\`\`bindings
-Timing.UnknownDetached is Person
+Timing.UnknownDetached is MissingType
 \`\`\`
 `,
       "zero-external.md",
@@ -423,7 +424,7 @@ Timing.UnknownDetached is Person
     ).toEqual(["UNKNOWN_EXTERNAL_BINDING", "UNKNOWN_EXTERNAL_BINDING"]);
   });
 
-  test("retains unknown-binding diagnostics when invalid names also mix placement", () => {
+  test("suppresses unknown and missing cascades while external binding placement is mixed", () => {
     const document = parseApplicationDesignDocument(
       `# Unknown mixed bindings
 
@@ -451,12 +452,7 @@ Linking.UnknownDetached is Person
         computations: [],
         concepts: [{ instance: "Linking", definition: "Linking", externalTypes: ["Required"] }],
       }).map(({ code }) => code),
-    ).toEqual([
-      "MIXED_BINDING_PLACEMENT",
-      "UNKNOWN_EXTERNAL_BINDING",
-      "UNKNOWN_EXTERNAL_BINDING",
-      "MISSING_EXTERNAL_BINDING",
-    ]);
+    ).toEqual(["MIXED_BINDING_PLACEMENT"]);
   });
 
   test.each([

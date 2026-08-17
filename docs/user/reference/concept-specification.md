@@ -154,11 +154,12 @@ Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
 The parser recognizes set, sequence, element, and subset declarations; their
 indented fields and multiplicities; structural keywords; and SSF identifier and
-article placement. Collection declaration subjects use conservative singular/plural
-normalization, including documented irregular pairs such as `Mouse`/`Mice`; `element`
-and scalar names are not treated as plurals merely because they end in `s`. The parser
-records subset relationships and inventories nonexternal type names introduced by
-declaration subjects, subset parents, and structural fields.
+article placement. Structural declaration and subset names remain exact. A collection
+name gains a singular/plural equivalent only when that exact second spelling occurs in
+a parsed State field type or action/query type expression in the same specification;
+this includes evidenced irregular pairs such as `Mouse`/`Mice` without inventing names
+such as `Chaose` from `Chaoses`. Element names remain exact. Fields and subset parents
+provide references or evidence but do not independently introduce owned types.
 
 A line that begins like a declaration or an indented field but is incomplete, has
 trailing tokens, or otherwise misses the grammar fails with a source-located diagnostic.
@@ -171,7 +172,8 @@ to appear in State.
 
 Config-based application checking uses the owned-name inventory for one specific
 proof: a qualified external-binding target must name a type owned by the target
-instance's definition. An external parameter is not an owned type and cannot be
+instance's definition. Checked manifests persist that exact-spelling inventory, and
+validation independently rederives it from the included State and member signatures. An external parameter is not an owned type and cannot be
 a binding target. State changes continue to affect canonical design digests.
 
 ## `Actions`

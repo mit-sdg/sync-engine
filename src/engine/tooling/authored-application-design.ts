@@ -707,22 +707,36 @@ export function validateAuthoredApplicationDesign(
   const unresolvedConceptInstances = new Set(selected.unresolvedConceptInstances ?? []);
   const locationKey = ({ source, line, column }: DesignSourceLocation): string =>
     `${source}\0${line}\0${column}`;
+  const bindingsByInstance = Map.groupBy(allBindings(corpus), ({ instance }) => instance);
+  const mixedInstances = new Set(
+    [...bindingsByInstance]
+      .filter(([, bindings]) => new Set(bindings.map(({ placement }) => placement)).size > 1)
+      .map(([instance]) => instance),
+  );
+  const positiveExternalMixedInstances = new Set(
+    [...mixedInstances].filter(
+      (instance) => (selectedConcepts.get(instance)?.externalTypes.length ?? 0) > 0,
+    ),
+  );
   const zeroExternalMixedLocations = new Set(
-    [...Map.groupBy(allBindings(corpus), ({ instance }) => instance)]
-      .filter(([instance, bindings]) => {
-        const placements = new Set(bindings.map(({ placement }) => placement));
-        return placements.size > 1 && selectedConcepts.get(instance)?.externalTypes.length === 0;
-      })
-      .map(([, bindings]) =>
-        locationKey(bindings.find(({ placement }) => placement === "detached")!.location),
+    [...mixedInstances]
+      .filter((instance) => selectedConcepts.get(instance)?.externalTypes.length === 0)
+      .flatMap((instance) =>
+        (bindingsByInstance.get(instance) ?? []).map(({ location }) => locationKey(location)),
       ),
+  );
+  const allMixedBindingLocations = new Set(
+    [...mixedInstances].flatMap((instance) =>
+      (bindingsByInstance.get(instance) ?? []).map(({ location }) => locationKey(location)),
+    ),
   );
   for (let index = issues.length - 1; index >= 0; index -= 1) {
     const issue = issues[index];
+    if (issue.location === undefined) continue;
+    const key = locationKey(issue.location);
     if (
-      issue.code === "MIXED_BINDING_PLACEMENT" &&
-      issue.location !== undefined &&
-      zeroExternalMixedLocations.has(locationKey(issue.location))
+      (issue.code === "MIXED_BINDING_PLACEMENT" && zeroExternalMixedLocations.has(key)) ||
+      (issue.code === "DUPLICATE_EXTERNAL_BINDING" && allMixedBindingLocations.has(key))
     ) {
       issues.splice(index, 1);
     }
@@ -802,6 +816,7 @@ export function validateAuthoredApplicationDesign(
     )
       continue;
     const concept = selectedConcepts.get(instance.instance)!;
+    if (positiveExternalMixedInstances.has(instance.instance)) continue;
     const externals = new Set(concept.externalTypes);
     const accepted = new Set<string>();
     for (const binding of instance.bindings) {
@@ -811,9 +826,9 @@ export function validateAuthoredApplicationDesign(
           message: `instance ${JSON.stringify(instance.instance)} of ${JSON.stringify(instance.definition)} binds ${JSON.stringify(binding.external)}, but the definition declares only ${concept.externalTypes.map((name) => JSON.stringify(name)).join(" and ") || "no types"} as external parameters.`,
           location: binding.location,
         });
-      } else if (!accepted.has(binding.external)) {
-        accepted.add(binding.external);
+        continue;
       }
+      if (!accepted.has(binding.external)) accepted.add(binding.external);
 
       if (binding.target.kind === "concrete") {
         if (!concrete.has(binding.target.name)) {

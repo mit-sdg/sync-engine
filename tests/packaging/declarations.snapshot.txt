@@ -3722,6 +3722,7 @@ export interface SpecificationStateIR {
     /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
     body: string;
     prose: string;
+    /** Origin of `body` after surrounding blank fence lines are removed. */
     location: SpecificationLocationIR;
 }
 /** The JSON-safe authored contract parsed from one concept specification. */
@@ -4566,7 +4567,10 @@ export declare function custom(fn: (...args: never[]) => unknown | Promise<unkno
 export {};
 
 === dist/engine/tooling/application-manifest-format.d.ts ===
+import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
+/** Independently derive the exact SSF-owned names carried as a manifest cross-check. */
+export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
 /** Validate untrusted data as one complete canonical version-1 application manifest. */
@@ -5069,7 +5073,7 @@ export interface ManifestConceptDefinitionV1 {
     definition: string;
     source?: string;
     specification: ConceptSpecificationIR;
-    /** Accepted canonical singular/plural spellings of definition-owned State types. */
+    /** Exact authored spellings independently derivable as definition-owned State types. */
     ownedTypes: string[];
     instances: {
         name: string;
@@ -5256,7 +5260,7 @@ export interface SsfDiagnostic {
 export interface SsfTypeName {
     /** Spelling retained from the State text. */
     readonly text: string;
-    /** Stable singular equivalence key used for declaration and reference joins. */
+    /** Exact structural declaration spelling used for declaration and reference joins. */
     readonly normalized: string;
 }
 export type SsfReferenceKind = "external" | "owned" | "primitive" | "unresolved";
@@ -5310,9 +5314,9 @@ export interface SsfDeclaration {
 }
 export type SsfStatement = SsfDeclaration | SsfOpaqueLine;
 export interface SsfOwnedType {
-    /** Canonical singular name used for equality. */
+    /** Exact spelling of the structural State declaration. */
     readonly name: string;
-    /** Every authored spelling that introduced this type. */
+    /** Exact authored spellings evidenced as this type; no spelling is generated into this list. */
     readonly declaredNames: readonly string[];
     readonly roles: readonly ("identity" | "subset")[];
     readonly declarationSpans: readonly SsfSpan[];
@@ -5334,6 +5338,8 @@ export interface SsfDocument {
 export interface SsfParseOptions {
     /** Opaque parameter names declared by the containing concept specification. */
     readonly externalTypes?: readonly string[];
+    /** Exact type spellings parsed elsewhere in the same specification's action/query contract. */
+    readonly evidenceTypeNames?: readonly string[];
 }
 export interface SsfParseResult {
     readonly document: SsfDocument;
@@ -5341,20 +5347,16 @@ export interface SsfParseResult {
 }
 /** Tokenize all State text without discarding whitespace or source ranges. */
 export declare function tokenizeSimpleStateForm(source: string): readonly SsfToken[];
-/**
- * Normalize a name used where SSF structurally expects a collection subject.
- * Unknown singular-looking `s` words are preserved; element and scalar names do
- * not call this function merely because they happen to end in `s`.
- */
+/** Exact-name normalization: SSF never materializes a guessed singular spelling. */
 export declare function normalizeTypeName(name: string): string;
-export declare function typeNamesEquivalent(left: string, right: string): boolean;
-/** Test an authored spelling against the normalized definition-owned inventory. */
-export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
 /**
- * Enumerate every identifier spelling accepted by the shared singular/plural
- * normalizer for the definition-owned inventory. This is the list-valued adapter
- * used by sync-engine's authored-instance validation seam.
+ * Compare two exact authored spellings. Morphology may relate the two supplied
+ * values, but this function never returns or admits a third, generated spelling.
  */
+export declare function typeNamesEquivalent(left: string, right: string): boolean;
+/** Test an exact evidenced spelling against the definition-owned inventory. */
+export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
+/** Enumerate only exact authored spellings evidenced for definition-owned State types. */
 export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
 /** Parse the bounded structural SSF grammar while retaining other State lines as opaque text. */
 export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;

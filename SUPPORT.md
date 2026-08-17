@@ -41,7 +41,7 @@ after changing a package version, then typecheck their consumers.
 
 `sync-engine.application-manifest` version 1 is the versioned core format. This
 schema reset records the registered authored-design contract, including concept
-external types, full State text, normalized definition-owned type inventories,
+external types, full State text, exact evidenced definition-owned type inventories,
 complete authored instance declarations and external bindings, declaration coverage,
 and computation signatures. It also contains executable application
 and wire facts, implementation provenance, validators, and diagnostics. It does

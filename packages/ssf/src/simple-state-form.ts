@@ -39,7 +39,7 @@ export interface SsfDiagnostic {
 export interface SsfTypeName {
   /** Spelling retained from the State text. */
   readonly text: string;
-  /** Stable singular equivalence key used for declaration and reference joins. */
+  /** Exact structural declaration spelling used for declaration and reference joins. */
   readonly normalized: string;
 }
 
@@ -105,9 +105,9 @@ export interface SsfDeclaration {
 export type SsfStatement = SsfDeclaration | SsfOpaqueLine;
 
 export interface SsfOwnedType {
-  /** Canonical singular name used for equality. */
+  /** Exact spelling of the structural State declaration. */
   readonly name: string;
-  /** Every authored spelling that introduced this type. */
+  /** Exact authored spellings evidenced as this type; no spelling is generated into this list. */
   readonly declaredNames: readonly string[];
   readonly roles: readonly ("identity" | "subset")[];
   readonly declarationSpans: readonly SsfSpan[];
@@ -132,6 +132,8 @@ export interface SsfDocument {
 export interface SsfParseOptions {
   /** Opaque parameter names declared by the containing concept specification. */
   readonly externalTypes?: readonly string[];
+  /** Exact type spellings parsed elsewhere in the same specification's action/query contract. */
+  readonly evidenceTypeNames?: readonly string[];
 }
 
 export interface SsfParseResult {
@@ -200,26 +202,24 @@ interface ParsedDeclaration {
 
 const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
 const IRREGULAR_PLURALS = new Map<string, string>([
-  ["Aliases", "Alias"],
-  ["Analyses", "Analysis"],
-  ["Canvases", "Canvas"],
-  ["Children", "Child"],
-  ["Feet", "Foot"],
-  ["Gases", "Gas"],
-  ["Geese", "Goose"],
-  ["Indices", "Index"],
-  ["Lenses", "Lens"],
-  ["Matrices", "Matrix"],
-  ["Men", "Man"],
-  ["Mice", "Mouse"],
-  ["People", "Person"],
-  ["Statuses", "Status"],
-  ["Teeth", "Tooth"],
-  ["Women", "Woman"],
+  ["Alias", "Aliases"],
+  ["Analysis", "Analyses"],
+  ["Canvas", "Canvases"],
+  ["Child", "Children"],
+  ["Foot", "Feet"],
+  ["Gas", "Gases"],
+  ["Goose", "Geese"],
+  ["Index", "Indices"],
+  ["Lens", "Lenses"],
+  ["Man", "Men"],
+  ["Matrix", "Matrices"],
+  ["Mouse", "Mice"],
+  ["Person", "People"],
+  ["Status", "Statuses"],
+  ["Tooth", "Teeth"],
+  ["Woman", "Women"],
 ]);
-const UNCHANGED_PLURALS = new Set(["News", "Series", "Species"]);
-/** Singular words whose final `s` must never be stripped without collection context. */
-const PROTECTED_SINGULARS = new Set([
+const KNOWN_SINGULARS = new Set([
   "Access",
   "Address",
   "Alias",
@@ -237,7 +237,7 @@ const PROTECTED_SINGULARS = new Set([
 const FIELD_NAME = /^[a-z][A-Za-z0-9_]*$/;
 const ENUM_VALUE = /^[A-Z][A-Z0-9_]*$/;
 const PRIMITIVES = ["Date", "DateTime", "Flag", "Number", "String"] as const;
-const PRIMITIVE_KEYS = new Set(PRIMITIVES.map((name) => normalizeTypeName(name)));
+const PRIMITIVE_KEYS = new Set<string>(PRIMITIVES);
 const CANONICAL_STRUCTURAL = new Set(["element", "seq", "set"]);
 const NEAR_MISS_STRUCTURAL = new Map<string, SsfMultiplicity>([
   ["array", "sequence"],
@@ -295,20 +295,8 @@ export function tokenizeSimpleStateForm(source: string): readonly SsfToken[] {
   return tokens;
 }
 
-/**
- * Normalize a name used where SSF structurally expects a collection subject.
- * Unknown singular-looking `s` words are preserved; element and scalar names do
- * not call this function merely because they happen to end in `s`.
- */
+/** Exact-name normalization: SSF never materializes a guessed singular spelling. */
 export function normalizeTypeName(name: string): string {
-  if (!TYPE_NAME.test(name) || PROTECTED_SINGULARS.has(name) || UNCHANGED_PLURALS.has(name)) {
-    return name;
-  }
-  const irregular = IRREGULAR_PLURALS.get(name);
-  if (irregular !== undefined) return irregular;
-  if (/[^AEIOU]ies$/.test(name)) return `${name.slice(0, -3)}y`;
-  if (/(?:ches|shes|sses|xes|zes)$/.test(name)) return name.slice(0, -2);
-  if (name.endsWith("s") && !/(?:ss|us|is)$/.test(name)) return name.slice(0, -1);
   return name;
 }
 
@@ -318,65 +306,34 @@ function regularPluralTypeName(name: string): string {
   return `${name}s`;
 }
 
-function acceptedTypeNameSpellings(canonical: string): readonly string[] {
-  const names = new Set([canonical]);
-  let hasIrregularPlural = false;
-  for (const [plural, singular] of IRREGULAR_PLURALS) {
-    if (singular === canonical) {
-      names.add(plural);
-      hasIrregularPlural = true;
-    }
-  }
-  if (hasIrregularPlural || UNCHANGED_PLURALS.has(canonical)) return [...names];
-  const regularPlural = regularPluralTypeName(canonical);
-  if (!PROTECTED_SINGULARS.has(regularPlural) && normalizeTypeName(regularPlural) === canonical) {
-    names.add(regularPlural);
-  }
-  return [...names];
-}
-
-export function typeNamesEquivalent(left: string, right: string): boolean {
-  if (left === right) return true;
-  return (
-    acceptedTypeNameSpellings(left).includes(right) ||
-    acceptedTypeNameSpellings(right).includes(left)
-  );
-}
-
-/** Test an authored spelling against the normalized definition-owned inventory. */
-export function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean {
-  return inventory.types.some((owned) => acceptedTypeNameSpellings(owned.name).includes(name));
+function pluralTypeName(name: string): string {
+  return IRREGULAR_PLURALS.get(name) ?? regularPluralTypeName(name);
 }
 
 /**
- * Enumerate every identifier spelling accepted by the shared singular/plural
- * normalizer for the definition-owned inventory. This is the list-valued adapter
- * used by sync-engine's authored-instance validation seam.
+ * Compare two exact authored spellings. Morphology may relate the two supplied
+ * values, but this function never returns or admits a third, generated spelling.
  */
+export function typeNamesEquivalent(left: string, right: string): boolean {
+  if (left === right) return true;
+  if (!TYPE_NAME.test(left) || !TYPE_NAME.test(right)) return false;
+  if (KNOWN_SINGULARS.has(left)) return pluralTypeName(left) === right;
+  if (KNOWN_SINGULARS.has(right)) return pluralTypeName(right) === left;
+  return pluralTypeName(left) === right || pluralTypeName(right) === left;
+}
+
+/** Test an exact evidenced spelling against the definition-owned inventory. */
+export function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean {
+  return inventory.types.some((owned) => owned.declaredNames.includes(name));
+}
+
+/** Enumerate only exact authored spellings evidenced for definition-owned State types. */
 export function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[] {
-  const names = new Set<string>();
-  for (const owned of inventory.types) {
-    names.add(owned.name);
-    for (const declared of owned.declaredNames) names.add(declared);
-    for (const spelling of acceptedTypeNameSpellings(owned.name)) names.add(spelling);
-  }
-  return [...names].sort();
+  return [...new Set(inventory.types.flatMap(({ declaredNames }) => declaredNames))].sort();
 }
 
-function pluralizeNormalizedTypeName(name: string): string {
-  const irregular = [...IRREGULAR_PLURALS].find(([, singular]) => singular === name)?.[0];
-  if (irregular !== undefined) return irregular;
-  if (UNCHANGED_PLURALS.has(name)) return name;
-  return regularPluralTypeName(name);
-}
-
-function implicitFieldName(type: string, collection: boolean): string {
-  const authored = collection
-    ? normalizeTypeName(type) === type
-      ? pluralizeNormalizedTypeName(type)
-      : type
-    : type;
-  return `${authored[0]?.toLowerCase() ?? ""}${authored.slice(1)}`;
+function implicitFieldName(type: string, _collection: boolean): string {
+  return `${type[0]?.toLowerCase() ?? ""}${type.slice(1)}`;
 }
 
 function sourceLines(source: string, tokens: readonly SsfToken[]): readonly SourceLine[] {
@@ -621,8 +578,18 @@ function structurallyLooksLikeDeclaration(line: SourceLine): boolean {
 
 function structurallyLooksLikeField(line: SourceLine): boolean {
   if (!/^[ \t]/.test(line.text)) return false;
-  const first = words(line)[0];
-  return first === "a" || first === "an";
+  const authored = words(line);
+  if (authored[0] !== "a" && authored[0] !== "an") return false;
+  const field = authored.slice(1);
+  if (field.length === 0 || field.length === 1) return true;
+  if (field[0] === "optional" || field[0] === "set" || field[0] === "seq") return true;
+  return (
+    TYPE_NAME.test(field[1] ?? "") ||
+    field[1] === "optional" ||
+    field[1] === "set" ||
+    field[1] === "seq" ||
+    field[1] === "of"
+  );
 }
 
 function malformedStructuralDiagnostic(
@@ -763,37 +730,31 @@ function fieldDiagnostics(line: SourceLine): readonly SsfDiagnostic[] {
   return [];
 }
 
-function matchingName(names: ReadonlySet<string>, authored: string): string | undefined {
-  return [...names].find((name) => acceptedTypeNameSpellings(name).includes(authored));
-}
-
 function typeReference(
   reference: ParsedReference,
-  owned: ReadonlySet<string>,
+  owned: ReadonlyMap<string, string>,
   external: ReadonlySet<string>,
-  structuralCanonical?: string,
 ): SsfTypeReference {
-  const primitive = matchingName(PRIMITIVE_KEYS, reference.text);
-  const externalName = matchingName(external, reference.text);
-  const ownedName = matchingName(owned, reference.text);
+  const primitive = PRIMITIVE_KEYS.has(reference.text);
+  const externalType = external.has(reference.text);
+  const ownedName = owned.get(reference.text);
   return {
     text: reference.text,
-    normalized: structuralCanonical ?? primitive ?? externalName ?? ownedName ?? reference.text,
-    referenceKind:
-      primitive !== undefined
-        ? "primitive"
-        : externalName !== undefined
-          ? "external"
-          : ownedName !== undefined
-            ? "owned"
-            : "unresolved",
+    normalized: ownedName ?? reference.text,
+    referenceKind: primitive
+      ? "primitive"
+      : externalType
+        ? "external"
+        : ownedName !== undefined
+          ? "owned"
+          : "unresolved",
     span: reference.span,
   };
 }
 
 function fieldType(
   value: ParsedFieldType,
-  owned: ReadonlySet<string>,
+  owned: ReadonlyMap<string, string>,
   external: ReadonlySet<string>,
 ): SsfFieldType {
   if (value.kind === "named") {
@@ -809,49 +770,66 @@ function fieldType(
   };
 }
 
-interface IntroducedTypeReference {
-  readonly reference: ParsedReference;
-  readonly canonical: string;
-}
-
-function declarationCanonicalName(declaration: ParsedDeclaration): string {
-  return declaration.declarationKind === "collection" && declaration.multiplicity !== "element"
-    ? normalizeTypeName(declaration.name.text)
-    : declaration.name.text;
-}
-
-function introducedTypeReferences(
+function stateFieldTypeEvidence(
   declarations: readonly ParsedDeclaration[],
-): readonly IntroducedTypeReference[] {
-  return declarations.flatMap((declaration) => [
-    { reference: declaration.name, canonical: declarationCanonicalName(declaration) },
-    ...(declaration.parent === undefined
-      ? []
-      : [{ reference: declaration.parent, canonical: normalizeTypeName(declaration.parent.text) }]),
-    ...declaration.fields.flatMap(({ value }) => {
-      const reference =
-        value.kind === "named"
-          ? value.reference
-          : value.kind === "collection" && value.element.kind === "named"
-            ? value.element.reference
-            : undefined;
-      return reference === undefined ? [] : [{ reference, canonical: reference.text }];
+): readonly ParsedReference[] {
+  return declarations.flatMap(({ fields }) =>
+    fields.flatMap(({ value }) => {
+      if (value.kind === "named") return [value.reference];
+      if (value.kind === "collection" && value.element.kind === "named") {
+        return [value.element.reference];
+      }
+      return [];
     }),
+  );
+}
+
+function evidencedOwnedSpellings(
+  declarations: readonly ParsedDeclaration[],
+  options: SsfParseOptions,
+  external: ReadonlySet<string>,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const declared = new Set(
+    declarations
+      .map(({ name }) => name.text)
+      .filter((name) => !external.has(name) && !PRIMITIVE_KEYS.has(name)),
+  );
+  const aliases = new Map([...declared].map((name) => [name, new Set([name])]));
+  const evidence = new Set([
+    ...stateFieldTypeEvidence(declarations).map(({ text }) => text),
+    ...(options.evidenceTypeNames ?? []),
   ]);
+  for (const candidate of evidence) {
+    if (!TYPE_NAME.test(candidate) || external.has(candidate) || PRIMITIVE_KEYS.has(candidate)) {
+      continue;
+    }
+    if (declared.has(candidate)) continue;
+    const matches = [
+      ...new Set(
+        declarations
+          .filter(
+            ({ name, multiplicity }) =>
+              multiplicity !== "element" &&
+              declared.has(name.text) &&
+              typeNamesEquivalent(name.text, candidate),
+          )
+          .map(({ name }) => name.text),
+      ),
+    ];
+    if (matches.length === 1) aliases.get(matches[0])?.add(candidate);
+  }
+  return aliases;
 }
 
 function inventoryEntry(
-  canonical: string,
+  name: string,
   declarations: readonly ParsedDeclaration[],
-  introduced: readonly IntroducedTypeReference[],
+  spellings: ReadonlySet<string>,
 ): SsfOwnedType {
-  const matching = declarations.filter(
-    (declaration) => declarationCanonicalName(declaration) === canonical,
-  );
-  const references = introduced.filter((item) => item.canonical === canonical);
+  const matching = declarations.filter((declaration) => declaration.name.text === name);
   return {
-    name: canonical,
-    declaredNames: [...new Set(references.map(({ reference }) => reference.text))],
+    name,
+    declaredNames: [...spellings].sort(),
     roles: [
       ...new Set(
         matching.map(({ declarationKind }) =>
@@ -859,7 +837,7 @@ function inventoryEntry(
         ),
       ),
     ],
-    declarationSpans: references.map(({ reference }) => reference.span),
+    declarationSpans: matching.map(({ name: declarationName }) => declarationName.span),
   };
 }
 
@@ -878,11 +856,14 @@ export function parseSimpleStateForm(
   for (const line of lines) {
     if (line.text.trim() === "") continue;
     if (/^[ \t]/.test(line.text)) {
+      const field = parseField(line);
       if (current === undefined) {
         parsedStatements.push(opaqueLine(line));
+        if (field !== undefined || structurallyLooksLikeField(line)) {
+          diagnostics.push(malformedStructuralDiagnostic(line, "field"));
+        }
         continue;
       }
-      const field = parseField(line);
       if (field === undefined) {
         current.opaqueBody.push(opaqueLine(line));
         if (structurallyLooksLikeField(line)) {
@@ -920,42 +901,27 @@ export function parseSimpleStateForm(
   diagnostics.sort((left, right) => left.span.start.offset - right.span.start.offset);
 
   const external = new Set(options.externalTypes ?? []);
-  const introduced = introducedTypeReferences(parsedDeclarations);
-  const ownedNames = new Set<string>();
-  for (const { reference, canonical } of introduced) {
-    if (
-      matchingName(external, reference.text) === undefined &&
-      matchingName(PRIMITIVE_KEYS, reference.text) === undefined
-    ) {
-      ownedNames.add(canonical);
+  const ownedSpellings = evidencedOwnedSpellings(parsedDeclarations, options, external);
+  const ownedBySpelling = new Map<string, string>();
+  for (const [name, spellings] of ownedSpellings) {
+    for (const spelling of spellings) {
+      if (!ownedBySpelling.has(spelling)) ownedBySpelling.set(spelling, name);
     }
   }
   const declarations: SsfDeclaration[] = parsedDeclarations.map((declaration) => ({
     kind: "declaration",
-    name: typeReference(
-      declaration.name,
-      ownedNames,
-      external,
-      declarationCanonicalName(declaration),
-    ),
+    name: typeReference(declaration.name, ownedBySpelling, external),
     declarationKind: declaration.declarationKind,
     multiplicity: declaration.multiplicity,
     ...(declaration.parent === undefined
       ? {}
-      : {
-          parent: typeReference(
-            declaration.parent,
-            ownedNames,
-            external,
-            normalizeTypeName(declaration.parent.text),
-          ),
-        }),
+      : { parent: typeReference(declaration.parent, ownedBySpelling, external) }),
     fields: declaration.fields.map((field) => ({
       kind: "field",
       name: field.name,
       inferredName: field.inferredName,
       optional: field.optional,
-      value: fieldType(field.value, ownedNames, external),
+      value: fieldType(field.value, ownedBySpelling, external),
       span: field.span,
     })),
     opaqueBody: declaration.opaqueBody,
@@ -973,13 +939,13 @@ export function parseSimpleStateForm(
   const opaqueLines = statements.flatMap((statement) =>
     statement.kind === "opaque" ? [statement] : statement.opaqueBody,
   );
-  const types = [...ownedNames]
-    .sort()
-    .map((name) => inventoryEntry(name, parsedDeclarations, introduced));
+  const types = [...ownedSpellings]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([name, spellings]) => inventoryEntry(name, parsedDeclarations, spellings));
   const identityNames = new Set(
     parsedDeclarations
       .filter(({ declarationKind }) => declarationKind === "collection")
-      .map(declarationCanonicalName),
+      .map(({ name }) => name.text),
   );
   return {
     document: {

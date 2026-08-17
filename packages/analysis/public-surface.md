@@ -71,7 +71,8 @@ and endpoints. Runtime lowering names remain in manifest definitions and are
 not substituted for authored design identities. `indexApplication()` builds the
 deterministic inventory and possible-impact graph from an exact V1 manifest,
 including authored instance/definition provenance, normalized external bindings, and
-definition-owned SSF type inventories used to validate qualified targets. The beta V1 schema is the replaced static-instance schema. Older
+exact evidenced SSF type inventories. Core validation independently rederives those
+inventories from included specifications before analysis uses the manifest. The beta V1 schema is the replaced static-instance schema. Older
 application manifests are rejected; analysis has no compatibility
 decoder. `traceApplicationImpact()` performs bounded deterministic traversal
 and reports explicit incompleteness when limits or unknown seeds prevent a

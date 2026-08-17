@@ -14,11 +14,11 @@ Defined in [Authenticating](../design/concepts/Authenticating.md), line 1.
 
 #### Actions
 
-- `register(username: Username, password: Password) : return (username: Username)`
+- `register(username: Username, password: Password) : return (username: Account)`
   - Refuses `INVALID_USERNAME`: A username must contain 3 to 32 letters, numbers, underscores, or hyphens.
   - Refuses `WEAK_PASSWORD`: A password must contain 8 to 128 characters.
   - Refuses `USERNAME_TAKEN`: That username is already registered.
-- `authenticate(username: Username, password: Password) : return (username: Username)`
+- `authenticate(username: Username, password: Password) : return (username: Account)`
   - Refuses `INVALID_CREDENTIALS`: The username or password is incorrect.
 
 #### Queries
@@ -47,7 +47,7 @@ Defined in [Commenting](../design/concepts/Commenting.md), line 1.
 #### Instances
 
 - `Commenting` — instance of `Commenting` — [Message Board Application Types](../design/types.md), line 30.
-  - `Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 31.
+  - `Author` is `Authenticating.Account` — [Message Board Application Types](../design/types.md), line 31.
   - `Content` is `CommentContent` — [Message Board Application Types](../design/types.md), line 33.
   - `Target` is `Posting.Post` — [Message Board Application Types](../design/types.md), line 32.
 
@@ -68,7 +68,7 @@ Defined in [Posting](../design/concepts/Posting.md), line 1.
 #### Instances
 
 - `Posting` — instance of `Posting` — [Message Board Application Types](../design/types.md), line 27.
-  - `Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 28.
+  - `Author` is `Authenticating.Account` — [Message Board Application Types](../design/types.md), line 28.
 
 ### Sessioning
 
@@ -89,7 +89,7 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 #### Instances
 
 - `Sessioning` — instance of `Sessioning` — [Message Board Application Types](../design/types.md), line 24.
-  - `Subject` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 25.
+  - `Subject` is `Authenticating.Account` — [Message Board Application Types](../design/types.md), line 25.
 
 ## Application types
 

@@ -25,30 +25,40 @@ import {
   type RegisteredConceptSource,
 } from "./concept-source-discovery.ts";
 import { typeScriptSourceContext, type TypeScriptSourceContext } from "./typescript-shapes.ts";
+import { specificationOwnedTypeNames as authoritativeOwnedTypeNames } from "./application-manifest-format.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 
-function specificationOwnedTypeNames(specification: {
-  definitionName: string;
-  externalTypes: readonly { name: string }[];
-  state: { body: string; location: { line: number } };
-}): readonly string[] {
+function specificationOwnedTypeNames(
+  specification: Parameters<typeof authoritativeOwnedTypeNames>[0],
+): readonly string[] {
+  const authoritative = authoritativeOwnedTypeNames(specification);
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
+    evidenceTypeNames: authoritative,
   });
   if (parsed.diagnostics.length > 0) {
     throw new Error(
       `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
         .map(
           ({ code, message, span }) =>
-            `- line ${specification.state.location.line + span.start.line}, column ${span.start.column}: [${code}] ${message}`,
+            `- line ${specification.state.location.line + span.start.line - 1}, column ${specification.state.location.column + span.start.column - 1}: [${code}] ${message}`,
         )
         .join("\n")}`,
     );
   }
-  return ownedTypeNameSpellings(parsed.document.inventory);
+  const parsedNames = ownedTypeNameSpellings(parsed.document.inventory);
+  if (
+    parsedNames.length !== authoritative.length ||
+    parsedNames.some((name, index) => name !== authoritative[index])
+  ) {
+    throw new Error(
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} produced inconsistent SSF-owned type evidence.`,
+    );
+  }
+  return authoritative;
 }
 
 /**

@@ -17,6 +17,8 @@ A malformed structural declaration never supplies an owned inventory.
 ## State
 
 ```state
+
+
 a set of Items with garbage
 ```
 

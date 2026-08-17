@@ -22,13 +22,13 @@ concrete CommentContent
 instantiate Authenticating
 
 instantiate Sessioning with
-  Subject is Authenticating.Username
+  Subject is Authenticating.Account
 
 instantiate Posting with
-  Author is Authenticating.Username
+  Author is Authenticating.Account
 
 instantiate Commenting with
-  Author is Authenticating.Username
+  Author is Authenticating.Account
   Target is Posting.Post
   Content is CommentContent
 ```

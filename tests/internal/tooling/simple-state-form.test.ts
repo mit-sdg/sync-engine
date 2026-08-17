@@ -66,8 +66,8 @@ describe("limited Simple State Form validation", () => {
     );
     const parsed = parseSimpleStateForm(scanned.fences[0]!, { externalTypes: ["Person"] });
     expect(parsed.document.inventory).toMatchObject({
-      identities: [{ name: "Entry" }],
-      types: [{ name: "Entry" }, { name: "Open" }],
+      identities: [{ name: "Entries" }],
+      types: [{ name: "Entries" }, { name: "Open" }],
       external: ["Person"],
     });
     expect(parsed.document.declarations[0]).toMatchObject({
@@ -94,6 +94,19 @@ describe("limited Simple State Form validation", () => {
         "set Items\n\na set of Items with garbage\n\na set of Accounts with\n  a owner\n\nat most one Item has each owner",
       ).map(({ code }) => code),
     ).toEqual(["SSF_ARTICLE", "SSF_MALFORMED_DECLARATION", "SSF_MALFORMED_FIELD"]);
+  });
+
+  test("diagnoses orphan structural-looking fields while preserving indented prose", () => {
+    expect(
+      validate(
+        "  a owner\n  owner String\n  a user may own many Items\n\na set of Records with garbage\n  an optional owner",
+      ).map(({ code }) => code),
+    ).toEqual([
+      "SSF_MALFORMED_FIELD",
+      "SSF_MALFORMED_FIELD",
+      "SSF_MALFORMED_DECLARATION",
+      "SSF_MALFORMED_FIELD",
+    ]);
   });
 
   test("batches independent issues in source order", () => {

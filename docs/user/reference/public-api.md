@@ -547,7 +547,7 @@ reset replaces the version-1 schema in place; earlier beta shapes and prior
 versions are rejected without upconversion. It
 contains executable application and wire facts plus structured concept
 contracts, full State text, authored definition/instance declarations and external
-bindings, normalized definition-owned type inventories, resolved application types,
+bindings, exact evidenced definition-owned type inventories, resolved application types,
 computation signatures, registered design source locations, normalized-source digests, implementation provenance, validators, and diagnostics. It excludes
 runtime functions, constructor arguments, resources, object identity,
 occurrences, timestamps, and other runtime state.
@@ -570,7 +570,8 @@ vocabulary declaration rather than a replacement instance.
 `applicationManifestDigest(...)` recomputes the digest while ignoring the
 supplied `digest` field. `validateApplicationManifest(...)` treats its input as untrusted data: it
 checks the complete top-level version-1 shape, the nested IR needed by tooling,
-inventory uniqueness and cross-field consistency, endpoint, input-contract, and
+inventory uniqueness and cross-field consistency, independently rederives persisted
+owned types from each included specification, endpoint, input-contract, and
 logical-wire path agreement, plain JSON portability, and exact canonical digest
 equality. Previous versions are rejected without upconversion.
 Failures identify the offending `$` path. `parseApplicationManifest(...)`

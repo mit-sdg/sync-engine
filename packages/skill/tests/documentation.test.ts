@@ -159,7 +159,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Collections are never `optional`",
       "No nested collections or unions",
       "Declaration direction implies no storage, navigation, or ownership",
-      "inventories owned identity/type names",
+      "inventories structural identity/type names",
+      "never invents an owned name",
       "remain opaque prose",
     ]) {
       expect(ssf).toContain(rule);

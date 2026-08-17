@@ -102,8 +102,8 @@ Application-design documents use the same parser and assembly-independent valida
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
 - SSF structural declarations and fields parse canonically, including articles,
-  multiplicity, `optional`, `with`, identifiers, collection-aware conservative
-  singular/plural normalization, and subset structure; malformed structural-looking
+  multiplicity, `optional`, `with`, exact identifiers, evidence-based collection
+  singular/plural joins, and subset structure; malformed structural-looking
   lines fail while truly standalone invariant sentences remain opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
@@ -136,7 +136,7 @@ application declaration paths. Arbitrary prose is not admitted inside
 `instances` or `bindings` fences.
 
 The command does not discover additional files or require a complete corpus. Its
-bounded SSF parser establishes structural declarations and owned-name inventories,
+bounded SSF parser establishes exact structural declarations and evidenced owned-name inventories,
 not a storage schema or invariant/prose semantics. It does not resolve typed links,
 instance definitions, external names, or binding targets against an assembled
 selection. It also does not require complete instances or declaration coverage,
@@ -288,7 +288,7 @@ and prior versions are rejected and have no compatibility decoder.
 
 The manifest retains normalized full concept State text, structured concept
 action/query declarations, authored definition/instance identities and bindings, each
-definition's normalized SSF-owned type inventory, resolved application types,
+definition's exact-spelling SSF-owned type inventory, resolved application types,
 application declaration identities, computation signatures, source locations, and
 digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
