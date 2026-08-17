@@ -39,13 +39,14 @@ bun add @mit-sdg/sync-engine@beta
 
 ## Packages
 
-| Package                                                                                                         | Role                                                                     |
-| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [`@mit-sdg/sync-engine`](README.md)                                                                             | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
-| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/README.md) | Deterministic IR queries and optional TypeScript project/source evidence |
-| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)         | Maintained HTTP handler, Fetch client, and generated wire projection     |
-| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)   | CLI-only read-only browser for curated concept and recipe source         |
-| [`@mit-sdg/sync-engine-skill`](https://github.com/mit-sdg/sync-engine/blob/main/packages/skill/README.md)       | Independent design review and isolated implementation Agent Skill        |
+| Package                                                                                                           | Role                                                                     |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [`@mit-sdg/sync-engine`](README.md)                                                                               | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
+| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/README.md)   | Deterministic IR queries and optional TypeScript project/source evidence |
+| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)           | Maintained HTTP handler, Fetch client, and generated wire projection     |
+| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)     | CLI-only read-only browser for curated concept and recipe source         |
+| [`@mit-sdg/sync-engine-skill`](https://github.com/mit-sdg/sync-engine/blob/main/packages/skill/README.md)         | Independent design review and isolated implementation Agent Skill        |
+| [`@mit-sdg/sync-engine-rendering`](https://github.com/mit-sdg/sync-engine/blob/main/packages/rendering/README.md) | Portable renderer declarations and endpoint-returned invocation data     |
 
 ## Create your first application
 

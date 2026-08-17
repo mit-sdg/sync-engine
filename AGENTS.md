@@ -49,6 +49,7 @@ The consumer document owners are:
 - Analysis exports and API summaries: `packages/analysis/public-surface.md`
 - Catalog command and schema contract: `packages/catalog/public-surface.md`
 - Agent skill workflow: `packages/skill/skills/sync-engine/SKILL.md` and package README
+- Rendering declarations and invocation contract: `packages/rendering/public-surface.md`
 - Concept file grammar: `docs/user/reference/concept-specification.md`
 - Installed command behavior: `docs/user/reference/cli.md`
 - Execution guarantees: `docs/user/reference/semantics.md`
@@ -96,6 +97,7 @@ the book.
 | `packages/analysis/`             | Independently published analysis companion and its package-owned API, declaration, and packaging tests                              |
 | `packages/catalog/`              | CLI-only read-only curated source browser, entry assets, manifest decoder, and package-owned tests                                  |
 | `packages/skill/`                | Documentation-only Agent Skills workflow, role contracts, and package-owned tests                                                   |
+| `packages/rendering/`            | Portable renderer declarations, invocations, and package-owned contract tests                                                       |
 | `src/engine/hosting/`            | Log retention and persistence                                                                                                       |
 | `src/engine/tooling/`            | Assembly inspection and generated-artifact implementation                                                                           |
 | `src/engine/utils/`              | Shared dependency-neutral utilities and framework primitives                                                                        |

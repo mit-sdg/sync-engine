@@ -48,6 +48,13 @@
         "@mit-sdg/sync-engine": "1.0.0-beta.11",
       },
     },
+    "packages/rendering": {
+      "name": "@mit-sdg/sync-engine-rendering",
+      "version": "1.0.0-beta.11",
+      "peerDependencies": {
+        "@mit-sdg/sync-engine": "1.0.0-beta.11",
+      },
+    },
     "packages/skill": {
       "name": "@mit-sdg/sync-engine-skill",
       "version": "1.0.0-beta.11",
@@ -123,6 +130,8 @@
     "@mit-sdg/sync-engine-catalog": ["@mit-sdg/sync-engine-catalog@workspace:packages/catalog"],
 
     "@mit-sdg/sync-engine-http": ["@mit-sdg/sync-engine-http@workspace:packages/http"],
+
+    "@mit-sdg/sync-engine-rendering": ["@mit-sdg/sync-engine-rendering@workspace:packages/rendering"],
 
     "@mit-sdg/sync-engine-skill": ["@mit-sdg/sync-engine-skill@workspace:packages/skill"],
 
@@ -632,7 +641,7 @@
 
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
-    "@mit-sdg/sync-engine-http/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
+    "@mit-sdg/sync-engine-rendering/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
 
     "rolldown/@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 

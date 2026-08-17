@@ -30,6 +30,7 @@ interface ConsumerFixture {
 const consumerFixtures: readonly ConsumerFixture[] = [
   { workspaceId: "core" },
   { workspaceId: "http" },
+  { workspaceId: "rendering" },
   {
     workspaceId: "analysis",
     runtimeChecks: [
@@ -1055,7 +1056,9 @@ try {
   await verifyMultiInstance(artifacts);
   await verifySetupAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
-  console.log("Package verification passed for core, analysis, HTTP, catalog, and skill.");
+  console.log(
+    "Package verification passed for core, analysis, HTTP, catalog, skill, and rendering.",
+  );
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }
