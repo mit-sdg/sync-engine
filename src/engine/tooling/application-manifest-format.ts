@@ -19,6 +19,7 @@ import { isAuthoredDeclarationPath, isDesignIdentifier } from "@engine/utils/des
 import { setOwn } from "@engine/utils/own-property";
 import { ordinal } from "@engine/utils/ordinal";
 import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
+import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
 
@@ -38,185 +39,38 @@ const DIAGNOSTIC_CODES = [
   "ORDER_SENSITIVE_FORMER",
 ] as const;
 
-const SSF_TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
-const SSF_FIELD_NAME = /^[a-z][A-Za-z0-9_]*$/;
-const SSF_PRIMITIVES = new Set(["Date", "DateTime", "Flag", "Number", "String"]);
-const SSF_KNOWN_SINGULARS = new Set([
-  "Access",
-  "Address",
-  "Alias",
-  "Analysis",
-  "Canvas",
-  "Class",
-  "Gas",
-  "Lens",
-  "News",
-  "Process",
-  "Series",
-  "Species",
-  "Status",
-]);
-const SSF_IRREGULAR_PLURALS = new Map<string, string>([
-  ["Alias", "Aliases"],
-  ["Analysis", "Analyses"],
-  ["Canvas", "Canvases"],
-  ["Child", "Children"],
-  ["Foot", "Feet"],
-  ["Gas", "Gases"],
-  ["Goose", "Geese"],
-  ["Index", "Indices"],
-  ["Lens", "Lenses"],
-  ["Man", "Men"],
-  ["Matrix", "Matrices"],
-  ["Mouse", "Mice"],
-  ["Person", "People"],
-  ["Status", "Statuses"],
-  ["Tooth", "Teeth"],
-  ["Woman", "Women"],
-]);
-
-type SsfMultiplicity = "element" | "sequence" | "set";
-
-interface SsfStructuralDeclaration {
-  name: string;
-  multiplicity: SsfMultiplicity;
-}
-
-function ssfRegularPlural(name: string): string {
-  if (/[^AEIOU]y$/.test(name)) return `${name.slice(0, -1)}ies`;
-  if (/(?:ch|sh|ss|x|z|s)$/.test(name)) return `${name}es`;
-  return `${name}s`;
-}
-
-function ssfPlural(name: string): string {
-  return SSF_IRREGULAR_PLURALS.get(name) ?? ssfRegularPlural(name);
-}
-
-function ssfInflectionPair(left: string, right: string): boolean {
-  if (left === right) return true;
-  if (SSF_KNOWN_SINGULARS.has(left)) return ssfPlural(left) === right;
-  if (SSF_KNOWN_SINGULARS.has(right)) return ssfPlural(right) === left;
-  return ssfPlural(left) === right || ssfPlural(right) === left;
-}
-
-function ssfMultiplicity(structural: string): SsfMultiplicity | undefined {
-  if (structural === "element" || structural === "set") return structural;
-  if (structural === "seq") return "sequence";
-  return undefined;
-}
-
-function ssfStructuralDeclaration(line: string): SsfStructuralDeclaration | undefined {
-  if (/^[ \t]/.test(line)) return undefined;
-  const words = line.trim().split(/\s+/);
-  let first = words[0] === "a" || words[0] === "an" ? 1 : 0;
-  const topMultiplicity = ssfMultiplicity(words[first] ?? "");
-  if (topMultiplicity !== undefined) {
-    first += 1;
-    if (words[first] === "of") first += 1;
-    const name = words[first];
-    const trailing = words.slice(first + 1);
-    if (
-      name !== undefined &&
-      SSF_TYPE_NAME.test(name) &&
-      (trailing.length === 0 || (trailing.length === 1 && trailing[0] === "with"))
-    ) {
-      return { name, multiplicity: topMultiplicity };
-    }
-    return undefined;
-  }
-
-  const name = words[first];
-  const subsetMultiplicity = ssfMultiplicity(words[first + 1] ?? "");
-  if (
-    name === undefined ||
-    !SSF_TYPE_NAME.test(name) ||
-    subsetMultiplicity === undefined ||
-    subsetMultiplicity === "sequence"
-  ) {
-    return undefined;
-  }
-  first += 2;
-  if (words[first] === "of") first += 1;
-  const parent = words[first];
-  const trailing = words.slice(first + 1);
-  return parent !== undefined &&
-    SSF_TYPE_NAME.test(parent) &&
-    (trailing.length === 0 || (trailing.length === 1 && trailing[0] === "with"))
-    ? { name, multiplicity: subsetMultiplicity }
-    : undefined;
-}
-
-function ssfStateFieldType(line: string): string | undefined {
-  if (!/^[ \t]/.test(line)) return undefined;
-  const original = line.trim().split(/\s+/);
-  const first = original[0] === "a" || original[0] === "an" ? 1 : 0;
-  const optional = original.indexOf("optional", first);
-  const words = original.filter((_, index) => index >= first && index !== optional);
-  if (words.length === 0) return undefined;
-
-  let value = 0;
-  if (words[0] !== "set" && words[0] !== "seq" && SSF_FIELD_NAME.test(words[0] ?? "")) value = 1;
-  if (words[value] === "set" || words[value] === "seq") {
-    value += 1;
-    if (words[value] === "of") value += 1;
-  }
-  const candidate = words[value];
-  return candidate !== undefined && SSF_TYPE_NAME.test(candidate) && value + 1 === words.length
-    ? candidate
-    : undefined;
-}
-
-function ssfSpecificationTypeNames(type: SpecificationTypeIR): string[] {
+function specificationTypeNames(type: SpecificationTypeIR): string[] {
   if (type.kind === "named") {
-    return [
-      ...(SSF_TYPE_NAME.test(type.name) ? [type.name] : []),
-      ...type.arguments.flatMap(ssfSpecificationTypeNames),
-    ];
+    return [type.name, ...type.arguments.flatMap(specificationTypeNames)];
   }
-  return type.kind === "union" ? type.members.flatMap(ssfSpecificationTypeNames) : [];
+  return type.kind === "union" ? type.members.flatMap(specificationTypeNames) : [];
 }
 
 /** Independently derive the exact SSF-owned names carried as a manifest cross-check. */
 export function specificationOwnedTypeNames(
   specification: ConceptSpecificationIR,
 ): readonly string[] {
-  const external = new Set(specification.externalTypes.map(({ name }) => name));
-  const lines = specification.state.body.split(/\r?\n/);
-  const declarations = lines
-    .map(ssfStructuralDeclaration)
-    .filter((item): item is SsfStructuralDeclaration => item !== undefined)
-    .filter(({ name }) => !external.has(name) && !SSF_PRIMITIVES.has(name));
-  const declaredNames = new Set(declarations.map(({ name }) => name));
-  const evidence = new Set([
-    ...lines.map(ssfStateFieldType).filter((name): name is string => name !== undefined),
-    ...[...specification.actions, ...specification.queries].flatMap((member) => [
-      ...member.parameters.flatMap(({ type }) => ssfSpecificationTypeNames(type)),
-      ...member.result.fields.flatMap(({ type }) => ssfSpecificationTypeNames(type)),
-    ]),
-  ]);
-  const accepted = new Set(declaredNames);
-  for (const candidate of evidence) {
-    if (
-      declaredNames.has(candidate) ||
-      external.has(candidate) ||
-      SSF_PRIMITIVES.has(candidate) ||
-      !SSF_TYPE_NAME.test(candidate)
-    ) {
-      continue;
-    }
-    const matches = [
-      ...new Set(
-        declarations
-          .filter(
-            ({ name, multiplicity }) =>
-              multiplicity !== "element" && ssfInflectionPair(name, candidate),
-          )
-          .map(({ name }) => name),
-      ),
-    ];
-    if (matches.length === 1) accepted.add(candidate);
+  const evidenceTypeNames = [...specification.actions, ...specification.queries].flatMap(
+    (member) => [
+      ...member.parameters.flatMap(({ type }) => specificationTypeNames(type)),
+      ...member.result.fields.flatMap(({ type }) => specificationTypeNames(type)),
+    ],
+  );
+  const parsed = parseSimpleStateForm(specification.state.body, {
+    externalTypes: specification.externalTypes.map(({ name }) => name),
+    evidenceTypeNames,
+  });
+  if (parsed.diagnostics.length > 0) {
+    throw new Error(
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
+        .map(
+          ({ code, message, span }) =>
+            `- line ${specification.state.location.line + span.start.line - 1}, column ${specification.state.location.column + span.start.column - 1}: [${code}] ${message}`,
+        )
+        .join("\n")}`,
+    );
   }
-  return [...accepted].sort(ordinal);
+  return [...ownedTypeNameSpellings(parsed.document.inventory)].sort(ordinal);
 }
 
 function fail(path: string, message: string): never {
