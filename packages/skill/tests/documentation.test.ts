@@ -143,7 +143,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Expected domain rejection is a declared refusal",
       "A reaction cannot make separate owners atomic",
       "Request data is a claim, not\nauthentication",
-      "State gets only a limited SSF form check",
+      "SSF tooling parses structure and owned names",
       "Write State only in Simple State Form",
       "Every query has an indented prose body",
       "Neither proves boundaries",

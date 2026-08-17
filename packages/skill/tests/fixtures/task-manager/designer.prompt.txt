@@ -88,8 +88,8 @@ Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paire
 A definition may have many instances. Bind each external type once to a nonempty
 concrete or selected concept-owned type. Reject chains, external targets, missing or
 duplicate bindings, unresolved names, and unused concretes. Binding conveys identity,
-not ownership, validation, or TypeScript equivalence. State gets only a limited SSF
-form check; review its meaning manually.
+not ownership, validation, or TypeScript equivalence. SSF tooling parses structure
+and owned names; review lines and meaning.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
 wildcards. Cover each authored endpoint/reaction tree, named view/former; declare

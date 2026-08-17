@@ -116,9 +116,10 @@ config-based `check`. Before assembly, `check-design` proves only these form pro
   across the supplied application-design documents.
 
 The command does not discover additional files or require a complete corpus. Its SSF
-validation is an intentionally incomplete form check, not a State parser, schema, or
-semantic type check. It does not resolve typed links, binding left sides, or binding
-targets against selected instances or concept declarations. It also does not require
+validation uses the shared bounded structural parser, but reports only canonical repair
+issues; parser success is not a runtime schema or semantic State proof. It does not
+resolve typed links, binding left sides, or binding targets against selected instances
+or concept declarations. It also does not require
 declaration coverage, compare computation inputs with TypeScript, validate concept source agreement, or
 inspect ordinary prose and computation-body semantics. Those checks need the selected
 assembly and remain the job of config-based `sync-engine check`. In particular, a
@@ -167,9 +168,10 @@ being skipped. `field?: T` and `field: T | undefined` have equivalent
 optionality.
 
 The checker does not claim semantic equivalence between authored type names and
-TypeScript types or require non-external names to have Types declarations. It
-retains raw State but does not parse SSF or compare State with class fields,
-storage, or application type-binding targets.
+TypeScript types or require non-external names to have Types declarations. It retains
+raw State; shared tooling can parse its bounded structural SSF declarations, but the
+current config check does not compare that inventory with class fields, storage, or
+application type-binding targets.
 
 ### Application-design checks
 
@@ -185,8 +187,9 @@ For the configured design corpus, `check`:
 - requires exactly one declaration for every executable computation; and
 - rejects authored declarations that are absent from the selected assembly.
 
-The checker validates links and coverage, not the truth of ordinary prose. It
-also does not parse State or prove computation-body semantics.
+The checker validates links and coverage, not the truth of ordinary prose. Its bounded
+State parsing does not prove opaque invariant lines, State semantics, or
+computation-body semantics.
 
 `--fail-on-warnings` promotes application warnings. Errors always fail;
 informational diagnostics remain advisory. The command modifies no files.

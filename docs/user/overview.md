@@ -71,7 +71,8 @@ definition may be instantiated several times.
 
 A strict specification has ordered Purpose, Principle, Types, State, Actions,
 and Queries sections. Types declares only opaque external parameters. State uses SSF
-and is retained raw for provenance; version 1 leaves its grammar for manual review.
+and is retained raw for provenance; bounded tooling parses structural declarations and
+owned names while leaving invariant sentences and unrecognized lines for manual review.
 Actions use explicit `where`/`then` branches and terminal returns or refusals;
 queries select `one`, `optional`, or `many`, return named rows, and explain their
 answers in an indented body. See [Concept
@@ -103,9 +104,10 @@ concrete type or a type owned by another selected concept instance. Chains,
 cycles, bindings to external parameters, missing or duplicate bindings, and
 unused concrete types are rejected.
 
-Because State is not parsed, tooling can verify the selected concept on a
-qualified target but cannot yet prove that the final type name is state-owned.
-It reports no heuristic approximation of that missing proof.
+Structural SSF tooling can inventory state-owned names, but the current
+application-binding checker has not yet adopted that inventory. It can verify the
+selected concept on a qualified target but cannot yet prove that the final type name is
+state-owned; it reports no heuristic approximation of that missing proof.
 
 ## Application prose covers executable decisions
 

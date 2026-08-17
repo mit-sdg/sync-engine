@@ -317,8 +317,13 @@ contracts, and runtime scenarios.
 The workspace registry in `scripts/workspaces.ts` defines build and packaging
 order. Packaging and publication are separate policies: every registered
 workspace builds, packs, and participates in combined-consumer checks, while
-only workspaces marked for npm publication are published. Combined verification
-installs exact tarballs in an isolated directory and checks emitted type and
+only workspaces marked for npm publication are published. `packages/ssf` is a
+private, unpublished grammar owner. Core development imports its source through
+`@ssf`; the build compiles that workspace first, copies its emitted modules under
+`dist/engine/tooling/ssf-package`, and rewrites the repository-only alias. Thus
+the packed public core has no dependency on a private or missing package.
+Combined verification installs exact tarballs in an isolated directory, checks
+the internalized SSF files in the core-only consumer, and checks emitted type and
 runtime graphs without workspace links.
 
 ## Dependency rules

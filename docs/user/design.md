@@ -148,18 +148,20 @@ lifecycle stage of each managed entity, and any order, multiplicity, or invarian
 that changes behavior. Tables, documents, indexes, caches, and serialization
 formats are implementation choices unless they alter the observable contract.
 
-The required `State` fence is normalized and retained but remains unparsed. Authors
-must nevertheless use Simple State Form (SSF): set, sequence, singleton, and subset
+The required `State` fence is normalized and retained as raw specification text.
+Authors must use Simple State Form (SSF): set, sequence, singleton, and subset
 declarations with indented relation fields; implicit set identity rather than synthetic
 ID fields; capitalized types, lowercase field names, uppercase enumeration values, and
-SSF primitives. Registration derives no schema from it. `check-design` rejects a small
-published set of recognized, mechanically repairable SSF form errors while leaving
-unrecognized lines opaque. See [`State`](reference/concept-specification.md#state).
-Names introduced by State and conventional names used in operation signatures do not
-require declarations in the external-only Types fence. Record owned facts in State and
-put each enforced invariant or value refinement in the action branch that checks it.
-Do not compensate for deferred authoritative SSF parsing with local type aliases, a
-heuristic type scan, or a private notation dialect.
+SSF primitives. Registration derives no schema from it. Shared structural tooling
+parses those declaration forms and inventories owned identity/type names;
+`check-design` reports a small published set of mechanically repairable canonical-form
+errors while leaving standalone invariants and unrecognized lines opaque. See
+[`State`](reference/concept-specification.md#state). Names introduced by State and
+conventional names used in operation signatures do not require declarations in the
+external-only Types fence. Record owned facts in State and put each enforced invariant
+or value refinement in the action branch that checks it. Do not compensate for bounded
+SSF parsing with local type aliases, another heuristic type scan, or a private notation
+dialect.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

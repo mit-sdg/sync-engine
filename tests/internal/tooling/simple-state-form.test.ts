@@ -1,5 +1,6 @@
 import { scanDesignMarkdown } from "@engine/tooling/markdown-design-source";
 import {
+  parseSimpleStateForm,
   validateSimpleStateForm,
   type SimpleStateFormIssueCode,
 } from "@engine/tooling/simple-state-form";
@@ -53,8 +54,26 @@ describe("limited Simple State Form validation", () => {
       {
         code: "SSF_MISPLACED_OPTIONAL",
         location: { source: "concept.md", line: 3, column: 15 },
+        span: { start: { offset: 37, line: 2, column: 15 } },
       },
     ]);
+  });
+
+  test("adapts structured ownership and package-local spans without coupling the package to Markdown", () => {
+    const scanned = scanDesignMarkdown(
+      "# Example\n\n```state\na set of Entries with\n  an owner Person\n\nan Open set of Entries\n```\n",
+      "design/example.md",
+    );
+    const parsed = parseSimpleStateForm(scanned.fences[0]!, { externalTypes: ["Person"] });
+    expect(parsed.document.inventory).toMatchObject({
+      identities: [{ name: "Entry" }],
+      types: [{ name: "Entry" }, { name: "Open" }],
+      external: ["Person"],
+    });
+    expect(parsed.document.declarations[0]).toMatchObject({
+      name: { referenceKind: "owned" },
+      fields: [{ value: { reference: { referenceKind: "external" } } }],
+    });
   });
 
   test.each([

@@ -225,8 +225,9 @@ State, structured action branches and outcomes, query choices, and source
 locations. Config-based checking compares member, input, action-result, query-row,
 return-name, optionality, and refusal shapes with resolvable TypeScript source.
 Query choices are enforced when a reaction, view, or former evaluates a query.
-State remains unparsed SSF text and is not compared with class fields, floor
-implementations, databases, or storage.
+State remains raw SSF text in this public IR and is not compared with class fields,
+floor implementations, databases, or storage. Config-free tooling separately uses the
+bounded structural parser described in the concept-specification reference.
 
 ### Occurrence index and log sinks
 
@@ -557,10 +558,10 @@ Failures identify the offending `$` path. `parseApplicationManifest(...)`
 performs the same checks after JSON parsing and returns data in canonical record-key
 order; neither function imports application code or a manifest-producing config.
 `parseConceptSpecification(...)` exposes the same structured, source-located
-contract used by registration. It enforces the exact section order, parses
-external declarations and structured action/query choices, and retains raw
-State. It does not interpret SSF, prove prose semantics, or turn authored types
-into runtime schemas.
+contract used by registration. It enforces the exact section order, parses external
+declarations and structured action/query choices, and retains raw State. This public
+parser does not expose structural SSF IR, prove prose semantics, or turn authored types
+into runtime schemas; config-free tooling applies the private bounded SSF parser.
 
 Each concept inventory may carry a `sync-engine.concept-specification`
 version-1 subtree with the definition name, external types, normalized raw

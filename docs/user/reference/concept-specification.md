@@ -146,29 +146,28 @@ type universe nor requires every named type to have a declaration.
 
 `State` contains exactly one `state` fence. The concept parser normalizes and
 retains the fence contents verbatim in concept-specification IR and application
-manifests. Version 1 does not parse State into structured IR or reject it during
-registration.
+manifests. Registration does not derive a runtime schema from State.
 
 Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
-The config-free `check-design` command separately applies an intentionally limited
-SSF form validator. It fails with a concrete repair when a recognized declaration or
-field uses a near-miss structural keyword, the wrong article before a structural
-keyword or `optional`, a misplaced `optional`, `optional` on a collection, or omits
-`with` before indented fields. Unrecognized State lines remain opaque; the validator
-is not a complete SSF parser and does not define State semantics. Review all other SSF
-declaration, identity, multiplicity, type, naming, and indentation rules manually.
+The config-free `check-design` command uses a bounded structural parser shared with
+SSF tooling. It recognizes set, sequence, element, subset, field, enumeration,
+primitive, and external-reference forms, including equivalent singular/plural type
+spellings. It fails with a concrete repair when a recognized declaration or field uses
+a near-miss structural keyword, the wrong article before a structural keyword or
+`optional`, a misplaced `optional`, `optional` on a collection, or omits `with` before
+indented fields.
 
-Because State remains unparsed, tooling does not yet prove:
+Standalone invariant sentences and lines outside the bounded structural grammar
+remain opaque. The parser inventories structurally declared owned identity/type names,
+but it does not prove invariant prose, action or query meaning, State/storage
+agreement, or runtime schemas. Review those semantics and any unrecognized State lines
+manually.
 
-- that action and query types are state-owned or external;
-- that every external type is used; or
-- that a qualified type-binding target is introduced by the target concept's
-  State.
-
-The checker still inventories external declarations and checks every required
-application type binding. State changes affect canonical design digests
-even before SSF parsing is available.
+The current application-binding checker has not yet adopted the owned-type inventory,
+so it still does not prove that the final name on a qualified binding target is
+introduced by the target concept's State. State changes continue to affect canonical
+design digests.
 
 ## `Actions`
 
