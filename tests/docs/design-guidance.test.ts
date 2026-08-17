@@ -116,7 +116,9 @@ describe("generic design guidance", () => {
     }
     expect(review).toContain("Do not reject a cycle merely because instance A");
     expect(review).toContain("core-owned\n`RequestBoundary`");
-    expect(reference).toContain("Standalone invariant\nsentences");
+    expect(reference.replace(/\s+/g, " ")).toContain(
+      "Standalone non-structural invariant sentences",
+    );
     expect(reference).toContain("qualified external-binding target");
   });
 

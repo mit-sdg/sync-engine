@@ -4569,7 +4569,7 @@ export {};
 === dist/engine/tooling/application-manifest-format.d.ts ===
 import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
-/** Derive exact structural declaration and explicit alias names through the SSF package. */
+/** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
 export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
@@ -4710,7 +4710,7 @@ export interface SelectedConceptDesign {
     /**
      * Optional integration result from the structured-SSF owner. Supply the complete
      * normalized owned-name inventory for the selected definition (including structural,
-     * subset, and explicit alias names). Configured application checking always supplies
+     * subset, safely evidenced alias, and explicit alias names). Configured application checking always supplies
      * this inventory; omission supports isolated form/validator use and makes no ownership
      * claim.
      */
@@ -4815,7 +4815,7 @@ export interface OwnedTypeNameContext {
 }
 /**
  * SSF integration seam. The integrator supplies the complete normalized owned-name
- * inventory for this definition, including structural, subset, and explicit alias
+ * inventory for this definition, including structural, subset, safely evidenced alias, and explicit alias
  * names. Configured application checking always installs the private SSF
  * adapter; `undefined` exists only for isolated validator use that makes no ownership
  * claim.
@@ -5228,6 +5228,21 @@ export declare function parseSimpleStateForm(fence: MarkdownFence, options?: Ssf
 /** Validate deterministic, mechanically repairable SSF forms through the private parser. */
 export declare function validateSimpleStateForm(fence: MarkdownFence, options?: SsfParseOptions): readonly SimpleStateFormIssue[];
 
+=== dist/engine/tooling/specification-type-evidence.d.ts ===
+import type { ConceptSpecificationIR } from "../reads/ir.ts";
+/** Exact authored action/query parameter and result type spellings for SSF resolution. */
+export declare function specificationTypeNameEvidence(specification: ConceptSpecificationIR): readonly string[];
+
+=== dist/engine/tooling/ssf-package/automatic-aliases.d.ts ===
+import type { ParsedDeclaration } from "./model.ts";
+/** Exact named State field references that can evidence an automatic alias. */
+export declare function stateFieldTypeEvidence(declarations: readonly ParsedDeclaration[]): readonly string[];
+/**
+ * Relate only exact authored evidence to one non-element structure or subset owner.
+ * The pluralizer's output is compared, never inserted into the inventory.
+ */
+export declare function automaticAliasCandidates(declarations: readonly ParsedDeclaration[], eligibleStructuralNames: ReadonlySet<string>, evidenceTypeNames: readonly string[], explicitAliasNames: ReadonlySet<string>, external: ReadonlySet<string>): ReadonlyMap<string, string>;
+
 === dist/engine/tooling/ssf-package/grammar.d.ts ===
 import type { ParsedAlias, ParsedDeclaration, ParsedStatement, SourceLine, SsfDiagnostic } from "./model.ts";
 export interface GrammarResult {
@@ -5245,7 +5260,7 @@ export interface ResolutionFacts {
     readonly validAliases: ReadonlyMap<string, string>;
 }
 /** Resolve order-independent alias and subset graphs and report every invalid edge. */
-export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, diagnostics: SsfDiagnostic[]): ResolutionFacts;
+export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, evidenceTypeNames: readonly string[], diagnostics: SsfDiagnostic[]): ResolutionFacts;
 
 === dist/engine/tooling/ssf-package/index.d.ts ===
 export { isOwnedTypeName, ownedTypeNameSpellings, parseSimpleStateForm, validateSimpleStateForm, } from "./simple-state-form.ts";
@@ -5346,7 +5361,7 @@ export type SsfStatement = SsfDeclaration | SsfAlias | SsfOpaqueLine;
 export interface SsfOwnedType {
     /** Exact spelling of the structural State declaration. */
     readonly name: string;
-    /** The declaration spelling and its exact explicit aliases. */
+    /** The declaration spelling and its exact explicit or evidenced aliases. */
     readonly declaredNames: readonly string[];
     readonly roles: readonly ("identity" | "subset")[];
     readonly declarationSpans: readonly SsfSpan[];
@@ -5367,6 +5382,8 @@ export interface SsfDocument {
 export interface SsfParseOptions {
     /** Opaque parameter names declared by the containing concept specification. */
     readonly externalTypes?: readonly string[];
+    /** Exact type spellings authored in action/query parameter and result expressions. */
+    readonly evidenceTypeNames?: readonly string[];
 }
 export interface SsfParseResult {
     readonly document: SsfDocument;
@@ -5449,9 +5466,9 @@ export declare function resolveGrammar(grammar: GrammarResult, options: SsfParse
 
 === dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
 import type { SsfParseOptions, SsfParseResult, SsfTypeInventory } from "./model.ts";
-/** Test an exact structural declaration or explicit alias against the owned inventory. */
+/** Test an exact structural, explicit-alias, or evidenced-alias spelling. */
 export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
-/** Enumerate exact structural declaration and explicit alias spellings. */
+/** Enumerate exact structural, explicit-alias, and evidenced-alias spellings. */
 export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
 /** Parse and validate the bounded structural SSF grammar. */
 export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
@@ -5468,6 +5485,39 @@ export declare function sourceLines(source: string, tokens: readonly SsfToken[])
 export declare function lineSpan(line: SourceLine): SsfSpan;
 export declare function opaqueLine(line: SourceLine): SsfOpaqueLine;
 export declare function words(line: SourceLine): readonly string[];
+
+=== dist/engine/tooling/ssf-package/vendor/irregular-plurals.d.ts ===
+/**
+ * Vendored from irregular-plurals@4.2.0:
+ * https://registry.npmjs.org/irregular-plurals/-/irregular-plurals-4.2.0.tgz
+ *
+ * MIT License
+ *
+ * Copyright (c) Sindre Sorhus
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+export declare const IRREGULAR_PLURAL_PAIRS: readonly (readonly [singular: string, plural: string])[];
+
+=== dist/engine/tooling/ssf-package/vendor/plur.d.ts ===
+/** Return the plur 6.0.0 plural form of one authored spelling. */
+export declare function pluralize(word: string): string;
 
 === dist/engine/tooling/typescript-shapes.d.ts ===
 import ts from "typescript";

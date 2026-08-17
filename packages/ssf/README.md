@@ -1,8 +1,9 @@
 # Simple State Form (SSF)
 
 Simple State Form (SSF) is the State language for a concept specification. It is a
-small English-like notation for structural State declarations. Write one declaration
-or alias per top-level line. Put a declaration's fields on following indented lines.
+small English-like notation for structural State declarations. Write one declaration,
+alias, or standalone invariant per top-level line. Put a declaration's fields on
+following indented lines.
 
 ```state
 a set of Items with
@@ -24,22 +25,30 @@ at most one Item has each title
 
 ## Grammar
 
-The bounded structural grammar is:
+The bounded document grammar is:
 
 ```text
-schema := (setDecl | subsetDecl | aliasDecl)*
+document := (setDecl | subsetDecl | aliasDecl | opaque)*
 setDecl := (a|an) (element|set|seq) [of] Type [with field+]
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with field+]
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] [optional] [name] (scalar|collection)
-scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
-collection := (set|seq) [of] scalar
+field := [a|an] (requiredField | optional optionalField)
+requiredField := inferredField | fieldName (scalar|collection)
+optionalField := named | fieldName scalar
+inferredField := named | (set|seq) [of] named
+scalar := named | enum
+named := Type | Parameter | primitive
+enum := of values
+collection := (set|seq) [of] (named|values)
+values := VALUE (or VALUE)+
 primitive := Number | String | Flag | Date | DateTime
+opaque := OPAQUE_LINE
 ```
 
-A top-level declaration uses `a set of Items`, `a seq of Items`, or
-`an element Settings`. The `of` after a structural keyword is optional. A declaration
-with fields ends its first line with `with`.
+`OPAQUE_LINE` means standalone non-structural invariant prose; it is not an escape for a
+malformed structural-looking line. A top-level declaration uses `a set of Items`,
+`a seq of Items`, or `an element Settings`. The `of` after a structural keyword is
+optional. A declaration with fields ends its first line with `with`.
 
 A subset declaration, such as `a Completed set of Items`, classifies members of an
 existing parent. A subset may use `set` or `element`, but not `seq`. Every parent must
@@ -53,7 +62,7 @@ SSF can recognize two exact authored spellings as one owned type. It gathers can
 from named State field types and from action/query parameter and result type expressions
 in the containing concept. It never generates a candidate. For each candidate, SSF uses
 the vendored `plur` 6.0.0 relation: pluralizing either authored spelling must exactly
-yield the other. The candidate must match one unique non-element structural declaration.
+yield the other. The candidate must match one unique non-element structure or subset.
 For example, the field type `Item` establishes the additional owned spelling here:
 
 ```state
@@ -94,28 +103,31 @@ A field may have an explicit lowercase name before its value form:
   a members set of Person
   a history seq of Event
   a status of OPEN or DONE
+  a flags set of VISIBLE or HIDDEN
 ```
 
 An indented field may omit its article. `optional` precedes the field name and, when
 an article is present, immediately follows it: `an optional owner Person`. Collections
 are never optional; an empty collection represents absence.
 
-A field name may be omitted when its value supplies a named type. SSF lowercases only
-the first character of that exact type spelling:
+A field name may be omitted only when a scalar or collection supplies one named type.
+SSF lowercases only the first character of that exact type spelling:
 
 ```state
   a Profile
   a set of Options
 ```
 
-These fields are named `profile` and `options`. Enumerations do not supply inferred
-field names. Effective field names, including inferred names, must be unique within one
-declaration. The same field name may occur in a different declaration.
+These fields are named `profile` and `options`. Enumerations require an explicit field
+name and do not supply inferred field names. Effective field names, including inferred
+names, must be unique within one declaration. The same field name may occur in a different declaration.
 
 A collection uses `set` or `seq`, with optional `of`, and cannot contain another
-collection. Named-type unions are not part of SSF. `or` occurs only between at least
-two enumeration values. Each value must be unique within that one enumeration; the
-same value may occur in another field or enum.
+collection. Named and primitive elements use forms such as `watchers set of Person`;
+enum elements use the natural `flags set of VISIBLE or HIDDEN`. Omitting the collection
+`of` is also accepted, but a second `of` is malformed. Named-type unions are not part of
+SSF. `or` occurs only between at least two enumeration values. Each value must be unique
+within that one enumeration; the same value may occur in another field or enum.
 
 ## Names and namespaces
 
@@ -138,7 +150,7 @@ spelling.
 SSF classifies every parsed named reference as owned, external, primitive, or
 unresolved. Contexts that require ownership are closed: subset parents must resolve to
 valid structural declarations or their automatic or explicit aliases; explicit alias
-targets must resolve directly to valid structural declarations. Application qualified
+targets must resolve directly to valid structures or subsets. Application qualified
 binding targets must resolve to an owned structural or alias spelling of the selected
 instance.
 
@@ -146,8 +158,8 @@ State field value names remain an intentionally open authored namespace. A field
 refer to an owned identity, external parameter, primitive, conventional value type, or
 concept-local refinement. An unresolved value is retained and classified as unresolved
 but is not itself an SSF error. It becomes owned only when the bounded automatic-alias
-rule establishes one unique structural owner. Action and query types likewise need not
-occur in State; their exact spellings contribute alias candidates but do not otherwise
+rule establishes one unique non-element structure or subset owner. Action and query types
+likewise need not occur in State; their exact spellings contribute alias candidates but do not otherwise
 close the namespace.
 
 ## State meaning

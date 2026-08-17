@@ -142,6 +142,108 @@ at most one Item has each title`;
   });
 });
 
+describe("collection fields", () => {
+  test("parses named and enum set/sequence elements with optional collection `of`", () => {
+    const parsed = parseSimpleStateForm(
+      `a set of Palettes with
+  a flags set of RED or BLUE
+  a modes seq ACTIVE or PAUSED
+  a watchers set of Person
+  a reviewers seq Person`,
+      { externalTypes: ["Person"] },
+    );
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      {
+        name: "flags",
+        value: {
+          kind: "collection",
+          multiplicity: "set",
+          element: {
+            kind: "enumeration",
+            values: ["RED", "BLUE"],
+            span: {
+              start: { line: 2, column: 18 },
+              end: { line: 2, column: 29 },
+            },
+          },
+          span: { start: { line: 2, column: 11 }, end: { line: 2, column: 29 } },
+        },
+      },
+      {
+        name: "modes",
+        value: {
+          kind: "collection",
+          multiplicity: "sequence",
+          element: {
+            kind: "enumeration",
+            values: ["ACTIVE", "PAUSED"],
+            span: {
+              start: { line: 3, column: 15 },
+              end: { line: 3, column: 31 },
+            },
+          },
+        },
+      },
+      {
+        name: "watchers",
+        value: { element: { reference: { text: "Person", referenceKind: "external" } } },
+      },
+      {
+        name: "reviewers",
+        value: { element: { reference: { text: "Person", referenceKind: "external" } } },
+      },
+    ]);
+  });
+
+  test.each([
+    ["enum values without an explicit field name", "a set of RED or BLUE", 23],
+    ["a doubled collection `of`", "a flags set of of RED or BLUE", 32],
+    ["a scalar enum without its `of` marker", "a status RED or BLUE", 23],
+  ])("rejects %s", (_, field, column) => {
+    const parsed = parseSimpleStateForm(`a set of Palettes with\n  ${field}`);
+    expect(parsed.diagnostics).toMatchObject([
+      {
+        code: "SSF_MALFORMED_FIELD",
+        span: { start: { line: 2, column: 1 }, end: { line: 2, column } },
+      },
+    ]);
+  });
+
+  test("diagnoses an unnamed scalar enum but retains indented non-structural prose", () => {
+    const parsed = parseSimpleStateForm(`a set of Items with
+  of OPEN or DONE
+  each item may have a note`);
+    expect(parsed.diagnostics).toMatchObject([
+      {
+        code: "SSF_MALFORMED_FIELD",
+        span: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column: 18 },
+        },
+      },
+    ]);
+    expect(parsed.document.declarations[0]?.opaqueBody).toMatchObject([
+      { text: "  of OPEN or DONE", span: { start: { line: 2, column: 1 } } },
+      { text: "  each item may have a note", span: { start: { line: 3, column: 1 } } },
+    ]);
+  });
+
+  test("locates duplicate values in collection enums", () => {
+    const parsed = parseSimpleStateForm(`a set of Palettes with
+  a flags set of RED or RED`);
+    expect(parsed.diagnostics).toMatchObject([
+      {
+        code: "SSF_DUPLICATE_ENUM_VALUE",
+        span: {
+          start: { line: 2, column: 25 },
+          end: { line: 2, column: 28 },
+        },
+      },
+    ]);
+  });
+});
+
 describe("safe automatic aliases", () => {
   test.each([
     ["Mice", "Mouse"],
@@ -336,6 +438,16 @@ alias Bee for B`);
     ]);
   });
 
+  test("rejects a subset parent with duplicate structural declarations", () => {
+    const parsed = parseSimpleStateForm(
+      "a Child set of Roots\n\na set of Roots\n\nan element Roots",
+    );
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 1, column: 16 } } },
+      { code: "SSF_DUPLICATE_DECLARATION", span: { start: { line: 5, column: 12 } } },
+    ]);
+  });
+
   test("rejects a subset whose structurally named parent has an invalid chain", () => {
     const parsed = parseSimpleStateForm("a Child set of Parent\n\na Parent set of Missing");
     expect(parsed.diagnostics).toMatchObject([
@@ -485,6 +597,74 @@ at most one Item has each owner`;
 });
 
 describe("repository SSF corpus", () => {
+  test("parses the packaged skill example and retains its teaching structures", async () => {
+    const root = resolve(import.meta.dirname, "../../..");
+    const markdown = await readFile(
+      resolve(root, "packages/skill/skills/sync-engine/prompts/common/ssf.md"),
+      "utf8",
+    );
+    const parsed = parseSimpleStateForm(stateFence(markdown), { externalTypes: ["Person"] });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations).toMatchObject([
+      {
+        name: { text: "Items", referenceKind: "owned" },
+        fields: [
+          { name: "title", inferredName: false, value: { kind: "named" } },
+          {
+            name: "item",
+            inferredName: true,
+            value: {
+              kind: "named",
+              reference: { text: "Item", normalized: "Items", referenceKind: "owned" },
+            },
+          },
+          {
+            name: "owner",
+            optional: true,
+            value: { reference: { text: "Person", referenceKind: "external" } },
+          },
+          {
+            name: "watchers",
+            inferredName: false,
+            value: { kind: "collection", multiplicity: "set" },
+          },
+          {
+            name: "updates",
+            inferredName: true,
+            value: {
+              kind: "collection",
+              multiplicity: "sequence",
+              element: { reference: { text: "Updates", referenceKind: "unresolved" } },
+            },
+          },
+          {
+            name: "status",
+            value: { kind: "enumeration", values: ["OPEN", "DONE"] },
+          },
+        ],
+      },
+      {
+        name: { text: "Completed", referenceKind: "owned" },
+        declarationKind: "subset",
+        fields: [{ name: "completedAt" }],
+      },
+      {
+        name: { text: "Settings", referenceKind: "owned" },
+        multiplicity: "element",
+        fields: [{ name: "retentionDays" }],
+      },
+    ]);
+    expect(parsed.document.aliases).toMatchObject([
+      {
+        name: { text: "WorkItem", referenceKind: "owned" },
+        target: { text: "Items", referenceKind: "owned" },
+      },
+    ]);
+    expect(parsed.document.opaqueLines).toMatchObject([
+      { text: "at most one Item has each owner and title pair" },
+    ]);
+  });
+
   test("validates every catalog and application concept with explicit inventories", async () => {
     const root = resolve(import.meta.dirname, "../../..");
     const directories = [

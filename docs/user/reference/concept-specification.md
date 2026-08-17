@@ -156,27 +156,29 @@ The parser recognizes set, sequence, element, subset, explicit alias, and field
 declarations, including multiplicity, identifier, article, and graph constraints.
 Structural names remain exact. Named State field types and action/query parameter and
 result types supply exact alias candidates. SSF accepts a candidate automatically only
-when vendored `plur` pluralizes either it or one unique non-element structural name to
-the other exact authored spelling. It does not insert the pluralizer's output. This
+when vendored `plur` pluralizes either it or one unique non-element structure or subset
+to the other exact authored spelling. It does not insert the pluralizer's output. This
 supports regular and irregular pairs such as `Note`/`Notes`, `Mouse`/`Mice`, and
 `Person`/`People` while leaving ambiguous candidates unresolved.
 
 `alias Alias for Target` explicitly handles domain synonyms and ambiguity. Explicit
-aliases take precedence, must target unique valid structural declarations, and cannot
+aliases take precedence, must target unique valid structures or subsets, and cannot
 form chains. Subset parents resolve independent of declaration order and may name a
 structural identity, subset, or automatic or explicit alias. Alias parent edges
 normalize to structural targets before cycle checks. External parameters, primitives,
-invalid aliases, unresolved parents, self-parenting, and cycles fail with source-located
-diagnostics.
+invalid aliases, unresolved parents, duplicate or ambiguous structures, self-parenting,
+and cycles fail with source-located diagnostics.
 
 Structural declaration and alias names share one whole-State namespace with external
 parameters and SSF primitives. Effective field names are unique within one declaration,
-and enum values are unique within one enum. The same field name in distinct declarations
-and the same enum value in distinct enums remain valid.
+and enum values are unique within one enum. Collection enums use `flags set of RED or BLUE` (or omit the collection
+`of`); `set of of RED or BLUE` is malformed. Enums require an explicit field name. The
+same field name in distinct declarations and the same enum value in distinct enums remain
+valid.
 
 A line that begins like a declaration, alias, or indented field but misses the grammar
-fails with a source-located diagnostic. Standalone invariant
-sentences remain opaque.
+fails with a source-located diagnostic. Standalone non-structural invariant sentences
+remain opaque; the parser retains but does not prove them.
 State field value names are intentionally open because they may denote conventional or
 concept-local refinement types: an unresolved value reference is retained and
 classified as unresolved, but is not an SSF error. It becomes owned only through the

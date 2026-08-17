@@ -22,7 +22,7 @@ function exactPluralPair(left: string, right: string): boolean {
 }
 
 /**
- * Relate only exact authored evidence to one non-element structural owner.
+ * Relate only exact authored evidence to one non-element structure or subset owner.
  * The pluralizer's output is compared, never inserted into the inventory.
  */
 export function automaticAliasCandidates(

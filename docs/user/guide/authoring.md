@@ -153,10 +153,10 @@ remain globally unique.
 Each right side directly names a declared concrete type or an owned type of
 another declared, selected instance. The bounded SSF parser proves owned target
 names. A State field or action/query type can evidence a regular or irregular plural
-pair only when it has one unique non-element structural owner; use
+pair only when it has one unique non-element structure or subset owner; use
 `alias Alias for Target` for synonyms or ambiguity. Never target another instance's
-external parameter or an unresolved or ambiguous type, and never construct an application binding chain. Direct qualified
-owned-type dependencies may be cyclic because every target is checked
+external parameter or an unresolved or ambiguous type, and never construct an application
+binding chain. Direct qualified owned-type dependencies may be cyclic because every target is checked
 independently; declaration order does not resolve or prioritize them. Do not
 leave a concrete type unused.
 

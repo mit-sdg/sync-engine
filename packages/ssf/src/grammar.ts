@@ -125,24 +125,40 @@ function parseAlias(line: SourceLine): ParsedAlias | undefined {
   };
 }
 
-function enumeration(tokens: readonly SsfToken[], start: number): ParsedEnumeration | undefined {
-  if (tokens[start]?.text !== "of") return undefined;
+function enumerationValues(
+  tokens: readonly SsfToken[],
+  start: number,
+): ParsedEnumeration | undefined {
+  const first = tokens[start];
+  if (first === undefined) return undefined;
   const values: ParsedReference[] = [];
-  for (let index = start + 1; index < tokens.length; index += 1) {
+  for (let index = start; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (token === undefined) return undefined;
-    if ((index - start) % 2 === 1) {
+    if ((index - start) % 2 === 0) {
       if (!ENUM_VALUE.test(token.text)) return undefined;
       values.push({ text: token.text, span: token.span });
     } else if (token.text !== "or") return undefined;
   }
-  if (values.length < 2 || tokens.length - start !== values.length * 2) return undefined;
+  if (values.length < 2 || tokens.length - start !== values.length * 2 - 1) return undefined;
   return {
     kind: "enumeration",
     values: values.map(({ text }) => text),
     valueReferences: values,
-    span: span(tokens[start].span.start, tokens.at(-1)?.span.end ?? tokens[start].span.end),
+    span: span(first.span.start, tokens.at(-1)?.span.end ?? first.span.end),
   };
+}
+
+function scalarEnumeration(
+  tokens: readonly SsfToken[],
+  start: number,
+): ParsedEnumeration | undefined {
+  const marker = tokens[start];
+  if (marker?.text !== "of") return undefined;
+  const parsed = enumerationValues(tokens, start + 1);
+  return parsed === undefined
+    ? undefined
+    : { ...parsed, span: span(marker.span.start, parsed.span.end) };
 }
 
 function namedType(token: SsfToken | undefined): ParsedNamed | undefined {
@@ -180,10 +196,10 @@ function parseField(line: SourceLine): ParsedField | undefined {
   if (structural === "set" || structural === "seq") {
     let elementStart = valueStart + 1;
     if (tokens[elementStart]?.text === "of") elementStart += 1;
-    const element = enumeration(tokens, elementStart) ?? namedType(tokens[elementStart]);
+    const element = enumerationValues(tokens, elementStart) ?? namedType(tokens[elementStart]);
     if (
       element !== undefined &&
-      elementStart + (element.kind === "named" ? 1 : element.values.length * 2) === tokens.length
+      (element.kind === "enumeration" || elementStart + 1 === tokens.length)
     ) {
       value = {
         kind: "collection",
@@ -201,7 +217,7 @@ function parseField(line: SourceLine): ParsedField | undefined {
       }
     }
   } else {
-    value = enumeration(tokens, valueStart) ?? namedType(tokens[valueStart]);
+    value = scalarEnumeration(tokens, valueStart) ?? namedType(tokens[valueStart]);
     const consumed =
       value?.kind === "named" ? valueStart + 1 : value?.kind === "enumeration" ? tokens.length : -1;
     if (consumed !== tokens.length) value = undefined;
@@ -243,7 +259,8 @@ function structurallyLooksLikeField(line: SourceLine): boolean {
   const hasArticle = authored[0] === "a" || authored[0] === "an";
   const field = authored.slice(hasArticle ? 1 : 0);
   if (hasArticle && (field.length === 0 || field.length === 1)) return true;
-  if (field[0] === "optional" || field[0] === "set" || field[0] === "seq") return true;
+  if (field[0] === "of" || field[0] === "optional" || field[0] === "set" || field[0] === "seq")
+    return true;
   return (
     (hasArticle && TYPE_NAME.test(field[1] ?? "")) ||
     field[1] === "optional" ||

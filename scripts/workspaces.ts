@@ -58,7 +58,7 @@ export const workspaceCatalog = [
       "SUPPORT.md",
       "package.json",
     ],
-    packageBudget: { files: 438, packedBytes: 520_000, unpackedBytes: 1_723_000 },
+    packageBudget: { files: 450, packedBytes: 540_000, unpackedBytes: 1_825_000 },
     assets: [
       { source: "src/command/setup", destination: "dist/command/setup" },
       {
@@ -231,7 +231,7 @@ export const workspaceCatalog = [
     copiesExamples: false,
     publication: "private",
     requiredPackedFiles: ["README.md", "package.json", "dist/index.js", "dist/index.d.ts"],
-    packageBudget: { files: 20, packedBytes: 20_000, unpackedBytes: 100_000 },
+    packageBudget: { files: 28, packedBytes: 30_000, unpackedBytes: 100_000 },
     assets: [],
     bins: [],
   },

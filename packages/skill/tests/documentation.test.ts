@@ -39,7 +39,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
-    expect(bytes(ssf)).toBeLessThanOrEqual(1.75 * 1024);
+    expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
 
@@ -103,8 +103,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 11.625 * 1024,
-      critic: 9.125 * 1024,
+      designer: 13 * 1024,
+      critic: 10.5 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
       "frontend-worker": 2.5 * 1024,
@@ -121,6 +121,108 @@ describe("compact sync-engine Agent Skill documents", () => {
           }),
         ),
       ).toBeLessThanOrEqual(limit);
+    }
+  });
+
+  test("keeps the compact SSF grammar closed and its example coherent", async () => {
+    const ssf = await text(new URL("common/ssf.md", promptRoot));
+    const grammar = ssf.match(/```text\n([\s\S]*?)```/)?.[1];
+    expect(grammar).toBeDefined();
+    const productions = new Map(
+      [...(grammar ?? "").matchAll(/^([A-Za-z][A-Za-z0-9_]*) := (.+)$/gm)].map(
+        ([, name, expression]) => [name!, expression!],
+      ),
+    );
+    expect(Object.fromEntries(productions)).toMatchObject({
+      document: "(setDecl|subsetDecl|aliasDecl|opaque)*",
+      field: "[a|an] (requiredField|optional optionalField)",
+      inferredField: "named|(set|seq) [of] named",
+      enum: "of values",
+      collection: "(set|seq) [of] (named|values)",
+      values: "VALUE (or VALUE)+",
+      opaque: "OPAQUE_LINE",
+    });
+
+    const terminals = new Set([
+      "a",
+      "alias",
+      "an",
+      "element",
+      "for",
+      "of",
+      "optional",
+      "or",
+      "seq",
+      "set",
+      "with",
+    ]);
+    const lexical = new Set([
+      "Alias",
+      "Date",
+      "DateTime",
+      "Flag",
+      "Number",
+      "OPAQUE_LINE",
+      "Parameter",
+      "String",
+      "Subtype",
+      "Type",
+      "VALUE",
+      "fieldName",
+    ]);
+    const unresolved = [...productions.values()]
+      .flatMap((expression) => expression.match(/[A-Za-z][A-Za-z0-9_]*/g) ?? [])
+      .filter(
+        (symbol) => !productions.has(symbol) && !terminals.has(symbol) && !lexical.has(symbol),
+      );
+    expect(unresolved).toEqual([]);
+
+    const normalized = ssf.replace(/\s+/g, " ");
+    expect(normalized).toMatch(/fieldName lowercase; tails use ASCII letters, digits, or `_`/);
+    expect(normalized).toMatch(
+      /VALUE starts uppercase; its tail uses only uppercase ASCII letters, digits, or `_`/,
+    );
+    expect(normalized).toMatch(/OPAQUE_LINE means standalone non-structural invariant prose/);
+
+    const example = ssf.match(/```state\n([\s\S]*?)```/)?.[1];
+    expect(example).toContain(
+      [
+        "a set of Items with",
+        "  a title String",
+        "  an Item",
+        "  an optional owner Person",
+        "  a watchers set of Person",
+        "  a seq of Updates",
+        "  a status of OPEN or DONE",
+      ].join("\n"),
+    );
+    for (const line of [
+      "a Completed set of Items with",
+      "  a completedAt DateTime",
+      "an element Settings with",
+      "  a retentionDays Number",
+      "alias WorkItem for Items",
+      "at most one Item has each owner and title pair",
+    ]) {
+      expect(example).toContain(line);
+    }
+
+    for (const commitment of [
+      "one unique non-element structure or subset",
+      "SSF generates no candidate or transitive/third spelling",
+      "externals, primitives, elements, and ambiguous candidates get no automatic alias",
+      "Targets are unique valid structures/subsets, never aliases",
+      "duplicate/ambiguous structures, self-parents, and cycles",
+      "Unresolved field values are legal conventional/refinement references, not owned binding targets",
+      "Malformed structural-looking lines fail; standalone non-structural invariants stay opaque",
+      "vendored `plur` pluralizes",
+      "Collections are never `optional`",
+      "Sets/sequences introduce identities—never add ID fields",
+      "Subsets add no identity",
+      "`element` has one member",
+      "Which side declares a relation implies no storage, navigation, or ownership",
+    ]) {
+      expect(normalized).toContain(commitment);
     }
   });
 
@@ -154,19 +256,6 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(normalizedDesign).toContain(rule.replace(/\s+/g, " "));
     }
 
-    const ssf = (await text(new URL("common/ssf.md", promptRoot))).replace(/\s+/g, " ");
-    for (const rule of [
-      "Sets introduce identities—never add ID fields",
-      "Subsets classify existing parent members",
-      "Collections are never `optional`",
-      "No nested collections or unions",
-      "Which side declares a relation implies no storage, navigation, or ownership",
-      "vendored `plur` pluralizes",
-      "No generated or transitive spelling is admitted",
-      "remain opaque prose",
-    ]) {
-      expect(ssf).toContain(rule);
-    }
     const format = (await text(new URL("common/concept-format.md", promptRoot))).replace(
       /\s+/g,
       " ",

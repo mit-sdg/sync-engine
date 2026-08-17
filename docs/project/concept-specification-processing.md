@@ -81,16 +81,16 @@ The parser authoritatively handles structural set, sequence, element, subset, al
 and field declarations. Structural and alias spellings remain exact. Named State field
 references and parsed action/query type expressions supply exact authored candidates.
 An automatic alias is accepted only when pluralizing either candidate or one unique
-non-element structural name with vendored `plur` exactly yields the other. No generated
-plural is inserted, no transitive closure runs, and external, primitive, element, exact
+non-element structure or subset name with vendored `plur` exactly yields the other. No
+generated plural is inserted, no transitive closure runs, and external, primitive, element, exact
 declaration, ambiguous, and explicitly aliased candidates are excluded. A valid
 `alias Alias for Target` takes precedence and remains the escape hatch. Alias targets
-must be unique valid structural declarations, and alias chains are rejected.
+must be unique valid structures or subsets, and alias chains are rejected.
 
 Subset parents resolve after structures and aliases are parsed, so forward references,
 automatic or explicit parent aliases, and valid chains work while unresolved, external,
-primitive, invalid-alias, self, and cyclic parents fail at their authored spans. Parent
-alias edges normalize to their structural targets before cycle validation.
+primitive, invalid-alias, duplicate or ambiguous structural, self, and cyclic parents
+fail at their authored spans. Parent alias edges normalize to their structural targets before cycle validation.
 Whole-State type names, declaration-local effective field names, and enumeration-local
 values have separately enforced uniqueness scopes.
 
