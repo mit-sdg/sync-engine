@@ -52,8 +52,8 @@ only a trace token.
 ## Composition and failure
 
 Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; independent consequences get separate reactions;
-named siblings are cases, not priority.
+decision. Stages express causality; independent consequences get separate reactions; named sibling
+reaction cases are alternatives whose order carries no priority.
 
 Composition owns cross-concept policy, workflow, context, adaptation, notification,
 compensation, and repair—not owner invariants, mutation, race decisions, or
@@ -72,15 +72,16 @@ For each protected effect identify actor, authenticated identity, resource, fact
 owners, condition, and enforcement point. Request data is a claim, not authentication.
 Composition may deny early; owner actions enforce non-bypassable rules.
 
-Model host effects as concepts only with observable policy, state, lifecycle, failure,
-or useful tests; otherwise adapt thinly.
+Model a host effect as a concept only if it has observable policy, state, lifecycle, or
+failure or needs its own tests; otherwise adapt thinly.
 
 ## Authored application design
 
-Inventory exact selected static instances except `RequestBoundary`. Definitions may
-have many or no same-name instance. Bind each external once to a concrete or SSF-owned
-type, all inline or all detached per instance. Reject aliases, external targets, mixed,
-missing, duplicate, or unresolved bindings, and unused concretes. Direct qualified
+Inventory exact selected static instances except `RequestBoundary`. A definition may
+have zero or more instances; none need carry its name. Bind each external once to a
+concrete or SSF-owned type. Reject aliases, external targets, mixed placement of inline
+and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
+unused concretes. Direct qualified
 owned-type dependency cycles are valid: edges resolve independently. Bindings convey
 identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
 storage isolation.

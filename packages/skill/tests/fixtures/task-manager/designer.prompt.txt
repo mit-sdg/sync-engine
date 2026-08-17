@@ -54,8 +54,8 @@ only a trace token.
 ## Composition and failure
 
 Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; independent consequences get separate reactions;
-named siblings are cases, not priority.
+decision. Stages express causality; independent consequences get separate reactions; named sibling
+reaction cases are alternatives whose order carries no priority.
 
 Composition owns cross-concept policy, workflow, context, adaptation, notification,
 compensation, and repair—not owner invariants, mutation, race decisions, or
@@ -74,15 +74,16 @@ For each protected effect identify actor, authenticated identity, resource, fact
 owners, condition, and enforcement point. Request data is a claim, not authentication.
 Composition may deny early; owner actions enforce non-bypassable rules.
 
-Model host effects as concepts only with observable policy, state, lifecycle, failure,
-or useful tests; otherwise adapt thinly.
+Model a host effect as a concept only if it has observable policy, state, lifecycle, or
+failure or needs its own tests; otherwise adapt thinly.
 
 ## Authored application design
 
-Inventory exact selected static instances except `RequestBoundary`. Definitions may
-have many or no same-name instance. Bind each external once to a concrete or SSF-owned
-type, all inline or all detached per instance. Reject aliases, external targets, mixed,
-missing, duplicate, or unresolved bindings, and unused concretes. Direct qualified
+Inventory exact selected static instances except `RequestBoundary`. A definition may
+have zero or more instances; none need carry its name. Bind each external once to a
+concrete or SSF-owned type. Reject aliases, external targets, mixed placement of inline
+and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
+unused concretes. Direct qualified
 owned-type dependency cycles are valid: edges resolve independently. Bindings convey
 identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
 storage isolation.
@@ -119,11 +120,10 @@ specification. `element` names remain exact. The parser never invents an owned n
 It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
 remain opaque prose.
 
-Omit a field name only for an object/parameter. Collections are never `optional` (empty
+Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
 means absent). No nested collections or unions. Sets introduce identities—never add ID
 fields. Subsets classify existing parent members, may overlap, and add relations;
-`element` has one member. Declaration direction implies no storage, navigation, or
-ownership. `at most one Membership has each gathering and member pair` is an opaque
+`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
 invariant, not a proved behavior.
 
 ```state
@@ -198,8 +198,8 @@ the fence may end with invariant sentences.
 Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared
-names. Empty results use `: return ()` and bare `return`, never `return ()` or a
-standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
+names. Empty-result signatures declare `: return ()`; branch bodies use bare `return`, never
+`return ()` or standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
 within an action and never shared across actions. Return declared names only:
 `return account`, never prose such as `return the session account`.
 

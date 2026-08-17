@@ -18,11 +18,10 @@ specification. `element` names remain exact. The parser never invents an owned n
 It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
 remain opaque prose.
 
-Omit a field name only for an object/parameter. Collections are never `optional` (empty
+Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
 means absent). No nested collections or unions. Sets introduce identities—never add ID
 fields. Subsets classify existing parent members, may overlap, and add relations;
-`element` has one member. Declaration direction implies no storage, navigation, or
-ownership. `at most one Membership has each gathering and member pair` is an opaque
+`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
 invariant, not a proved behavior.
 
 ```state

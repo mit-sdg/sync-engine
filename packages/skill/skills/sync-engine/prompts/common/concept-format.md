@@ -54,8 +54,8 @@ the fence may end with invariant sentences.
 Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared
-names. Empty results use `: return ()` and bare `return`, never `return ()` or a
-standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
+names. Empty-result signatures declare `: return ()`; branch bodies use bare `return`, never
+`return ()` or standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
 within an action and never shared across actions. Return declared names only:
 `return account`, never prose such as `return the session account`.
 
