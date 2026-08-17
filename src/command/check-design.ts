@@ -11,6 +11,7 @@ import {
   type SimpleStateFormIssue,
 } from "@engine/tooling/simple-state-form";
 import { parseSpec } from "@engine/reactions/concepts/concept-spec";
+import { specificationTypeNameEvidence } from "@engine/tooling/specification-type-evidence";
 
 export interface CheckedDesignDocument {
   readonly path: string;
@@ -76,6 +77,7 @@ export async function checkDesignFiles(
             ? []
             : validateSimpleStateForm(stateFence, {
                 externalTypes: concept.externalTypes.map(({ name }) => name),
+                evidenceTypeNames: specificationTypeNameEvidence(concept),
               });
         if (stateIssues.length > 0) throw new Error(describeSimpleStateFormIssues(stateIssues));
         checked.push({ path: label, kind: "concept" });

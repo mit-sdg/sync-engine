@@ -17,7 +17,7 @@ a Completed set of Items with
 an element Settings with
   a retentionDays Number
 
-alias Item for Items
+alias WorkItem for Items
 
 at most one Item has each title
 ```
@@ -47,28 +47,42 @@ resolve by exact spelling to a unique structural identity or subset in the same 
 Forward references, exact explicit parent aliases, and chains are valid; external
 parameters, primitives, unresolved or invalid aliases, self-parenting, and cycles are not.
 
-## Exact aliases
+## Automatic and explicit aliases
 
-An alias explicitly adds one exact owned spelling:
+SSF can recognize two exact authored spellings as one owned type. It gathers candidates
+from named State field types and from action/query parameter and result type expressions
+in the containing concept. It never generates a candidate. For each candidate, SSF uses
+the vendored `plur` 6.0.0 relation: pluralizing either authored spelling must exactly
+yield the other. The candidate must match one unique non-element structural declaration.
+For example, the field type `Item` establishes the additional owned spelling here:
+
+```state
+a set of Items with
+  a related Item
+```
+
+This also supports irregular pairs such as `Mouse`/`Mice` and `Person`/`People`. External
+parameters, primitives, and element declarations do not gain automatic aliases. An
+ambiguous candidate remains unresolved. Exact structural declarations take precedence,
+and automatic aliases are not fed back through pluralization, so no transitive or third
+spelling appears.
+
+Use an explicit alias when pluralization cannot uniquely express the intended relation:
 
 ```state
 a set of People
 
-alias Person for People
+alias Human for People
 ```
 
 The canonical syntax is exactly `alias Alias for Target`. The alias name and target
 begin with uppercase ASCII letters. The target may occur before or after the alias but
 must be a unique, valid structural identity or subset. An alias cannot target another
-alias, so alias chains and alias cycles are impossible. A subset parent may use an exact
-alias; graph validation normalizes that edge to the alias's structural target. Alias names share the type
-namespace with structural declarations, external parameters, primitives, and other
-aliases and must be unique.
-
-Aliases are the only way to add another owned spelling; SSF never derives one. A field,
-action, or query that mentions `Person` does not make `Person` an alias for `People`;
-author the alias declaration when both exact spellings are intended to denote the same
-owned type.
+alias, so alias chains and alias cycles are impossible. A valid explicit alias takes
+precedence over automatic evidence with the same name. A subset parent may use either
+kind of alias; graph validation normalizes that edge to the structural target. Explicit
+alias names share the type namespace with structural declarations, external parameters,
+primitives, and other explicit aliases and must be unique.
 
 ## Fields
 
@@ -111,28 +125,30 @@ characters may be ASCII letters, digits, or `_`. Enumeration values begin with a
 uppercase ASCII letter and otherwise use uppercase ASCII letters, digits, or `_`.
 
 Structural declaration names are unique across the whole State. They must not exactly
-collide with an external parameter or one of the five SSF primitives. Alias names use
-the same whole-State namespace. Field names are local to one declaration. Enumeration
+collide with an external parameter or one of the five SSF primitives. Explicit alias
+names use the same whole-State namespace. Field names are local to one declaration. Enumeration
 values are local to one enumeration.
 
-All joins use exact authored spelling. Nothing is case-folded, inflected, corrected, or
-silently generated.
+All joins retain exact authored spelling. Automatic alias resolution only compares two
+authored names through the documented plural relation; it never corrects or inserts a
+spelling.
 
 ## Reference boundary
 
 SSF classifies every parsed named reference as owned, external, primitive, or
 unresolved. Contexts that require ownership are closed: subset parents must resolve to
-valid structural declarations or their explicit aliases, alias targets must resolve
-directly to valid structural declarations, and application qualified
+valid structural declarations or their automatic or explicit aliases; explicit alias
+targets must resolve directly to valid structural declarations. Application qualified
 binding targets must resolve to an owned structural or alias spelling of the selected
 instance.
 
 State field value names remain an intentionally open authored namespace. A field may
 refer to an owned identity, external parameter, primitive, conventional value type, or
-concept-local refinement. Therefore an unresolved field value is retained and
-classified as unresolved but is not itself an SSF error. It does not become owned and
-cannot be used as a qualified binding target. Action and query signature types are also
-not required to occur in State and never contribute ownership.
+concept-local refinement. An unresolved value is retained and classified as unresolved
+but is not itself an SSF error. It becomes owned only when the bounded automatic-alias
+rule establishes one unique structural owner. Action and query types likewise need not
+occur in State; their exact spellings contribute alias candidates but do not otherwise
+close the namespace.
 
 ## State meaning
 

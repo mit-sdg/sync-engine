@@ -97,7 +97,7 @@ export interface OwnedTypeNameContext {
 
 /**
  * SSF integration seam. The integrator supplies the complete normalized owned-name
- * inventory for this definition, including structural, subset, and explicit alias
+ * inventory for this definition, including structural, subset, safely evidenced alias, and explicit alias
  * names. Configured application checking always installs the private SSF
  * adapter; `undefined` exists only for isolated validator use that makes no ownership
  * claim.

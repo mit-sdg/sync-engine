@@ -21,8 +21,6 @@ external Operation
 a seq of Observations with
   an operation Operation
   an entryId String
-
-alias Observation for Observations
 ```
 
 ## Actions

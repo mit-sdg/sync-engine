@@ -101,9 +101,9 @@ Concept documents must pass the strict version-1 concept parser.
 Application-design documents use the same parser and assembly-independent validator as
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
-- SSF structural declarations, explicit aliases, and fields parse canonically,
-  including articles, multiplicity, `optional`, `with`, exact identifiers, subset
-  graph integrity, and scoped uniqueness; malformed structural-looking lines fail
+- SSF structural declarations, safe evidenced aliases, explicit aliases, and fields
+  parse canonically, including articles, multiplicity, `optional`, `with`, exact
+  identifiers, subset graph integrity, and scoped uniqueness; malformed structural-looking lines fail
   while truly standalone invariant sentences remain opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
@@ -136,7 +136,7 @@ application declaration paths. Arbitrary prose is not admitted inside
 `instances` or `bindings` fences.
 
 The command does not discover additional files or require a complete corpus. Its
-bounded SSF parser establishes exact structural and explicit-alias owned-name inventories,
+bounded SSF parser establishes exact structural, safely evidenced, and explicit-alias inventories,
 not a storage schema or invariant/prose semantics. It does not resolve typed links,
 instance definitions, external names, or binding targets against an assembled
 selection. It also does not require complete instances or declaration coverage,

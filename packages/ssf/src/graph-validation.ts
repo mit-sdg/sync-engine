@@ -1,3 +1,4 @@
+import { automaticAliasCandidates } from "./automatic-aliases.ts";
 import { PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
 import type { ParsedAlias, ParsedDeclaration, SsfDiagnostic } from "./model.ts";
 
@@ -42,6 +43,7 @@ export function validateTypeGraph(
   declarations: readonly ParsedDeclaration[],
   aliases: readonly ParsedAlias[],
   external: ReadonlySet<string>,
+  evidenceTypeNames: readonly string[],
   diagnostics: SsfDiagnostic[],
 ): ResolutionFacts {
   const declarationGroups = groupsOf(declarations, ({ name }) => name.text);
@@ -56,17 +58,28 @@ export function validateTypeGraph(
   const aliasGroups = groupsOf(aliases, ({ name }) => name.text);
   const occupied = new Set([...declarationGroups.keys(), ...external, ...PRIMITIVES]);
 
-  // Candidate aliases have an unambiguous namespace owner and target a structural
-  // declaration directly. Whether that target has a valid subset chain is checked below.
-  const candidateAliases = new Map<string, string>();
+  // Explicit aliases take precedence over automatic evidence. Both maps initially
+  // target unique structural declarations; target graph validity is checked below.
+  const candidateExplicitAliases = new Map<string, string>();
   for (const alias of aliases) {
     if (
       aliasGroups.get(alias.name.text)?.length === 1 &&
       !occupied.has(alias.name.text) &&
       eligible.has(alias.target.text)
     ) {
-      candidateAliases.set(alias.name.text, alias.target.text);
+      candidateExplicitAliases.set(alias.name.text, alias.target.text);
     }
+  }
+  const candidateAutomaticAliases = automaticAliasCandidates(
+    declarations,
+    new Set(eligible.keys()),
+    evidenceTypeNames,
+    new Set(aliasGroups.keys()),
+    external,
+  );
+  const candidateAliases = new Map(candidateExplicitAliases);
+  for (const [name, target] of candidateAutomaticAliases) {
+    if (!candidateAliases.has(name)) candidateAliases.set(name, target);
   }
 
   const parentBySubset = new Map<string, string>();
@@ -196,6 +209,11 @@ export function validateTypeGraph(
           "Target the exact name of a unique identity or subset declaration; do not target another alias.",
         span: alias.target.span,
       });
+    }
+  }
+  for (const [name, target] of candidateAutomaticAliases) {
+    if (validStructuralNames.has(target) && !validAliases.has(name)) {
+      validAliases.set(name, target);
     }
   }
   return { validStructuralNames, validAliases };

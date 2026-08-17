@@ -20,7 +20,7 @@ Creating a label establishes one record with that label.
 a set of Records with
   a label String
 
-alias Record for Records
+alias Entry for Records
 ```
 
 ## Actions

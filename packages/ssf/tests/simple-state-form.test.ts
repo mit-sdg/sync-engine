@@ -22,6 +22,16 @@ function externalTypes(markdown: string): string[] {
   );
 }
 
+function memberTypeEvidence(markdown: string): string[] {
+  return [...markdown.matchAll(/```(?:actions|queries)\r?\n([\s\S]*?)\r?\n```/g)].flatMap(
+    ([, body]) =>
+      (body ?? "")
+        .split(/\r?\n/)
+        .filter((line) => !/^\s/.test(line) && /^[a-z_][A-Za-z0-9_]*\s*\(/.test(line))
+        .flatMap((line) => [...line.matchAll(/\b[A-Z][A-Za-z0-9_]*\b/g)].map(([name]) => name)),
+  );
+}
+
 function codes(source: string, external: readonly string[] = []): readonly string[] {
   return parseSimpleStateForm(source, { externalTypes: external }).diagnostics.map(
     ({ code }) => code,
@@ -94,14 +104,18 @@ at most one Item has each title`;
     expect(isOwnedTypeName(parsed.document.inventory, "Person")).toBe(false);
   });
 
-  test("does not derive aliases from field names or type references", () => {
+  test("derives a regular alias only from an exact authored field type", () => {
     const parsed = parseSimpleStateForm(`a set of Accounts with
   an account Account
   a usernames set of Username`);
     expect(parsed.diagnostics).toEqual([]);
-    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Accounts"]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Account", "Accounts"]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      { value: { reference: { text: "Account", referenceKind: "unresolved" } } },
+      {
+        value: {
+          reference: { text: "Account", normalized: "Accounts", referenceKind: "owned" },
+        },
+      },
       { value: { element: { reference: { text: "Username", referenceKind: "unresolved" } } } },
     ]);
   });
@@ -125,6 +139,105 @@ at most one Item has each title`;
       },
       { name: "status", value: { reference: { referenceKind: "unresolved" } } },
     ]);
+  });
+});
+
+describe("safe automatic aliases", () => {
+  test.each([
+    ["Mice", "Mouse"],
+    ["People", "Person"],
+    ["Items", "Item"],
+    ["Chaoses", "Chaos"],
+  ])("relates exact authored %s and %s spellings", (declaration, candidate) => {
+    const parsed = parseSimpleStateForm(`a set of ${declaration}`, {
+      evidenceTypeNames: [candidate],
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(
+      [candidate, declaration].sort(),
+    );
+  });
+
+  test("can compare an authored plural candidate against a singular structural spelling", () => {
+    const parsed = parseSimpleStateForm("a set of Mouse", { evidenceTypeNames: ["Mice"] });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.inventory.types).toMatchObject([
+      { name: "Mouse", declaredNames: ["Mice", "Mouse"] },
+    ]);
+  });
+
+  test("never inserts pluralizer output or follows aliases transitively", () => {
+    const withoutEvidence = parseSimpleStateForm("a set of Mice");
+    expect(ownedTypeNameSpellings(withoutEvidence.document.inventory)).toEqual(["Mice"]);
+
+    const withEvidence = parseSimpleStateForm("a set of Mice", {
+      evidenceTypeNames: ["Mouse"],
+    });
+    expect(ownedTypeNameSpellings(withEvidence.document.inventory)).toEqual(["Mice", "Mouse"]);
+    for (const unauthored of ["Mices", "MouseS", "Mouses"]) {
+      expect(isOwnedTypeName(withEvidence.document.inventory, unauthored)).toBe(false);
+    }
+  });
+
+  test("excludes elements, externals, and primitives from automatic aliases", () => {
+    const element = parseSimpleStateForm("an element People", {
+      evidenceTypeNames: ["Person"],
+    });
+    expect(ownedTypeNameSpellings(element.document.inventory)).toEqual(["People"]);
+
+    const external = parseSimpleStateForm("a set of People", {
+      externalTypes: ["Person"],
+      evidenceTypeNames: ["Person"],
+    });
+    expect(ownedTypeNameSpellings(external.document.inventory)).toEqual(["People"]);
+
+    const primitive = parseSimpleStateForm("a set of Strings", {
+      evidenceTypeNames: ["String"],
+    });
+    expect(ownedTypeNameSpellings(primitive.document.inventory)).toEqual(["Strings"]);
+  });
+
+  test("leaves an ambiguous plural candidate unresolved", () => {
+    const parsed = parseSimpleStateForm("a set of Ax\n\na set of Axis", {
+      evidenceTypeNames: ["Axes"],
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Ax", "Axis"]);
+  });
+
+  test("lets a valid explicit alias resolve an ambiguous automatic candidate", () => {
+    const parsed = parseSimpleStateForm("a set of Ax\n\na set of Axis\n\nalias Axes for Axis", {
+      evidenceTypeNames: ["Axes"],
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.inventory.types).toMatchObject([
+      { name: "Ax", declaredNames: ["Ax"] },
+      { name: "Axis", declaredNames: ["Axes", "Axis"] },
+    ]);
+  });
+
+  test("gives an exact structural declaration precedence over automatic matching", () => {
+    const parsed = parseSimpleStateForm("a set of Ax\n\na set of Axis\n\na set of Axes", {
+      evidenceTypeNames: ["Axes"],
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.inventory.types).toMatchObject([
+      { name: "Ax", declaredNames: ["Ax"] },
+      { name: "Axes", declaredNames: ["Axes"] },
+      { name: "Axis", declaredNames: ["Axis"] },
+    ]);
+  });
+
+  test("is invariant to structural and evidence declaration order", () => {
+    const first = parseSimpleStateForm("a set of Mice\n\na set of People", {
+      evidenceTypeNames: ["Mouse", "Person"],
+    });
+    const second = parseSimpleStateForm("a set of People\n\na set of Mice", {
+      evidenceTypeNames: ["Person", "Mouse"],
+    });
+    expect(ownedTypeNameSpellings(first.document.inventory)).toEqual(
+      ownedTypeNameSpellings(second.document.inventory),
+    );
   });
 });
 
@@ -185,6 +298,19 @@ a Child set of Root`,
     ).toMatchObject({
       text: "Root",
       normalized: "Roots",
+      referenceKind: "owned",
+    });
+  });
+
+  test("resolves an evidenced automatic alias as a subset parent", () => {
+    const parsed = parseSimpleStateForm(`a Child set of Item
+
+a set of Items with
+  a parent Item`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.parent).toMatchObject({
+      text: "Item",
+      normalized: "Items",
       referenceKind: "owned",
     });
   });
@@ -382,6 +508,7 @@ describe("repository SSF corpus", () => {
       if (!markdown.includes("```state")) continue;
       const parsed = parseSimpleStateForm(stateFence(markdown), {
         externalTypes: externalTypes(markdown),
+        evidenceTypeNames: memberTypeEvidence(markdown),
       });
       expect(parsed.diagnostics, path).toEqual([]);
       for (const name of ownedTypeNameSpellings(parsed.document.inventory)) {

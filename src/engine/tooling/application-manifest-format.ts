@@ -21,6 +21,7 @@ import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
 import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
+import { specificationTypeNameEvidence } from "./specification-type-evidence.ts";
 
 type DataRecord = Record<string, unknown>;
 
@@ -38,12 +39,13 @@ const DIAGNOSTIC_CODES = [
   "ORDER_SENSITIVE_FORMER",
 ] as const;
 
-/** Derive exact structural declaration and explicit alias names through the SSF package. */
+/** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
 export function specificationOwnedTypeNames(
   specification: ConceptSpecificationIR,
 ): readonly string[] {
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
+    evidenceTypeNames: specificationTypeNameEvidence(specification),
   });
   if (parsed.diagnostics.length > 0) {
     throw new Error(
@@ -1423,7 +1425,7 @@ function assertManifestCrossFields(data: DataRecord): void {
       if (!sameCanonicalValue(item.ownedTypes, authoritativeOwnedTypes)) {
         fail(
           `$.design.concepts[${index}].ownedTypes`,
-          "does not equal the inventory independently derived from specification State declarations and explicit aliases",
+          "does not equal the inventory independently derived from specification State and operation type evidence",
         );
       }
       for (const [instanceIndex, instance] of array(

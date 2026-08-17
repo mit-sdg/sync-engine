@@ -26,8 +26,6 @@ external Subject
 a set of Sessions with
   a subject Subject
   an expiresAt Time
-
-alias Session for Sessions
 ```
 
 ## Actions

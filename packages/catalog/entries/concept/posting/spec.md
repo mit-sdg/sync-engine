@@ -26,8 +26,6 @@ a seq of Posts with
   an author Author
   a content String
   a publishedAt DateTime
-
-alias Post for Posts
 ```
 
 ## Actions

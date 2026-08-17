@@ -68,7 +68,8 @@ There is no legacy parser or format auto-detection.
 The workspace-private, unpublished `packages/ssf` package owns SSF tokenization,
 grammar, exact-name resolution, graph and namespace validation, diagnostics, and
 structured State IR. Its former monolith is split into source, grammar, name/model,
-resolution, and facade modules. It remains `private: true`, has no release-owned
+local validation, automatic-alias, graph, resolution, and facade modules. A vendored,
+attributed `plur` implementation isolates the canonical plural relation. It remains `private: true`, has no release-owned
 publication entry, and has no dependency on sync-engine Markdown or source-location
 types. It returns exact text spans and line/column offsets; the tooling adapter maps
 those spans from the normalized State-body origin retained by the concept parser to
@@ -77,11 +78,17 @@ this parser as the one implementation used for repair diagnostics and checked-mo
 owned-name extraction; do not recreate a parser under `src/engine/tooling`.
 
 The parser authoritatively handles structural set, sequence, element, subset, alias,
-and field declarations. Structural and alias spellings remain exact. The only way to
-add an owned spelling is `alias Alias for Target`; field and operation-signature
-mentions never contribute ownership. Alias targets must be unique valid structural
-declarations, and alias chains are rejected. Subset parents resolve after all structures and aliases are parsed, so forward
-references, exact parent aliases, and valid chains work while unresolved, external,
+and field declarations. Structural and alias spellings remain exact. Named State field
+references and parsed action/query type expressions supply exact authored candidates.
+An automatic alias is accepted only when pluralizing either candidate or one unique
+non-element structural name with vendored `plur` exactly yields the other. No generated
+plural is inserted, no transitive closure runs, and external, primitive, element, exact
+declaration, ambiguous, and explicitly aliased candidates are excluded. A valid
+`alias Alias for Target` takes precedence and remains the escape hatch. Alias targets
+must be unique valid structural declarations, and alias chains are rejected.
+
+Subset parents resolve after structures and aliases are parsed, so forward references,
+automatic or explicit parent aliases, and valid chains work while unresolved, external,
 primitive, invalid-alias, self, and cyclic parents fail at their authored spans. Parent
 alias edges normalize to their structural targets before cycle validation.
 Whole-State type names, declaration-local effective field names, and enumeration-local
@@ -89,20 +96,21 @@ values have separately enforced uniqueness scopes.
 
 State field value names are deliberately open: the parser classifies owned, external,
 primitive, and unresolved references, but unresolved conventional or refinement names
-remain legal. This boundary does not make them owned. Structural-looking malformed
+remain legal. Only the bounded unique plural relation can promote one of those exact
+references to an automatic owned alias. Structural-looking malformed
 statements produce diagnostics; standalone invariant sentences remain opaque. The
 concept IR preserves the complete normalized State text. The parser does not prove
 those sentences, field refinements, conditions, effects, query meaning, storage layout,
 State/storage agreement, or implementation semantics.
 
 Config-based binding validation uses only the derived exact owned-name inventory. A
-qualified target must name a structural declaration or explicit alias of the selected
-target instance's definition; an external, primitive, or unresolved name is invalid.
-Checked manifests persist the sorted inventory. Their codec independently rederives it
-from the included State alone, requires exact canonical equality, and validates every
-qualified target against that derived fact. Action and query signature types are not
-required to occur in State: conventional and refinement names remain valid there and
-never affect ownership.
+qualified target must name a structural declaration, safe evidenced alias, or explicit
+alias of the selected target instance's definition; an external, primitive, ambiguous,
+or unresolved name is invalid. Checked manifests persist the sorted inventory. Their
+codec independently rederives it from included State plus action/query type evidence,
+requires exact canonical equality, and validates every qualified target against that
+derived fact. Operation types are not required to occur in State: conventional and
+refinement names remain valid, and only an exact unique plural pair affects ownership.
 
 ## Static source agreement
 

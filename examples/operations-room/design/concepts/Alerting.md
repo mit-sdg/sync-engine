@@ -28,8 +28,6 @@ external Subject
 a set of Alerts with
   a recipient Person
   a subject Subject
-
-alias Alert for Alerts
 ```
 
 ## Actions

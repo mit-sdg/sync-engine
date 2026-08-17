@@ -97,7 +97,13 @@ export function resolveGrammar(
     ...grammar.diagnostics,
     ...localIntegrityDiagnostics(grammar.declarations, grammar.aliases, external),
   ];
-  const facts = validateTypeGraph(grammar.declarations, grammar.aliases, external, diagnostics);
+  const facts = validateTypeGraph(
+    grammar.declarations,
+    grammar.aliases,
+    external,
+    options.evidenceTypeNames ?? [],
+    diagnostics,
+  );
   const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => ({
     kind: "declaration",
     name: typeReference(declaration.name, facts, external),

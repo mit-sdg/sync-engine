@@ -73,10 +73,10 @@ definition may be instantiated several times.
 
 A strict specification has ordered Purpose, Principle, Types, State, Actions,
 and Queries sections. Types declares only opaque external parameters. State uses
-SSF. A bounded structural parser inventories exact nonexternal declaration, subset,
-and explicit `alias Alias for Target` names; validates subset graphs and namespace
-scopes; and retains standalone invariant sentences and other admitted prose as opaque
-text. Field and operation-signature mentions never contribute ownership.
+SSF. A bounded structural parser inventories exact nonexternal declarations, subsets,
+safe plural aliases evidenced by State and operation types, and explicit
+`alias Alias for Target` names. It validates subset graphs and namespace scopes and
+retains standalone invariant sentences and other admitted prose as opaque text.
 Actions use explicit `where`/`then` branches and terminal returns or refusals;
 queries select `one`, `optional`, or `many`, return named rows, and explain their
 answers in an indented body. See [Concept

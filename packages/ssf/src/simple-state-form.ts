@@ -3,12 +3,12 @@ import type { SsfParseOptions, SsfParseResult, SsfTypeInventory } from "./model.
 import { resolveGrammar } from "./resolution.ts";
 import { sourceLines, tokenizeSimpleStateForm } from "./source.ts";
 
-/** Test an exact structural declaration or explicit alias against the owned inventory. */
+/** Test an exact structural, explicit-alias, or evidenced-alias spelling. */
 export function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean {
   return inventory.types.some((owned) => owned.declaredNames.includes(name));
 }
 
-/** Enumerate exact structural declaration and explicit alias spellings. */
+/** Enumerate exact structural, explicit-alias, and evidenced-alias spellings. */
 export function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[] {
   return [...new Set(inventory.types.flatMap(({ declaredNames }) => declaredNames))].sort();
 }

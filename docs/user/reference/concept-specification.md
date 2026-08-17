@@ -82,8 +82,6 @@ external Person
 a set of Notes with
   an author Person
   a text String
-
-alias Note for Notes
 ```
 
 ## Actions
@@ -156,11 +154,17 @@ Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
 The parser recognizes set, sequence, element, subset, explicit alias, and field
 declarations, including multiplicity, identifier, article, and graph constraints.
-Structural names remain exact. An additional owned spelling must be authored explicitly
-as `alias Alias for Target`; fields and action/query signatures never add aliases or
-other owned names. Alias targets must be unique valid structural declarations and may
-occur before or after the alias. Alias chains are rejected. Subset parents likewise resolve independent of declaration order and may name a
-structural identity, subset, or exact explicit alias for one. Alias parent edges
+Structural names remain exact. Named State field types and action/query parameter and
+result types supply exact alias candidates. SSF accepts a candidate automatically only
+when vendored `plur` pluralizes either it or one unique non-element structural name to
+the other exact authored spelling. It does not insert the pluralizer's output. This
+supports regular and irregular pairs such as `Note`/`Notes`, `Mouse`/`Mice`, and
+`Person`/`People` while leaving ambiguous candidates unresolved.
+
+`alias Alias for Target` explicitly handles domain synonyms and ambiguity. Explicit
+aliases take precedence, must target unique valid structural declarations, and cannot
+form chains. Subset parents resolve independent of declaration order and may name a
+structural identity, subset, or automatic or explicit alias. Alias parent edges
 normalize to structural targets before cycle checks. External parameters, primitives,
 invalid aliases, unresolved parents, self-parenting, and cycles fail with source-located
 diagnostics.
@@ -175,16 +179,18 @@ fails with a source-located diagnostic. Standalone invariant
 sentences remain opaque.
 State field value names are intentionally open because they may denote conventional or
 concept-local refinement types: an unresolved value reference is retained and
-classified as unresolved, but is not an SSF error and never becomes owned. Operation
-signature types likewise need not occur in State. The parser does not prove invariants,
+classified as unresolved, but is not an SSF error. It becomes owned only through the
+bounded unique automatic-alias rule or an explicit alias. Operation signature types
+likewise need not occur in State. The parser does not prove invariants,
 refinement meaning, action conditions or effects, query meaning, storage layout,
 State/storage agreement, or implementation behavior.
 
 Config-based checking uses the exact owned-name inventory for one proof: a
-qualified external-binding target must name a structural declaration or explicit alias owned by
-the selected target instance's definition. Checked manifests persist that inventory,
-and validation independently rederives it from included State alone. External,
-primitive, and unresolved names cannot be binding targets. State changes continue to
+qualified external-binding target must name a structural declaration or automatic or
+explicit alias owned by the selected target instance's definition. Checked manifests
+persist that inventory, and validation independently rederives it from State plus exact
+action/query type evidence. External, primitive, ambiguous, and unresolved names cannot
+be binding targets. State changes continue to
 affect canonical design digests.
 
 ## `Actions`

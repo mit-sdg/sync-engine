@@ -32,9 +32,6 @@ a seq of Memberships with
   a member Person
 
 at most one Membership has each gathering and member pair
-
-alias Gathering for Gatherings
-alias Membership for Memberships
 ```
 
 ## Actions

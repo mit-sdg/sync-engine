@@ -54,7 +54,7 @@ const ownedTypeModule = new URL(
   "./fixtures/generated-artifacts/owned-types/vocabulary.ts",
   import.meta.url,
 );
-const ownedTypeDesign = (name: "design" | "invalid-design") => ({
+const ownedTypeDesign = (name: "design" | "explicit-design" | "invalid-design") => ({
   version: 1 as const,
   documents: [new URL(`./fixtures/generated-artifacts/owned-types/${name}.md`, import.meta.url)],
 });
@@ -132,7 +132,7 @@ describe("generated application artifacts", () => {
   }, 15_000);
 
   test("proves qualified targets with the private SSF inventory for advanced vocabularies", async () => {
-    const application = (design: "design" | "invalid-design") =>
+    const application = (design: "design" | "explicit-design" | "invalid-design") =>
       resolveApplication(
         {
           assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
@@ -144,6 +144,9 @@ describe("generated application artifacts", () => {
       );
     await expect(renderGenerated(application("design"))).resolves.toMatchObject({
       specification: expect.stringContaining("`Target` is `Targeting.Record`"),
+    });
+    await expect(renderGenerated(application("explicit-design"))).resolves.toMatchObject({
+      specification: expect.stringContaining("`Target` is `Targeting.Entry`"),
     });
     await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
       'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',

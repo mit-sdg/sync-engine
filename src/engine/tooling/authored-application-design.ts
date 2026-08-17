@@ -468,7 +468,7 @@ export interface SelectedConceptDesign {
   /**
    * Optional integration result from the structured-SSF owner. Supply the complete
    * normalized owned-name inventory for the selected definition (including structural,
-   * subset, and explicit alias names). Configured application checking always supplies
+   * subset, safely evidenced alias, and explicit alias names). Configured application checking always supplies
    * this inventory; omission supports isolated form/validator use and makes no ownership
    * claim.
    */

@@ -122,7 +122,7 @@ export type SsfStatement = SsfDeclaration | SsfAlias | SsfOpaqueLine;
 export interface SsfOwnedType {
   /** Exact spelling of the structural State declaration. */
   readonly name: string;
-  /** The declaration spelling and its exact explicit aliases. */
+  /** The declaration spelling and its exact explicit or evidenced aliases. */
   readonly declaredNames: readonly string[];
   readonly roles: readonly ("identity" | "subset")[];
   readonly declarationSpans: readonly SsfSpan[];
@@ -146,6 +146,8 @@ export interface SsfDocument {
 export interface SsfParseOptions {
   /** Opaque parameter names declared by the containing concept specification. */
   readonly externalTypes?: readonly string[];
+  /** Exact type spellings authored in action/query parameter and result expressions. */
+  readonly evidenceTypeNames?: readonly string[];
 }
 
 export interface SsfParseResult {
