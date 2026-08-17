@@ -447,7 +447,11 @@ Touching a note updates the feed.[touch]
           definition: "SharedNotes",
           source: "concept-1",
           specification,
-          instances: concepts.map(({ name }) => ({ name, bindings: [] })),
+          instances: concepts.map(({ name }) => ({
+            name,
+            declaration: { source: "document-1", line: 3, column: 1 },
+            bindings: [],
+          })),
         },
       ],
       computations: [],
@@ -899,14 +903,21 @@ describe("application impact analysis", () => {
       }),
     );
     for (const concept of ["PrimaryNotes", "ArchiveNotes"]) {
-      expect(
-        sourceIndex.entries.find(({ ref }) => ref.kind === "concept" && ref.concept === concept)
-          ?.sources,
-      ).toContainEqual(
+      const conceptSources = sourceIndex.entries.find(
+        ({ ref }) => ref.kind === "concept" && ref.concept === concept,
+      )?.sources;
+      expect(conceptSources).toContainEqual(
         expect.objectContaining({
           role: "specification",
           resolution: "manifest-provenance",
           range: expect.objectContaining({ path: "design/SharedNotes.md" }),
+        }),
+      );
+      expect(conceptSources).toContainEqual(
+        expect.objectContaining({
+          role: "design-coverage",
+          resolution: "manifest-provenance",
+          range: expect.objectContaining({ path: "design/forum.md" }),
         }),
       );
     }

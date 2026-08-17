@@ -21,8 +21,8 @@ subpaths only. Routine construction:
   implementation and stable refusal classes.
 - `conceptSet({ ...registrations }, computations?)` creates typed instances and
   computation references. A definition may have several instance names; registrations
-  with one definition name require identical canonical specifications; type bindings
-  select instances.
+  with one definition name require identical canonical specifications; authored
+  `instances` declarations must exactly match those selected keys and own their type bindings.
 - `reaction`, `view`, `former`, and endpoint declarations implement exact adjacent
   authored links and decisions.
 - `assemble({ conceptSet, composition, ... })` selects implementations and exposes the

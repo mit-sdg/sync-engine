@@ -276,12 +276,30 @@ conceptSet({
 })
 ```
 
-Both instances use the `Commenting` definition. Generated design output records
-the definition name and each instance name separately. If selected
-registrations use the same definition name, their canonical specifications must
-be identical. Different implementation classes or floors may implement that
-shared contract; incompatible specifications cannot claim the same definition
-name.
+The registered application corpus must declare the same inventory:
+
+```instances
+instantiate Commenting as PostComments
+instantiate Commenting as AnswerComments
+```
+
+`instantiate Definition` is shorthand for `instantiate Definition as
+Definition`; a same-name instance is not conventional or privileged. Every
+selected application instance has exactly one declaration, and every declaration
+must be selected by the exact assembled config variant. `RequestBoundary` is
+core-owned and is not authored.
+
+Both example instances use the `Commenting` definition. Generated design output
+records each declaration location and groups both under the shared definition.
+If selected registrations use the same definition name, their canonical
+specifications must be identical. Different implementation classes or floors
+may implement that shared contract; incompatible specifications cannot claim
+the same definition name.
+
+External bindings belong to each instance, either inline in its declaration or
+entirely in detached `bindings` fences. Supplying a semantic type binding does
+not configure an implementation floor, allocate storage, or specialize action
+and query signatures.
 
 ## Source provenance
 

@@ -64,19 +64,24 @@ named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional S
 values as optional row fields, for example `dueAt?: DateTime`. A `one` body always
 promises one row; only `optional` may say no row.
 
-Application `design/types.md` uses one `types` fence. Concrete definitions and direct
-external bindings have this direction:
+Application `design/types.md` separates concrete types from the complete inventory:
 
 ```types
 concrete Person
   Stable application identity.
-
-Tasking.Owner is Person
-Notes.Task is Tasking.Task
 ```
 
-The binding left side is `SelectedInstance.External`; the right side is a concrete or
-selected concept-owned type. Concept files contain no application links or computations.
+```instances
+instantiate Tasking with
+  Owner is Person
+instantiate Noting as Notes with
+  Task is Tasking.Task
+```
+
+`instantiate D` means `instantiate D as D`. An instance binds all externals inline or
+all in detached `bindings` fences, never both. Targets are concrete or selected
+qualified non-external types. Concept files contain no application links or
+computations.
 
 Each composition document has one nonempty H1 and decision prose. References are actual
 Markdown links to application declarations—not bare `view:` lines, routes, or

@@ -8,7 +8,16 @@ as opaque.
 ```types
 concrete CommentContent
   Text supplied by a signed-in account for a comment.
+```
 
+```instances
+instantiate Authenticating
+instantiate Commenting
+instantiate Posting
+instantiate Sessioning
+```
+
+```bindings
 Sessioning.Subject is Authenticating.Username
   A session identifies the account username whose credentials were accepted.
 

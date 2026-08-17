@@ -1130,16 +1130,24 @@ function assertDesign(value: unknown, path: string): void {
       `${conceptPath}.instances`,
     ).entries()) {
       const instancePath = `${conceptPath}.instances[${instanceIndex}]`;
-      const selected = shape(instance, instancePath, ["name", "bindings"]);
+      const selected = shape(instance, instancePath, ["name", "declaration", "bindings"]);
       authoredPathSegment(selected.name, `${instancePath}.name`);
+      assertDesignLocation(selected.declaration, `${instancePath}.declaration`, sourceIds);
       for (const [bindingIndex, binding] of array(
         selected.bindings,
         `${instancePath}.bindings`,
       ).entries()) {
         const bindingPath = `${instancePath}.bindings[${bindingIndex}]`;
-        const bound = shape(binding, bindingPath, ["external", "target", "location"]);
+        const bound = shape(
+          binding,
+          bindingPath,
+          ["external", "target", "location"],
+          ["explanation"],
+        );
         designIdentifier(bound.external, `${bindingPath}.external`);
         assertTypeBindingTarget(bound.target, `${bindingPath}.target`);
+        if (bound.explanation !== undefined)
+          nonemptyString(bound.explanation, `${bindingPath}.explanation`);
         assertDesignLocation(bound.location, `${bindingPath}.location`, sourceIds);
       }
       uniqueFieldIndexes(selected.bindings, `${instancePath}.bindings`, "external");
@@ -1147,7 +1155,7 @@ function assertDesign(value: unknown, path: string): void {
     uniqueFieldIndexes(item.instances, `${conceptPath}.instances`, "name");
   }
   if (data.types !== undefined) {
-    const types = shape(data.types, `${path}.types`, ["concreteTypes", "bindings"]);
+    const types = shape(data.types, `${path}.types`, ["concreteTypes"]);
     for (const [index, concrete] of array(
       types.concreteTypes,
       `${path}.types.concreteTypes`,
@@ -1157,23 +1165,7 @@ function assertDesign(value: unknown, path: string): void {
       authoredPathSegment(item.name, `${concretePath}.name`);
       assertDesignLocation(item.location, `${concretePath}.location`, sourceIds);
     }
-    for (const [index, binding] of array(types.bindings, `${path}.types.bindings`).entries()) {
-      const bindingPath = `${path}.types.bindings[${index}]`;
-      const item = shape(binding, bindingPath, ["instance", "external", "target", "location"]);
-      authoredPathSegment(item.instance, `${bindingPath}.instance`);
-      designIdentifier(item.external, `${bindingPath}.external`);
-      assertTypeBindingTarget(item.target, `${bindingPath}.target`);
-      assertDesignLocation(item.location, `${bindingPath}.location`, sourceIds);
-    }
     uniqueFieldIndexes(types.concreteTypes, `${path}.types.concreteTypes`, "name");
-    const bindingKeys = new Set<string>();
-    for (const [index, binding] of array(types.bindings, `${path}.types.bindings`).entries()) {
-      const item = record(binding, `${path}.types.bindings[${index}]`);
-      const key = `${item.instance as string}\0${item.external as string}`;
-      if (bindingKeys.has(key))
-        fail(`${path}.types.bindings[${index}].external`, "duplicates an earlier binding");
-      bindingKeys.add(key);
-    }
   }
   for (const [index, computation] of array(data.computations, `${path}.computations`).entries()) {
     const computationPath = `${path}.computations[${index}]`;
@@ -1399,6 +1391,10 @@ function assertManifestCrossFields(data: DataRecord): void {
       [...conceptIndexes.keys()].filter((name) => name !== "RequestBoundary"),
     );
     const designInstances = new Set<string>();
+    const designInstanceRecords = new Map<
+      string,
+      { item: DataRecord; path: string; externalTypes: Set<string> }
+    >();
     const definitions = new Set<string>();
     for (const [index, concept] of array(design.concepts, "$.design.concepts").entries()) {
       const item = record(concept, `$.design.concepts[${index}]`);
@@ -1430,6 +1426,27 @@ function assertManifestCrossFields(data: DataRecord): void {
             "appears under more than one definition",
           );
         designInstances.add(name);
+        const specification = record(
+          item.specification,
+          `$.design.concepts[${index}].specification`,
+        );
+        const externalTypes = new Set(
+          array(
+            specification.externalTypes,
+            `$.design.concepts[${index}].specification.externalTypes`,
+          ).map(
+            (external, externalIndex) =>
+              record(
+                external,
+                `$.design.concepts[${index}].specification.externalTypes[${externalIndex}]`,
+              ).name as string,
+          ),
+        );
+        designInstanceRecords.set(name, {
+          item: instanceItem,
+          path: `$.design.concepts[${index}].instances[${instanceIndex}]`,
+          externalTypes,
+        });
         const inventoryIndex = conceptIndexes.get(name)!;
         const inventory = record(
           array(data.concepts, "$.concepts")[inventoryIndex],
@@ -1445,6 +1462,64 @@ function assertManifestCrossFields(data: DataRecord): void {
     for (const name of selectedConcepts)
       if (!designInstances.has(name))
         fail("$.design.concepts", `omits selected concept instance ${JSON.stringify(name)}`);
+
+    const concreteTypes = new Set<string>();
+    if (design.types !== undefined) {
+      const types = record(design.types, "$.design.types");
+      for (const [index, concrete] of array(
+        types.concreteTypes,
+        "$.design.types.concreteTypes",
+      ).entries()) {
+        concreteTypes.add(
+          record(concrete, `$.design.types.concreteTypes[${index}]`).name as string,
+        );
+      }
+    }
+    for (const [name, instance] of designInstanceRecords) {
+      const bindingIndexes = uniqueFieldIndexes(
+        instance.item.bindings,
+        `${instance.path}.bindings`,
+        "external",
+      );
+      for (const external of instance.externalTypes) {
+        if (!bindingIndexes.has(external))
+          fail(
+            `${instance.path}.bindings`,
+            `omits external parameter ${JSON.stringify(external)} for ${JSON.stringify(name)}`,
+          );
+      }
+      for (const [external, bindingIndex] of bindingIndexes) {
+        if (!instance.externalTypes.has(external))
+          fail(
+            `${instance.path}.bindings[${bindingIndex}].external`,
+            "is not declared by the selected definition",
+          );
+        const binding = record(
+          array(instance.item.bindings, `${instance.path}.bindings`)[bindingIndex],
+          `${instance.path}.bindings[${bindingIndex}]`,
+        );
+        const target = record(binding.target, `${instance.path}.bindings[${bindingIndex}].target`);
+        if (target.kind === "concrete") {
+          if (!concreteTypes.has(target.name as string))
+            fail(
+              `${instance.path}.bindings[${bindingIndex}].target.name`,
+              "does not name a concrete application type",
+            );
+          continue;
+        }
+        const selectedTarget = designInstanceRecords.get(target.instance as string);
+        if (selectedTarget === undefined)
+          fail(
+            `${instance.path}.bindings[${bindingIndex}].target.instance`,
+            "does not name a selected authored instance",
+          );
+        if (selectedTarget.externalTypes.has(target.type as string))
+          fail(
+            `${instance.path}.bindings[${bindingIndex}].target.type`,
+            "names an external parameter; bindings must terminate directly",
+          );
+      }
+    }
 
     const expectedComputations = new Set(
       array(data.computations, "$.computations")

@@ -41,6 +41,7 @@ const fixtureDesign = (documents: readonly string[] = []) => ({
   ),
 });
 const emptyDesign = fixtureDesign();
+const instanceDesign = fixtureDesign(["instances"]);
 const loginDesign = fixtureDesign(["login"]);
 const loginCurrentDesign = fixtureDesign(["login", "current"]);
 const closureDesign = fixtureDesign(["closure"]);
@@ -785,7 +786,7 @@ describe("an artifact configuration's defaults", () => {
       {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
         title: "Reading circle",
-        design: emptyDesign,
+        design: instanceDesign,
         specification: "book.md",
         specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",

@@ -85,11 +85,12 @@ policy in composition.
 Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paired with
 `src/compositions/*.ts`. Deviations need a benefit and explicit mapping.
 
-A definition may have many instances. Bind each external type once to a nonempty
-concrete or selected concept-owned type. Reject chains, external targets, missing or
-duplicate bindings, unresolved names, and unused concretes. Binding conveys identity,
-not ownership, validation, or TypeScript equivalence. SSF tooling parses structure
-and owned names; review lines and meaning.
+Declare each selected instance once (`instantiate D` or `instantiate D as I`). Bind
+externals once, all inline or detached, to concrete or selected qualified owned types.
+Direct cycles are valid; reject mixed placement, aliases, gaps, duplicates, unresolved
+names, external targets, and unused concretes. Binding conveys identity, not ownership,
+validation, or TypeScript equivalence. SSF tooling parses structure and owned names;
+review opaque lines and meaning manually.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
 wildcards. Cover each authored endpoint/reaction tree, named view/former; declare
@@ -211,19 +212,24 @@ named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional S
 values as optional row fields, for example `dueAt?: DateTime`. A `one` body always
 promises one row; only `optional` may say no row.
 
-Application `design/types.md` uses one `types` fence. Concrete definitions and direct
-external bindings have this direction:
+Application `design/types.md` separates concrete types from the complete inventory:
 
 ```types
 concrete Person
   Stable application identity.
-
-Tasking.Owner is Person
-Notes.Task is Tasking.Task
 ```
 
-The binding left side is `SelectedInstance.External`; the right side is a concrete or
-selected concept-owned type. Concept files contain no application links or computations.
+```instances
+instantiate Tasking with
+  Owner is Person
+instantiate Noting as Notes with
+  Task is Tasking.Task
+```
+
+`instantiate D` means `instantiate D as D`. An instance binds all externals inline or
+all in detached `bindings` fences, never both. Targets are concrete or selected
+qualified non-external types. Concept files contain no application links or
+computations.
 
 Each composition document has one nonempty H1 and decision prose. References are actual
 Markdown links to application declarations—not bare `view:` lines, routes, or
@@ -274,7 +280,7 @@ Create or revise only:
 - `design/concepts/*.md` for reusable concept definitions;
 - `design/compositions/*.md` for application decisions and exact intended
   `reaction:`, `view:`, `former:`, and `computation:` links; and
-- `design/types.md` for application `concrete` declarations and `is` bindings.
+- `design/types.md` for the complete instance, concrete-type, and binding corpus.
 
 Create no index, `application.md`, memo, report, progress file, or workflow metadata.
 Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.

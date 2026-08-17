@@ -653,14 +653,17 @@ evaluates projectors in declaration order, and a projector or validation failure
 occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
-format and package SemVer. The application-manifest schema is version 1 and has
-no decoder for previous manifest versions. A beta upgrade across this reset
-requires regenerating all manifests and generated artifacts.
+format and package SemVer. The application-manifest schema remains version 1,
+but this beta replaces the earlier beta version-1 shape in place: instances own
+normalized bindings and authored provenance, while application types own
+concrete declarations. No decoder accepts the old beta shape. Upgrading requires
+regenerating all manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
-application instances, raw concept State, resolved application types, executable
-application identities, implementation provenance, registered design source
-locations, and normalized-source digests. It does not retain executable
+application instances with declaration and binding provenance, raw concept
+State, concrete application types, executable application identities,
+implementation provenance, registered design source locations, and
+normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.
 
 Generated Markdown names its manifest producer, concept-specification format,
@@ -668,9 +671,10 @@ and renderer version. It links each selected authored reaction tree, view,
 former, computation, concept, concrete type, and binding to every applicable
 authored source location. It shows structured concept signatures,
 cardinalities, refusals, definition/instance relationships, and executable
-lowering. It does not copy application prose, Purpose, Principle, raw State,
-action/query bodies, type-binding explanations, or computation bodies. These
-authored statements do not become runtime validation or executable assertions.
+lowering. It does not copy ordinary application prose, Purpose, Principle, raw State,
+action/query bodies, or computation bodies. Retained detached binding
+explanations appear with their normalized bindings. These authored statements
+do not become runtime validation or executable assertions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 requires explicit input, successful-output, and domain-error validators; none is

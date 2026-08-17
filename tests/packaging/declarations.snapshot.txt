@@ -4097,6 +4097,7 @@ interface RenderDesign {
         specification: ConceptSpecificationIR;
         instances: {
             name: string;
+            declaration: RenderDesignLocation;
             bindings: {
                 external: string;
                 target: {
@@ -4107,6 +4108,7 @@ interface RenderDesign {
                     instance: string;
                     type: string;
                 };
+                explanation?: string;
                 location: RenderDesignLocation;
             }[];
         }[];
@@ -4650,6 +4652,9 @@ export interface AuthoredApplicationDesignDocument {
     links: readonly AuthoredDesignLink[];
     computations: readonly AuthoredComputation[];
     concreteTypes: readonly ConcreteTypeDeclaration[];
+    /** Instance declarations authored in this document, with inline bindings attached. */
+    instances: readonly AuthoredConceptInstanceDeclaration[];
+    /** Bindings authored in detached `bindings` fences. */
     bindings: readonly ExternalTypeBinding[];
 }
 export interface ConcreteTypeDeclaration {
@@ -4657,6 +4662,7 @@ export interface ConcreteTypeDeclaration {
     definition: string;
     location: DesignSourceLocation;
 }
+export type BindingPlacement = "inline" | "detached";
 export interface ExternalTypeBinding {
     instance: string;
     external: string;
@@ -4668,8 +4674,19 @@ export interface ExternalTypeBinding {
         instance: string;
         type: string;
     };
+    placement: BindingPlacement;
+    /** Detached declarations retain beta-era explanatory prose rather than discarding it. */
     explanation?: string;
     location: DesignSourceLocation;
+}
+export interface AuthoredConceptInstanceDeclaration {
+    definition: string;
+    instance: string;
+    bindings: readonly ExternalTypeBinding[];
+    location: DesignSourceLocation;
+}
+export interface NormalizedConceptInstance extends AuthoredConceptInstanceDeclaration {
+    bindings: readonly ExternalTypeBinding[];
 }
 /** Parse one explicitly registered application design file. */
 export declare function parseApplicationDesignDocument(markdown: string, source?: string): AuthoredApplicationDesignDocument;
@@ -4687,7 +4704,15 @@ export interface SelectedComputationDesign {
 }
 export interface SelectedConceptDesign {
     instance: string;
+    definition: string;
     externalTypes: readonly string[];
+    /**
+     * Optional integration result from the structured-SSF owner. Supply the complete
+     * normalized owned-name inventory for the selected definition (including accepted
+     * singular/plural and subset names). Until supplied, qualified targets retain the
+     * beta selected-instance, non-external check and do not claim ownership proof.
+     */
+    ownedTypes?: readonly string[];
 }
 export interface SelectedApplicationDesign {
     reactions: readonly string[];
@@ -4696,16 +4721,18 @@ export interface SelectedApplicationDesign {
     computations: readonly SelectedComputationDesign[];
     concepts: readonly SelectedConceptDesign[];
 }
-export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING" | "UNKNOWN_EXTERNAL" | "MISSING_BINDING" | "UNRESOLVED_TYPE_TARGET" | "EXTERNAL_TARGET" | "UNUSED_CONCRETE";
+export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE" | "UNSELECTED_INSTANCE" | "UNDECLARED_SELECTED_INSTANCE" | "INSTANCE_DEFINITION_MISMATCH" | "UNKNOWN_EXTERNAL_BINDING" | "MISSING_EXTERNAL_BINDING" | "UNRESOLVED_BINDING_TARGET" | "EXTERNAL_BINDING_TARGET" | "UNUSED_CONCRETE_TYPE";
 export interface ApplicationDesignIssue {
     code: ApplicationDesignIssueCode;
     message: string;
     location?: DesignSourceLocation;
 }
 export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
-    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING";
+    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE";
     location: DesignSourceLocation;
 };
+/** Merge valid distributed declarations into the canonical per-instance authored model. */
+export declare function normalizeAuthoredConceptInstances(documents: readonly AuthoredApplicationDesignDocument[]): NormalizedConceptInstance[];
 /** Check corpus-wide authored forms that do not require a selected assembly. */
 export declare function validateAuthoredApplicationDesignForm(documents: readonly AuthoredApplicationDesignDocument[]): ApplicationDesignFormIssue[];
 /**
@@ -4773,8 +4800,21 @@ export interface SelectedConceptDesignFact {
     instance: string;
     definition: string;
     externalParameters: readonly string[];
+    /** Present only when the structured-SSF integration seam supplied authoritative names. */
+    ownedTypes?: readonly string[];
     specification: ConceptSpec;
 }
+export interface OwnedTypeNameContext {
+    instance: string;
+    definition: string;
+    specification: ConceptSpec;
+}
+/**
+ * SSF integration seam. The integrator supplies the complete normalized owned-name
+ * inventory for this definition, including accepted singular/plural equivalents and
+ * subset names. Returning `undefined` retains selected-qualified-nonexternal checking.
+ */
+export type ResolveOwnedTypeNames = (context: OwnedTypeNameContext) => readonly string[] | undefined | Promise<readonly string[] | undefined>;
 /** Equality is over canonical specification content with source positions removed. */
 export interface SharedDefinitionEqualityFact {
     definition: string;
@@ -4816,6 +4856,7 @@ export declare function checkAuthoredDesign(options: {
     assembly: Assembly<Record<string, new (...args: never[]) => object>>;
     design: AuthoredDesignRegistration;
     resolveComputationInputs?: ResolveComputationInputs;
+    resolveOwnedTypeNames?: ResolveOwnedTypeNames;
     conceptSources?: readonly ConceptSpecificationSourceInput[];
 }): Promise<CheckedAuthoredDesignModel>;
 
@@ -5028,6 +5069,7 @@ export interface ManifestConceptDefinitionV1 {
     specification: ConceptSpecificationIR;
     instances: {
         name: string;
+        declaration: ManifestSourceLocationV1;
         bindings: {
             external: string;
             target: {
@@ -5038,6 +5080,7 @@ export interface ManifestConceptDefinitionV1 {
                 instance: string;
                 type: string;
             };
+            explanation?: string;
             location: ManifestSourceLocationV1;
         }[];
     }[];
@@ -5060,22 +5103,10 @@ export interface ApplicationDesignManifestV1 {
     sources: ManifestSourceV1[];
     declarations: ManifestDeclarationV1[];
     concepts: ManifestConceptDefinitionV1[];
+    /** Concrete application types; normalized external bindings belong to instances. */
     types?: {
         concreteTypes: {
             name: string;
-            location: ManifestSourceLocationV1;
-        }[];
-        bindings: {
-            instance: string;
-            external: string;
-            target: {
-                kind: "concrete";
-                name: string;
-            } | {
-                kind: "qualified";
-                instance: string;
-                type: string;
-            };
             location: ManifestSourceLocationV1;
         }[];
     };

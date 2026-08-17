@@ -5,7 +5,15 @@ The entry, observation, and fault contracts refer to the same caller-supplied do
 ```types
 concrete OperationId
   A stable identifier supplied by the domain operation initiating a request.
+```
 
+```instances
+instantiate Entries
+instantiate Effects
+instantiate Faulting
+```
+
+```bindings
 Entries.Operation is OperationId
   Entry idempotency is scoped to the initiating operation.
 

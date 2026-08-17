@@ -76,7 +76,7 @@ changing the four concept classes.
 | -------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `design/concepts/*.md`                                         | Registered concept specifications                                |
 | `design/compositions/*.md`                                     | Composition-group intent and shared view/former design           |
-| `design/types.md`                                              | Application concrete types and cross-concept bindings            |
+| `design/types.md`                                              | Complete instance inventory, concrete types, and bindings        |
 | `src/concepts/`                                                | PascalCase concept classes and adjacent registries               |
 | `src/concepts.ts`                                              | Named concept set, typed references, and deterministic floor     |
 | `src/compositions/Room.ts`                                     | Room endpoint groups and the single owning path for room formers |

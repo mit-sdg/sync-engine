@@ -10,7 +10,15 @@ concrete Person
 
 concrete Reading
   A work that a circle may choose for discussion.
+```
 
+```instances
+instantiate Gathering
+instantiate Selecting
+instantiate Discussing
+```
+
+```bindings
 Gathering.Person is Person
   Circle hosts and members are reading-circle people.
 

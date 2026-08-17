@@ -11,10 +11,10 @@ questions.
 Tooling combines two authored input families for the exact assembly selected by
 one generated config:
 
-| Input                             | Machine-readable contribution                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Registered concept specifications | Definition identity, external parameters, raw State, structured actions/queries, and source provenance |
-| Registered application documents  | Links, computations, concrete types, external bindings, full normalized source, and locations          |
+| Input                             | Machine-readable contribution                                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Registered concept specifications | Definition identity, external parameters, raw State, structured actions/queries, and source provenance                        |
+| Registered application documents  | Links, computations, concrete types, complete instance declarations, normalized external bindings, full source, and locations |
 
 The executable assembly supplies selected concept instances, authored reaction
 and endpoint trees, named views, named formers, and executable computations.
@@ -86,11 +86,12 @@ form issues. Repair validation and owned-name extraction therefore share one tok
 and grammar implementation. Unknown lines remain opaque and never become guessed
 owned types.
 
-Current registration and manifests continue to retain raw State, and existing
-application-binding checks have not yet been switched to this inventory. Source
-checking therefore still does not compare State with class fields or storage. Named
-types used by State, actions, and queries do not need local declarations; Types
-inventories only external application parameters.
+Instance validation consumes the complete normalized owned-name inventory for each
+selected definition, including accepted singular/plural variants and subset names.
+Qualified binding targets must name a selected instance's definition-owned type;
+external parameter targets remain invalid. Source checking still does not compare State
+with class fields or storage. Named types used by State, actions, and queries do not
+need local declarations; Types inventories only external application parameters.
 
 ## Static source agreement
 
@@ -119,25 +120,43 @@ changing definition identity. Generated read-back renders one definition
 contract and lists its selected instances and bindings rather than duplicating
 the contract.
 
-## Application-type processing
+## Instance and application-type processing
 
-Any registered application document can contain `types` fences. The parser
-records `concrete` declarations with required prose definitions and
-`ConceptInstance.External is Target` bindings with optional explanations.
-Validation combines every fence in the registered corpus.
+Any registered application document can contain `instances`, `bindings`, and
+`types` fences. An `instances` fence declares `instantiate Definition`, its
+normalized equivalent `instantiate Definition as Definition`, or
+`instantiate Definition as Instance`. A declaration can append `with` and one
+or more indented local bindings. A `bindings` fence supplies detached
+`Instance.External is Target` declarations. A `types` fence contains only
+`concrete` declarations with required prose definitions.
 
-Validation joins against the exact selected assembly and enforces:
+The parser retains every instance declaration and binding location. Detached
+binding explanations are retained in parsed provenance and the manifest. The
+corpus merge is global and declaration order has no semantic effect. An instance
+uses either inline or detached placement, never both; mixed placement is
+reported before duplicate or missing-binding consequences.
 
+Validation joins against the exact facts exported by the assembled variant,
+not the syntactically discovered concept-set map. Advanced `vocabulary(...)`
+assemblies remain valid, and the core-owned `RequestBoundary` is excluded. The
+join enforces:
+
+- every selected application instance has exactly one authored instantiation,
+  and every authored instance is selected;
+- the authored definition equals the selected specification H1;
 - every selected external parameter is bound exactly once;
-- every left side names a selected instance and declared external parameter;
-- every right side directly names a concrete type or selected concept-owned
-  type;
-- no target is an external parameter;
-- no chain, cycle, duplicate, missing, or unresolved binding exists; and
+- every binding belongs to its declared instance and names one external
+  parameter of the matched definition;
+- every target directly names a concrete type or selected qualified type;
+- no target is another external parameter, so alias chains are impossible; and
 - every concrete type is used.
 
-The current unparsed-State boundary permits checking the target instance but not
-proving its final owned type name. That proof remains deferred.
+Cycles among direct qualified targets are valid: each edge terminates at a
+purported owned type and no alias expansion or topological evaluation occurs.
+The current unparsed-State boundary proves only selected-qualified-nonexternal
+targets unless the owned-name adapter is supplied. Definition mismatches suppress
+external-closure diagnostics for that instance so the checker does not validate
+against the wrong parameter inventory.
 
 The containing document's prose is included in digests and may also contain
 typed links and computation fences. The concept-set source has no Markdown
@@ -146,8 +165,9 @@ import/export path; `design.documents` is the sole registration path.
 ## Application-document processing
 
 Each configured document is a local `file:` URL and contains one nonempty H1.
-No other heading structure has parser significance. `types` and `computations`
-fences may appear in any of these documents. The Markdown link parser
+No other heading structure has parser significance. `types`, `instances`,
+`bindings`, and `computations` fences may appear in any of these documents. An
+instances-only document is application content. The Markdown link parser
 supports inline and standard reference-style links with the destination schemes
 `reaction:`, `view:`, `former:`, and `computation:`.
 
@@ -189,10 +209,13 @@ Canonical provenance includes normalized complete contents of every registered
 application document, not only extracted links. A prose-only change changes the
 input digest.
 
-The application manifest resets to `sync-engine.application-manifest`, version
-`1`. It retains raw State, structured declarations, definition/instance joins,
-application-type resolution, source locations, and design digests. Old manifest
-versions are rejected without upconversion.
+The application manifest remains `sync-engine.application-manifest`, version
+`1`, but its beta schema is intentionally replaced in place. Each definition's
+instances own normalized bindings, instance declaration provenance, binding
+locations, and retained detached explanations. `design.types` owns only concrete
+application types. No reader accepts the former beta version-1 shape. The
+manifest also retains raw State, structured declarations, source locations, and
+design digests.
 
 Generated Markdown links to prose rather than copying it. Paths are relative and
 host-independent; one-based lines are shown separately. It lists every source

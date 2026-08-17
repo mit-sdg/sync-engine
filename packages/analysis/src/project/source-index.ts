@@ -652,6 +652,10 @@ export function indexApplicationSourcesWithController<
       definition.source === undefined ? undefined : designSourceText.get(definition.source);
     for (const instance of definition.instances) {
       const concept: DesignRef = { kind: "concept", concept: instance.name };
+      add(concept, manifestAnchor(instance.declaration, "design-coverage"));
+      for (const binding of instance.bindings) {
+        add(concept, manifestAnchor(binding.location, "design-coverage"));
+      }
       if (whole !== undefined) {
         add(concept, {
           role: "specification",

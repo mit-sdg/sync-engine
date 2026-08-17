@@ -34,7 +34,7 @@ Create or revise only:
 - `design/concepts/*.md` for reusable concept definitions;
 - `design/compositions/*.md` for application decisions and exact intended
   `reaction:`, `view:`, `former:`, and `computation:` links; and
-- `design/types.md` for application `concrete` declarations and `is` bindings.
+- `design/types.md` for the complete instance, concrete-type, and binding corpus.
 
 Create no index, `application.md`, memo, report, progress file, or workflow metadata.
 Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.

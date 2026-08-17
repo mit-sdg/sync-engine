@@ -17,6 +17,7 @@ import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalDigest, canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import { GENERATOR_IDENTITY, type GeneratorIdentity } from "@engine/utils/package-version";
+import { normalizeAuthoredConceptInstances } from "./authored-application-design.ts";
 import type {
   CheckedAuthoredDesignModel,
   LoadedConceptSpecificationSource,
@@ -63,11 +64,13 @@ export interface ManifestConceptDefinitionV1 {
   specification: ConceptSpecificationIR;
   instances: {
     name: string;
+    declaration: ManifestSourceLocationV1;
     bindings: {
       external: string;
       target:
         | { kind: "concrete"; name: string }
         | { kind: "qualified"; instance: string; type: string };
+      explanation?: string;
       location: ManifestSourceLocationV1;
     }[];
   }[];
@@ -88,16 +91,9 @@ export interface ApplicationDesignManifestV1 {
   sources: ManifestSourceV1[];
   declarations: ManifestDeclarationV1[];
   concepts: ManifestConceptDefinitionV1[];
+  /** Concrete application types; normalized external bindings belong to instances. */
   types?: {
     concreteTypes: { name: string; location: ManifestSourceLocationV1 }[];
-    bindings: {
-      instance: string;
-      external: string;
-      target:
-        | { kind: "concrete"; name: string }
-        | { kind: "qualified"; instance: string; type: string };
-      location: ManifestSourceLocationV1;
-    }[];
   };
   computations: ManifestComputationDeclarationV1[];
 }
@@ -337,7 +333,12 @@ function checkedDesign(
       )?.locations ?? []
     ).map((item) => location(item, sourceIds)),
   }));
-  const bindings = checked.documents.flatMap(({ bindings: declared }) => declared);
+  const instancesByName = new Map(
+    normalizeAuthoredConceptInstances(checked.documents).map((instance) => [
+      instance.instance,
+      instance,
+    ]),
+  );
   const concepts = checked.sharedDefinitions.map((shared) => {
     const selected = checked.concepts.filter(({ definition }) => definition === shared.definition);
     const first = selected[0];
@@ -348,16 +349,26 @@ function checkedDesign(
       definition: shared.definition,
       ...(source === undefined ? {} : { source: sourceIds.get(source.path) }),
       specification: first.specification,
-      instances: selected.map(({ instance }) => ({
-        name: instance,
-        bindings: bindings
-          .filter((binding) => binding.instance === instance)
-          .map((binding) => ({
-            external: binding.external,
-            target: binding.target,
-            location: location(binding.location, sourceIds),
-          })),
-      })),
+      instances: selected.map(({ instance }) => {
+        const authored = instancesByName.get(instance);
+        if (authored === undefined) {
+          throw new Error(
+            `application manifest: checked design omitted authored instance ${JSON.stringify(instance)}.`,
+          );
+        }
+        return {
+          name: instance,
+          declaration: location(authored.location, sourceIds),
+          bindings: [...authored.bindings]
+            .sort((left, right) => ordinal(left.external, right.external))
+            .map((binding) => ({
+              external: binding.external,
+              target: binding.target,
+              ...(binding.explanation === undefined ? {} : { explanation: binding.explanation }),
+              location: location(binding.location, sourceIds),
+            })),
+        };
+      }),
     };
   });
   const declarationsByName = new Map(
@@ -385,25 +396,17 @@ function checkedDesign(
     sources,
     declarations,
     concepts,
-    ...(checked.documents.every(
-      ({ concreteTypes, bindings: declared }) =>
-        concreteTypes.length === 0 && declared.length === 0,
-    )
+    ...(checked.documents.every(({ concreteTypes }) => concreteTypes.length === 0)
       ? {}
       : {
           types: {
-            concreteTypes: checked.documents.flatMap(({ concreteTypes }) =>
-              concreteTypes.map(({ name, location: at }) => ({
+            concreteTypes: checked.documents
+              .flatMap(({ concreteTypes }) => concreteTypes)
+              .sort((left, right) => ordinal(left.name, right.name))
+              .map(({ name, location: at }) => ({
                 name,
                 location: location(at, sourceIds),
               })),
-            ),
-            bindings: bindings.map((binding) => ({
-              instance: binding.instance,
-              external: binding.external,
-              target: binding.target,
-              location: location(binding.location, sourceIds),
-            })),
           },
         }),
     computations,

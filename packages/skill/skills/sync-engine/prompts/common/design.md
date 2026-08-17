@@ -83,11 +83,12 @@ policy in composition.
 Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paired with
 `src/compositions/*.ts`. Deviations need a benefit and explicit mapping.
 
-A definition may have many instances. Bind each external type once to a nonempty
-concrete or selected concept-owned type. Reject chains, external targets, missing or
-duplicate bindings, unresolved names, and unused concretes. Binding conveys identity,
-not ownership, validation, or TypeScript equivalence. SSF tooling parses structure
-and owned names; review lines and meaning.
+Declare each selected instance once (`instantiate D` or `instantiate D as I`). Bind
+externals once, all inline or detached, to concrete or selected qualified owned types.
+Direct cycles are valid; reject mixed placement, aliases, gaps, duplicates, unresolved
+names, external targets, and unused concretes. Binding conveys identity, not ownership,
+validation, or TypeScript equivalence. SSF tooling parses structure and owned names;
+review opaque lines and meaning manually.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
 wildcards. Cover each authored endpoint/reaction tree, named view/former; declare

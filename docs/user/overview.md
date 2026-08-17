@@ -14,13 +14,14 @@ An application design has three distinct parts:
    Purpose, Principle, external Types, raw State, Actions, and Queries.
 2. **Application design prose** explains application behavior and links each
    selected reaction, view, and former to the decision it realizes.
-3. **Application type declarations** resolve every concept-external type to a
-   concrete application type or a type owned by another selected concept.
+3. **Application instance and type declarations** inventory every selected
+   concept instance and resolve each instance's external parameters to concrete
+   application types or types owned by other selected instances.
 
 These parts answer different questions. A concept specification explains a
 mechanism without naming an application. Application prose explains why
-selected declarations are present. Application type bindings record how otherwise-independent concept parameters
-meet in this assembly.
+selected declarations are present. The instance inventory records which reusable definitions this assembly selects;
+its bindings record how otherwise-independent concept parameters meet.
 
 New applications should use `design/concepts/*.md`,
 `design/compositions/*.md`, and `design/types.md`, conventionally pairing each
@@ -82,32 +83,52 @@ Registration and source checking compare machine-readable declaration shape
 with TypeScript. Natural-language conditions, effects, and query meaning remain
 design contracts and test responsibilities.
 
-## Application types close external parameters
+## Application instances close the selected vocabulary
 
-A `types` fence in any registered application document can contain concrete
-types and direct bindings for selected concept instances:
+Every selected application concept has exactly one authored declaration. The
+short form and explicit same-name form are equivalent:
+
+```instances
+instantiate Posting
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+```
+
+`instantiate Definition as Instance` names the reusable specification H1 first
+and the selected application identity second. Omitting `as` uses the definition
+name as the instance name. Same-name instances have no special semantics, and a
+definition can have only renamed instances.
+
+Application `types` fences contain concrete declarations only:
 
 ```types
 concrete Person
   A stable identity supplied by the institution.
+```
 
+An instance can instead keep all bindings in detached `bindings` fences:
+
+```bindings
 PostComments.User is Person
   Comment authors use institution identities.
-
 PostComments.Target is Posting.Post
   Post comments attach to published posts.
 ```
 
-`concrete` introduces an application type and requires a prose definition.
-`is` binds one selected instance's external parameter directly to either a
-concrete type or a type owned by another selected concept instance. Chains,
-cycles, bindings to external parameters, missing or duplicate bindings, and
-unused concrete types are rejected.
+Bindings can be distributed across registered documents, but one instance must
+use one placement mode: all inline under `with`, or all detached. `with` is
+nonempty. Every external parameter is bound exactly once. A target directly
+names a concrete type or a qualified type on another selected instance. Direct
+qualified dependency cycles are valid because no aliases are expanded; a target
+that names another external parameter is invalid and cannot form an alias chain.
 
-Structural SSF tooling can inventory state-owned names, but the current
-application-binding checker has not yet adopted that inventory. It can verify the
-selected concept on a qualified target but cannot yet prove that the final type name is
-state-owned; it reports no heuristic approximation of that missing proof.
+The full checker compares this inventory with the exact assembled config variant,
+including advanced vocabulary-backed assemblies, and excludes the core-owned
+`RequestBoundary`. Structural SSF tooling supplies each selected definition's
+state-owned name inventory, so qualified binding targets must name an actual owned type;
+external parameter targets remain invalid. Binding statements do not allocate storage
+or establish TypeScript nominal types.
 
 ## Application prose covers executable decisions
 
@@ -179,9 +200,11 @@ design: {
 ```
 
 `documents` contains explicit local `file:` URLs. Documents may be elsewhere in
-a monorepo. Any document may contain `types` fences, and the checker combines
-the declarations across the registered corpus. An application with no
-application-level declarations uses `design: { version: 1, documents: [] }`.
+a monorepo. Any document may contain `types`, `instances`, or `bindings` fences, and the
+checker combines declarations across the registered corpus without depending on
+registration or declaration order. Every selected application instance must
+appear in that corpus; only a concept-free assembly can use
+`design: { version: 1, documents: [] }`.
 
 A second supported application variant uses a second config. Shared documents
 can be reused only when every typed reference resolves in each selected

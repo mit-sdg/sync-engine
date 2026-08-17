@@ -55,10 +55,10 @@ inferring an answer from implementation source.
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
-- Keep concept specifications, registered composition documents, application types, executable declarations, and generated read-back distinct.
+- Keep concept specifications, registered composition documents, authored instance/binding/type declarations, executable declarations, and generated read-back distinct.
 - For new applications, author `design/concepts/*.md`, `design/compositions/*.md`, and `design/types.md`; conventionally pair one composition document with one source module.
-- Form-check draft concepts, compositions, and application types with config-free `sync-engine check-design`; then treat the generated config as the implemented design root: use explicit local URLs, exact typed links, and config-based `sync-engine check` for resolution and coverage. Do not use the removed vocabulary-module mode.
-- Author Concept State in SSF. Version 1 retains raw State while bounded tooling parses structural declarations and owned names; `check-design` reports recognized canonical repairs. Review opaque lines and semantics manually, and do not infer runtime schemas or current application-binding proof from checker success.
+- Form-check draft concepts, compositions, instances, detached bindings, and concrete types with config-free `sync-engine check-design`; then treat each generated config as the implemented design root: declare every selected instance exactly, use explicit local URLs and exact typed links, and run config-based `sync-engine check` for per-variant closure and coverage. Do not use the removed vocabulary-module mode.
+- Author Concept State in SSF. Version 1 retains raw State while bounded tooling parses structural declarations and owned names; `check-design` reports recognized canonical repairs. Config-based checking uses that inventory to prove qualified binding targets. Review opaque lines and semantics manually, and do not infer runtime schemas from checker success.
 - Give every query an indented body explaining its answers, empty or unknown case, and deterministic ordering for `many`.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.

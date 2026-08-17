@@ -1,5 +1,9 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import {
+  AUTHORED_PATH_SEGMENT_SOURCE,
+  DESIGN_IDENTIFIER_SOURCE,
+} from "@engine/utils/design-identifiers";
+import {
   declarationGroups,
   exactlyOneH1,
   indentedBody,
@@ -44,6 +48,9 @@ export interface AuthoredApplicationDesignDocument {
   links: readonly AuthoredDesignLink[];
   computations: readonly AuthoredComputation[];
   concreteTypes: readonly ConcreteTypeDeclaration[];
+  /** Instance declarations authored in this document, with inline bindings attached. */
+  instances: readonly AuthoredConceptInstanceDeclaration[];
+  /** Bindings authored in detached `bindings` fences. */
   bindings: readonly ExternalTypeBinding[];
 }
 
@@ -53,17 +60,33 @@ export interface ConcreteTypeDeclaration {
   location: DesignSourceLocation;
 }
 
+export type BindingPlacement = "inline" | "detached";
+
 export interface ExternalTypeBinding {
   instance: string;
   external: string;
   target:
     | { kind: "concrete"; name: string }
     | { kind: "qualified"; instance: string; type: string };
+  placement: BindingPlacement;
+  /** Detached declarations retain beta-era explanatory prose rather than discarding it. */
   explanation?: string;
   location: DesignSourceLocation;
 }
 
-const SEGMENT = "[A-Za-z_][A-Za-z0-9_-]*";
+export interface AuthoredConceptInstanceDeclaration {
+  definition: string;
+  instance: string;
+  bindings: readonly ExternalTypeBinding[];
+  location: DesignSourceLocation;
+}
+
+export interface NormalizedConceptInstance extends AuthoredConceptInstanceDeclaration {
+  bindings: readonly ExternalTypeBinding[];
+}
+
+const SEGMENT = AUTHORED_PATH_SEGMENT_SOURCE;
+const IDENTIFIER = DESIGN_IDENTIFIER_SOURCE;
 const PATH = new RegExp(`^${SEGMENT}(?:\\.${SEGMENT})*$`);
 const COMPUTATION_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const TYPED_DESTINATION = /^(reaction|view|former|computation):(.*)$/;
@@ -235,9 +258,15 @@ function baseDocument(
 ): { scanned: ScannedMarkdown; document: AuthoredApplicationDesignDocument } {
   const scanned = scanDesignMarkdown(markdown, source);
   const title = exactlyOneH1(scanned).text;
-  const types = scanned.fences
+  const concreteTypes = scanned.fences
     .filter(({ info }) => info === "types")
-    .map((fence) => typesOf(scanned, fence));
+    .flatMap((fence) => concreteTypesOf(scanned, fence));
+  const instances = scanned.fences
+    .filter(({ info }) => info === "instances")
+    .flatMap((fence) => instancesOf(scanned, fence));
+  const bindings = scanned.fences
+    .filter(({ info }) => info === "bindings")
+    .flatMap((fence) => detachedBindingsOf(scanned, fence));
   return {
     scanned,
     document: {
@@ -247,8 +276,9 @@ function baseDocument(
       digest: scanned.digest,
       links: linksOf(scanned),
       computations: computationsOf(scanned),
-      concreteTypes: types.flatMap(({ concreteTypes }) => concreteTypes),
-      bindings: types.flatMap(({ bindings }) => bindings),
+      concreteTypes,
+      instances,
+      bindings,
     },
   };
 }
@@ -265,66 +295,156 @@ export function parseApplicationDesignDocument(
     ) &&
     document.computations.length === 0 &&
     document.concreteTypes.length === 0 &&
+    document.instances.length === 0 &&
     document.bindings.length === 0
   ) {
     fail(
       scanned,
       1,
-      "registered design document must cite a reaction, view, or former, or define a computation or application type",
+      "registered design document must cite a reaction, view, or former, or define a computation, application type, concept instance, or binding",
     );
   }
   return document;
 }
 
-function typesOf(
+function sourceColumn(fence: MarkdownFence, line: DesignSourceLine): number {
+  return fence.location.column + (/^[ \t]*/.exec(line.text)?.[0].length ?? 0);
+}
+
+function targetOf(
+  scanned: ScannedMarkdown,
+  line: DesignSourceLine,
+  target: string,
+): ExternalTypeBinding["target"] {
+  const match = new RegExp(`^(${SEGMENT})(?:\\.(${IDENTIFIER}))?$`).exec(target);
+  if (match === null)
+    fail(scanned, line.number, `binding target ${JSON.stringify(target)} is not direct`);
+  return match[2] === undefined
+    ? { kind: "concrete", name: match[1] }
+    : { kind: "qualified", instance: match[1], type: match[2] };
+}
+
+function concreteTypesOf(
   scanned: ScannedMarkdown,
   fence: MarkdownFence,
-): {
-  concreteTypes: ConcreteTypeDeclaration[];
-  bindings: ExternalTypeBinding[];
-} {
+): ConcreteTypeDeclaration[] {
   const concreteTypes: ConcreteTypeDeclaration[] = [];
-  const bindings: ExternalTypeBinding[] = [];
   for (const group of declarationGroups(fence)) {
     const concrete = new RegExp(`^concrete\\s+(${SEGMENT})\\s*$`).exec(group.signature.text);
-    const binding = new RegExp(
-      `^(${SEGMENT})\\.(${SEGMENT})\\s+is\\s+(${SEGMENT})(?:\\.(${SEGMENT}))?\\s*$`,
-    ).exec(group.signature.text);
+    if (concrete === null) {
+      fail(
+        scanned,
+        group.signature.number,
+        "types fence accepts only `concrete Name` declarations",
+      );
+    }
     const body = indentedBody(group.body);
-    if (concrete !== null) {
-      if (body === "")
-        fail(
-          scanned,
-          group.signature.number,
-          `concrete type ${JSON.stringify(concrete[1])} needs an indented prose definition`,
-        );
-      concreteTypes.push({
-        name: concrete[1],
-        definition: body,
-        location: at(scanned, group.signature.number),
-      });
-      continue;
-    }
-    if (binding !== null) {
-      bindings.push({
-        instance: binding[1],
-        external: binding[2],
-        target:
-          binding[4] === undefined
-            ? { kind: "concrete", name: binding[3] }
-            : { kind: "qualified", instance: binding[3], type: binding[4] },
-        ...(body === "" ? {} : { explanation: body }),
-        location: at(scanned, group.signature.number),
-      });
-      continue;
-    }
-    fail(
-      scanned,
-      group.signature.number,
-      "types fence accepts only `concrete Name` or `Instance.External is Target` declarations",
-    );
+    if (body === "")
+      fail(
+        scanned,
+        group.signature.number,
+        `concrete type ${JSON.stringify(concrete[1])} needs an indented prose definition`,
+      );
+    concreteTypes.push({
+      name: concrete[1],
+      definition: body,
+      location: at(scanned, group.signature.number, sourceColumn(fence, group.signature)),
+    });
   }
-  return { concreteTypes, bindings };
+  return concreteTypes;
+}
+
+function inlineBindingOf(
+  scanned: ScannedMarkdown,
+  fence: MarkdownFence,
+  instance: string,
+  line: DesignSourceLine,
+): ExternalTypeBinding {
+  const match = new RegExp(
+    `^[ \\t]+(${IDENTIFIER})\\s+is\\s+(${SEGMENT}(?:\\.${IDENTIFIER})?)\\s*$`,
+  ).exec(line.text);
+  if (match === null) {
+    fail(scanned, line.number, "inline binding needs indented `External is Target` form");
+  }
+  return {
+    instance,
+    external: match[1],
+    target: targetOf(scanned, line, match[2]),
+    placement: "inline",
+    location: at(scanned, line.number, sourceColumn(fence, line)),
+  };
+}
+
+function instancesOf(
+  scanned: ScannedMarkdown,
+  fence: MarkdownFence,
+): AuthoredConceptInstanceDeclaration[] {
+  const instances: AuthoredConceptInstanceDeclaration[] = [];
+  for (const group of declarationGroups(fence)) {
+    const declaration = new RegExp(
+      `^instantiate\\s+(${IDENTIFIER})(?:\\s+as\\s+(${SEGMENT}))?(\\s+with)?\\s*$`,
+    ).exec(group.signature.text);
+    if (declaration === null) {
+      fail(
+        scanned,
+        group.signature.number,
+        "instances fence needs `instantiate Definition`, optionally followed by `as Instance` and `with`",
+      );
+    }
+    const definition = declaration[1];
+    const instance = declaration[2] ?? definition;
+    const withBindings = declaration[3] !== undefined;
+    const body = group.body.filter(({ text }) => text.trim() !== "");
+    if (!withBindings && body.length > 0) {
+      fail(
+        scanned,
+        body[0].number,
+        `instance ${JSON.stringify(instance)} has a body without \`with\``,
+      );
+    }
+    if (withBindings && body.length === 0) {
+      fail(
+        scanned,
+        group.signature.number,
+        `instance ${JSON.stringify(instance)} has an empty \`with\` block`,
+      );
+    }
+    instances.push({
+      definition,
+      instance,
+      bindings: withBindings
+        ? body.map((line) => inlineBindingOf(scanned, fence, instance, line))
+        : [],
+      location: at(scanned, group.signature.number, sourceColumn(fence, group.signature)),
+    });
+  }
+  return instances;
+}
+
+function detachedBindingsOf(scanned: ScannedMarkdown, fence: MarkdownFence): ExternalTypeBinding[] {
+  const bindings: ExternalTypeBinding[] = [];
+  for (const group of declarationGroups(fence)) {
+    const binding = new RegExp(
+      `^(${SEGMENT})\\.(${IDENTIFIER})\\s+is\\s+(${SEGMENT}(?:\\.${IDENTIFIER})?)\\s*$`,
+    ).exec(group.signature.text);
+    if (binding === null) {
+      fail(
+        scanned,
+        group.signature.number,
+        "bindings fence accepts only `Instance.External is Target` declarations",
+      );
+    }
+    const explanation = indentedBody(group.body);
+    bindings.push({
+      instance: binding[1],
+      external: binding[2],
+      target: targetOf(scanned, group.signature, binding[3]),
+      placement: "detached",
+      ...(explanation === "" ? {} : { explanation }),
+      location: at(scanned, group.signature.number, sourceColumn(fence, group.signature)),
+    });
+  }
+  return bindings;
 }
 
 export interface SelectedComputationDesign {
@@ -339,7 +459,15 @@ export interface SelectedComputationDesign {
 
 export interface SelectedConceptDesign {
   instance: string;
+  definition: string;
   externalTypes: readonly string[];
+  /**
+   * Optional integration result from the structured-SSF owner. Supply the complete
+   * normalized owned-name inventory for the selected definition (including accepted
+   * singular/plural and subset names). Until supplied, qualified targets retain the
+   * beta selected-instance, non-external check and do not claim ownership proof.
+   */
+  ownedTypes?: readonly string[];
 }
 
 export interface SelectedApplicationDesign {
@@ -357,12 +485,18 @@ export type ApplicationDesignIssueCode =
   | "UNREGISTERED_COMPUTATION"
   | "COMPUTATION_INPUT_MISMATCH"
   | "DUPLICATE_CONCRETE_TYPE"
-  | "DUPLICATE_TYPE_BINDING"
-  | "UNKNOWN_EXTERNAL"
-  | "MISSING_BINDING"
-  | "UNRESOLVED_TYPE_TARGET"
-  | "EXTERNAL_TARGET"
-  | "UNUSED_CONCRETE";
+  | "DUPLICATE_INSTANCE"
+  | "DUPLICATE_EXTERNAL_BINDING"
+  | "MIXED_BINDING_PLACEMENT"
+  | "UNDECLARED_BINDING_INSTANCE"
+  | "UNSELECTED_INSTANCE"
+  | "UNDECLARED_SELECTED_INSTANCE"
+  | "INSTANCE_DEFINITION_MISMATCH"
+  | "UNKNOWN_EXTERNAL_BINDING"
+  | "MISSING_EXTERNAL_BINDING"
+  | "UNRESOLVED_BINDING_TARGET"
+  | "EXTERNAL_BINDING_TARGET"
+  | "UNUSED_CONCRETE_TYPE";
 
 export interface ApplicationDesignIssue {
   code: ApplicationDesignIssueCode;
@@ -371,9 +505,44 @@ export interface ApplicationDesignIssue {
 }
 
 export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
-  code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING";
+  code:
+    | "DUPLICATE_COMPUTATION"
+    | "DUPLICATE_CONCRETE_TYPE"
+    | "DUPLICATE_INSTANCE"
+    | "DUPLICATE_EXTERNAL_BINDING"
+    | "MIXED_BINDING_PLACEMENT"
+    | "UNDECLARED_BINDING_INSTANCE";
   location: DesignSourceLocation;
 };
+
+function allDeclarations(
+  documents: readonly AuthoredApplicationDesignDocument[],
+): AuthoredConceptInstanceDeclaration[] {
+  return documents.flatMap(({ instances }) => instances);
+}
+
+function allBindings(
+  documents: readonly AuthoredApplicationDesignDocument[],
+): ExternalTypeBinding[] {
+  return documents.flatMap(({ instances, bindings }) => [
+    ...instances.flatMap((instance) => instance.bindings),
+    ...bindings,
+  ]);
+}
+
+/** Merge valid distributed declarations into the canonical per-instance authored model. */
+export function normalizeAuthoredConceptInstances(
+  documents: readonly AuthoredApplicationDesignDocument[],
+): NormalizedConceptInstance[] {
+  const detached = Map.groupBy(
+    documents.flatMap(({ bindings }) => bindings),
+    ({ instance }) => instance,
+  );
+  return allDeclarations(documents).map((declaration) => ({
+    ...declaration,
+    bindings: [...declaration.bindings, ...(detached.get(declaration.instance) ?? [])],
+  }));
+}
 
 /** Check corpus-wide authored forms that do not require a selected assembly. */
 export function validateAuthoredApplicationDesignForm(
@@ -382,7 +551,7 @@ export function validateAuthoredApplicationDesignForm(
   const issues: ApplicationDesignFormIssue[] = [];
   const computations = new Set<string>();
   const concreteTypes = new Set<string>();
-  const bindings = new Set<string>();
+  const instances = new Map<string, AuthoredConceptInstanceDeclaration>();
 
   for (const document of documents) {
     for (const computation of document.computations) {
@@ -403,15 +572,53 @@ export function validateAuthoredApplicationDesignForm(
         });
       } else concreteTypes.add(declaration.name);
     }
-    for (const binding of document.bindings) {
-      const key = `${binding.instance}.${binding.external}`;
-      if (bindings.has(key)) {
+    for (const declaration of document.instances) {
+      if (instances.has(declaration.instance)) {
         issues.push({
-          code: "DUPLICATE_TYPE_BINDING",
-          message: `external type ${JSON.stringify(key)} has more than one application binding.`,
+          code: "DUPLICATE_INSTANCE",
+          message: `instance ${JSON.stringify(declaration.instance)} is instantiated more than once.`,
+          location: declaration.location,
+        });
+      } else instances.set(declaration.instance, declaration);
+    }
+  }
+
+  const bindingsByInstance = Map.groupBy(allBindings(documents), ({ instance }) => instance);
+  for (const [instance, bindings] of bindingsByInstance) {
+    const declaration = instances.get(instance);
+    const inline = bindings.filter(({ placement }) => placement === "inline");
+    const detached = bindings.filter(({ placement }) => placement === "detached");
+    const mixed = inline.length > 0 && detached.length > 0;
+    if (declaration === undefined) {
+      for (const binding of detached) {
+        issues.push({
+          code: "UNDECLARED_BINDING_INSTANCE",
+          message: `detached binding for ${JSON.stringify(`${instance}.${binding.external}`)} has no authored instance declaration.`,
           location: binding.location,
         });
-      } else bindings.add(key);
+      }
+    }
+    if (mixed) {
+      issues.push({
+        code: "MIXED_BINDING_PLACEMENT",
+        message: `instance ${JSON.stringify(instance)} supplies bindings both inline and in detached binding declarations; choose one placement for the instance.`,
+        location: detached[0].location,
+      });
+    }
+
+    // Mixed placement is one repair. Suppress cross-mode duplicate noise, while
+    // retaining independently actionable duplicates inside either chosen mode.
+    for (const placementBindings of mixed ? [inline, detached] : [bindings]) {
+      const seen = new Set<string>();
+      for (const binding of placementBindings) {
+        if (seen.has(binding.external)) {
+          issues.push({
+            code: "DUPLICATE_EXTERNAL_BINDING",
+            message: `external type ${JSON.stringify(`${instance}.${binding.external}`)} has more than one application binding.`,
+            location: binding.location,
+          });
+        } else seen.add(binding.external);
+      }
     }
   }
   return issues;
@@ -432,7 +639,8 @@ export function validateAuthoredApplicationDesign(
   documents: readonly AuthoredApplicationDesignDocument[],
   selected: SelectedApplicationDesign,
 ): ApplicationDesignIssue[] {
-  const issues: ApplicationDesignIssue[] = [...validateAuthoredApplicationDesignForm(documents)];
+  const formIssues = validateAuthoredApplicationDesignForm(documents);
+  const issues: ApplicationDesignIssue[] = [...formIssues];
   const corpus = documents;
   const selectedByKind: Record<Exclude<DesignLinkKind, "computation">, Set<string>> = {
     reaction: new Set(selected.reactions),
@@ -499,70 +707,143 @@ export function validateAuthoredApplicationDesign(
     }
   }
 
-  const concepts = new Map(
-    selected.concepts.map((concept) => [concept.instance, new Set(concept.externalTypes)]),
-  );
-  const concrete = new Map<string, ConcreteTypeDeclaration>();
-  for (const declaration of corpus.flatMap(({ concreteTypes }) => concreteTypes)) {
-    if (concrete.has(declaration.name)) continue;
-    concrete.set(declaration.name, declaration);
+  const selectedConcepts = new Map(selected.concepts.map((concept) => [concept.instance, concept]));
+  const declarations = new Map<string, AuthoredConceptInstanceDeclaration>();
+  for (const declaration of allDeclarations(corpus)) {
+    if (!declarations.has(declaration.instance))
+      declarations.set(declaration.instance, declaration);
   }
+  const normalized = new Map<string, NormalizedConceptInstance>();
+  for (const instance of normalizeAuthoredConceptInstances(corpus)) {
+    if (!normalized.has(instance.instance)) normalized.set(instance.instance, instance);
+  }
+  const declarationCounts = Map.groupBy(allDeclarations(corpus), ({ instance }) => instance);
+  const duplicateInstances = new Set(
+    [...declarationCounts].filter(([, values]) => values.length > 1).map(([instance]) => instance),
+  );
+  const mixedInstances = new Set(
+    [...Map.groupBy(allBindings(corpus), ({ instance }) => instance)]
+      .filter(([, bindings]) => {
+        const placements = new Set(bindings.map(({ placement }) => placement));
+        return placements.size > 1;
+      })
+      .map(([instance]) => instance),
+  );
 
-  const usedConcrete = new Set<string>();
-  const bindings = new Map<string, ExternalTypeBinding>();
-  for (const binding of corpus.flatMap(({ bindings: declared }) => declared)) {
-    const externals = concepts.get(binding.instance);
-    const key = `${binding.instance}.${binding.external}`;
-    if (!bindings.has(key) && externals !== undefined && externals.has(binding.external)) {
-      bindings.set(key, binding);
-    }
-    if (externals === undefined || !externals.has(binding.external)) {
+  const matched = new Set<string>();
+  for (const declaration of declarations.values()) {
+    const executable = selectedConcepts.get(declaration.instance);
+    if (executable === undefined) {
       issues.push({
-        code: "UNKNOWN_EXTERNAL",
-        message: `binding left side ${JSON.stringify(key)} is not a selected external type.`,
-        location: binding.location,
+        code: "UNSELECTED_INSTANCE",
+        message: `authored instance ${JSON.stringify(declaration.instance)} of ${JSON.stringify(declaration.definition)} is not selected by this assembly.`,
+        location: declaration.location,
+      });
+      continue;
+    }
+    if (declaration.definition !== executable.definition) {
+      issues.push({
+        code: "INSTANCE_DEFINITION_MISMATCH",
+        message: `instance ${JSON.stringify(declaration.instance)} is authored from ${JSON.stringify(declaration.definition)}, but its executable registration defines ${JSON.stringify(executable.definition)}.`,
+        location: declaration.location,
+      });
+      continue;
+    }
+    matched.add(declaration.instance);
+  }
+  for (const concept of selected.concepts) {
+    if (!declarations.has(concept.instance)) {
+      issues.push({
+        code: "UNDECLARED_SELECTED_INSTANCE",
+        message: `selected instance ${JSON.stringify(concept.instance)} of ${JSON.stringify(concept.definition)} has no authored instantiation.`,
       });
     }
+  }
 
-    if (binding.target.kind === "concrete") {
-      if (!concrete.has(binding.target.name)) {
+  const concrete = new Map<string, ConcreteTypeDeclaration>();
+  for (const declaration of corpus.flatMap(({ concreteTypes }) => concreteTypes)) {
+    if (!concrete.has(declaration.name)) concrete.set(declaration.name, declaration);
+  }
+  const usedConcrete = new Set<string>();
+  // A placement or definition repair must not cascade into an unrelated unused-type finding.
+  for (const binding of allBindings(corpus)) {
+    if (binding.target.kind === "concrete" && concrete.has(binding.target.name)) {
+      usedConcrete.add(binding.target.name);
+    }
+  }
+
+  for (const instance of normalized.values()) {
+    if (
+      !matched.has(instance.instance) ||
+      duplicateInstances.has(instance.instance) ||
+      mixedInstances.has(instance.instance)
+    )
+      continue;
+    const concept = selectedConcepts.get(instance.instance)!;
+    const externals = new Set(concept.externalTypes);
+    const accepted = new Set<string>();
+    for (const binding of instance.bindings) {
+      if (!externals.has(binding.external)) {
         issues.push({
-          code: "UNRESOLVED_TYPE_TARGET",
-          message: `binding target ${JSON.stringify(binding.target.name)} is not a declared concrete type.`,
+          code: "UNKNOWN_EXTERNAL_BINDING",
+          message: `instance ${JSON.stringify(instance.instance)} of ${JSON.stringify(instance.definition)} binds ${JSON.stringify(binding.external)}, but the definition declares only ${concept.externalTypes.map((name) => JSON.stringify(name)).join(" and ") || "no types"} as external parameters.`,
           location: binding.location,
         });
-      } else usedConcrete.add(binding.target.name);
-    } else {
-      const targetExternals = concepts.get(binding.target.instance);
-      if (targetExternals === undefined) {
+      } else if (!accepted.has(binding.external)) {
+        accepted.add(binding.external);
+      }
+
+      if (binding.target.kind === "concrete") {
+        if (!concrete.has(binding.target.name)) {
+          issues.push({
+            code: "UNRESOLVED_BINDING_TARGET",
+            message: `binding target ${JSON.stringify(binding.target.name)} is not a declared concrete type.`,
+            location: binding.location,
+          });
+        } else usedConcrete.add(binding.target.name);
+        continue;
+      }
+      const target = selectedConcepts.get(binding.target.instance);
+      if (target === undefined || !matched.has(binding.target.instance)) {
         issues.push({
-          code: "UNRESOLVED_TYPE_TARGET",
-          message: `binding target instance ${JSON.stringify(binding.target.instance)} is not selected.`,
+          code: "UNRESOLVED_BINDING_TARGET",
+          message:
+            target === undefined
+              ? `binding target instance ${JSON.stringify(binding.target.instance)} is not selected.`
+              : `binding target instance ${JSON.stringify(binding.target.instance)} has no matching authored instantiation.`,
           location: binding.location,
         });
-      } else if (targetExternals.has(binding.target.type)) {
+      } else if (target.externalTypes.includes(binding.target.type)) {
         issues.push({
-          code: "EXTERNAL_TARGET",
-          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is another external parameter.`,
+          code: "EXTERNAL_BINDING_TARGET",
+          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is another external parameter; bindings must target a concrete application type or terminate directly at an owned type.`,
+          location: binding.location,
+        });
+      } else if (
+        target.ownedTypes !== undefined &&
+        !target.ownedTypes.includes(binding.target.type)
+      ) {
+        issues.push({
+          code: "UNRESOLVED_BINDING_TARGET",
+          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is not an owned type reported for definition ${JSON.stringify(target.definition)}.`,
           location: binding.location,
         });
       }
     }
-  }
-  for (const [instance, externals] of concepts) {
-    for (const external of externals) {
-      const key = `${instance}.${external}`;
-      if (!bindings.has(key))
+    for (const external of concept.externalTypes) {
+      if (!accepted.has(external)) {
         issues.push({
-          code: "MISSING_BINDING",
-          message: `selected external type ${JSON.stringify(key)} has no application type binding.`,
+          code: "MISSING_EXTERNAL_BINDING",
+          message: `instance ${JSON.stringify(instance.instance)} of ${JSON.stringify(instance.definition)} does not bind external parameter ${JSON.stringify(external)}.`,
+          location: instance.location,
         });
+      }
     }
   }
   for (const declaration of concrete.values()) {
     if (!usedConcrete.has(declaration.name)) {
       issues.push({
-        code: "UNUSED_CONCRETE",
+        code: "UNUSED_CONCRETE_TYPE",
         message: `concrete type ${JSON.stringify(declaration.name)} is not used by a binding.`,
         location: declaration.location,
       });

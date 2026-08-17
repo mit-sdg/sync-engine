@@ -292,7 +292,7 @@ versions are not decoded.
 
 Artifact planning validates the complete design before rendering either output.
 Generated Markdown reports reaction lowering, views, formers, structured concept
-contracts, application type bindings, computations, and every covering source
+contracts, authored instance declarations and per-instance bindings, concrete application types, computations, and every covering source
 location. It links to authored prose rather than copying it. Full normalized
 document contents contribute to input digests, so prose-only changes invalidate
 pinned artifacts. Generated wire remains derived from executable boundary facts

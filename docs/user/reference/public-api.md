@@ -524,12 +524,13 @@ versioned manifest protects application IR carried inside a manifest from
 incompatible tooling.
 
 The application manifest has format `sync-engine.application-manifest`, version
-`1`, and is canonical JSON-round-trippable application data. This is a hard
-schema reset; earlier manifest versions are rejected without upconversion. It
-contains executable application and wire facts plus structured concept
-contracts, raw State, definition and instance identities, resolved application types,
-computation signatures, registered design source locations, normalized-source
-digests, implementation provenance, validators, and diagnostics. It excludes
+`1`, and is canonical JSON-round-trippable application data. This beta replaces
+the earlier version-1 schema in place; the old beta shape and other versions are
+rejected without upconversion. It contains executable application and wire facts
+plus structured concept contracts, raw State, definition identities, instances
+with declaration and binding provenance, concrete application types, computation
+signatures, registered design source locations, normalized-source digests,
+implementation provenance, validators, and diagnostics. It excludes
 runtime functions, constructor arguments, resources, object identity,
 occurrences, timestamps, and other runtime state.
 
@@ -630,21 +631,21 @@ The `sync-engine artifacts` command reads the default export of the
 application-owned `generated.config.ts`. `GeneratedApplication` names the
 descriptor type exported from `/tooling`.
 
-| Field                 | Required | Default                                                            |
-| --------------------- | -------- | ------------------------------------------------------------------ |
-| `assemble`            | yes      | Synchronous function that returns the application assembly         |
-| `title`               | yes      | Application title used to derive names                             |
-| `close`               | no       | Runs after the generated assembly drains                           |
-| `directory`           | no       | `new URL("./generated/", configUrl)`                               |
-| `specification`       | no       | Slugged title plus `.md`                                           |
-| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance            |
-| `wire`                | no       | `"wire.ts"`                                                        |
-| `wireName`            | no       | Pascal-cased title plus `Wire`                                     |
-| `wireBanner`          | no       | Exact package/version generator banner                             |
-| `design.version`      | yes      | Must be `1`                                                        |
-| `design.documents`    | yes      | Local design URLs; may contain `types` fences or be empty          |
-| `conceptSet`          | no       | Source anchor; defaults to `src/concepts.ts#applicationConceptSet` |
-| `projections`         | no       | Ordered transport-specific projections                             |
+| Field                 | Required | Default                                                                                     |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `assemble`            | yes      | Synchronous function that returns the application assembly                                  |
+| `title`               | yes      | Application title used to derive names                                                      |
+| `close`               | no       | Runs after the generated assembly drains                                                    |
+| `directory`           | no       | `new URL("./generated/", configUrl)`                                                        |
+| `specification`       | no       | Slugged title plus `.md`                                                                    |
+| `specificationBanner` | no       | Generated-from comment followed by mandatory provenance                                     |
+| `wire`                | no       | `"wire.ts"`                                                                                 |
+| `wireName`            | no       | Pascal-cased title plus `Wire`                                                              |
+| `wireBanner`          | no       | Exact package/version generator banner                                                      |
+| `design.version`      | yes      | Must be `1`                                                                                 |
+| `design.documents`    | yes      | Local URLs containing the complete instances, bindings, concrete types, and coverage corpus |
+| `conceptSet`          | no       | Source anchor; defaults to `src/concepts.ts#applicationConceptSet`                          |
+| `projections`         | no       | Ordered transport-specific projections                                                      |
 
 The default specification banner consists of these comments:
 

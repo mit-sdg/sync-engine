@@ -83,16 +83,16 @@ export async function checkDesignFiles(
       } catch (applicationError) {
         throw resemblesConcept(markdown, label) ? conceptError : applicationError;
       }
-      const issue = validateAuthoredApplicationDesignForm(applicationDocuments)[0];
-      if (issue !== undefined) {
-        throw new Error(
-          `${issue.location.source}:${issue.location.line}:${issue.location.column}: [${issue.code}] ${issue.message}`,
-        );
-      }
       checked.push({ path: label, kind: "application" });
     } catch (error) {
       throw new Error(`Design document ${label} is invalid: ${describe(error)}`);
     }
+  }
+  const issue = validateAuthoredApplicationDesignForm(applicationDocuments)[0];
+  if (issue !== undefined) {
+    throw new Error(
+      `Design document ${issue.location.source} is invalid: ${issue.location.source}:${issue.location.line}:${issue.location.column}: [${issue.code}] ${issue.message}`,
+    );
   }
   return checked;
 }

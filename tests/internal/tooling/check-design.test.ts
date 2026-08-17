@@ -62,7 +62,14 @@ const types = `# Notes application types
 \`\`\`types
 concrete Person
   A stable application identity.
+\`\`\`
 
+\`\`\`instances
+instantiate Commenting as Comments
+instantiate Posting
+\`\`\`
+
+\`\`\`bindings
 Comments.User is Person
 Comments.Target is Posting.Post
 \`\`\`
@@ -124,13 +131,13 @@ describe("authored design form check", () => {
     ],
     [
       "binding left side",
-      "# Bad binding\n\n```types\nUser is Person\n```\n",
-      /accepts only `concrete Name` or `Instance.External is Target`/,
+      "# Bad binding\n\n```bindings\nUser is Person\n```\n",
+      /accepts only `Instance.External is Target`/,
     ],
     [
       "binding target",
-      "# Bad target\n\n```types\nComments.User is Other..Person\n```\n",
-      /accepts only `concrete Name` or `Instance.External is Target`/,
+      "# Bad target\n\n```bindings\nComments.User is Other..Person\n```\n",
+      /accepts only `Instance.External is Target`/,
     ],
   ])("rejects malformed %s form", async (_name, markdown, expected) => {
     const root = await fixture({ "bad.md": markdown });
@@ -172,12 +179,16 @@ concrete Person
       "binding",
       `# Duplicate binding
 
-\`\`\`types
+\`\`\`instances
+instantiate Commenting as Comments
+\`\`\`
+
+\`\`\`bindings
 Comments.User is Person
 Comments.User is Posting.Author
 \`\`\`
 `,
-      "DUPLICATE_TYPE_BINDING",
+      "DUPLICATE_EXTERNAL_BINDING",
     ],
   ])("rejects a duplicate %s across the supplied corpus", async (_name, duplicate, code) => {
     const root = await fixture({ "valid.md": composition, "duplicate.md": duplicate });

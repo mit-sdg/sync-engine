@@ -92,33 +92,61 @@ After registering the implementation, run config-based `sync-engine check` to ad
 source provenance, TypeScript shapes, result fields, optionality, and refusal mapping.
 Do not leave those diagnostics unresolved.
 
-## 3. Declare application types
+## 3. Declare every concept instance and application type
 
-Put the application `types` fence in `design/types.md` and register that document in
-the generated config. The checker can parse a fence in any registered application
-document, but one dedicated file keeps application-wide identity closure visible.
+Put the complete instance inventory and concrete application types in
+`design/types.md` and register that document in the generated config. The checker
+accepts these fences in any registered application document, but one dedicated
+file keeps the closed inventory visible.
 
-Declare each concrete type with a nonempty definition, then bind every selected
-external parameter exactly once across all registered documents:
+Declare each selected concept-set key exactly once. Use the inline form when the
+definition has external parameters:
+
+```instances
+instantiate Posting
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+```
+
+`instantiate Definition` means `instantiate Definition as Definition`. The name
+after `as` must equal the selected `conceptSet` key, and the definition must equal
+the selected specification H1. An instance with `with` must include at least one
+binding.
+
+Declare concrete application types separately:
 
 ```types
 concrete Person
   A stable identity supplied by the institution.
+```
 
+If the application deliberately centralizes relationships, omit `with` and put
+all bindings for that instance in one or more detached fences:
+
+```bindings
 PostComments.User is Person
   Comment authors use institution identities.
-
 PostComments.Target is Posting.Post
   Post comments attach to published posts.
 ```
 
-The left side names a selected concept instance and one of its external
-parameters. The right side directly names a concrete type or a type owned by a
-selected concept instance. Do not create chains, bind to another external
-parameter, or leave a concrete type unused.
+Do not split one instance between inline and detached forms. Every external
+parameter is supplied exactly once. The right side directly names a concrete
+type or a qualified type on a selected instance. Do not bind to another external
+parameter or create an alias chain. Direct qualified dependency cycles are
+allowed because each edge resolves independently rather than expanding aliases.
+Until structured SSF ownership is integrated, manually review the final
+qualified type name; checker success proves only that its instance is selected
+and its name is not external.
+
+Detached binding explanations are retained in provenance and generated read-back;
+keep useful existing prose when migrating. Neither an instantiation nor a binding
+allocates storage or changes TypeScript signatures. Configure per-instance
+repositories or namespaces separately where durable state must be isolated.
 
 The concept-set module neither imports nor exports this Markdown. Register the
-document containing the fence in the generated config's `design.documents`
+document containing the fences in the generated config's `design.documents`
 array.
 
 ## 4. Explain application decisions with typed links
@@ -205,9 +233,10 @@ export default {
 ```
 
 Every URL must use the local `file:` scheme. Relative URLs may point outside the
-application directory, including elsewhere in a monorepo. Type declarations and
-bindings may be split across these documents; names and external bindings remain
-globally unique. Use this explicit empty form when there is no application-level
+application directory, including elsewhere in a monorepo. Instance declarations, concrete types, and detached bindings may be split across
+these documents; registration and declaration order do not affect resolution.
+Instance names and external binding left sides remain globally unique. Use this
+explicit empty form only for a concept-free assembly with no application-level
 declaration to explain:
 
 ```text
@@ -268,14 +297,17 @@ by the old format.
    review opaque lines and State semantics manually.
 4. Rewrite action branches and query result rows into the structured grammar, and give
    every query an explanatory body.
-5. Replace vocabulary edges and executable Markdown imports with `types` fences
-   using `concrete` and `is` in registered application documents.
-6. Remove composition `spec` imports and add exact typed links to registered
+5. Add one `instantiate Definition` or `instantiate Definition as Instance`
+   declaration for every selected concept-set key in each config variant.
+6. Move concrete declarations into `types` fences and old qualified binding lines
+   into inline `with` blocks or detached `bindings` fences. Preserve useful
+   indented binding explanations; detached declarations retain them directly.
+7. Remove composition `spec` imports and add exact typed links to registered
    application prose.
-7. Add declarations for every executable computation.
-8. Add `design: { version: 1, documents }` to each generated config.
-9. Remove `--vocabulary-module`; run `sync-engine check` or pass `--config`.
-10. Regenerate every manifest and generated artifact, then rerun tests.
+8. Add declarations for every executable computation.
+9. Add `design: { version: 1, documents }` to each generated config.
+10. Remove `--vocabulary-module`; run `sync-engine check` or pass `--config`.
+11. Regenerate every manifest and generated artifact, then rerun tests.
 
 There is no legacy parser, compatibility flag, automatic format detection, or
 old-manifest decoder. Migration failures name the missing or malformed required

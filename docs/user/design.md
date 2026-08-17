@@ -40,8 +40,8 @@ rule and permits a concept to participate in another composition.
 Keep authored intent, executable declarations, and generated evidence distinct.
 A concept specification records reusable concept-local behavior. Registered
 application prose records the decisions realized by selected reactions, views, and
-formers, while `types` fences in those documents resolve every concept-external type
-for that application. Concept specifications are imported by `registerConcept` and
+formers, while `instances`, `bindings`, and `types` fences declare the complete
+selected concept inventory and resolve every concept-external type for that application. Concept specifications are imported by `registerConcept` and
 are not application documents listed again in `design.documents`.
 
 For a new application, use `design/concepts/*.md`, `design/compositions/*.md`, and
@@ -77,22 +77,28 @@ One link names one exact dotted composition path; wildcards and implied descenda
 not exist. The checker resolves a link but cannot judge whether the surrounding prose
 states the declaration's decision honestly.
 
-`design/types.md` normally contains the registered `types` fence. Use `concrete` to
-introduce an application type and `is` to bind one selected concept instance's
-external parameter directly:
+`design/types.md` normally contains the complete registered inventory. Declare
+concrete types separately from instances and bindings:
 
 ```types
 concrete Person
   A stable identity supplied by the institution.
-
-PostComments.User is Person
-PostComments.Target is Posting.Post
 ```
 
-A right side names either a concrete type or a type owned by a selected concept
-instance. Bindings do not transfer ownership, establish TypeScript assignability, or
-provide runtime validation. Chains, bindings to external parameters, missing
-bindings, and unused concrete declarations are invalid.
+```instances
+instantiate Posting
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+```
+
+An instance may instead supply all of its external parameters through detached
+`bindings` fences, but one instance cannot mix placement modes. A right side names
+either a concrete type or a qualified type on a selected concept instance. Bindings
+do not transfer ownership, establish TypeScript assignability, configure storage, or
+provide runtime validation. Alias chains, bindings to external parameters, missing
+bindings, and unused concrete declarations are invalid. Cycles among direct qualified
+owned-type dependencies are valid because no alias expansion occurs.
 
 Declare named computations in `computations` fences in the composition document that
 uses them, or in `design/types.md` when several modules share their meaning. Each

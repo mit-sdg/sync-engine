@@ -1,6 +1,4 @@
-# Login
-
-[Login flow](reaction:Login).
+# Application instances
 
 ```instances
 instantiate Sessioning

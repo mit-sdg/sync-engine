@@ -108,18 +108,26 @@ config-based `check`. Before assembly, `check-design` proves only these form pro
   paths, and `computation:` links contain exact computation names;
 - `computations` declarations have valid signatures, distinct input names, balanced
   type delimiters, and indented prose bodies;
-- application `types` fences contain only `concrete Name` declarations with prose or
-  direct `SelectedInstance.External is Target` bindings;
-- a binding target has either the concrete-name form or the concept-owned
-  `SelectedInstance.Type` form; and
-- computation names, concrete type names, and binding left sides are not duplicated
-  across the supplied application-design documents.
+- application `types` fences contain only `concrete Name` declarations with prose;
+- `instances` fences accept bare, renamed, and nonempty inline-`with` declarations;
+- detached `bindings` fences use direct `SelectedInstance.External is Target` form;
+- a binding target has either a concrete-name or qualified `SelectedInstance.Type`
+  form, never a chain;
+- one instance does not mix inline and detached placement; and
+- computation names, concrete type names, instance names, and binding left sides are
+  not duplicated across the supplied application-design documents.
 
-The command does not discover additional files or require a complete corpus. Its SSF
-validation uses the shared bounded structural parser, but reports only canonical repair
-issues; parser success is not a runtime schema or semantic State proof. It does not
-resolve typed links, binding left sides, or binding targets against selected instances
-or concept declarations. It also does not require
+Definition and external names use `[A-Za-z_][A-Za-z0-9_]*`. Instance and concrete
+name segments retain authored-path form `[A-Za-z_][A-Za-z0-9_-]*`; the final type
+name of a qualified target uses identifier form.
+
+The command does not discover additional files or require assembly completeness.
+It merges all supplied application documents before corpus checks, so detached
+bindings may precede their instance declaration in operand order. Its SSF validation
+uses the shared bounded structural parser but reports only canonical repair issues;
+parser success is not a runtime schema or semantic State proof. It does not resolve
+typed links, binding left sides, or binding targets against selected instances or
+concept declarations. It also does not require
 declaration coverage, compare computation inputs with TypeScript, validate concept source agreement, or
 inspect ordinary prose and computation-body semantics. Those checks need the selected
 assembly and remain the job of config-based `sync-engine check`. In particular, a
@@ -169,18 +177,23 @@ optionality.
 
 The checker does not claim semantic equivalence between authored type names and
 TypeScript types or require non-external names to have Types declarations. It retains
-raw State; shared tooling can parse its bounded structural SSF declarations, but the
-current config check does not compare that inventory with class fields, storage, or
-application type-binding targets.
+raw State and does not compare its bounded structural inventory with class fields or
+storage. Config-based instance checking does use the inventory to prove qualified
+binding targets are definition-owned.
 
 ### Application-design checks
 
 For the configured design corpus, `check`:
 
 - accepts only explicit local `file:` URLs;
-- parses links, computations, and application `types` fences in every listed document;
-- inventories all normalized source contents for provenance and digests;
-- validates application `concrete` declarations and direct `is` bindings;
+- parses links, computations, and application `types`, `instances`, and `bindings`
+  fences in every listed document;
+- inventories all normalized source contents, instance declarations, binding
+  explanations, and exact locations for provenance and digests;
+- compares the mandatory authored instance inventory with the exact assembled variant,
+  excluding core-owned `RequestBoundary`;
+- validates one binding placement mode per instance, complete external closure,
+  concrete declarations, and direct binding targets;
 - resolves every `reaction:`, `view:`, `former:`, and `computation:` link;
 - requires coverage for every selected authored reaction/endpoint tree, named
   view, and named former;
@@ -208,10 +221,13 @@ design: {
 }
 ```
 
-`documents` can be empty. Any listed document may contain `types` fences;
-selected external types require complete bindings across the registered corpus.
-All URLs must be local `file:` URLs. A separate assembly variant uses a separate
-config.
+`documents` can be empty only when the assembled variant selects no
+application-owned concepts or other authored declarations. Any listed document
+may contain `types`, `instances`, or `bindings` fences. Every selected instance
+requires one authored instantiation and complete per-instance external bindings
+across the registered corpus. All URLs must be local `file:` URLs. A separate
+assembly variant uses a separate config and is checked against its own exact
+inventory.
 
 Configuration source must be statically inspectable where a command needs
 source provenance. Import, config, assembly, source, design, and projection
@@ -253,9 +269,13 @@ schema is a hard reset: earlier application-manifest versions are rejected and
 have no compatibility decoder.
 
 The manifest retains normalized raw concept State, structured concept
-declarations, definition and instance identities, resolved application types,
-application declaration identities, computation signatures, source locations,
-and digests over registered design contents. It excludes executable functions,
+declarations, definition and instance identities, each instance declaration
+location, per-instance normalized bindings and binding provenance, concrete
+application types, application declaration identities, computation signatures,
+source locations, and digests over registered design contents. This beta
+replaces the earlier version-1 shape in place: `design.types` contains concrete
+types only, and instances own bindings. There is no compatibility decoder for
+the former beta schema. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
 other runtime-only values.
 
@@ -271,8 +291,9 @@ Prints generated Markdown read-back. It shows:
 - concrete types and resolved external bindings; and
 - computation signatures and source links.
 
-It does not copy application prose, Purpose, Principle, raw State, action/query
-bodies, type-binding explanations, or computation bodies. Concept State remains
+It does not copy ordinary application prose, Purpose, Principle, raw State,
+action/query bodies, or computation bodies. Retained detached binding
+explanations are shown beneath their normalized instance bindings. Concept State remains
 in the manifest and digest even though it is omitted from read-back.
 
 ### `wire`

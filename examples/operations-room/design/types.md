@@ -10,7 +10,16 @@ concrete Person
 
 concrete Mitigation
   An incident response option that a room may select.
+```
 
+```instances
+instantiate Gathering
+instantiate Selecting
+instantiate Discussing
+instantiate Alerting
+```
+
+```bindings
 Gathering.Person is Person
   Hosts and room members are operations-room people.
 

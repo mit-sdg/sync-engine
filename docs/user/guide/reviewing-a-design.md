@@ -128,21 +128,29 @@ semantics; do not manufacture a pass-through concept solely to wrap an API call.
 
 ## 6. Check application types and external identities
 
-Inventory every `ConceptInstance.ExternalType` and require one direct binding in the
-registered application `types` corpus, conventionally `design/types.md`. A right side
-must directly name either:
+Compare every executable concept-set key with exactly one `instantiate Definition`
+or `instantiate Definition as Instance` declaration in the registered corpus. The
+instance name must match the selected key and the definition must match the selected
+specification H1. Same-name and renamed instances follow the same rule; core-owned
+`RequestBoundary` is exempt.
+
+Inventory every `ConceptInstance.ExternalType` and require one direct binding,
+either entirely inline under that instance's `with` block or entirely in detached
+`bindings` fences. A right side must directly name either:
 
 - an application `concrete` type with a nonempty prose definition; or
-- a type owned by a selected concept instance.
+- a qualified type on a selected concept instance.
 
-Reject chains, cycles, bindings to another external parameter, duplicate or missing
-bindings, unresolved names, and unused concrete declarations. A binding establishes
-identity correspondence, not transferred ownership, runtime validation, or general
-TypeScript assignability.
+Reject mixed placement, alias chains, bindings to another external parameter,
+duplicate or missing bindings, unresolved names, and unused concrete declarations.
+Allow cycles among direct qualified targets: they are instance dependencies, not
+external aliases. A binding establishes identity correspondence, not transferred
+ownership, storage allocation, runtime validation, or general TypeScript
+assignability.
 
 Because version 1 retains State without parsing it, manually review whether a
-qualified target is really owned by that concept. Do not claim the checker proved the
-final State type name.
+qualified non-external target is really owned by that concept. Do not claim the
+checker proved the final State type name.
 
 ## 7. Review each composition document beside its source responsibility
 

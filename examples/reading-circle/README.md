@@ -60,23 +60,23 @@ checks the assembled behavior.
 
 ## Source map
 
-| Path                                                         | Role                                                     |
-| ------------------------------------------------------------ | -------------------------------------------------------- |
-| `design/concepts/*.md`                                       | Registered concept specifications                        |
-| `design/compositions/ReadingCircle.md`                       | Lean authored application composition                    |
-| `design/types.md`                                            | Application concrete types and cross-concept bindings    |
-| `src/concepts/*.ts`                                          | Flat concept implementations and registries              |
-| `src/concepts.ts`                                            | Named concept set, typed references, and implementations |
-| `src/compositions/ReadingCircle.ts`                          | Composition declarations grouped by exported namespace   |
-| `src/assembly.ts`                                            | Application assembly                                     |
-| `src/edge.ts`                                                | Standard gateway                                         |
-| `src/client.ts`                                              | Transport-neutral generated-contract client helper       |
-| `src/scenario.ts`                                            | Complete local-gateway workflow                          |
-| `tests/concepts/`                                            | Concept principle tests                                  |
-| `tests/compositions/ReadingCircle.test.ts`                   | Assembled behavior and deterministic scenario tests      |
-| `generated.config.ts`                                        | Artifact command configuration                           |
-| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                               |
-| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                          |
+| Path                                                         | Role                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------- |
+| `design/concepts/*.md`                                       | Registered concept specifications                         |
+| `design/compositions/ReadingCircle.md`                       | Lean authored application composition                     |
+| `design/types.md`                                            | Complete instance inventory, concrete types, and bindings |
+| `src/concepts/*.ts`                                          | Flat concept implementations and registries               |
+| `src/concepts.ts`                                            | Named concept set, typed references, and implementations  |
+| `src/compositions/ReadingCircle.ts`                          | Composition declarations grouped by exported namespace    |
+| `src/assembly.ts`                                            | Application assembly                                      |
+| `src/edge.ts`                                                | Standard gateway                                          |
+| `src/client.ts`                                              | Transport-neutral generated-contract client helper        |
+| `src/scenario.ts`                                            | Complete local-gateway workflow                           |
+| `tests/concepts/`                                            | Concept principle tests                                   |
+| `tests/compositions/ReadingCircle.test.ts`                   | Assembled behavior and deterministic scenario tests       |
+| `generated.config.ts`                                        | Artifact command configuration                            |
+| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                |
+| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                           |
 
 ## Individual checks
 

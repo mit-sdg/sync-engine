@@ -371,11 +371,13 @@ interface RenderDesign {
     specification: ConceptSpecificationIR;
     instances: {
       name: string;
+      declaration: RenderDesignLocation;
       bindings: {
         external: string;
         target:
           | { kind: "concrete"; name: string }
           | { kind: "qualified"; instance: string; type: string };
+        explanation?: string;
         location: RenderDesignLocation;
       }[];
     }[];
@@ -472,17 +474,22 @@ function renderCheckedConcept(
     for (const query of specification.queries) lines.push(`- \`${renderQuerySignature(query)}\``);
     lines.push("");
   }
-  lines.push("#### Selected instances and bindings", "");
+  lines.push("#### Instances", "");
   for (const instance of concept.instances) {
-    lines.push(`- \`${instance.name}\``);
+    lines.push(
+      `- \`${instance.name}\` — instance of \`${concept.definition}\` — ${sourceLink(design, instance.declaration)}.`,
+    );
     for (const binding of instance.bindings) {
       const target =
         binding.target.kind === "concrete"
           ? binding.target.name
           : `${binding.target.instance}.${binding.target.type}`;
       lines.push(
-        `  - \`${instance.name}.${binding.external}\` is \`${target}\` — ${sourceLink(design, binding.location)}.`,
+        `  - \`${binding.external}\` is \`${target}\` — ${sourceLink(design, binding.location)}.`,
       );
+      if (binding.explanation !== undefined) {
+        lines.push(...binding.explanation.split("\n").map((line) => `    ${line}`));
+      }
     }
   }
   lines.push("");
