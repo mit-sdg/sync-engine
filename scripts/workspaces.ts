@@ -61,7 +61,11 @@ export const workspaceCatalog = [
     packageBudget: { files: 425, packedBytes: 520_000, unpackedBytes: 1_720_000 },
     assets: [
       { source: "src/command/setup", destination: "dist/command/setup" },
-      { source: "packages/ssf/dist", destination: "dist/engine/tooling/ssf-package" },
+      {
+        source: "packages/ssf/dist",
+        destination: "dist/engine/tooling/ssf-package",
+        exclude: ["vendor/irregular-plurals.d.ts"],
+      },
     ],
     bins: ["dist/command/main.js"],
   },
@@ -228,7 +232,7 @@ export const workspaceCatalog = [
     copiesExamples: false,
     publication: "private",
     requiredPackedFiles: ["package.json", "dist/index.js", "dist/index.d.ts"],
-    packageBudget: { files: 6, packedBytes: 15_000, unpackedBytes: 70_000 },
+    packageBudget: { files: 7, packedBytes: 15_000, unpackedBytes: 70_000 },
     assets: [],
     bins: [],
   },

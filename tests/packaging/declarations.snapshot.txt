@@ -4569,7 +4569,7 @@ export {};
 === dist/engine/tooling/application-manifest-format.d.ts ===
 import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
-/** Independently derive the exact SSF-owned names carried as a manifest cross-check. */
+/** Derive the exact SSF-owned names carried in the manifest through the SSF package. */
 export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
@@ -5340,6 +5340,8 @@ export interface SsfParseOptions {
     readonly externalTypes?: readonly string[];
     /** Exact type spellings parsed elsewhere in the same specification's action/query contract. */
     readonly evidenceTypeNames?: readonly string[];
+    /** Relates two exact authored spellings; never causes a name to be generated. */
+    readonly typeNameEquivalence?: (left: string, right: string) => boolean;
 }
 export interface SsfParseResult {
     readonly document: SsfDocument;

@@ -260,26 +260,114 @@ a set of Mice`,
     ["Items", "Item", true],
     ["Entries", "Entry", true],
     ["Addresses", "Address", true],
-    ["Statuses", "Status", true],
     ["Settings", "Setting", true],
-    ["Aliases", "Alias", true],
-    ["Analyses", "Analysis", true],
-    ["Mice", "Mouse", true],
     ["Chaoses", "Chaos", true],
     ["Atlases", "Atlas", true],
     ["Biases", "Bias", true],
+    ["Bonuses", "Bonus", true],
     ["Buses", "Bus", true],
+    ["Campuses", "Campus", true],
+    ["Cosmoses", "Cosmos", true],
+    ["Ethoses", "Ethos", true],
+    ["Viruses", "Virus", true],
+    ["Aliases", "Alias", true],
+    ["Analyses", "Analysis", true],
+    ["Canvases", "Canvas", true],
+    ["Children", "Child", true],
+    ["Feet", "Foot", true],
+    ["Gases", "Gas", true],
+    ["Geese", "Goose", true],
+    ["Indices", "Index", true],
+    ["Lenses", "Lens", true],
+    ["Men", "Man", true],
+    ["Matrices", "Matrix", true],
+    ["Mice", "Mouse", true],
+    ["People", "Person", true],
+    ["Statuses", "Status", true],
+    ["Teeth", "Tooth", true],
+    ["Women", "Woman", true],
+    ["Corpora", "Corpus", true],
+    ["Cacti", "Cactus", true],
+    ["Criteria", "Criterion", true],
+    ["Wugs", "Wug", true],
+    ["Parties", "Party", true],
+    ["Boxes", "Box", true],
+    ["Chaos", "Chao", false],
+    ["Atlas", "Atla", false],
+    ["Bias", "Bia", false],
+    ["Bonus", "Bonu", false],
+    ["Bus", "Bu", false],
+    ["Campus", "Campu", false],
+    ["Cosmos", "Cosmo", false],
+    ["Ethos", "Etho", false],
+    ["Virus", "Viru", false],
+    ["Alias", "Alia", false],
     ["Canvas", "Canva", false],
     ["Gas", "Ga", false],
     ["Lens", "Len", false],
+    ["News", "New", false],
+    ["Series", "Serie", false],
+    ["Species", "Specie", false],
+    ["Access", "Acces", false],
+    ["Address", "Addres", false],
+    ["Class", "Clas", false],
+    ["Process", "Proces", false],
+    ["Status", "Statu", false],
+    ["FieldMouse", "FieldMice", false],
   ])(
     "compares authored spellings %s and %s without normalizing either",
     (left, right, equivalent) => {
       expect(normalizeTypeName(left)).toBe(left);
       expect(normalizeTypeName(right)).toBe(right);
       expect(typeNamesEquivalent(left, right)).toBe(equivalent);
+      expect(typeNamesEquivalent(right, left)).toBe(equivalent);
     },
   );
+
+  test("allows exact-match-only equivalence to reject a default morphology relation", () => {
+    const parsed = parseSimpleStateForm("a set of Mice with\n  a parent Mouse", {
+      typeNameEquivalence: (left, right) => left === right,
+    });
+
+    expect(parsed.document.inventory.types).toMatchObject([
+      { name: "Mice", declaredNames: ["Mice"] },
+    ]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      { value: { reference: { text: "Mouse", referenceKind: "unresolved" } } },
+    ]);
+  });
+
+  test("admits only authored spellings related by an injected alias table", () => {
+    const aliases = new Set(["Wug\0Wuggen", "Wuggen\0Wug"]);
+    const parsed = parseSimpleStateForm("a set of Wuggen with\n  a parent Wug", {
+      typeNameEquivalence: (left, right) => aliases.has(`${left}\0${right}`),
+    });
+
+    expect(parsed.document.inventory.types).toMatchObject([
+      { name: "Wuggen", declaredNames: ["Wug", "Wuggen"] },
+    ]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      {
+        value: {
+          reference: { text: "Wug", normalized: "Wuggen", referenceKind: "owned" },
+        },
+      },
+    ]);
+  });
+
+  test("uses the exported English equivalence when no injection is supplied", () => {
+    const source = "a set of Mice with\n  a parent Mouse\n\na set of Parties with\n  a host Party";
+    const defaulted = parseSimpleStateForm(source);
+    const explicit = parseSimpleStateForm(source, { typeNameEquivalence: typeNamesEquivalent });
+
+    expect(defaulted).toEqual(explicit);
+    expect(ownedTypeNameSpellings(defaulted.document.inventory)).toEqual([
+      "Mice",
+      "Mouse",
+      "Parties",
+      "Party",
+    ]);
+  });
 });
 
 describe("canonical repair diagnostics", () => {

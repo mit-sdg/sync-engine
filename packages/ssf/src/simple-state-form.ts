@@ -1,3 +1,5 @@
+import { IRREGULAR_PLURAL_PAIRS } from "./vendor/irregular-plurals.ts";
+
 export interface SsfPosition {
   /** Zero-based UTF-16 offset in the supplied State text. */
   readonly offset: number;
@@ -134,6 +136,8 @@ export interface SsfParseOptions {
   readonly externalTypes?: readonly string[];
   /** Exact type spellings parsed elsewhere in the same specification's action/query contract. */
   readonly evidenceTypeNames?: readonly string[];
+  /** Relates two exact authored spellings; never causes a name to be generated. */
+  readonly typeNameEquivalence?: (left: string, right: string) => boolean;
 }
 
 export interface SsfParseResult {
@@ -201,38 +205,26 @@ interface ParsedDeclaration {
 }
 
 const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
-const IRREGULAR_PLURALS = new Map<string, string>([
-  ["Alias", "Aliases"],
-  ["Analysis", "Analyses"],
-  ["Canvas", "Canvases"],
-  ["Child", "Children"],
-  ["Foot", "Feet"],
-  ["Gas", "Gases"],
-  ["Goose", "Geese"],
-  ["Index", "Indices"],
-  ["Lens", "Lenses"],
-  ["Man", "Men"],
-  ["Matrix", "Matrices"],
-  ["Mouse", "Mice"],
-  ["Person", "People"],
-  ["Status", "Statuses"],
-  ["Tooth", "Teeth"],
-  ["Woman", "Women"],
-]);
-const KNOWN_SINGULARS = new Set([
+const VENDORED_PLURALS: ReadonlyMap<string, string> = new Map(IRREGULAR_PLURAL_PAIRS);
+/** S-ending singulars absent from the vendor that must never be reverse-trimmed. */
+const SUPPLEMENTARY_KNOWN_SINGULARS = new Set([
   "Access",
   "Address",
   "Alias",
-  "Analysis",
+  "Atlas",
+  "Bias",
+  "Bonus",
+  "Bus",
+  "Campus",
   "Canvas",
+  "Chaos",
   "Class",
+  "Cosmos",
+  "Ethos",
   "Gas",
   "Lens",
-  "News",
   "Process",
-  "Series",
-  "Species",
-  "Status",
+  "Virus",
 ]);
 const FIELD_NAME = /^[a-z][A-Za-z0-9_]*$/;
 const ENUM_VALUE = /^[A-Z][A-Z0-9_]*$/;
@@ -306,8 +298,21 @@ function regularPluralTypeName(name: string): string {
   return `${name}s`;
 }
 
+function lowerInitial(name: string): string {
+  return `${name[0]?.toLowerCase() ?? ""}${name.slice(1)}`;
+}
+
+function upperInitial(name: string): string {
+  return `${name[0]?.toUpperCase() ?? ""}${name.slice(1)}`;
+}
+
 function pluralTypeName(name: string): string {
-  return IRREGULAR_PLURALS.get(name) ?? regularPluralTypeName(name);
+  const vendored = VENDORED_PLURALS.get(lowerInitial(name));
+  return vendored === undefined ? regularPluralTypeName(name) : upperInitial(vendored);
+}
+
+function knownSingular(name: string): boolean {
+  return VENDORED_PLURALS.has(lowerInitial(name)) || SUPPLEMENTARY_KNOWN_SINGULARS.has(name);
 }
 
 /**
@@ -317,8 +322,14 @@ function pluralTypeName(name: string): string {
 export function typeNamesEquivalent(left: string, right: string): boolean {
   if (left === right) return true;
   if (!TYPE_NAME.test(left) || !TYPE_NAME.test(right)) return false;
-  if (KNOWN_SINGULARS.has(left)) return pluralTypeName(left) === right;
-  if (KNOWN_SINGULARS.has(right)) return pluralTypeName(right) === left;
+  const leftKnown = knownSingular(left);
+  const rightKnown = knownSingular(right);
+  if (leftKnown || rightKnown) {
+    return (
+      (leftKnown && pluralTypeName(left) === right) ||
+      (rightKnown && pluralTypeName(right) === left)
+    );
+  }
   return pluralTypeName(left) === right || pluralTypeName(right) === left;
 }
 
@@ -795,6 +806,7 @@ function evidencedOwnedSpellings(
       .filter((name) => !external.has(name) && !PRIMITIVE_KEYS.has(name)),
   );
   const aliases = new Map([...declared].map((name) => [name, new Set([name])]));
+  const equivalent = options.typeNameEquivalence ?? typeNamesEquivalent;
   const evidence = new Set([
     ...stateFieldTypeEvidence(declarations).map(({ text }) => text),
     ...(options.evidenceTypeNames ?? []),
@@ -811,7 +823,7 @@ function evidencedOwnedSpellings(
             ({ name, multiplicity }) =>
               multiplicity !== "element" &&
               declared.has(name.text) &&
-              typeNamesEquivalent(name.text, candidate),
+              equivalent(name.text, candidate),
           )
           .map(({ name }) => name.text),
       ),

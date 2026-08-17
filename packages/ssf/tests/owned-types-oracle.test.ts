@@ -1,44 +1,13 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ownedTypeNameSpellings, parseSimpleStateForm } from "../src/index.ts";
+import { ownedTypeNameSpellings, parseSimpleStateForm, typeNamesEquivalent } from "../src/index.ts";
 import { describe, expect, test } from "vite-plus/test";
 
 const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
 const FIELD_NAME = /^[a-z][A-Za-z0-9_]*$/;
 const PRIMITIVES = new Set(["Date", "DateTime", "Flag", "Number", "String"]);
-const KNOWN_SINGULARS = new Set([
-  "Access",
-  "Address",
-  "Alias",
-  "Analysis",
-  "Canvas",
-  "Class",
-  "Gas",
-  "Lens",
-  "News",
-  "Process",
-  "Series",
-  "Species",
-  "Status",
-]);
-const IRREGULAR_PLURALS = new Map<string, string>([
-  ["Alias", "Aliases"],
-  ["Analysis", "Analyses"],
-  ["Canvas", "Canvases"],
-  ["Child", "Children"],
-  ["Foot", "Feet"],
-  ["Gas", "Gases"],
-  ["Goose", "Geese"],
-  ["Index", "Indices"],
-  ["Lens", "Lenses"],
-  ["Man", "Men"],
-  ["Matrix", "Matrices"],
-  ["Mouse", "Mice"],
-  ["Person", "People"],
-  ["Status", "Statuses"],
-  ["Tooth", "Teeth"],
-  ["Woman", "Women"],
-]);
+
+// Grammar scanning stays independent while morphology is deliberately single-sourced through SSF.
 
 type Multiplicity = "element" | "sequence" | "set";
 
@@ -50,23 +19,6 @@ interface StructuralDeclaration {
 interface OracleOptions {
   readonly externalTypes?: readonly string[];
   readonly evidenceTypeNames?: readonly string[];
-}
-
-function regularPlural(name: string): string {
-  if (/[^AEIOU]y$/.test(name)) return `${name.slice(0, -1)}ies`;
-  if (/(?:ch|sh|ss|x|z|s)$/.test(name)) return `${name}es`;
-  return `${name}s`;
-}
-
-function plural(name: string): string {
-  return IRREGULAR_PLURALS.get(name) ?? regularPlural(name);
-}
-
-function inflectionPair(left: string, right: string): boolean {
-  if (left === right) return true;
-  if (KNOWN_SINGULARS.has(left)) return plural(left) === right;
-  if (KNOWN_SINGULARS.has(right)) return plural(right) === left;
-  return plural(left) === right || plural(right) === left;
 }
 
 function multiplicity(structural: string): Multiplicity | undefined {
@@ -164,7 +116,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
         declarations
           .filter(
             ({ name, multiplicity: declarationMultiplicity }) =>
-              declarationMultiplicity !== "element" && inflectionPair(name, candidate),
+              declarationMultiplicity !== "element" && typeNamesEquivalent(name, candidate),
           )
           .map(({ name }) => name),
       ),

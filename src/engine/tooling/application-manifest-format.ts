@@ -46,7 +46,7 @@ function specificationTypeNames(type: SpecificationTypeIR): string[] {
   return type.kind === "union" ? type.members.flatMap(specificationTypeNames) : [];
 }
 
-/** Independently derive the exact SSF-owned names carried as a manifest cross-check. */
+/** Derive the exact SSF-owned names carried in the manifest through the SSF package. */
 export function specificationOwnedTypeNames(
   specification: ConceptSpecificationIR,
 ): readonly string[] {
