@@ -590,12 +590,12 @@ function structurallyLooksLikeDeclaration(line: SourceLine): boolean {
 function structurallyLooksLikeField(line: SourceLine): boolean {
   if (!/^[ \t]/.test(line.text)) return false;
   const authored = words(line);
-  if (authored[0] !== "a" && authored[0] !== "an") return false;
-  const field = authored.slice(1);
-  if (field.length === 0 || field.length === 1) return true;
+  const hasArticle = authored[0] === "a" || authored[0] === "an";
+  const field = authored.slice(hasArticle ? 1 : 0);
+  if (hasArticle && (field.length === 0 || field.length === 1)) return true;
   if (field[0] === "optional" || field[0] === "set" || field[0] === "seq") return true;
   return (
-    TYPE_NAME.test(field[1] ?? "") ||
+    (hasArticle && TYPE_NAME.test(field[1] ?? "")) ||
     field[1] === "optional" ||
     field[1] === "set" ||
     field[1] === "seq" ||
@@ -616,7 +616,7 @@ function malformedStructuralDiagnostic(
     suggestion:
       kind === "declaration"
         ? "Use one canonical `a set of Name`, `a seq of Name`, `an element Name`, or subset declaration; put fields on following indented lines after `with`."
-        : "Use `a fieldName Type`, `an optional fieldName Type`, or a canonical set/sequence field.",
+        : "Use `fieldName Type`, `optional fieldName Type`, or a canonical set/sequence field, optionally prefixed by an article.",
     span: lineSpan(line),
   };
 }
@@ -648,10 +648,15 @@ function declarationDiagnostics(
   if (declaration.authoredStructural !== canonical) {
     replacements.set(declaration.structuralIndex, canonical);
   }
-  if (declaration.structuralIndex === 1) replacements.set(0, articleFor(declaration.multiplicity));
+  const collectionHasArticle =
+    declaration.declarationKind === "collection" && declaration.structuralIndex === 1;
+  const subsetMissingArticle =
+    declaration.declarationKind === "subset" && declaration.structuralIndex === 1;
+  if (collectionHasArticle) replacements.set(0, articleFor(declaration.multiplicity));
   const canonicalLine = `${correctedTokens(tokens, replacements)}${
     hasFieldLikeBody && !declaration.hasWith ? " with" : ""
   }`;
+  const subsetArticleSuggestion = `Use \`a ${canonicalLine}\` or \`an ${canonicalLine}\`.`;
   const structuralToken = tokens[declaration.structuralIndex];
 
   if (declaration.declarationKind === "collection" && declaration.structuralIndex === 0) {
@@ -661,6 +666,13 @@ function declarationDiagnostics(
       suggestion: `${articleFor(declaration.multiplicity)} ${canonicalLine}`,
       span: structuralToken?.span ?? declaration.signatureSpan,
     });
+  } else if (subsetMissingArticle) {
+    diagnostics.push({
+      code: "SSF_ARTICLE",
+      message: `Add \`a\` or \`an\` before subset \`${declaration.name.text}\`.`,
+      suggestion: subsetArticleSuggestion,
+      span: declaration.name.span,
+    });
   } else if (declaration.authoredStructural !== canonical && structuralToken !== undefined) {
     diagnostics.push({
       code: "SSF_NEAR_MISS_KEYWORD",
@@ -668,7 +680,7 @@ function declarationDiagnostics(
       suggestion: canonicalLine,
       span: structuralToken.span,
     });
-  } else if (declaration.structuralIndex === 1) {
+  } else if (collectionHasArticle) {
     const expected = articleFor(declaration.multiplicity);
     const article = authored[0];
     if ((article === "a" || article === "an") && article !== expected && tokens[0] !== undefined) {
@@ -680,12 +692,25 @@ function declarationDiagnostics(
       });
     }
   }
+  if (
+    declaration.hasWith &&
+    declaration.fields.length === 0 &&
+    declaration.opaqueBody.length === 0
+  ) {
+    const withToken = tokens.at(-1);
+    diagnostics.push({
+      code: "SSF_MALFORMED_DECLARATION",
+      message: "A declaration ending in `with` must have an indented body.",
+      suggestion: "Remove `with` or add at least one indented field.",
+      span: withToken?.span ?? declaration.signatureSpan,
+    });
+  }
   if (hasFieldLikeBody && !declaration.hasWith) {
     const end = declaration.signatureSpan.end;
     diagnostics.push({
       code: "SSF_MISSING_WITH",
       message: "A declaration with indented fields must include `with`.",
-      suggestion: canonicalLine,
+      suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
       span: span(end, end),
     });
   }
@@ -695,12 +720,10 @@ function declarationDiagnostics(
 function fieldDiagnostics(line: SourceLine): readonly SsfDiagnostic[] {
   if (!/^[ \t]/.test(line.text)) return [];
   const tokens = line.tokens;
-  if (tokens[0]?.text !== "a" && tokens[0]?.text !== "an") return [];
+  const hasArticle = tokens[0]?.text === "a" || tokens[0]?.text === "an";
   const optionalIndex = tokens.findIndex(({ text }) => text === "optional");
   if (optionalIndex < 0) return [];
-  const collectionIndex = tokens.findIndex(
-    ({ text }, index) => index > 0 && (text === "set" || text === "seq"),
-  );
+  const collectionIndex = tokens.findIndex(({ text }) => text === "set" || text === "seq");
   const optionalToken = tokens[optionalIndex];
   if (optionalToken === undefined) return [];
   if (collectionIndex >= 0) {
@@ -713,16 +736,18 @@ function fieldDiagnostics(line: SourceLine): readonly SsfDiagnostic[] {
       },
     ];
   }
-  if (optionalIndex !== 1) {
+  const expectedOptionalIndex = hasArticle ? 1 : 0;
+  if (optionalIndex !== expectedOptionalIndex) {
     const withoutOptional = tokens
       .filter((_, index) => index !== optionalIndex)
       .map(({ text }) => text);
-    withoutOptional[0] = "an";
-    withoutOptional.splice(1, 0, "optional");
+    if (hasArticle) withoutOptional[0] = "an";
+    withoutOptional.splice(expectedOptionalIndex, 0, "optional");
     return [
       {
         code: "SSF_MISPLACED_OPTIONAL",
-        message: "The `optional` modifier must immediately follow the article.",
+        message:
+          "The `optional` modifier must precede the field name and follow the article when present.",
         suggestion: withoutOptional.join(" "),
         span: optionalToken.span,
       },

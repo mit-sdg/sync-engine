@@ -416,6 +416,58 @@ a set of Records with garbage
     ]);
   });
 
+  test("diagnoses malformed article-less fields that use structural keywords", () => {
+    expect(
+      validateSimpleStateForm(`a set of Groups with
+  optional owner
+  optional optional owner Person`),
+    ).toMatchObject([{ code: "SSF_MALFORMED_FIELD" }, { code: "SSF_MALFORMED_FIELD" }]);
+  });
+
+  test("rejects a declaration whose `with` has no body", () => {
+    expect(validateSimpleStateForm("a set of Items with")).toMatchObject([
+      {
+        code: "SSF_MALFORMED_DECLARATION",
+        suggestion: "Remove `with` or add at least one indented field.",
+      },
+    ]);
+  });
+
+  test("validates optional fields that omit their article", () => {
+    expect(
+      validateSimpleStateForm(`a set of Groups with
+  owner optional Person
+  optional members set of Person`),
+    ).toMatchObject([
+      { code: "SSF_MISPLACED_OPTIONAL", suggestion: "optional owner Person" },
+      { code: "SSF_OPTIONAL_COLLECTION", suggestion: "Remove `optional` from this field." },
+    ]);
+    expect(validateSimpleStateForm("a set of Groups with\n  optional owner Person")).toEqual([]);
+  });
+
+  test("requires an article without dropping a subset name from repairs", () => {
+    expect(
+      validateSimpleStateForm(`Completed set of Items
+  a note String`),
+    ).toMatchObject([
+      {
+        code: "SSF_ARTICLE",
+        suggestion: "Use `a Completed set of Items with` or `an Completed set of Items with`.",
+      },
+      {
+        code: "SSF_MISSING_WITH",
+        suggestion: "Use `a Completed set of Items with` or `an Completed set of Items with`.",
+      },
+    ]);
+    expect(validateSimpleStateForm("Open set of Items")).toMatchObject([
+      {
+        code: "SSF_ARTICLE",
+        suggestion: "Use `a Open set of Items` or `an Open set of Items`.",
+      },
+    ]);
+    expect(validateSimpleStateForm("a Hour set of Items\nan Hour set of Items")).toEqual([]);
+  });
+
   test("uses the parser's recovered structure for every existing repair", () => {
     const source = `a sequence of Sessions
   a revokedAt optional DateTime
@@ -423,7 +475,8 @@ a set of Records with garbage
 a set of Groups with
   an optional members seq of Person
 
-a element Settings with`;
+a element Settings with
+  a retentionDays Number`;
     expect(validateSimpleStateForm(source)).toMatchObject([
       { code: "SSF_NEAR_MISS_KEYWORD", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISSING_WITH", suggestion: "a seq of Sessions with" },
