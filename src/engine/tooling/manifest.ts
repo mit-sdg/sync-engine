@@ -62,6 +62,8 @@ export interface ManifestConceptDefinitionV1 {
   definition: string;
   source?: string;
   specification: ConceptSpecificationIR;
+  /** Accepted canonical singular/plural spellings of definition-owned State types. */
+  ownedTypes: string[];
   instances: {
     name: string;
     declaration: ManifestSourceLocationV1;
@@ -70,7 +72,6 @@ export interface ManifestConceptDefinitionV1 {
       target:
         | { kind: "concrete"; name: string }
         | { kind: "qualified"; instance: string; type: string };
-      explanation?: string;
       location: ManifestSourceLocationV1;
     }[];
   }[];
@@ -345,10 +346,16 @@ function checkedDesign(
     const source = selected
       .map(({ instance }) => conceptSourceByInstance.get(instance))
       .find((item) => item !== undefined);
+    if (first.ownedTypes === undefined) {
+      throw new Error(
+        `application manifest: checked definition ${JSON.stringify(shared.definition)} has no SSF-owned type inventory.`,
+      );
+    }
     return {
       definition: shared.definition,
       ...(source === undefined ? {} : { source: sourceIds.get(source.path) }),
       specification: first.specification,
+      ownedTypes: [...first.ownedTypes],
       instances: selected.map(({ instance }) => {
         const authored = instancesByName.get(instance);
         if (authored === undefined) {
@@ -364,7 +371,6 @@ function checkedDesign(
             .map((binding) => ({
               external: binding.external,
               target: binding.target,
-              ...(binding.explanation === undefined ? {} : { explanation: binding.explanation }),
               location: location(binding.location, sourceIds),
             })),
         };

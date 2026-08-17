@@ -75,16 +75,21 @@ repair diagnostics and owned-name extraction; do not recreate a second parser un
 `src/engine/tooling`.
 
 The parser increment is deliberately bounded. It authoritatively parses structural
-set, sequence, element, subset, and field declarations; normalizes consistent
-singular/plural forms; records subset structure; and inventories nonexternal type names
-introduced by declaration subjects, subset parents, and structural fields. It preserves the complete normalized State text. Standalone invariant sentences
-and admitted prose remain opaque. The parser must not claim to prove those sentences,
+set, sequence, element, subset, and field declarations; applies conservative
+collection-aware singular/plural equivalence; records subset structure; and inventories
+nonexternal type names introduced by declaration subjects, subset parents, and
+structural fields. Element and scalar names are preserved rather than blindly
+singularized. Structural-looking malformed declarations and fields produce diagnostics;
+truly standalone invariant sentences remain opaque. The concept IR continues to
+preserve the complete normalized State text. The parser must not claim to prove those sentences,
 conditions, effects, query meaning, storage layout, State/storage agreement, or
 implementation semantics.
 
 Config-based binding validation uses only the established owned-name inventory. A
 qualified target must name an owned type of the selected target instance's definition;
-an external parameter is independently invalid. This proof does not imply that every
+an external parameter is independently invalid. Checked manifests persist the sorted
+accepted owned-name inventory, and their codec validates every qualified target against
+that canonical fact. This proof does not imply that every
 action/query type must be declared in State: conventional and refinement names remain
 valid in operation signatures under the public contract.
 

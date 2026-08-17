@@ -41,8 +41,9 @@ policy](../../../SUPPORT.md) defines the support window and generated-format rul
 One action body runs at a time per concept instance within one engine. Different
 concept instances, root flows, assemblies, and processes may overlap. One
 assembly rejects the same raw implementation object under two selected names.
-Sharing one raw instance between separate assemblies remains allowed and creates
-separate queues; the engine does not serialize those assemblies.
+Sharing one raw instance between separate assemblies remains allowed when their
+registrations carry compatible specifications, protocols, and refusal metadata. Each
+assembly creates a separate queue; the engine does not serialize those assemblies.
 
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query

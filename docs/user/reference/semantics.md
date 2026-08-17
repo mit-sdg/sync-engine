@@ -660,8 +660,8 @@ no decoder for the earlier beta shape or any prior version. Upgrading across the
 reset requires regenerating all manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
-authored application instance declarations and bindings, full concept State text,
-resolved application types, executable application
+authored application instance declarations and bindings, normalized definition-owned
+type inventories, full concept State text, resolved application types, executable application
 identities, implementation provenance, registered design source locations, and
 normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.
@@ -755,8 +755,9 @@ frontier.
 Action bodies run one at a time per concept instance within one engine, in
 arrival order. The queue awaits native promises and structural thenables as
 described under [Execution and concurrency](#execution-and-concurrency). One
-assembly cannot install the same raw object under two names. Sharing one raw
-instance between separate engines does not share a queue or query cache. This is
+assembly cannot install the same raw object under two names. Separate engines may reuse
+one raw instance through semantically compatible registrations; they do not share a
+queue or query cache. Conflicting registration metadata remains invalid. This is
 an in-process guarantee. A concept's implementation and storage must supply any
 atomicity or coordination required across processes. A reaction consequence
 chain commits each action independently. Earlier actions remain committed when a

@@ -69,8 +69,6 @@ export interface ExternalTypeBinding {
     | { kind: "concrete"; name: string }
     | { kind: "qualified"; instance: string; type: string };
   placement: BindingPlacement;
-  /** Detached declarations retain beta-era explanatory prose rather than discarding it. */
-  explanation?: string;
   location: DesignSourceLocation;
 }
 
@@ -316,7 +314,7 @@ function targetOf(
   line: DesignSourceLine,
   target: string,
 ): ExternalTypeBinding["target"] {
-  const match = new RegExp(`^(${SEGMENT})(?:\\.(${IDENTIFIER}))?$`).exec(target);
+  const match = new RegExp(`^(${IDENTIFIER})(?:\\.(${IDENTIFIER}))?$`).exec(target);
   if (match === null)
     fail(scanned, line.number, `binding target ${JSON.stringify(target)} is not direct`);
   return match[2] === undefined
@@ -330,7 +328,7 @@ function concreteTypesOf(
 ): ConcreteTypeDeclaration[] {
   const concreteTypes: ConcreteTypeDeclaration[] = [];
   for (const group of declarationGroups(fence)) {
-    const concrete = new RegExp(`^concrete\\s+(${SEGMENT})\\s*$`).exec(group.signature.text);
+    const concrete = new RegExp(`^concrete\\s+(${IDENTIFIER})\\s*$`).exec(group.signature.text);
     if (concrete === null) {
       fail(
         scanned,
@@ -361,7 +359,7 @@ function inlineBindingOf(
   line: DesignSourceLine,
 ): ExternalTypeBinding {
   const match = new RegExp(
-    `^[ \\t]+(${IDENTIFIER})\\s+is\\s+(${SEGMENT}(?:\\.${IDENTIFIER})?)\\s*$`,
+    `^[ \\t]+(${IDENTIFIER})\\s+is\\s+(${IDENTIFIER}(?:\\.${IDENTIFIER})?)\\s*$`,
   ).exec(line.text);
   if (match === null) {
     fail(scanned, line.number, "inline binding needs indented `External is Target` form");
@@ -382,7 +380,7 @@ function instancesOf(
   const instances: AuthoredConceptInstanceDeclaration[] = [];
   for (const group of declarationGroups(fence)) {
     const declaration = new RegExp(
-      `^instantiate\\s+(${IDENTIFIER})(?:\\s+as\\s+(${SEGMENT}))?(\\s+with)?\\s*$`,
+      `^instantiate\\s+(${IDENTIFIER})(?:\\s+as\\s+(${IDENTIFIER}))?(\\s+with)?\\s*$`,
     ).exec(group.signature.text);
     if (declaration === null) {
       fail(
@@ -425,7 +423,7 @@ function detachedBindingsOf(scanned: ScannedMarkdown, fence: MarkdownFence): Ext
   const bindings: ExternalTypeBinding[] = [];
   for (const group of declarationGroups(fence)) {
     const binding = new RegExp(
-      `^(${SEGMENT})\\.(${IDENTIFIER})\\s+is\\s+(${SEGMENT}(?:\\.${IDENTIFIER})?)\\s*$`,
+      `^(${IDENTIFIER})\\.(${IDENTIFIER})\\s+is\\s+(${IDENTIFIER}(?:\\.${IDENTIFIER})?)\\s*$`,
     ).exec(group.signature.text);
     if (binding === null) {
       fail(
@@ -434,13 +432,19 @@ function detachedBindingsOf(scanned: ScannedMarkdown, fence: MarkdownFence): Ext
         "bindings fence accepts only `Instance.External is Target` declarations",
       );
     }
-    const explanation = indentedBody(group.body);
+    const prose = group.body.find(({ text }) => text.trim() !== "");
+    if (prose !== undefined) {
+      fail(
+        scanned,
+        prose.number,
+        "bindings fence accepts declarations only; move explanation prose outside the fence",
+      );
+    }
     bindings.push({
       instance: binding[1],
       external: binding[2],
       target: targetOf(scanned, group.signature, binding[3]),
       placement: "detached",
-      ...(explanation === "" ? {} : { explanation }),
       location: at(scanned, group.signature.number, sourceColumn(fence, group.signature)),
     });
   }
@@ -477,6 +481,8 @@ export interface SelectedApplicationDesign {
   formers: readonly string[];
   computations: readonly SelectedComputationDesign[];
   concepts: readonly SelectedConceptDesign[];
+  /** Selected assembly names whose definitions cannot be checked without a specification. */
+  unresolvedConceptInstances?: readonly string[];
 }
 
 export type ApplicationDesignIssueCode =
@@ -511,8 +517,7 @@ export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
     | "DUPLICATE_CONCRETE_TYPE"
     | "DUPLICATE_INSTANCE"
     | "DUPLICATE_EXTERNAL_BINDING"
-    | "MIXED_BINDING_PLACEMENT"
-    | "UNDECLARED_BINDING_INSTANCE";
+    | "MIXED_BINDING_PLACEMENT";
   location: DesignSourceLocation;
 };
 
@@ -586,19 +591,9 @@ export function validateAuthoredApplicationDesignForm(
 
   const bindingsByInstance = Map.groupBy(allBindings(documents), ({ instance }) => instance);
   for (const [instance, bindings] of bindingsByInstance) {
-    const declaration = instances.get(instance);
     const inline = bindings.filter(({ placement }) => placement === "inline");
     const detached = bindings.filter(({ placement }) => placement === "detached");
     const mixed = inline.length > 0 && detached.length > 0;
-    if (declaration === undefined) {
-      for (const binding of detached) {
-        issues.push({
-          code: "UNDECLARED_BINDING_INSTANCE",
-          message: `detached binding for ${JSON.stringify(`${instance}.${binding.external}`)} has no authored instance declaration.`,
-          location: binding.location,
-        });
-      }
-    }
     if (mixed) {
       issues.push({
         code: "MIXED_BINDING_PLACEMENT",
@@ -709,6 +704,30 @@ export function validateAuthoredApplicationDesign(
   }
 
   const selectedConcepts = new Map(selected.concepts.map((concept) => [concept.instance, concept]));
+  const unresolvedConceptInstances = new Set(selected.unresolvedConceptInstances ?? []);
+  const locationKey = ({ source, line, column }: DesignSourceLocation): string =>
+    `${source}\0${line}\0${column}`;
+  const zeroExternalMixedLocations = new Set(
+    [...Map.groupBy(allBindings(corpus), ({ instance }) => instance)]
+      .filter(([instance, bindings]) => {
+        const placements = new Set(bindings.map(({ placement }) => placement));
+        return placements.size > 1 && selectedConcepts.get(instance)?.externalTypes.length === 0;
+      })
+      .map(([, bindings]) =>
+        locationKey(bindings.find(({ placement }) => placement === "detached")!.location),
+      ),
+  );
+  for (let index = issues.length - 1; index >= 0; index -= 1) {
+    const issue = issues[index];
+    if (
+      issue.code === "MIXED_BINDING_PLACEMENT" &&
+      issue.location !== undefined &&
+      zeroExternalMixedLocations.has(locationKey(issue.location))
+    ) {
+      issues.splice(index, 1);
+    }
+  }
+
   const declarations = new Map<string, AuthoredConceptInstanceDeclaration>();
   for (const declaration of allDeclarations(corpus)) {
     if (!declarations.has(declaration.instance))
@@ -722,24 +741,17 @@ export function validateAuthoredApplicationDesign(
   const duplicateInstances = new Set(
     [...declarationCounts].filter(([, values]) => values.length > 1).map(([instance]) => instance),
   );
-  const mixedInstances = new Set(
-    [...Map.groupBy(allBindings(corpus), ({ instance }) => instance)]
-      .filter(([, bindings]) => {
-        const placements = new Set(bindings.map(({ placement }) => placement));
-        return placements.size > 1;
-      })
-      .map(([instance]) => instance),
-  );
-
   const matched = new Set<string>();
   for (const declaration of declarations.values()) {
     const executable = selectedConcepts.get(declaration.instance);
     if (executable === undefined) {
-      issues.push({
-        code: "UNSELECTED_INSTANCE",
-        message: `authored instance ${JSON.stringify(declaration.instance)} of ${JSON.stringify(declaration.definition)} is not selected by this assembly.`,
-        location: declaration.location,
-      });
+      if (!unresolvedConceptInstances.has(declaration.instance)) {
+        issues.push({
+          code: "UNSELECTED_INSTANCE",
+          message: `authored instance ${JSON.stringify(declaration.instance)} of ${JSON.stringify(declaration.definition)} is not selected by this assembly.`,
+          location: declaration.location,
+        });
+      }
       continue;
     }
     if (declaration.definition !== executable.definition) {
@@ -760,6 +772,15 @@ export function validateAuthoredApplicationDesign(
       });
     }
   }
+  for (const binding of corpus.flatMap(({ bindings }) => bindings)) {
+    if (!declarations.has(binding.instance)) {
+      issues.push({
+        code: "UNDECLARED_BINDING_INSTANCE",
+        message: `detached binding for ${JSON.stringify(`${binding.instance}.${binding.external}`)} has no authored instance declaration.`,
+        location: binding.location,
+      });
+    }
+  }
 
   const concrete = new Map<string, ConcreteTypeDeclaration>();
   for (const declaration of corpus.flatMap(({ concreteTypes }) => concreteTypes)) {
@@ -777,7 +798,7 @@ export function validateAuthoredApplicationDesign(
     if (
       !matched.has(instance.instance) ||
       duplicateInstances.has(instance.instance) ||
-      mixedInstances.has(instance.instance)
+      unresolvedConceptInstances.has(instance.instance)
     )
       continue;
     const concept = selectedConcepts.get(instance.instance)!;
@@ -806,14 +827,16 @@ export function validateAuthoredApplicationDesign(
       }
       const target = selectedConcepts.get(binding.target.instance);
       if (target === undefined || !matched.has(binding.target.instance)) {
-        issues.push({
-          code: "UNRESOLVED_BINDING_TARGET",
-          message:
-            target === undefined
-              ? `binding target instance ${JSON.stringify(binding.target.instance)} is not selected.`
-              : `binding target instance ${JSON.stringify(binding.target.instance)} has no matching authored instantiation.`,
-          location: binding.location,
-        });
+        if (!unresolvedConceptInstances.has(binding.target.instance)) {
+          issues.push({
+            code: "UNRESOLVED_BINDING_TARGET",
+            message:
+              target === undefined
+                ? `binding target instance ${JSON.stringify(binding.target.instance)} is not selected.`
+                : `binding target instance ${JSON.stringify(binding.target.instance)} has no matching authored instantiation.`,
+            location: binding.location,
+          });
+        }
       } else if (target.externalTypes.includes(binding.target.type)) {
         issues.push({
           code: "EXTERNAL_BINDING_TARGET",

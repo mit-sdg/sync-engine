@@ -4108,7 +4108,6 @@ interface RenderDesign {
                     instance: string;
                     type: string;
                 };
-                explanation?: string;
                 location: RenderDesignLocation;
             }[];
         }[];
@@ -4675,8 +4674,6 @@ export interface ExternalTypeBinding {
         type: string;
     };
     placement: BindingPlacement;
-    /** Detached declarations retain beta-era explanatory prose rather than discarding it. */
-    explanation?: string;
     location: DesignSourceLocation;
 }
 export interface AuthoredConceptInstanceDeclaration {
@@ -4721,6 +4718,8 @@ export interface SelectedApplicationDesign {
     formers: readonly string[];
     computations: readonly SelectedComputationDesign[];
     concepts: readonly SelectedConceptDesign[];
+    /** Selected assembly names whose definitions cannot be checked without a specification. */
+    unresolvedConceptInstances?: readonly string[];
 }
 export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE" | "UNSELECTED_INSTANCE" | "UNDECLARED_SELECTED_INSTANCE" | "INSTANCE_DEFINITION_MISMATCH" | "UNKNOWN_EXTERNAL_BINDING" | "MISSING_EXTERNAL_BINDING" | "UNRESOLVED_BINDING_TARGET" | "EXTERNAL_BINDING_TARGET" | "UNUSED_CONCRETE_TYPE";
 export interface ApplicationDesignIssue {
@@ -4729,7 +4728,7 @@ export interface ApplicationDesignIssue {
     location?: DesignSourceLocation;
 }
 export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
-    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE";
+    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT";
     location: DesignSourceLocation;
 };
 /** Merge valid distributed declarations into the canonical per-instance authored model. */
@@ -5070,6 +5069,8 @@ export interface ManifestConceptDefinitionV1 {
     definition: string;
     source?: string;
     specification: ConceptSpecificationIR;
+    /** Accepted canonical singular/plural spellings of definition-owned State types. */
+    ownedTypes: string[];
     instances: {
         name: string;
         declaration: ManifestSourceLocationV1;
@@ -5083,7 +5084,6 @@ export interface ManifestConceptDefinitionV1 {
                 instance: string;
                 type: string;
             };
-            explanation?: string;
             location: ManifestSourceLocationV1;
         }[];
     }[];
@@ -5246,7 +5246,7 @@ export interface SsfToken {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export type SsfDiagnosticCode = "SSF_ARTICLE" | "SSF_MISPLACED_OPTIONAL" | "SSF_MISSING_WITH" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION";
+export type SsfDiagnosticCode = "SSF_ARTICLE" | "SSF_MISPLACED_OPTIONAL" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION";
 export interface SsfDiagnostic {
     readonly code: SsfDiagnosticCode;
     readonly message: string;
@@ -5342,9 +5342,9 @@ export interface SsfParseResult {
 /** Tokenize all State text without discarding whitespace or source ranges. */
 export declare function tokenizeSimpleStateForm(source: string): readonly SsfToken[];
 /**
- * Normalize the documented singular/plural equivalence to one lexical key.
- * The ordered suffix rules cover regular English plurals without changing
- * singular names ending in `ss`, `us`, or `is`.
+ * Normalize a name used where SSF structurally expects a collection subject.
+ * Unknown singular-looking `s` words are preserved; element and scalar names do
+ * not call this function merely because they happen to end in `s`.
  */
 export declare function normalizeTypeName(name: string): string;
 export declare function typeNamesEquivalent(left: string, right: string): boolean;

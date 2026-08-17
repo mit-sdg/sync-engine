@@ -14,11 +14,7 @@ import type {
   WhereOpIR,
 } from "@engine/reads/ir";
 import { canonicalDigest, canonicalValue } from "@engine/utils/canonical-json";
-import {
-  isAuthoredDeclarationPath,
-  isAuthoredPathSegment,
-  isDesignIdentifier,
-} from "@engine/utils/design-identifiers";
+import { isAuthoredDeclarationPath, isDesignIdentifier } from "@engine/utils/design-identifiers";
 import { setOwn } from "@engine/utils/own-property";
 import { ordinal } from "@engine/utils/ordinal";
 import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
@@ -143,11 +139,6 @@ function boolean(value: unknown, path: string): asserts value is boolean {
 function designIdentifier(value: unknown, path: string): asserts value is string {
   nonemptyString(value, path);
   if (!isDesignIdentifier(value)) fail(path, "expected an authored identifier");
-}
-
-function authoredPathSegment(value: unknown, path: string): asserts value is string {
-  nonemptyString(value, path);
-  if (!isAuthoredPathSegment(value)) fail(path, "expected an authored path segment");
 }
 
 function literal<const Values extends readonly (string | number | boolean)[]>(
@@ -1042,13 +1033,13 @@ function assertTypeBindingTarget(value: unknown, path: string): void {
   const candidate = record(value, path);
   if (candidate.kind === "concrete") {
     const data = shape(value, path, ["kind", "name"]);
-    authoredPathSegment(data.name, `${path}.name`);
+    designIdentifier(data.name, `${path}.name`);
     return;
   }
   if (candidate.kind === "qualified") {
     const data = shape(value, path, ["kind", "instance", "type"]);
-    authoredPathSegment(data.instance, `${path}.instance`);
-    authoredPathSegment(data.type, `${path}.type`);
+    designIdentifier(data.instance, `${path}.instance`);
+    designIdentifier(data.type, `${path}.type`);
     return;
   }
   fail(`${path}.kind`, 'expected "concrete" or "qualified"');
@@ -1114,16 +1105,22 @@ function assertDesign(value: unknown, path: string): void {
     const item = shape(
       concept,
       conceptPath,
-      ["definition", "specification", "instances"],
+      ["definition", "specification", "ownedTypes", "instances"],
       ["source"],
     );
     nonemptyString(item.definition, `${conceptPath}.definition`);
     if (item.source !== undefined && !sourceIds.has(item.source as string))
       fail(`${conceptPath}.source`, "does not name a concept source");
     assertSpecification(item.specification, `${conceptPath}.specification`);
-    if (
-      record(item.specification, `${conceptPath}.specification`).definitionName !== item.definition
-    )
+    uniqueNonemptyStrings(item.ownedTypes, `${conceptPath}.ownedTypes`);
+    for (const [ownedIndex, name] of item.ownedTypes.entries()) {
+      designIdentifier(name, `${conceptPath}.ownedTypes[${ownedIndex}]`);
+      if (ownedIndex > 0 && ordinal(item.ownedTypes[ownedIndex - 1], name) >= 0) {
+        fail(`${conceptPath}.ownedTypes[${ownedIndex}]`, "must be in canonical ordinal order");
+      }
+    }
+    const specification = record(item.specification, `${conceptPath}.specification`);
+    if (specification.definitionName !== item.definition)
       fail(`${conceptPath}.definition`, "does not match specification.definitionName");
     for (const [instanceIndex, instance] of array(
       item.instances,
@@ -1131,23 +1128,16 @@ function assertDesign(value: unknown, path: string): void {
     ).entries()) {
       const instancePath = `${conceptPath}.instances[${instanceIndex}]`;
       const selected = shape(instance, instancePath, ["name", "declaration", "bindings"]);
-      authoredPathSegment(selected.name, `${instancePath}.name`);
+      designIdentifier(selected.name, `${instancePath}.name`);
       assertDesignLocation(selected.declaration, `${instancePath}.declaration`, sourceIds);
       for (const [bindingIndex, binding] of array(
         selected.bindings,
         `${instancePath}.bindings`,
       ).entries()) {
         const bindingPath = `${instancePath}.bindings[${bindingIndex}]`;
-        const bound = shape(
-          binding,
-          bindingPath,
-          ["external", "target", "location"],
-          ["explanation"],
-        );
+        const bound = shape(binding, bindingPath, ["external", "target", "location"]);
         designIdentifier(bound.external, `${bindingPath}.external`);
         assertTypeBindingTarget(bound.target, `${bindingPath}.target`);
-        if (bound.explanation !== undefined)
-          nonemptyString(bound.explanation, `${bindingPath}.explanation`);
         assertDesignLocation(bound.location, `${bindingPath}.location`, sourceIds);
       }
       uniqueFieldIndexes(selected.bindings, `${instancePath}.bindings`, "external");
@@ -1162,7 +1152,7 @@ function assertDesign(value: unknown, path: string): void {
     ).entries()) {
       const concretePath = `${path}.types.concreteTypes[${index}]`;
       const item = shape(concrete, concretePath, ["name", "location"]);
-      authoredPathSegment(item.name, `${concretePath}.name`);
+      designIdentifier(item.name, `${concretePath}.name`);
       assertDesignLocation(item.location, `${concretePath}.location`, sourceIds);
     }
     uniqueFieldIndexes(types.concreteTypes, `${path}.types.concreteTypes`, "name");
@@ -1393,7 +1383,7 @@ function assertManifestCrossFields(data: DataRecord): void {
     const designInstances = new Set<string>();
     const designInstanceRecords = new Map<
       string,
-      { item: DataRecord; path: string; externalTypes: Set<string> }
+      { item: DataRecord; path: string; externalTypes: Set<string>; ownedTypes: Set<string> }
     >();
     const definitions = new Set<string>();
     for (const [index, concept] of array(design.concepts, "$.design.concepts").entries()) {
@@ -1446,6 +1436,7 @@ function assertManifestCrossFields(data: DataRecord): void {
           item: instanceItem,
           path: `$.design.concepts[${index}].instances[${instanceIndex}]`,
           externalTypes,
+          ownedTypes: new Set(item.ownedTypes as string[]),
         });
         const inventoryIndex = conceptIndexes.get(name)!;
         const inventory = record(
@@ -1517,6 +1508,11 @@ function assertManifestCrossFields(data: DataRecord): void {
           fail(
             `${instance.path}.bindings[${bindingIndex}].target.type`,
             "names an external parameter; bindings must terminate directly",
+          );
+        if (!selectedTarget.ownedTypes.has(target.type as string))
+          fail(
+            `${instance.path}.bindings[${bindingIndex}].target.type`,
+            "does not name an SSF-owned type of the selected definition",
           );
       }
     }
@@ -1596,7 +1592,7 @@ function manifestBodyDigest(data: DataRecord): string {
   return canonicalDigest(body);
 }
 
-function assertManifestStructure(value: unknown): DataRecord {
+function assertManifestStructure(value: unknown, crossFields = true): DataRecord {
   assertJsonValue(value, "$", new WeakSet());
   const candidate = record(value, "$");
   if (Object.hasOwn(candidate, "version") && candidate.version !== 1) {
@@ -1650,13 +1646,13 @@ function assertManifestStructure(value: unknown): DataRecord {
     assertDiagnostic(diagnostic, `$.diagnostics[${index}]`);
   }
   assertDesign(data.design, "$.design");
-  assertManifestCrossFields(data);
+  if (crossFields) assertManifestCrossFields(data);
   return data;
 }
 
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export function applicationManifestDigest(manifest: ApplicationManifestV1): string {
-  return manifestBodyDigest(assertManifestStructure(manifest));
+  return manifestBodyDigest(assertManifestStructure(manifest, false));
 }
 
 /** Validate untrusted data as one complete canonical version-1 application manifest. */

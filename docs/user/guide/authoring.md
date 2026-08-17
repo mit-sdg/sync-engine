@@ -66,8 +66,8 @@ Declare concept-external parameters in the sole `types` fence. The fence may be
 empty: concept-owned identities, conventional values, and refinements used in
 State or operation signatures are not additional Types declarations. Put one
 SSF `state` fence in State. `check-design` parses its bounded structural
-declarations, including owned identity/type names, singular/plural normalization,
-and subset structure. Review invariant sentences and other admitted prose
+declarations, including owned identity/type names, conservative collection-aware
+singular/plural equivalence, and subset structure. Review invariant sentences and other admitted prose
 manually because they remain opaque. Express enforced refinements in the owning
 action branches. Declare at least one
 structured action with explicit branches, and put
@@ -152,7 +152,7 @@ remain globally unique.
 
 Each right side directly names a declared concrete type or an owned type of
 another declared, selected instance. The bounded SSF parser proves owned target
-names, including normalized singular/plural forms. Never target another
+names, including accepted conservative singular/plural spellings for collection types. Never target another
 instance's external parameter or construct an alias chain. Direct qualified
 owned-type dependencies may be cyclic because every target is checked
 independently; declaration order does not resolve or prioritize them. Do not

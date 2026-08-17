@@ -124,6 +124,7 @@ describe("authored design orchestration", () => {
       const checked = await checkAuthoredDesign({
         assembly,
         design,
+        resolveOwnedTypeNames: () => [],
         resolveComputationInputs: ({ computations }) => {
           expect(computations).toEqual([{ name: "normalize" }]);
           return [{ name: "normalize", inputs: [{ name: "value", optional: true }] }];
@@ -249,6 +250,30 @@ describe("authored design orchestration", () => {
       ).rejects.toThrow(
         'traced concept source for "AnswerComments" does not exactly match its registered spec text',
       );
+    } finally {
+      await assembly.beginDrain();
+    }
+  });
+
+  test("reports a selected advanced concept without a specification only as missing its specification", async () => {
+    class Unspecified {
+      ping(_: Record<string, never>) {
+        return {};
+      }
+    }
+    const assembly = assemble({
+      vocabulary: vocabulary({ concepts: { Unspecified }, computations: {} }),
+      composition: {},
+    });
+    const design = await fixture("# Inventory\n\n```instances\ninstantiate Unspecified\n```\n");
+    try {
+      const failure = await checkAuthoredDesign({ assembly, design }).catch(
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(AuthoredDesignCheckError);
+      expect((failure as AuthoredDesignCheckError).issues.map(({ code }) => code)).toEqual([
+        "MISSING_CONCEPT_SPECIFICATION",
+      ]);
     } finally {
       await assembly.beginDrain();
     }

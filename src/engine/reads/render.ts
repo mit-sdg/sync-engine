@@ -377,7 +377,6 @@ interface RenderDesign {
         target:
           | { kind: "concrete"; name: string }
           | { kind: "qualified"; instance: string; type: string };
-        explanation?: string;
         location: RenderDesignLocation;
       }[];
     }[];
@@ -487,9 +486,6 @@ function renderCheckedConcept(
       lines.push(
         `  - \`${binding.external}\` is \`${target}\` — ${sourceLink(design, binding.location)}.`,
       );
-      if (binding.explanation !== undefined) {
-        lines.push(...binding.explanation.split("\n").map((line) => `    ${line}`));
-      }
     }
   }
   lines.push("");

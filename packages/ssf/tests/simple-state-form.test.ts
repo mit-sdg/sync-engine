@@ -96,7 +96,7 @@ at most one Item has each title`;
       ],
     });
     expect(parsed.document.declarations[1]).toMatchObject({
-      name: { text: "Settings", normalized: "Setting", referenceKind: "owned" },
+      name: { text: "Settings", normalized: "Settings", referenceKind: "owned" },
       multiplicity: "element",
     });
     expect(parsed.document.declarations[2]).toMatchObject({
@@ -108,13 +108,15 @@ at most one Item has each title`;
       { kind: "opaque", text: "at most one Item has each title" },
     ]);
     expect(parsed.document.inventory).toMatchObject({
-      identities: [{ name: "Item" }, { name: "Setting" }],
-      types: [{ name: "Item" }, { name: "Open" }, { name: "Setting" }],
+      identities: [{ name: "Item" }, { name: "Settings" }],
+      types: [{ name: "Item" }, { name: "Open" }, { name: "Settings" }],
       external: ["Person"],
     });
     expect(isOwnedTypeName(parsed.document.inventory, "Items")).toBe(true);
     expect(isOwnedTypeName(parsed.document.inventory, "Item")).toBe(true);
     expect(isOwnedTypeName(parsed.document.inventory, "Person")).toBe(false);
+    expect(isOwnedTypeName(parsed.document.inventory, "Settings")).toBe(true);
+    expect(isOwnedTypeName(parsed.document.inventory, "Setting")).toBe(false);
     expect(isOwnedTypeName(parsed.document.inventory, "Itme")).toBe(false);
   });
 
@@ -158,6 +160,57 @@ at most one Item has each title`;
 });
 
 describe("type-name normalization", () => {
+  test("uses structural kind and never invents names from singular elements ending in s", () => {
+    const parsed = parseSimpleStateForm(`an element Canvas
+
+an element Gas
+
+an element Lens
+
+an element Mouse
+
+a set of Canvases
+
+a set of Gases
+
+a set of Lenses
+
+a set of Mice`);
+    expect(parsed.document.inventory.types.map(({ name }) => name)).toEqual([
+      "Canvas",
+      "Gas",
+      "Lens",
+      "Mouse",
+    ]);
+    expect(parsed.document.inventory.types.flatMap(({ declaredNames }) => declaredNames)).toEqual([
+      "Canvas",
+      "Canvases",
+      "Gas",
+      "Gases",
+      "Lens",
+      "Lenses",
+      "Mouse",
+      "Mice",
+    ]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
+      "Canvas",
+      "Canvases",
+      "Gas",
+      "Gases",
+      "Lens",
+      "Lenses",
+      "Mice",
+      "Mouse",
+    ]);
+    for (const invented of ["Canva", "Ga", "Len"]) {
+      expect(isOwnedTypeName(parsed.document.inventory, invented), invented).toBe(false);
+    }
+    expect(typeNamesEquivalent("Mouse", "Mice")).toBe(true);
+    expect(typeNamesEquivalent("Canvas", "Canva")).toBe(false);
+    expect(typeNamesEquivalent("Gas", "Ga")).toBe(false);
+    expect(typeNamesEquivalent("Lens", "Len")).toBe(false);
+  });
+
   test("enumerates canonical, regular, exceptional, authored, and subset spellings", () => {
     const inventory = parseSimpleStateForm(
       "an element Entry\n\nan element Person\n\nan Analysis set of Entries",
@@ -169,7 +222,6 @@ describe("type-name normalization", () => {
       "Entry",
       "People",
       "Person",
-      "Persons",
     ]);
     expect(
       ownedTypeNameSpellings(inventory).every((name) => isOwnedTypeName(inventory, name)),
@@ -195,6 +247,28 @@ describe("type-name normalization", () => {
 });
 
 describe("canonical repair diagnostics", () => {
+  test("diagnoses structural-looking malformed lines while retaining invariant prose as opaque", () => {
+    const source = `set Items
+
+a set of Records with garbage
+
+a set of Accounts with
+  a owner
+
+at most one Item has each owner`;
+    const parsed = parseSimpleStateForm(source);
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_ARTICLE" },
+      { code: "SSF_MALFORMED_DECLARATION" },
+      { code: "SSF_MALFORMED_FIELD" },
+    ]);
+    expect(parsed.document.opaqueLines.map(({ text }) => text)).toEqual([
+      "a set of Records with garbage",
+      "  a owner",
+      "at most one Item has each owner",
+    ]);
+  });
+
   test("uses the parser's recovered structure for every existing repair", () => {
     const source = `a sequence of Sessions
   a revokedAt optional DateTime
@@ -212,7 +286,7 @@ a element Settings with`;
     ]);
     expect(
       parseSimpleStateForm(source).document.inventory.identities.map(({ name }) => name),
-    ).toEqual(["Group", "Session", "Setting"]);
+    ).toEqual(["Group", "Session", "Settings"]);
   });
 });
 
@@ -261,6 +335,17 @@ describe("repository SSF corpus", () => {
       const parsed = parseSimpleStateForm(stateFence(markdown), {
         externalTypes: externalTypes(markdown),
       });
+      expect(parsed.diagnostics, path).toEqual([]);
+      expect(
+        parsed.document.inventory.types.some(({ name }) => ["Canva", "Ga", "Len"].includes(name)),
+        path,
+      ).toBe(false);
+      expect(
+        ownedTypeNameSpellings(parsed.document.inventory).every((name) =>
+          isOwnedTypeName(parsed.document.inventory, name),
+        ),
+        path,
+      ).toBe(true);
       expect(
         parsed.document.inventory.types
           .filter(({ roles }) => roles.length > 0)

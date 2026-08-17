@@ -219,7 +219,9 @@ Assembly itself does not always call floor factories. For each selected name,
 supplied `initialize` arguments, otherwise default-constructs the canonical
 class. Within one assembly, two names cannot use the same raw implementation
 object. This identity check is assembly-local: the same raw object may be used
-in a separate assembly, which then has a separate action queue and query cache.
+in a separate assembly under a semantically compatible registration, which then has a
+separate action queue and query cache. Incompatible metadata remains invalid because one
+object cannot honor two conflicting contracts.
 Separate objects are not proof of separate durable state. A persistent floor
 factory should use its instance-name argument to select an explicit repository,
 collection, schema, namespace, or equivalent resource when isolation is
@@ -544,8 +546,9 @@ The application manifest has format `sync-engine.application-manifest`, version
 reset replaces the version-1 schema in place; earlier beta shapes and prior
 versions are rejected without upconversion. It
 contains executable application and wire facts plus structured concept
-contracts, full State text, authored definition/instance declarations and external bindings, resolved application types, computation
-signatures, registered design source locations, normalized-source digests, implementation provenance, validators, and diagnostics. It excludes
+contracts, full State text, authored definition/instance declarations and external
+bindings, normalized definition-owned type inventories, resolved application types,
+computation signatures, registered design source locations, normalized-source digests, implementation provenance, validators, and diagnostics. It excludes
 runtime functions, constructor arguments, resources, object identity,
 occurrences, timestamps, and other runtime state.
 

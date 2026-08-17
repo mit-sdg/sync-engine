@@ -12,7 +12,9 @@ import { vocabulary } from "@sync-engine/advanced";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
+import { applicationConceptSet as malformedSsfVocabulary } from "./fixtures/generated-artifacts/malformed-ssf/vocabulary.ts";
 import { applicationConceptSet as ownedTypeVocabulary } from "./fixtures/generated-artifacts/owned-types/vocabulary.ts";
+import packagingApplication from "../../packaging/application/generated.config.ts";
 import {
   checkGenerated,
   inspectGenerated,
@@ -20,7 +22,12 @@ import {
   renderGenerated,
   resolveApplication,
 } from "@engine/tooling/generated-artifacts";
+import {
+  applicationManifestDigest,
+  validateApplicationManifest,
+} from "@engine/tooling/application-manifest-format";
 import { inspectAssembly } from "@engine/tooling/inspection";
+import { applicationManifest } from "@engine/tooling/manifest";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 import { loadGeneratedApplication } from "@command/generated-config";
 
@@ -35,6 +42,14 @@ const conceptFreeModule = new URL(
   import.meta.url,
 );
 const conceptFreeVocabulary = vocabulary({ concepts: {}, computations: {} });
+const malformedSsfModule = new URL(
+  "./fixtures/generated-artifacts/malformed-ssf/vocabulary.ts",
+  import.meta.url,
+);
+const malformedSsfDesign = {
+  version: 1 as const,
+  documents: [new URL("./fixtures/generated-artifacts/malformed-ssf/design.md", import.meta.url)],
+};
 const ownedTypeModule = new URL(
   "./fixtures/generated-artifacts/owned-types/vocabulary.ts",
   import.meta.url,
@@ -133,7 +148,45 @@ describe("generated application artifacts", () => {
     await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
       'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
     );
-  });
+  }, 15_000);
+
+  test("surfaces structural-looking SSF diagnostics during configured checking", async () => {
+    const application = resolveApplication(
+      {
+        assemble: () => assemble({ vocabulary: malformedSsfVocabulary, composition: {} }),
+        title: "Malformed SSF",
+        design: malformedSsfDesign,
+        conceptSet: { module: malformedSsfModule },
+      },
+      configUrl,
+    );
+    await expect(renderGenerated(application)).rejects.toThrow(
+      /concept definition "Malformed" has invalid structural SSF State:.*\[SSF_MALFORMED_DECLARATION\]/s,
+    );
+  }, 15_000);
+
+  test("manifest validation rejects a digest-valid qualified target absent from SSF ownership", async () => {
+    const resolved = resolveApplication(
+      {
+        ...packagingApplication,
+        design: { ...packagingApplication.design, version: 1 as const },
+      },
+      configUrl,
+    );
+    const manifest = await inspectGenerated(resolved, (assembly) => applicationManifest(assembly));
+    const mitigating = manifest.design.concepts
+      .flatMap(({ instances }) => instances)
+      .find(({ name }) => name === "Mitigating")!;
+    const target = mitigating.bindings.find(({ external }) => external === "Room")!.target;
+    if (target.kind !== "qualified") throw new Error("fixture Room binding is not qualified");
+    expect(`${target.instance}.${target.type}`).toBe("Rooming.Room");
+    target.type = "DefinitelyNotOwned";
+    manifest.digest = applicationManifestDigest(manifest);
+
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /target\.type.*does not name an SSF-owned type/,
+    );
+  }, 15_000);
 
   test("assembles once while checking the exact generated application", async () => {
     let assemblies = 0;

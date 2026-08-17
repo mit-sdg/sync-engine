@@ -154,13 +154,16 @@ Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
 The parser recognizes set, sequence, element, and subset declarations; their
 indented fields and multiplicities; structural keywords; and SSF identifier and
-article placement. It normalizes consistent singular and plural type names,
-records subset relationships, and inventories nonexternal type names introduced by
-declaration subjects, subset parents, and structural fields. Malformed structural declarations fail with source-located
-canonical-form diagnostics.
+article placement. Collection declaration subjects use conservative singular/plural
+normalization, including documented irregular pairs such as `Mouse`/`Mice`; `element`
+and scalar names are not treated as plurals merely because they end in `s`. The parser
+records subset relationships and inventories nonexternal type names introduced by
+declaration subjects, subset parents, and structural fields.
 
+A line that begins like a declaration or an indented field but is incomplete, has
+trailing tokens, or otherwise misses the grammar fails with a source-located diagnostic.
 This is intentionally not a prose semantics parser. Standalone invariant
-sentences and other admitted non-structural lines remain opaque text. The parser
+sentences that do not masquerade as malformed structure remain opaque text. The parser
 does not prove those invariants, action conditions or effects, query meaning,
 storage layout, State/storage agreement, or implementation behavior. It also
 does not require every conventional or refinement name in an operation signature

@@ -329,12 +329,14 @@ export async function checkAuthoredDesign(options: {
   const inputsByComputation = new Map(analyzed.map(({ name, inputs }) => [name, inputs]));
 
   const concepts: SelectedConceptDesignFact[] = [];
+  const unresolvedConceptInstances: string[] = [];
   const orchestrationIssues: AuthoredDesignOrchestrationIssue[] = [];
   for (const inventory of assembled.engine
     .exportConcepts()
     .filter(({ name }) => name !== "RequestBoundary")
     .sort((left, right) => ordinal(left.name, right.name))) {
     if (inventory.specification === undefined) {
+      unresolvedConceptInstances.push(inventory.name);
       orchestrationIssues.push({
         code: "MISSING_CONCEPT_SPECIFICATION",
         message: `selected concept instance ${JSON.stringify(inventory.name)} has no authored concept specification.`,
@@ -458,6 +460,9 @@ export async function checkAuthoredDesign(options: {
       externalTypes: externalParameters,
       ...(ownedTypes === undefined ? {} : { ownedTypes }),
     })),
+    ...(unresolvedConceptInstances.length === 0
+      ? {}
+      : { unresolvedConceptInstances: unresolvedConceptInstances.sort(ordinal) }),
   };
 
   const validationIssues = validateAuthoredApplicationDesign(documents, selected);

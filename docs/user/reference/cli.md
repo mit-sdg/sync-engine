@@ -102,8 +102,9 @@ Application-design documents use the same parser and assembly-independent valida
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
 - SSF structural declarations and fields parse canonically, including articles,
-  multiplicity, `optional`, `with`, identifiers, singular/plural normalization, and
-  subset structure; standalone invariant sentences and admitted prose remain opaque;
+  multiplicity, `optional`, `with`, identifiers, collection-aware conservative
+  singular/plural normalization, and subset structure; malformed structural-looking
+  lines fail while truly standalone invariant sentences remain opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
 - `computations` declarations have valid signatures, distinct input names, balanced
@@ -142,9 +143,9 @@ selection. It also does not require complete instances or declaration coverage,
 compare computation inputs with TypeScript, validate concept source agreement, or
 inspect ordinary prose and computation-body semantics. Those checks need the selected
 assembly and remain the job of config-based `sync-engine check`. In particular, a
-binding target is accepted by shape even when its concrete declaration or target
-concept is outside the supplied partial corpus; rejecting it would make
-partial-corpus checks produce false positives.
+detached binding and binding target are accepted by shape even when their instance,
+concrete declaration, or target concept is outside the supplied partial corpus;
+rejecting them would make partial-corpus checks produce false positives.
 
 `check-design` reads no generated config, assembly, TypeScript project, or Git state and
 writes no files.
@@ -286,10 +287,10 @@ pre-1.0 beta reset replaces the version-1 schema in place: earlier beta shapes
 and prior versions are rejected and have no compatibility decoder.
 
 The manifest retains normalized full concept State text, structured concept
-action/query declarations, authored definition/instance identities and
-bindings, resolved application types, application declaration identities,
-computation signatures, source locations,
-and digests over registered design contents. It excludes executable functions,
+action/query declarations, authored definition/instance identities and bindings, each
+definition's normalized SSF-owned type inventory, resolved application types,
+application declaration identities, computation signatures, source locations, and
+digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
 other runtime-only values.
 

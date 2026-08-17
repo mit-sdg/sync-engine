@@ -26,7 +26,9 @@ external Person
 ## State
 
 \`\`\`state
-a set of Notes with an author Person and text String
+a set of Notes with
+  an author Person
+  a text String
 \`\`\`
 
 ## Actions
@@ -98,6 +100,19 @@ describe("authored design form check", () => {
         { path: "arbitrary/first.data", kind: "application" },
         { path: "second.txt", kind: "concept" },
         { path: "elsewhere/third", kind: "application" },
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts a partial detached-binding corpus without requiring its instance document", async () => {
+    const root = await fixture({
+      "bindings.md": "# Detached bindings\n\n```bindings\nComments.User is Person\n```\n",
+    });
+    try {
+      await expect(checkDesignFiles(["bindings.md"], root)).resolves.toEqual([
+        { path: "bindings.md", kind: "application" },
       ]);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -214,7 +229,7 @@ Comments.User is Posting.Author
 
   test("fails recognized noncanonical SSF with deterministic repairs", async () => {
     const malformed = concept.replace(
-      "a set of Notes with an author Person and text String",
+      "a set of Notes with\n  an author Person\n  a text String",
       "a sequence of Notes\n  a discardedAt optional DateTime",
     );
     const root = await fixture({ "broken.md": malformed });

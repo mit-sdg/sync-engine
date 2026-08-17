@@ -83,11 +83,17 @@ describe("limited Simple State Form validation", () => {
     ["invariant prose", "a set of Items with\n  a title String\n\nat most one Item has each title"],
     ["opaque no-state prose", "no durable state"],
     ["opaque function state", "a read function\n  read () -> DateTime"],
-    ["inline fields", "a set of Notes with an author Person and text String"],
-    ["nontrivial article", "a set of Entries with\n  a unique name String"],
     ["unrecognized colon dialect", "comments: set Comment\n  author: Person"],
   ])("ignores or accepts %s", (_name, body) => {
     expect(validate(body)).toEqual([]);
+  });
+
+  test("reports malformed structural declarations and fields without rejecting invariant prose", () => {
+    expect(
+      validate(
+        "set Items\n\na set of Items with garbage\n\na set of Accounts with\n  a owner\n\nat most one Item has each owner",
+      ).map(({ code }) => code),
+    ).toEqual(["SSF_ARTICLE", "SSF_MALFORMED_DECLARATION", "SSF_MALFORMED_FIELD"]);
   });
 
   test("batches independent issues in source order", () => {

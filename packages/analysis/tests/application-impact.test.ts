@@ -447,6 +447,7 @@ Touching a note updates the feed.[touch]
           definition: "SharedNotes",
           source: "concept-1",
           specification,
+          ownedTypes: [],
           instances: concepts.map(({ name }) => ({
             name,
             declaration: { source: "document-1", line: 3, column: 1 },

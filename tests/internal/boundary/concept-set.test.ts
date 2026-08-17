@@ -263,6 +263,28 @@ describe("external concept registration", () => {
     await expect(first.concepts.Cataloging._find({})).resolves.toEqual([]);
     await expect(second.concepts.Cataloging._find({})).resolves.toEqual([]);
   });
+
+  test("permits separate assemblies to reuse one raw object through distinct compatible registrations", async () => {
+    const compatible = registerConcept({
+      class: Cataloging,
+      spec: catalogingSpec,
+      refusals: { ITEM_NOT_FOUND: MissingItem },
+    });
+    const shared = new Cataloging();
+    const first = assembleApplication({
+      conceptSet: conceptSet({ PrimaryCatalog: cataloging }),
+      composition: {},
+      instances: { PrimaryCatalog: shared },
+    });
+    const second = assembleApplication({
+      conceptSet: conceptSet({ SecondaryCatalog: compatible }),
+      composition: {},
+      instances: { SecondaryCatalog: shared },
+    });
+
+    await expect(first.concepts.PrimaryCatalog._find({})).resolves.toEqual([]);
+    await expect(second.concepts.SecondaryCatalog._find({})).resolves.toEqual([]);
+  });
 });
 
 describe("parsed declarations and class methods", () => {

@@ -30,6 +30,27 @@ import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 
+function specificationOwnedTypeNames(specification: {
+  definitionName: string;
+  externalTypes: readonly { name: string }[];
+  state: { body: string; location: { line: number } };
+}): readonly string[] {
+  const parsed = parseSimpleStateForm(specification.state.body, {
+    externalTypes: specification.externalTypes.map(({ name }) => name),
+  });
+  if (parsed.diagnostics.length > 0) {
+    throw new Error(
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
+        .map(
+          ({ code, message, span }) =>
+            `- line ${specification.state.location.line + span.start.line}, column ${span.start.column}: [${code}] ${message}`,
+        )
+        .join("\n")}`,
+    );
+  }
+  return ownedTypeNameSpellings(parsed.document.inventory);
+}
+
 /**
  * What a project's `generated.config.ts` declares. `assemble`, `title`, and
  * `design` are required; generated output paths and names follow from the title
@@ -263,12 +284,7 @@ async function prepareConfiguredDesign(
       url: pathToFileURL(specPath),
       content: specText,
     })),
-    resolveOwnedTypeNames: ({ specification }) =>
-      ownedTypeNameSpellings(
-        parseSimpleStateForm(specification.state.body, {
-          externalTypes: specification.externalTypes.map(({ name }) => name),
-        }).document.inventory,
-      ),
+    resolveOwnedTypeNames: ({ specification }) => specificationOwnedTypeNames(specification),
     resolveComputationInputs: ({ computations }) => {
       const names = computations.map(({ name }) => name);
       const key = names.join("\0");

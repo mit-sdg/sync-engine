@@ -74,8 +74,8 @@ definition may be instantiated several times.
 A strict specification has ordered Purpose, Principle, Types, State, Actions,
 and Queries sections. Types declares only opaque external parameters. State uses
 SSF. A bounded structural parser inventories nonexternal type names introduced by
-declaration subjects, subset parents, and structural fields, normalizes singular and
-plural forms, and parses subset structure; it
+declaration subjects, subset parents, and structural fields, applies conservative
+singular/plural equivalence to collection subjects, and parses subset structure; it
 retains standalone invariant sentences and other admitted prose as opaque text.
 Actions use explicit `where`/`then` branches and terminal returns or refusals;
 queries select `one`, `optional`, or `many`, return named rows, and explain their

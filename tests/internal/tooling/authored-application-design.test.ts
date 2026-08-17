@@ -227,10 +227,9 @@ instantiate Posting
 instantiate Commenting as PostComments with
   Target is Posting.Post
 \`\`\`
-
+Authors are institution identities.
 \`\`\`bindings
 PostComments.User is Person
-  Authors are institution identities.
 \`\`\`
 
 \`\`\`computations
@@ -274,7 +273,6 @@ formatName(person: Person) : String
         external: "User",
         placement: "detached",
         target: { kind: "concrete", name: "Person" },
-        explanation: "Authors are institution identities.",
         location: { source: "design/types.md", line: 17, column: 1 },
       }),
     ]);
@@ -357,7 +355,7 @@ formatName(person: Person) : String
     );
   });
 
-  test("reports mixed placement once before suppressing duplicate and missing cascades", () => {
+  test("reports mixed placement together with independently actionable semantic gaps", () => {
     const mixed = parseApplicationDesignDocument(
       `# Mixed
 
@@ -391,7 +389,74 @@ Comments.User is Person
           },
         ],
       }).map(({ code }) => code),
-    ).toEqual(["MIXED_BINDING_PLACEMENT"]);
+    ).toEqual(["MIXED_BINDING_PLACEMENT", "MISSING_EXTERNAL_BINDING"]);
+  });
+
+  test("treats zero-external bindings as unknown without inventing a placement mode", () => {
+    const document = parseApplicationDesignDocument(
+      `# No external parameters
+
+\`\`\`types
+concrete Person
+  A person.
+\`\`\`
+
+\`\`\`instances
+instantiate Timing with
+  UnknownInline is Person
+\`\`\`
+
+\`\`\`bindings
+Timing.UnknownDetached is Person
+\`\`\`
+`,
+      "zero-external.md",
+    );
+    expect(
+      validateAuthoredApplicationDesign([document], {
+        reactions: [],
+        views: [],
+        formers: [],
+        computations: [],
+        concepts: [{ instance: "Timing", definition: "Timing", externalTypes: [] }],
+      }).map(({ code }) => code),
+    ).toEqual(["UNKNOWN_EXTERNAL_BINDING", "UNKNOWN_EXTERNAL_BINDING"]);
+  });
+
+  test("retains unknown-binding diagnostics when invalid names also mix placement", () => {
+    const document = parseApplicationDesignDocument(
+      `# Unknown mixed bindings
+
+\`\`\`types
+concrete Person
+  A person.
+\`\`\`
+
+\`\`\`instances
+instantiate Linking with
+  UnknownInline is Person
+\`\`\`
+
+\`\`\`bindings
+Linking.UnknownDetached is Person
+\`\`\`
+`,
+      "unknown-mixed.md",
+    );
+    expect(
+      validateAuthoredApplicationDesign([document], {
+        reactions: [],
+        views: [],
+        formers: [],
+        computations: [],
+        concepts: [{ instance: "Linking", definition: "Linking", externalTypes: ["Required"] }],
+      }).map(({ code }) => code),
+    ).toEqual([
+      "MIXED_BINDING_PLACEMENT",
+      "UNKNOWN_EXTERNAL_BINDING",
+      "UNKNOWN_EXTERNAL_BINDING",
+      "MISSING_EXTERNAL_BINDING",
+    ]);
   });
 
   test.each([
@@ -401,8 +466,21 @@ Comments.User is Person
     ["# V\n```instances\ninstantiate A with\n```\n", /empty `with`/],
     ["# V\n```instances\ninstantiate A\n  User is Person\n```\n", /without `with`/],
     ["# V\n```bindings\nA.User is B.External.More\n```\n", /accepts only/],
+    [
+      "# V\n```bindings\nA.User is Person\n  Explanations belong outside this fence.\n```\n",
+      /declarations only/,
+    ],
   ])("rejects malformed declaration forms", (markdown, message) => {
     expect(() => parseApplicationDesignDocument(markdown)).toThrow(message);
+  });
+
+  test.each([
+    ["concrete name", "```types\nconcrete Person-Type\n  Invalid.\n```"],
+    ["instance name", "```instances\ninstantiate Posting as Forum-Posts\n```"],
+    ["qualified target instance", "```bindings\nComments.User is Forum-Posts.Post\n```"],
+    ["concrete target", "```bindings\nComments.User is App-Person\n```"],
+  ])("rejects a hyphenated %s", (_name, fence) => {
+    expect(() => parseApplicationDesignDocument(`# Invalid\n\n${fence}\n`)).toThrow();
   });
 });
 
