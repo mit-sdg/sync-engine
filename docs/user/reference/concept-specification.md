@@ -150,8 +150,8 @@ retains its full contents in concept-specification IR and application manifests.
 Private tooling also parses a bounded structural view for form checks and owned-name
 resolution; that view is not part of the public concept-specification IR.
 
-Authors must use Simple State Form (SSF), based on the
-[conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
+Authors must use Simple State Form (SSF), defined by the canonical
+[SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
 The parser recognizes set, sequence, element, and subset declarations; their
 indented fields and multiplicities; structural keywords; and SSF identifier and
 article placement. Structural declaration and subset names remain exact. A collection
