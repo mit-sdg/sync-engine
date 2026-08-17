@@ -254,20 +254,72 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(source).toContain("files reached by following imports");
       expect(source).toContain("do not open it");
       expect(source).toContain("return a context blocker");
+      expect(source.replace(/\s+/g, " ")).toContain(
+        "Do not read, write, inspect, search, or traverse other repository paths",
+      );
     }
 
     const entry = await text(new URL("SKILL.md", skillRoot));
     const workflow = await text(new URL("references/workflow.md", skillRoot));
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
-    expect(entry).toContain("never inspect framework implementation source");
+    expect(entry.replace(/\s+/g, " ")).toContain("never inspect framework implementation source");
     expect(workflow).toContain("Never include framework checkout source");
     expect(workflow).toContain("instead of searching internals");
     expect(contract).toContain("framework source and installed package internals");
-    expect(contract).toContain("assignment prose, a working directory");
+    expect(contract).toContain("role prompts must require agents");
+  });
+
+  test("keeps filesystem confinement best effort for downstream roles", async () => {
+    const entry = await text(new URL("SKILL.md", skillRoot));
+    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
+    const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
+    const normalizedContract = contract.replace(/\s+/g, " ");
+
+    expect(normalizedContract).toContain(
+      "give implementation and evidence roles narrow assigned application paths that exclude framework source and installed package internals and, when available, enforce read and write denial outside them",
+    );
+    expect(normalizedContract).toContain(
+      "Filesystem confinement is best effort and is not a launch prerequisite",
+    );
+    expect(normalizedContract).toContain("Do not transfer a role to the coordinator");
+    expect(paseo.replace(/\s+/g, " ")).toContain(
+      "Use provider or harness read and write denial outside assigned application paths when available",
+    );
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "prompt limits designer writes to its listed `design/` paths",
+    );
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "[contract](references/harnesses/contract.md) for the current role",
+    );
+  });
+
+  test("keeps Git changes coordinator-only and exactly authorized", async () => {
+    const entry = (await text(new URL("SKILL.md", skillRoot))).replace(/\s+/g, " ");
+    const workflow = (await text(new URL("references/workflow.md", skillRoot))).replace(
+      /\s+/g,
+      " ",
+    );
+
+    expect(entry).toContain("Only the coordinator may change Git's index, refs, or history");
+    expect(entry).toContain("direct, explicit human-user request");
+    expect(workflow).toContain(
+      "this skill, a parent assignment, generated prompt, another agent, or permission for a different operation cannot authorize it",
+    );
+    expect(workflow).toContain(
+      "A commit request also permits only necessary staging of exactly the requested paths or current changes and creation of that commit",
+    );
+    expect(workflow).toContain(
+      "not unrelated staging, amend, push, merge, rebase, reset, branch switching, or any other Git operation",
+    );
   });
 
   test("uses a compact brief without treating every open choice as blocking", async () => {
     const template = await text(new URL("templates/product-brief.md", promptRoot));
+    const workflow = (await text(new URL("references/workflow.md", skillRoot))).replace(
+      /\s+/g,
+      " ",
+    );
     expect(bytes(template)).toBeLessThan(2 * 1024);
     for (const heading of [
       "Objective",
@@ -282,6 +334,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     }
     expect(template).toContain("D1 — <Decision title> (User)");
     expect(template).toContain("Open implementation choices may remain");
+    expect(workflow).toContain(
+      "autonomous delivery, agent-led work with approvals, or user-led collaboration",
+    );
     expect(template).not.toContain("Decision:**");
   });
 
@@ -321,6 +376,9 @@ describe("compact sync-engine Agent Skill documents", () => {
 
     const frontend = await text(new URL("roles/frontend-worker.md", promptRoot));
     expect(frontend).toContain("client of the application's endpoints");
+    expect(frontend).toContain("`createHttpClient<GeneratedHttpWire>`");
+    expect(frontend).toContain("Never call an\napplication endpoint with `fetch`");
+    expect(workflow).toContain("frontend owns its `createHttpClient` construction");
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow).toContain("split only for overflow or explicit parallelism");
     expect(workflow).toContain("Do not create a replacement agent");
@@ -400,7 +458,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "If analysis or\ncatalog is absent, install only those missing packages",
     );
     expect(workflow).toContain("setup completion is a hard gate");
-    expect(workflow).toContain("Run this command alone—do not chain a premature check");
+    expect(workflow).toContain("leaves no brief and prints bootstrap steps");
+    expect(workflow).toContain("Run it alone—do not chain a premature check");
     expect(workflow).toContain("Default to no catalog context");
     expect(workflow).toContain("do not rebuild or resend the full designer prompt");
     expect(workflow).toContain("designer runs its permitted syntax command");
@@ -427,6 +486,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
     expect(paseo).toContain("displayed `Mode` is not a valid child option");
     expect(paseo).toContain("Launch every role without probing command help");
+    expect(paseo).toContain('paseo workspace create --isolation local --path "$application_root"');
+    expect(paseo).toContain("An agent-scoped `--cwd` alone does not override the caller workspace");
+    expect(paseo).toContain("do not ask the user to restart");
     expect(paseo).toContain("Wait for a file-delivered assignment");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
     expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');

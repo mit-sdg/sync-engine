@@ -2,7 +2,7 @@
 name: sync-engine
 description: Design and build applications using concept design and @mit-sdg/sync-engine through compact independent review, bounded implementation roles, and objective evidence.
 license: Apache-2.0
-compatibility: Requires filesystem and shell access, Bun, and native agents with file-based prompt delivery and enforceable working boundaries.
+compatibility: Requires filesystem and shell access, Bun, and native agents with file-based prompts; downstream roles use best-effort assigned-path discipline.
 ---
 
 # Sync-engine application workflow
@@ -28,9 +28,11 @@ brief → independent design → syntax → bounded independent criticism
   or tests. If a required role cannot launch, stop.
 - Use the coordinator's exact provider and model for every role, at that provider's
   normal reasoning setting; do not repeat reasoning instructions in prompts.
-- Preserve unrelated work and Git history.
-- Implementation and evidence roles never inspect framework implementation source or
-  installed package internals. Supply exact public references instead.
+- Preserve unrelated work. Only the coordinator may change Git's index, refs, or history
+  on a direct, explicit human-user request; see the workflow for scope.
+- Downstream implementation and evidence roles receive narrow assigned paths and explicit
+  path-discipline instructions; they never inspect framework implementation source or
+  installed package internals. Supply exact public references.
 - Build every role prompt with the self-contained compiler `scripts/command.ts` and
   deliver it from a file. Bind downstream prompts and follow-ups to the reviewed design
   digest. Never place generated Markdown in a shell argument.
@@ -41,10 +43,10 @@ brief → independent design → syntax → bounded independent criticism
 
 1. Read repository instructions and
    [follow the coordinator workflow](references/workflow.md).
-2. Confirm the available native-agent harness satisfies the
-   [harness contract](references/harnesses/contract.md). When Paseo is available, read
-   the short [Paseo guide](references/harnesses/paseo.md); do not search for other
-   orchestration instructions.
+2. Confirm the harness satisfies the
+   [contract](references/harnesses/contract.md) for the current role. When Paseo is
+   available, read the short [Paseo guide](references/harnesses/paseo.md); do not search
+   for other orchestration instructions.
 3. Initialize and maintain `design/brief.md` with the workflow's brief commands; do not
    read or recreate the packaged template directly.
 4. Build only the current role prompt with the compiler. Do not read role templates or

@@ -2,10 +2,10 @@
 
 ## Assignment
 
-Implement all supplied approved concepts independently within the assignment's exact
-paths. Approved Markdown is read-only and authoritative. Do not inspect or edit
-compositions, registration, assembly, configuration, hosts, generated output,
-unassigned concepts, or unrelated tests.
+Implement approved concepts only in exact assignment paths. Do not read, write, inspect,
+search, or traverse other repository paths. Approved Markdown is read-only. Do not edit
+unassigned concepts, composition, registration, assembly, configuration, hosts,
+generated output, or unrelated tests.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,

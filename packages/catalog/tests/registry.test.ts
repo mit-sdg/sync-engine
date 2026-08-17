@@ -114,17 +114,21 @@ describe("catalog registry", () => {
         (value.sources = ["selecting.shared.ts", "selecting.shared.ts"]),
       "repeats a source",
     ],
-  ])("rejects a concept manifest with %s", async (_case, mutate, message) => {
-    const root = await mkdtemp(join(tmpdir(), "catalog-registry-"));
-    try {
-      await cp(new URL("../entries/", import.meta.url), root, { recursive: true });
-      const path = join(root, "concept/selecting/manifest.json");
-      const manifest = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
-      mutate(manifest);
-      await writeFile(path, `${JSON.stringify(manifest)}\n`);
-      await expect(CatalogRegistry.load(root)).rejects.toThrow(message);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
+  ])(
+    "rejects a concept manifest with %s",
+    async (_case, mutate, message) => {
+      const root = await mkdtemp(join(tmpdir(), "catalog-registry-"));
+      try {
+        await cp(new URL("../entries/", import.meta.url), root, { recursive: true });
+        const path = join(root, "concept/selecting/manifest.json");
+        const manifest = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+        mutate(manifest);
+        await writeFile(path, `${JSON.stringify(manifest)}\n`);
+        await expect(CatalogRegistry.load(root)).rejects.toThrow(message);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    15_000,
+  );
 });

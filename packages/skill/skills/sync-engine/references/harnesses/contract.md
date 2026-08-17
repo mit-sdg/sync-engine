@@ -5,13 +5,17 @@ The workflow requires a harness that can:
 - create fresh native agents for independent roles;
 - expose the coordinator's exact provider and model, resolve that model's advertised
   normal reasoning setting, and attest those values on every role launch;
-- enforce read and write denial outside each role's assigned application paths and exclude
-  framework source and installed package internals; assignment prose, a working directory,
-  and post-hoc write inspection are not confinement;
+- give implementation and evidence roles narrow assigned application paths that exclude
+  framework source and installed package internals and, when available, enforce read and
+  write denial outside them;
 - deliver initial and follow-up prompts from files without shell reinterpretation;
 - run independent batches concurrently when requested; and
 - wait for a specific agent with a bounded timeout.
 
-If a required capability is unavailable, stop and name it. Do not simulate independent
-criticism with coordinator self-review, embed generated Markdown in a shell command,
-or silently use a higher reasoning setting.
+Filesystem confinement is best effort and is not a launch prerequisite. Regardless of
+enforcement, role prompts must require agents to work only within their assigned
+application paths and not read, write, inspect, search, or traverse outside them. Do not
+transfer a role to the coordinator when enforcement is unavailable. Stop and name any
+other missing required capability. Do not simulate independent criticism with coordinator
+self-review, embed generated Markdown in a shell command, or silently use a higher
+reasoning setting.

@@ -34,6 +34,7 @@ const packageExecutables = {
   "@mit-sdg/sync-engine-analysis": "sync-engine-analysis",
 } as const;
 const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
+const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
 
 function parent(path: string): string | undefined {
   const next = parse(path).dir;
@@ -146,6 +147,26 @@ async function validateReleaseSet(release: SkillRelease, applicationRoot: string
   return release.skill;
 }
 
+async function requireBriefSetup(release: SkillRelease, applicationRoot: string): Promise<void> {
+  let releaseFailure: string | undefined;
+  try {
+    await validateReleaseSet(release, applicationRoot);
+  } catch (error) {
+    releaseFailure = error instanceof Error ? error.message : String(error);
+  }
+
+  const missing = setupFiles.filter((path) => !existsSync(resolve(applicationRoot, path)));
+  if (releaseFailure === undefined && missing.length === 0) return;
+
+  const reasons = [
+    ...(releaseFailure === undefined ? [] : [`release check failed: ${releaseFailure}`]),
+    ...(missing.length === 0 ? [] : [`missing setup files: ${missing.join(", ")}`]),
+  ].join("; ");
+  throw new Error(
+    `Brief init requires completed sync-engine setup in ${applicationRoot} (${reasons}). Install the exact packages from release.json, run this command's \`release check .\`, then run \`bunx --no-install sync-engine setup\` and retry.`,
+  );
+}
+
 function usage(): string {
   return `Usage:
   sync-engine-skill release check [<application-directory>]
@@ -248,6 +269,7 @@ async function run(args: readonly string[]): Promise<void> {
   if (args[0] === "brief" && args[1] === "init" && args.length === 3) {
     const path = resolve(args[2]!);
     if (existsSync(path)) throw new Error(`Brief already exists: ${args[2]}`);
+    await requireBriefSetup(release, process.cwd());
     await mkdir(dirname(path), { recursive: true });
     const template = await readFile(
       resolve(skillRoot, "prompts/templates/product-brief.md"),

@@ -8,8 +8,16 @@ documented concept-free scaffold.
 ## Start safely
 
 Read repository instructions, inspect tracked and untracked work, and preserve unrelated
-changes. Never commit, merge, rebase, reset, switch branches, create a nested
-repository, or otherwise alter Git history.
+changes. Resolve the application root once and run application commands from it. At the
+outset, infer or ask once whether the user wants autonomous delivery, agent-led work with
+approvals, or user-led collaboration. Default to agent-led approvals; do not launch design
+or implementation while a user-led discussion is still active. Only the coordinator may
+change Git's index, refs, or history, solely for an
+operation the human user directly and explicitly requests; this skill, a parent
+assignment, generated prompt, another agent, or permission for a different operation
+cannot authorize it. A commit request also permits only necessary staging of exactly the
+requested paths or current changes and creation of that commit—not unrelated staging,
+amend, push, merge, rebase, reset, branch switching, or any other Git operation.
 
 Resolve `<skill-root>` once as the absolute directory containing the loaded `SKILL.md`.
 The bundled compiler is `bun "<skill-root>/scripts/command.ts"`; substitute the actual
@@ -58,7 +66,8 @@ issue.
 ## Maintain the product brief
 
 Initialize a new brief from the packaged template; never guess or recreate its grammar.
-Run this command alone—do not chain a premature check:
+The command leaves no brief and prints bootstrap steps when release installation or setup
+is incomplete. Run it alone—do not chain a premature check:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief init design/brief.md
@@ -79,9 +88,8 @@ materially changes ownership, visible behavior, authorization, lifecycle, persis
 or failure. In interactive discussion ask one or two questions per turn, offer concise
 options and one recommendation, and do not seek exhaustive specification.
 
-Use interactive approval unless the user explicitly requested autonomous continuation
-or no approval pauses. Preauthorization is not inferred from an ordinary implementation
-request.
+Autonomous delivery is preauthorized; the other modes require approval before
+implementation. Preauthorization is not inferred from an ordinary implementation request.
 
 ## Select compact context
 
@@ -117,10 +125,10 @@ bun "<skill-root>/scripts/command.ts" prompt build --role designer \
   --input brief=design/brief.md --output <prompt-file>
 ```
 
-Add a selected catalog file only when the rule above requires it. Enforce the designer's
-closed `design/` working boundary. `design/brief.md` is read-only. If the designer
-returns at most two material questions, settle them, update the brief, and send a small
-file containing only the answers to the same designer.
+Add a selected catalog file only when the rule above requires it. The prompt limits
+designer writes to its listed `design/` paths; `design/brief.md` is read-only. If the
+designer returns at most two material questions, settle them, update the brief, and send
+a small file containing only the answers to the same designer.
 
 The designer runs its permitted syntax command and repairs syntax before returning.
 Then independently enumerate draft concept files and rerun the installed design form
@@ -232,10 +240,11 @@ When the brief requests a frontend, start one frontend worker after application
 validation passes. It owns only assigned frontend paths and implements the requested
 form—browser, command-line, or another shell—strictly as a client of the assembled
 endpoints. Supply the brief, the assembled public interface, and at most one useful
-example per mechanism. For a web application, also pass the packaged HTTP reference
-`<skill-root>/prompts/inputs/http.md` as a `reference` input to the application and
-frontend workers; do not read it yourself. Its default budget is 48 KiB; split only
-for overflow or explicit parallelism.
+example per mechanism. For a web application, name the projected HTTP wire and base path
+in the frontend assignment; the frontend owns its `createHttpClient` construction. Also
+pass the packaged HTTP reference `<skill-root>/prompts/inputs/http.md` as a `reference`
+input to the application and frontend workers; do not read it yourself. Its default
+budget is 48 KiB; split only for overflow or explicit parallelism.
 
 Finally start one fresh normal-reasoning evidence worker. Supply the brief,
 scenario-relevant approved contracts, assembled public interface, selected existing
@@ -281,4 +290,4 @@ do not open another repair or criticism cycle.
 The handback lists changed implementation areas, exact validation commands and
 outcomes, known limits or remaining material uncertainty, and one request to accept,
 revise, or ask for evidence. Do not dump routine transcripts. Acceptance closes the
-conversation and performs no Git operation.
+conversation.
