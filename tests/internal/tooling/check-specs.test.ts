@@ -824,12 +824,16 @@ describe("concept discovery", () => {
           "export const applicationConceptSet = conceptSet({ Sessioning });\n",
       );
       await writeFile(
+        join(project, "design", "instances.md"),
+        "# Application instances\n\n```instances\ninstantiate Sessioning\n```\n",
+      );
+      await writeFile(
         join(project, "generated.config.ts"),
         'import { assemble } from "@mit-sdg/sync-engine/assembly";\n' +
           'import { applicationConceptSet } from "./src/application-concepts.ts";\n' +
           "export default {\n" +
           '  title: "Session application",\n' +
-          "  design: { version: 1, documents: [] },\n" +
+          '  design: { version: 1, documents: [new URL("./design/instances.md", import.meta.url)] },\n' +
           '  conceptSet: { module: new URL("./src/application-concepts.ts", import.meta.url) },\n' +
           "  assemble: () => assemble({\n" +
           "    conceptSet: applicationConceptSet,\n" +

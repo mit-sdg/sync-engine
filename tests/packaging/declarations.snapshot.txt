@@ -3722,6 +3722,7 @@ export interface SpecificationStateIR {
     /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
     body: string;
     prose: string;
+    /** Origin of `body` after surrounding blank fence lines are removed. */
     location: SpecificationLocationIR;
 }
 /** The JSON-safe authored contract parsed from one concept specification. */
@@ -4097,6 +4098,7 @@ interface RenderDesign {
         specification: ConceptSpecificationIR;
         instances: {
             name: string;
+            declaration: RenderDesignLocation;
             bindings: {
                 external: string;
                 target: {
@@ -4565,7 +4567,10 @@ export declare function custom(fn: (...args: never[]) => unknown | Promise<unkno
 export {};
 
 === dist/engine/tooling/application-manifest-format.d.ts ===
+import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
+/** Derive the exact SSF-owned names carried in the manifest through the SSF package. */
+export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
 /** Validate untrusted data as one complete canonical version-1 application manifest. */
@@ -4650,6 +4655,9 @@ export interface AuthoredApplicationDesignDocument {
     links: readonly AuthoredDesignLink[];
     computations: readonly AuthoredComputation[];
     concreteTypes: readonly ConcreteTypeDeclaration[];
+    /** Instance declarations authored in this document, with inline bindings attached. */
+    instances: readonly AuthoredConceptInstanceDeclaration[];
+    /** Bindings authored in detached `bindings` fences. */
     bindings: readonly ExternalTypeBinding[];
 }
 export interface ConcreteTypeDeclaration {
@@ -4657,6 +4665,7 @@ export interface ConcreteTypeDeclaration {
     definition: string;
     location: DesignSourceLocation;
 }
+export type BindingPlacement = "inline" | "detached";
 export interface ExternalTypeBinding {
     instance: string;
     external: string;
@@ -4668,8 +4677,17 @@ export interface ExternalTypeBinding {
         instance: string;
         type: string;
     };
-    explanation?: string;
+    placement: BindingPlacement;
     location: DesignSourceLocation;
+}
+export interface AuthoredConceptInstanceDeclaration {
+    definition: string;
+    instance: string;
+    bindings: readonly ExternalTypeBinding[];
+    location: DesignSourceLocation;
+}
+export interface NormalizedConceptInstance extends AuthoredConceptInstanceDeclaration {
+    bindings: readonly ExternalTypeBinding[];
 }
 /** Parse one explicitly registered application design file. */
 export declare function parseApplicationDesignDocument(markdown: string, source?: string): AuthoredApplicationDesignDocument;
@@ -4687,7 +4705,16 @@ export interface SelectedComputationDesign {
 }
 export interface SelectedConceptDesign {
     instance: string;
+    definition: string;
     externalTypes: readonly string[];
+    /**
+     * Optional integration result from the structured-SSF owner. Supply the complete
+     * normalized owned-name inventory for the selected definition (including accepted
+     * singular/plural and subset names). Configured application checking always supplies
+     * this inventory; omission supports isolated form/validator use and makes no ownership
+     * claim.
+     */
+    ownedTypes?: readonly string[];
 }
 export interface SelectedApplicationDesign {
     reactions: readonly string[];
@@ -4695,17 +4722,21 @@ export interface SelectedApplicationDesign {
     formers: readonly string[];
     computations: readonly SelectedComputationDesign[];
     concepts: readonly SelectedConceptDesign[];
+    /** Selected assembly names whose definitions cannot be checked without a specification. */
+    unresolvedConceptInstances?: readonly string[];
 }
-export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING" | "UNKNOWN_EXTERNAL" | "MISSING_BINDING" | "UNRESOLVED_TYPE_TARGET" | "EXTERNAL_TARGET" | "UNUSED_CONCRETE";
+export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE" | "UNSELECTED_INSTANCE" | "UNDECLARED_SELECTED_INSTANCE" | "INSTANCE_DEFINITION_MISMATCH" | "UNKNOWN_EXTERNAL_BINDING" | "MISSING_EXTERNAL_BINDING" | "UNRESOLVED_BINDING_TARGET" | "EXTERNAL_BINDING_TARGET" | "UNUSED_CONCRETE_TYPE";
 export interface ApplicationDesignIssue {
     code: ApplicationDesignIssueCode;
     message: string;
     location?: DesignSourceLocation;
 }
 export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
-    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING";
+    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT";
     location: DesignSourceLocation;
 };
+/** Merge valid distributed declarations into the canonical per-instance authored model. */
+export declare function normalizeAuthoredConceptInstances(documents: readonly AuthoredApplicationDesignDocument[]): NormalizedConceptInstance[];
 /** Check corpus-wide authored forms that do not require a selected assembly. */
 export declare function validateAuthoredApplicationDesignForm(documents: readonly AuthoredApplicationDesignDocument[]): ApplicationDesignFormIssue[];
 /**
@@ -4773,8 +4804,23 @@ export interface SelectedConceptDesignFact {
     instance: string;
     definition: string;
     externalParameters: readonly string[];
+    /** Present only when the structured-SSF integration seam supplied authoritative names. */
+    ownedTypes?: readonly string[];
     specification: ConceptSpec;
 }
+export interface OwnedTypeNameContext {
+    instance: string;
+    definition: string;
+    specification: ConceptSpec;
+}
+/**
+ * SSF integration seam. The integrator supplies the complete normalized owned-name
+ * inventory for this definition, including accepted singular/plural equivalents and
+ * subset names. Configured application checking always installs the private SSF
+ * adapter; `undefined` exists only for isolated validator use that makes no ownership
+ * claim.
+ */
+export type ResolveOwnedTypeNames = (context: OwnedTypeNameContext) => readonly string[] | undefined | Promise<readonly string[] | undefined>;
 /** Equality is over canonical specification content with source positions removed. */
 export interface SharedDefinitionEqualityFact {
     definition: string;
@@ -4816,6 +4862,7 @@ export declare function checkAuthoredDesign(options: {
     assembly: Assembly<Record<string, new (...args: never[]) => object>>;
     design: AuthoredDesignRegistration;
     resolveComputationInputs?: ResolveComputationInputs;
+    resolveOwnedTypeNames?: ResolveOwnedTypeNames;
     conceptSources?: readonly ConceptSpecificationSourceInput[];
 }): Promise<CheckedAuthoredDesignModel>;
 
@@ -5026,8 +5073,11 @@ export interface ManifestConceptDefinitionV1 {
     definition: string;
     source?: string;
     specification: ConceptSpecificationIR;
+    /** Exact authored spellings independently derivable as definition-owned State types. */
+    ownedTypes: string[];
     instances: {
         name: string;
+        declaration: ManifestSourceLocationV1;
         bindings: {
             external: string;
             target: {
@@ -5060,22 +5110,10 @@ export interface ApplicationDesignManifestV1 {
     sources: ManifestSourceV1[];
     declarations: ManifestDeclarationV1[];
     concepts: ManifestConceptDefinitionV1[];
+    /** Concrete application types; normalized external bindings belong to instances. */
     types?: {
         concreteTypes: {
             name: string;
-            location: ManifestSourceLocationV1;
-        }[];
-        bindings: {
-            instance: string;
-            external: string;
-            target: {
-                kind: "concrete";
-                name: string;
-            } | {
-                kind: "qualified";
-                instance: string;
-                type: string;
-            };
             location: ManifestSourceLocationV1;
         }[];
     };
@@ -5169,19 +5207,163 @@ export declare function declarationGroups(fence: MarkdownFence): readonly {
 export declare function indentedBody(lines: readonly DesignSourceLine[]): string;
 
 === dist/engine/tooling/simple-state-form.d.ts ===
+import { type SsfDiagnostic, type SsfDocument, type SsfParseOptions, type SsfPosition, type SsfSpan } from "./ssf-package/index.js";
 import type { DesignSourceLocation, MarkdownFence } from "./markdown-design-source.ts";
-export type SimpleStateFormIssueCode = "SSF_ARTICLE" | "SSF_MISPLACED_OPTIONAL" | "SSF_MISSING_WITH" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION";
+export type SimpleStateFormIssueCode = SsfDiagnostic["code"];
 export interface SimpleStateFormIssue {
     readonly code: SimpleStateFormIssueCode;
     readonly message: string;
     readonly suggestion: string;
     readonly location: DesignSourceLocation;
+    readonly span: SsfSpan;
 }
-/**
- * Validate only deterministic, mechanically repairable SSF forms. Unrecognized
- * lines remain opaque so this checker does not define a complete State dialect.
- */
+export interface ParsedSimpleStateForm {
+    readonly document: SsfDocument;
+    readonly issues: readonly SimpleStateFormIssue[];
+}
+/** Map a package-local SSF position onto its containing Markdown source. */
+export declare function simpleStateFormLocation(fence: MarkdownFence, position: SsfPosition): DesignSourceLocation;
+/** Parse structural SSF and adapt package-local diagnostic spans to Markdown locations. */
+export declare function parseSimpleStateForm(fence: MarkdownFence, options?: SsfParseOptions): ParsedSimpleStateForm;
+/** Validate deterministic, mechanically repairable SSF forms through the private parser. */
 export declare function validateSimpleStateForm(fence: MarkdownFence): readonly SimpleStateFormIssue[];
+
+=== dist/engine/tooling/ssf-package/index.d.ts ===
+export { isOwnedTypeName, parseSimpleStateForm, tokenizeSimpleStateForm, typeNamesEquivalent, normalizeTypeName, ownedTypeNameSpellings, validateSimpleStateForm, type SsfCollectionFieldType, type SsfDeclaration, type SsfDiagnostic, type SsfDiagnosticCode, type SsfDocument, type SsfEnumerationFieldType, type SsfField, type SsfFieldType, type SsfMultiplicity, type SsfNamedFieldType, type SsfOpaqueLine, type SsfOwnedType, type SsfParseOptions, type SsfParseResult, type SsfPosition, type SsfReferenceKind, type SsfSpan, type SsfStatement, type SsfToken, type SsfTokenKind, type SsfTypeInventory, type SsfTypeName, type SsfTypeReference, } from "./simple-state-form.ts";
+
+=== dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
+export interface SsfPosition {
+    /** Zero-based UTF-16 offset in the supplied State text. */
+    readonly offset: number;
+    /** One-based line in the supplied State text. */
+    readonly line: number;
+    /** One-based column in the supplied State text. */
+    readonly column: number;
+}
+export interface SsfSpan {
+    readonly start: SsfPosition;
+    readonly end: SsfPosition;
+}
+export type SsfTokenKind = "newline" | "whitespace" | "word";
+export interface SsfToken {
+    readonly kind: SsfTokenKind;
+    readonly text: string;
+    readonly span: SsfSpan;
+}
+export type SsfDiagnosticCode = "SSF_ARTICLE" | "SSF_MISPLACED_OPTIONAL" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION";
+export interface SsfDiagnostic {
+    readonly code: SsfDiagnosticCode;
+    readonly message: string;
+    readonly suggestion: string;
+    readonly span: SsfSpan;
+}
+export interface SsfTypeName {
+    /** Spelling retained from the State text. */
+    readonly text: string;
+    /** Exact structural declaration spelling used for declaration and reference joins. */
+    readonly normalized: string;
+}
+export type SsfReferenceKind = "external" | "owned" | "primitive" | "unresolved";
+export interface SsfTypeReference extends SsfTypeName {
+    readonly referenceKind: SsfReferenceKind;
+    readonly span: SsfSpan;
+}
+export interface SsfNamedFieldType {
+    readonly kind: "named";
+    readonly reference: SsfTypeReference;
+}
+export interface SsfEnumerationFieldType {
+    readonly kind: "enumeration";
+    readonly values: readonly string[];
+    readonly span: SsfSpan;
+}
+export interface SsfCollectionFieldType {
+    readonly kind: "collection";
+    readonly multiplicity: "set" | "sequence";
+    readonly element: SsfNamedFieldType | SsfEnumerationFieldType;
+    readonly span: SsfSpan;
+}
+export type SsfFieldType = SsfNamedFieldType | SsfEnumerationFieldType | SsfCollectionFieldType;
+export interface SsfField {
+    readonly kind: "field";
+    readonly name: string;
+    readonly inferredName: boolean;
+    readonly optional: boolean;
+    readonly value: SsfFieldType;
+    readonly span: SsfSpan;
+}
+export type SsfMultiplicity = "element" | "sequence" | "set";
+export interface SsfOpaqueLine {
+    readonly kind: "opaque";
+    readonly text: string;
+    readonly span: SsfSpan;
+}
+export interface SsfDeclaration {
+    readonly kind: "declaration";
+    /** The introduced or referenced set/type name. */
+    readonly name: SsfTypeReference;
+    readonly declarationKind: "collection" | "subset";
+    readonly multiplicity: SsfMultiplicity;
+    /** Present only on subset declarations. */
+    readonly parent?: SsfTypeReference;
+    readonly fields: readonly SsfField[];
+    /** Indented lines outside the bounded structural grammar are retained losslessly. */
+    readonly opaqueBody: readonly SsfOpaqueLine[];
+    readonly span: SsfSpan;
+    readonly signatureSpan: SsfSpan;
+}
+export type SsfStatement = SsfDeclaration | SsfOpaqueLine;
+export interface SsfOwnedType {
+    /** Exact spelling of the structural State declaration. */
+    readonly name: string;
+    /** Exact authored spellings evidenced as this type; no spelling is generated into this list. */
+    readonly declaredNames: readonly string[];
+    readonly roles: readonly ("identity" | "subset")[];
+    readonly declarationSpans: readonly SsfSpan[];
+}
+export interface SsfTypeInventory {
+    /** Definition-owned identities introduced by top-level set, sequence, or element declarations. */
+    readonly identities: readonly SsfOwnedType[];
+    /** All definition-owned binding targets, including subset names. */
+    readonly types: readonly SsfOwnedType[];
+    readonly external: readonly string[];
+    readonly primitives: readonly string[];
+}
+export interface SsfDocument {
+    readonly statements: readonly SsfStatement[];
+    readonly declarations: readonly SsfDeclaration[];
+    readonly opaqueLines: readonly SsfOpaqueLine[];
+    readonly inventory: SsfTypeInventory;
+}
+export interface SsfParseOptions {
+    /** Opaque parameter names declared by the containing concept specification. */
+    readonly externalTypes?: readonly string[];
+    /** Exact type spellings parsed elsewhere in the same specification's action/query contract. */
+    readonly evidenceTypeNames?: readonly string[];
+    /** Relates two exact authored spellings; never causes a name to be generated. */
+    readonly typeNameEquivalence?: (left: string, right: string) => boolean;
+}
+export interface SsfParseResult {
+    readonly document: SsfDocument;
+    readonly diagnostics: readonly SsfDiagnostic[];
+}
+/** Tokenize all State text without discarding whitespace or source ranges. */
+export declare function tokenizeSimpleStateForm(source: string): readonly SsfToken[];
+/** Exact-name normalization: SSF never materializes a guessed singular spelling. */
+export declare function normalizeTypeName(name: string): string;
+/**
+ * Compare two exact authored spellings. Morphology may relate the two supplied
+ * values, but this function never returns or admits a third, generated spelling.
+ */
+export declare function typeNamesEquivalent(left: string, right: string): boolean;
+/** Test an exact evidenced spelling against the definition-owned inventory. */
+export declare function isOwnedTypeName(inventory: SsfTypeInventory, name: string): boolean;
+/** Enumerate only exact authored spellings evidenced for definition-owned State types. */
+export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
+/** Parse the bounded structural SSF grammar while retaining other State lines as opaque text. */
+export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
+/** Return only deterministic, mechanically repairable canonical-form diagnostics. */
+export declare function validateSimpleStateForm(source: string): readonly SsfDiagnostic[];
 
 === dist/engine/tooling/typescript-shapes.d.ts ===
 import ts from "typescript";

@@ -93,12 +93,31 @@ describe("generic design guidance", () => {
     expect(review).toContain("A direct inert adapter is permitted");
   });
 
-  test("documents the core-owned draft parser without evidence or application inspection", async () => {
+  test("documents the config-free authored form parser without application inspection", async () => {
     const reference = await source(conceptReferenceUrl);
     expect(reference).toContain("sync-engine check-design design/concepts/*.md");
     expect(reference).toContain("loads no application configuration or TypeScript source");
     expect(reference).toContain("writes nothing");
     expect(reference).toContain("reports only authored-design form failures");
+  });
+
+  test("states complete instance, binding-cycle, SSF, and persistence boundaries", async () => {
+    const design = await source(designUrl);
+    const review = await source(reviewUrl);
+    const reference = await source(conceptReferenceUrl);
+    const normalizedDesign = design.replace(/\s+/g, " ");
+    for (const phrase of [
+      "complete static instance",
+      "Direct dependencies on qualified owned types",
+      "storage configuration",
+      "bounded structural parser",
+    ]) {
+      expect(normalizedDesign).toContain(phrase);
+    }
+    expect(review).toContain("Do not reject a cycle merely because instance A");
+    expect(review).toContain("core-owned\n`RequestBoundary`");
+    expect(reference).toContain("Standalone invariant\nsentences");
+    expect(reference).toContain("qualified external-binding target");
   });
 
   test("keeps generic guidance free of application-agent orchestration", async () => {

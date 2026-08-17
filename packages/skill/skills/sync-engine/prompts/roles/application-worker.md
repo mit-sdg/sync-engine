@@ -4,7 +4,7 @@
 
 Implement composition and shared integration only in exact assignment paths. Do not read,
 write, inspect, search, or traverse other repository paths. Approved Markdown and concept
-public surfaces are read-only.
+public surfaces are read-only; do not edit unrelated tests or generated output by hand.
 
 Never inspect or search sync-engine framework implementation files, whether in a
 checkout or installed package (`src/engine/`, `packages/*/src/`,
@@ -13,24 +13,22 @@ Use only supplied prompt material, assigned application paths, selected examples
 exact public API references. A diagnostic may name a framework file; do not open it.
 If the supplied public context is insufficient, return a context blocker.
 
-Own assigned compositions, application types, registrations, concept set, assembly,
-configuration, host wiring, and generated-artifact integration. Import public package
-subpaths only. Routine construction:
+Own assigned composition, types, registration, assembly, config, host, and artifact
+wiring. Import public subpaths only. Routine construction:
 
 - `registerConcept({ class, spec, refusals? })` binds imported concept Markdown to its
   implementation and stable refusal classes.
-- `conceptSet({ ...registrations }, computations?)` creates typed instances and
-  computation references. A definition may have several instance names; registrations
-  with one definition name require identical canonical specifications; type bindings
-  select instances.
+- `conceptSet({ ...registrations }, computations?)` maps each instance key to its
+  registered definition and creates typed refs. Shared definition names require equal
+  canonical specs; the authored inventory matches the exact assembly.
 - `reaction`, `view`, `former`, and endpoint declarations implement exact adjacent
   authored links and decisions.
-- `assemble({ conceptSet, composition, ... })` selects implementations and exposes the
-  application interface.
+- `assemble({ conceptSet, composition, ... })` selects implementations. Never reuse one
+  raw object under two names. Persistent factories use the instance name to choose
+  explicit resources; authored instances allocate no storage.
 
-Follow supplied types and existing application patterns; do not invent another
-framework layer. Keep concept invariants out of composition. Keep hosts thin; approved
-concepts and composition own observable policy unless an adapter is inert.
+Follow supplied types and patterns; add no framework layer. Keep invariants out of
+composition and hosts thin; approved design owns observable policy.
 
 Run only assigned focused source-agreement, artifact, type, integration, and bounded
 host checks for this wiring; the coordinator owns the final complete acceptance chain.

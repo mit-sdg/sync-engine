@@ -97,11 +97,11 @@ export const commentOutput = validator(
 
 export const issuedSessionOutput = validator(
   (value) =>
-    hasOnly(value, ["username", "session", "expiresAt"]) &&
-    typeof value.username === "string" &&
+    hasOnly(value, ["account", "session", "expiresAt"]) &&
+    typeof value.account === "string" &&
     typeof value.session === "string" &&
     value.expiresAt instanceof Date,
-  "response must contain username, session, and Date expiry",
+  "response must contain account, session, and Date expiry",
 );
 
 export function validBoard(value: Record<string, unknown>): boolean {

@@ -2,8 +2,6 @@
 
 # Design rules
 
-Design only the brief; parser success does not prove quality.
-
 ## Useful independent concepts
 
 A concept owns one coherent mechanism: purpose, state, actions, queries. Layout,
@@ -56,8 +54,8 @@ only a trace token.
 ## Composition and failure
 
 Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; independent consequences get separate reactions;
-named siblings are cases, not priority.
+decision. Stages express causality; independent consequences get separate reactions; named sibling
+reaction cases are alternatives whose order carries no priority.
 
 Composition owns cross-concept policy, workflow, context, adaptation, notification,
 compensation, and repair—not owner invariants, mutation, race decisions, or
@@ -76,20 +74,22 @@ For each protected effect identify actor, authenticated identity, resource, fact
 owners, condition, and enforcement point. Request data is a claim, not authentication.
 Composition may deny early; owner actions enforce non-bypassable rules.
 
-Command/process/filesystem/clock/network are concepts only with observable choices,
-state, lifecycle, expected problems, or useful tests; otherwise adapt thinly and keep
-policy in composition.
+Model a host effect as a concept only if it has observable policy, state, lifecycle, or
+failure or needs its own tests; otherwise adapt thinly.
 
 ## Authored application design
 
-Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paired with
-`src/compositions/*.ts`. Deviations need a benefit and explicit mapping.
+Inventory exact selected static instances except `RequestBoundary`. A definition may
+have zero or more instances; none need carry its name. Bind each external once to a
+concrete or SSF-owned type. Reject aliases, external targets, mixed placement of inline
+and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
+unused concretes. Direct qualified
+owned-type dependency cycles are valid: edges resolve independently. Bindings convey
+identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
+storage isolation.
 
-A definition may have many instances. Bind each external type once to a nonempty
-concrete or selected concept-owned type. Reject chains, external targets, missing or
-duplicate bindings, unresolved names, and unused concretes. Binding conveys identity,
-not ownership, validation, or TypeScript equivalence. State gets only a limited SSF
-form check; review its meaning manually.
+The bounded SSF parser proves structural declarations and owned type names, not opaque
+invariants/prose, storage, or behavior.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
 wildcards. Cover each authored endpoint/reaction tree, named view/former; declare
@@ -104,30 +104,27 @@ and test.
 
 ```text
 schema := (setDecl | subsetDecl)*
-setDecl := [a|an] (element|set|seq) [of] Type [with field+]
-subsetDecl := [a|an] Subtype (element|set) [of] (Type|Subtype) [with field+]
+setDecl := (a|an) (element|set|seq) [of] Type [with field+]
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype) [with field+]
 field := [a|an] [optional] [name] (scalar|collection)
 scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
 collection := (set|seq) [of] scalar
 primitive := Number | String | Flag | Date | DateTime
 ```
 
-One declaration per line; indent fields. Types/subtypes/parameters start uppercase,
-fields lowercase, enum values all-uppercase. Identifiers start with a letter then use
-letters/digits/`_`. Consistent singular/plural type names are equivalent.
+Use one declaration per line and indent fields. Types start uppercase, fields lowercase,
+enums uppercase; identifiers use letters/digits/`_`. Declaration and subset spellings
+are exact. A collection spelling is related to a singular/plural spelling only when the
+second exact name also appears in a State field type or action/query signature in this
+specification. `element` names remain exact. The parser never invents an owned name.
+It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
+remain opaque prose.
 
-A field name may be omitted only for an object/parameter scalar or collection; infer
-lowercase singular/plural from its type. Names are unique through an acyclic subset
-hierarchy. Collections are never `optional` (empty means absent). No nested collections
-or unions.
-
-Sets introduce identities—never add ID fields. Subsets classify existing parent members,
-may overlap, and add relations. `element` has exactly one member. Scalar, optional, set,
-and seq mean one, zero-or-one, zero-or-more, and ordered zero-or-more. Declaration
-direction implies no storage, navigation, or ownership of referenced identities.
-Standalone invariant sentences such as
-`at most one Membership has each gathering and member pair` may follow the
-declarations inside the fence.
+Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
+means absent). No nested collections or unions. Sets introduce identities—never add ID
+fields. Subsets classify existing parent members, may overlap, and add relations;
+`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
+invariant, not a proved behavior.
 
 ```state
 a set of Items with
@@ -201,31 +198,44 @@ the fence may end with invariant sentences.
 Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared
-names. Empty results use `: return ()` and bare `return`, never `return ()` or a
-standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
+names. Empty-result signatures declare `: return ()`; branch bodies use bare `return`, never
+`return ()` or standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
 within an action and never shared across actions. Return declared names only:
 `return account`, never prose such as `return the session account`.
 
-Action names start with a letter; queries start `_`. Query resolution precedes the
-named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional State
-values as optional row fields, for example `dueAt?: DateTime`. A `one` body always
+Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
+before the named row. Mark optional State values `field?: Type`. A `one` body always
 promises one row; only `optional` may say no row.
-
-Application `design/types.md` uses one `types` fence. Concrete definitions and direct
-external bindings have this direction:
 
 ```types
 concrete Person
   Stable application identity.
+```
 
+```instances
+instantiate Tasking with
+  Owner is Person
+instantiate Noting as Notes with
+  Task is Tasking.Task
+```
+
+Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once
+except `RequestBoundary`; bind all externals inline or all detached:
+
+```instances
+instantiate Tasking
+instantiate Noting as Notes
+```
+
+```bindings
 Tasking.Owner is Person
 Notes.Task is Tasking.Task
 ```
 
-The binding left side is `SelectedInstance.External`; the right side is a concrete or
-selected concept-owned type. Concept files contain no application links or computations.
+Do not mix placement. Targets are concrete or SSF-owned types; external
+aliases are invalid and direct owned-type cycles valid. Concept files contain no application links, instances, bindings, or computations.
 
-Each composition document has one nonempty H1 and decision prose. References are actual
+Each composition document has nonempty H1 and decision prose. References are
 Markdown links to application declarations—not bare `view:` lines, routes, or
 concept actions:
 
@@ -235,8 +245,8 @@ The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
 Visibility follows the [readability policy](view:Forum.posts.Readable).
 ```
 
-Declare each executable computation once with an indented body, in the using
-composition document or in `design/types.md` when shared:
+Declare each computation once with an indented body where used, or in
+`design/types.md` when shared:
 
 ```computations
 normalizeTitle(raw: String) : String
@@ -248,10 +258,9 @@ targets are exact dotted source paths.
 
 ## Assignment
 
-Create the smallest complete concept design satisfying the brief. Work from mechanism
-and ownership, not endpoint/resource nouns. Explore alternatives mentally; write only
-the strongest design. Resolve brief-required behavior now. Mark only truly unspecified,
-nonblocking product choices as `Open decision:` with a safe provisional choice.
+Create the smallest complete design for the brief from mechanism and ownership, not
+endpoint nouns. Resolve required behavior now. Mark only truly unspecified,
+nonblocking choices as `Open decision:` with a safe provisional choice.
 
 You are the fresh design author, independent of implementation. Do not read or change
 source, tests, generated artifacts, dependencies, framework internals, or prior agent
@@ -274,7 +283,8 @@ Create or revise only:
 - `design/concepts/*.md` for reusable concept definitions;
 - `design/compositions/*.md` for application decisions and exact intended
   `reaction:`, `view:`, `former:`, and `computation:` links; and
-- `design/types.md` for application `concrete` declarations and `is` bindings.
+- `design/types.md` for application `concrete` declarations, the complete
+  `instances` inventory, and inline or detached external bindings.
 
 Create no index, `application.md`, memo, report, progress file, or workflow metadata.
 Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.

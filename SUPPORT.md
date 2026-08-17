@@ -41,18 +41,21 @@ after changing a package version, then typecheck their consumers.
 
 `sync-engine.application-manifest` version 1 is the versioned core format. This
 schema reset records the registered authored-design contract, including concept
-external types and raw State, application type bindings, declaration
-coverage, and computation signatures. It also contains executable application
+external types, full State text, exact evidenced definition-owned type inventories,
+complete authored instance declarations and external bindings, declaration coverage,
+and computation signatures. It also contains executable application
 and wire facts, implementation provenance, validators, and diagnostics. It does
 not contain functions, constructor arguments, resources, object identity,
 occurrences, timestamps, or other runtime state.
 
-Earlier application-manifest versions are rejected rather than upgraded and
-must be regenerated. An incompatible structural or semantic change requires a
-new integer format version and new public type names. A package release does not
-change the format version when the existing structure and meaning remain
-compatible. The artifact planner accepts 1.x core generator identities and
-projector provenance with a nonblank package name and valid SemVer version,
+Earlier application-manifest shapes are rejected rather than upgraded and must
+be regenerated. Before stable v1, an intentional beta reset may replace the
+version-1 schema in place and requires producers, consumers, authored fixtures,
+and generated artifacts to upgrade atomically. After stable v1, an incompatible
+structural or semantic change requires a new integer format version and new
+public type names. A package release does not change the format version when the
+existing structure and meaning remain compatible. The artifact planner accepts
+1.x core generator identities and projector provenance with a nonblank package name and valid SemVer version,
 including prereleases.
 
 ## Runtime and toolchain

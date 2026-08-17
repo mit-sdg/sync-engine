@@ -2,6 +2,36 @@
 
 An incident room coordinates responders around one current mitigation, its discussion, and addressed alerts.
 
+## Application types and instances
+
+```types
+concrete Person
+  A responder identity supplied by the incident-room application.
+
+concrete Mitigation
+  An incident response option that a room may select.
+```
+
+```instances
+instantiate Timing
+
+instantiate Gathering with
+  Person is Person
+
+instantiate Selecting with
+  Scope is Gathering.Gathering
+  Item is Mitigation
+
+instantiate Discussing with
+  Subject is Selecting.Selection
+  Author is Person
+
+instantiate Alerting with
+  Recipient is Person
+  Subject is Selecting.Selection
+  Cause is Selecting.Selection
+```
+
 ## Compositions
 
 ### RoomMembership

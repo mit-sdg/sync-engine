@@ -106,7 +106,7 @@ assemble(options: ConceptSetAssemblyOptions): Assembly
 | `conceptSet`                      | yes         | Registered application concept set                                                                           |
 | `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                         |
 | `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
-| `instances`                       | no          | Ready implementations by concept name; each overrides `initialize`                                           |
+| `instances`                       | no          | Ready implementations by instance name; each overrides `initialize`; object identities must be distinct      |
 | `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
 | `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
 | `queryCache`                      | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
@@ -165,7 +165,9 @@ sensitive host sink.
 ### Registration and floors
 
 An ordinary application creates one registered concept-set object and passes
-that object—not its `.concepts` property—to assembly:
+that object—not its `.concepts` property—to assembly. Every key is a selected
+application instance name, and every value is the registered concept definition
+that instance realizes:
 
 ```typescript
 export const applicationConceptSet = conceptSet({
@@ -196,18 +198,34 @@ needed by assembly and tooling.
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
-supplied floor value must be a factory function. Call
-`set.implementations(floor, context)` to construct a named implementation map.
-Each factory receives that exact caller-supplied `context`, followed by the
-concept's registration name; TypeScript requires the context to satisfy every
-selected factory's first parameter. This context is separate from
+supplied floor value must be a factory function. Each call to
+`set.implementations(floor, context)` first verifies that the named floor is
+complete, then calls its selected factory exactly once for every concept-set key.
+Each factory receives that exact caller-supplied `context`, followed by that
+key's application instance name; TypeScript requires the context to satisfy
+every selected factory's first parameter. A second `implementations(...)` call
+performs construction again. This context is separate from
 `ConceptFloor.resources`.
 
 A floor name is available through the typed `implementations(...)` overload only
-when every concept supplies it. If an incomplete floor is selected by bypassing
-that type restriction, selection fails at runtime. The zero-argument
-`implementations()` form is available only when every canonical class can be
-constructed without required arguments; otherwise use a named floor.
+when every selected registration supplies it. If an incomplete floor is
+selected by bypassing that type restriction, selection fails before any factory
+runs. The zero-argument `implementations()` form is available only when every
+canonical class can be constructed without required arguments; each call
+constructs one new object per selected key. Otherwise use a named floor.
+
+Assembly itself does not always call floor factories. For each selected name,
+`assemble` uses a supplied `instances` object first, otherwise constructs from
+supplied `initialize` arguments, otherwise default-constructs the canonical
+class. Within one assembly, two names cannot use the same raw implementation
+object. This identity check is assembly-local: the same raw object may be used
+in a separate assembly under a semantically compatible registration, which then has a
+separate action queue and query cache. Incompatible metadata remains invalid because one
+object cannot honor two conflicting contracts.
+Separate objects are not proof of separate durable state. A persistent floor
+factory should use its instance-name argument to select an explicit repository,
+collection, schema, namespace, or equivalent resource when isolation is
+required. Intentional resource sharing remains host configuration.
 
 The optional second `conceptSet` argument supplies named pure computations.
 The set exposes inferred references under `set.computations`. Compose raw
@@ -220,13 +238,14 @@ method. The host owns floor selection and lifecycle.
 
 `RegisteredConcept.specification` is the machine-readable version-1
 `ConceptSpec` extracted from the strict ordered Purpose, Principle, Types, State,
-Actions, and Queries sections. It retains external declarations, normalized raw
-State, structured action branches and outcomes, query choices, and source
-locations. Config-based checking compares member, input, action-result, query-row,
-return-name, optionality, and refusal shapes with resolvable TypeScript source.
-Query choices are enforced when a reaction, view, or former evaluates a query.
-State remains unparsed SSF text and is not compared with class fields, floor
-implementations, databases, or storage.
+Actions, and Queries sections. It retains external declarations, normalized full
+State text, structured action branches and outcomes, query choices, and source
+locations. Config-based checking compares
+member, input, action-result, query-row, return-name, optionality, and refusal
+shapes with resolvable TypeScript source. It also uses SSF-owned names to prove
+qualified external-binding targets. Query choices are enforced when a reaction,
+view, or former evaluates a query. Opaque invariant/prose semantics are not
+compared with class fields, floor implementations, databases, or storage.
 
 ### Occurrence index and log sinks
 
@@ -523,12 +542,13 @@ versioned manifest protects application IR carried inside a manifest from
 incompatible tooling.
 
 The application manifest has format `sync-engine.application-manifest`, version
-`1`, and is canonical JSON-round-trippable application data. This is a hard
-schema reset; earlier manifest versions are rejected without upconversion. It
+`1`, and is canonical JSON-round-trippable application data. This pre-1.0 beta
+reset replaces the version-1 schema in place; earlier beta shapes and prior
+versions are rejected without upconversion. It
 contains executable application and wire facts plus structured concept
-contracts, raw State, definition and instance identities, resolved application types,
-computation signatures, registered design source locations, normalized-source
-digests, implementation provenance, validators, and diagnostics. It excludes
+contracts, full State text, authored definition/instance declarations and external
+bindings, exact evidenced definition-owned type inventories, resolved application types,
+computation signatures, registered design source locations, normalized-source digests, implementation provenance, validators, and diagnostics. It excludes
 runtime functions, constructor arguments, resources, object identity,
 occurrences, timestamps, and other runtime state.
 
@@ -539,10 +559,10 @@ function's top-level destructuring can be read conservatively. The manifest
 sorts entries by name and never carries the function itself.
 
 `ConceptImplementationProvenanceIR` separates a concept set's canonical
-class from the implementation selected by assembly. RequestBoundary is
-core-owned and selected through `core`, and an application concept set cannot
-reuse that name. Application concepts report `default`, `initialize`, or
-`instances`. Constructor names are descriptive and omitted for anonymous or
+class from the implementation selected by assembly. `RequestBoundary` is
+core-owned and selected through `core`; an application concept set cannot reuse
+that name, and authored instance completeness excludes it. Application concepts
+report `default`, `initialize`, or `instances`. Constructor names are descriptive and omitted for anonymous or
 structural `Object` values; selected constructor names and `floor` can occur only
 with `instances`. A floor is omitted when provenance is ambiguous. Concept
 member roles, query cardinalities, and refusal semantics come from the canonical
@@ -550,23 +570,24 @@ vocabulary declaration rather than a replacement instance.
 `applicationManifestDigest(...)` recomputes the digest while ignoring the
 supplied `digest` field. `validateApplicationManifest(...)` treats its input as untrusted data: it
 checks the complete top-level version-1 shape, the nested IR needed by tooling,
-inventory uniqueness and cross-field consistency, endpoint, input-contract, and
+inventory uniqueness and cross-field consistency, independently rederives persisted
+owned types from each included specification, endpoint, input-contract, and
 logical-wire path agreement, plain JSON portability, and exact canonical digest
 equality. Previous versions are rejected without upconversion.
 Failures identify the offending `$` path. `parseApplicationManifest(...)`
 performs the same checks after JSON parsing and returns data in canonical record-key
 order; neither function imports application code or a manifest-producing config.
 `parseConceptSpecification(...)` exposes the same structured, source-located
-contract used by registration. It enforces the exact section order, parses
-external declarations and structured action/query choices, and retains raw
-State. It does not interpret SSF, prove prose semantics, or turn authored types
-into runtime schemas.
+contract used by registration. It enforces the exact section order, parses external
+declarations and structured action/query choices, and retains full State text. Private
+config and form-check tooling separately parses bounded SSF structure and inventories
+owned type names; neither layer interprets standalone invariants or prose semantics or
+turns authored types into runtime schemas.
 
 Each concept inventory may carry a `sync-engine.concept-specification`
-version-1 subtree with the definition name, external types, normalized raw
-State, structured actions and queries, refusals, and source locations. Selected
-application inventories separately retain instance names and concept-set
-bindings.
+version-1 subtree with the definition name, external types, normalized full
+State text, structured actions and queries, refusals, and source locations. Selected application inventories separately retain authored instance
+declarations, definition names, external bindings, and their source locations.
 `renderApplicationManifest` emits canonical JSON with ordinal record-key order
 and a final newline. Named collections use stable order while authored reaction,
 view-alternative, and former-node sequences retain semantics.

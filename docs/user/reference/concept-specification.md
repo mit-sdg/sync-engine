@@ -6,8 +6,9 @@ TypeScript-independent version-1 representation. The specification defines a
 concept definition; an application may instantiate that definition more than
 once under different concept-set keys.
 
-Application composition, concrete application types, typed design links, and
-computations do not belong in a concept specification. They belong in
+Application composition, concrete application types, concept instance
+inventories and bindings, typed design links, and computations do not belong in
+a concept specification. They belong in
 [registered application design](../guide/authoring.md#6-register-explicit-design-urls).
 
 For a new application, put one definition per
@@ -145,30 +146,35 @@ type universe nor requires every named type to have a declaration.
 ## `State`
 
 `State` contains exactly one `state` fence. The concept parser normalizes and
-retains the fence contents verbatim in concept-specification IR and application
-manifests. Version 1 does not parse State into structured IR or reject it during
-registration.
+retains its full contents in concept-specification IR and application manifests.
+Private tooling also parses a bounded structural view for form checks and owned-name
+resolution; that view is not part of the public concept-specification IR.
 
-Authors must use Simple State Form (SSF), based on the
-[conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
-The config-free `check-design` command separately applies an intentionally limited
-SSF form validator. It fails with a concrete repair when a recognized declaration or
-field uses a near-miss structural keyword, the wrong article before a structural
-keyword or `optional`, a misplaced `optional`, `optional` on a collection, or omits
-`with` before indented fields. Unrecognized State lines remain opaque; the validator
-is not a complete SSF parser and does not define State semantics. Review all other SSF
-declaration, identity, multiplicity, type, naming, and indentation rules manually.
+Authors must use Simple State Form (SSF), defined by the canonical
+[SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
+The parser recognizes set, sequence, element, and subset declarations; their
+indented fields and multiplicities; structural keywords; and SSF identifier and
+article placement. Structural declaration and subset names remain exact. A collection
+name gains a singular/plural equivalent only when that exact second spelling occurs in
+a parsed State field type or action/query type expression in the same specification;
+this includes evidenced irregular pairs such as `Mouse`/`Mice` without inventing names
+such as `Chaose` from `Chaoses`. Element names remain exact. Fields and subset parents
+provide references or evidence but do not independently introduce owned types.
 
-Because State remains unparsed, tooling does not yet prove:
+A line that begins like a declaration or an indented field but is incomplete, has
+trailing tokens, or otherwise misses the grammar fails with a source-located diagnostic.
+This is intentionally not a prose semantics parser. Standalone invariant
+sentences that do not masquerade as malformed structure remain opaque text. The parser
+does not prove those invariants, action conditions or effects, query meaning,
+storage layout, State/storage agreement, or implementation behavior. It also
+does not require every conventional or refinement name in an operation signature
+to appear in State.
 
-- that action and query types are state-owned or external;
-- that every external type is used; or
-- that a qualified type-binding target is introduced by the target concept's
-  State.
-
-The checker still inventories external declarations and checks every required
-application type binding. State changes affect canonical design digests
-even before SSF parsing is available.
+Config-based application checking uses the owned-name inventory for one specific
+proof: a qualified external-binding target must name a type owned by the target
+instance's definition. Checked manifests persist that exact-spelling inventory, and
+validation independently rederives it from the included State and member signatures. An external parameter is not an owned type and cannot be
+a binding target. State changes continue to affect canonical design digests.
 
 ## `Actions`
 
@@ -277,12 +283,32 @@ conceptSet({
 })
 ```
 
-Both instances use the `Commenting` definition. Generated design output records
-the definition name and each instance name separately. If selected
-registrations use the same definition name, their canonical specifications must
-be identical. Different implementation classes or floors may implement that
-shared contract; incompatible specifications cannot claim the same definition
-name.
+`conceptSet` maps every selected application instance name to the registered
+concept definition it realizes. Both entries above use the `Commenting`
+definition. The configured application corpus must declare that exact static
+selection:
+
+```instances
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+
+instantiate Commenting as AnswerComments with
+  User is Person
+  Target is Answering.Answer
+```
+
+`instantiate Definition` means exactly `instantiate Definition as Definition`.
+A definition does not require a same-name instance. Every config is checked
+against the exact assembly it returns, and the core-owned `RequestBoundary` is
+excluded from authored completeness. Generated design output records definition
+and instance names separately.
+
+If selected registrations use the same definition name, their canonical
+specifications must be identical. Different implementation classes or floors
+may implement that shared contract; incompatible specifications cannot claim
+the same definition name. Authored instance declarations are a finite design
+inventory, not runtime instance creation or storage allocation.
 
 ## Source provenance
 

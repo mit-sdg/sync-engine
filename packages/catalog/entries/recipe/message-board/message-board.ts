@@ -37,20 +37,20 @@ const MessageBoard = former(
 
 const RegisterBoardUser = endpoint(
   "/message-board/register",
-  ({ username, password, session, expiresAt }) =>
+  ({ username, password, account, session, expiresAt }) =>
     receive({ username, password })
-      .then(Authenticating.register({ username, password }).responds({ username }))
-      .then(Sessioning.start({ subject: username }).responds({ session, expiresAt }))
-      .then(respond({ username, session, expiresAt })),
+      .then(Authenticating.register({ username, password }).responds({ account }))
+      .then(Sessioning.start({ subject: account }).responds({ session, expiresAt }))
+      .then(respond({ account, session, expiresAt })),
 );
 
 const SignInBoardUser = endpoint(
   "/message-board/sign-in",
-  ({ username, password, session, expiresAt }) =>
+  ({ username, password, account, session, expiresAt }) =>
     receive({ username, password })
-      .then(Authenticating.authenticate({ username, password }).responds({ username }))
-      .then(Sessioning.start({ subject: username }).responds({ session, expiresAt }))
-      .then(respond({ username, session, expiresAt })),
+      .then(Authenticating.authenticate({ username, password }).responds({ account }))
+      .then(Sessioning.start({ subject: account }).responds({ session, expiresAt }))
+      .then(respond({ account, session, expiresAt })),
 );
 
 const CurrentBoardUser = endpoint("/message-board/current-user", ({ session, username }) =>
@@ -67,7 +67,7 @@ const SignOutBoardUser = endpoint("/message-board/sign-out", ({ session, signedO
 
 const ChangeBoardPassword = endpoint(
   "/message-board/change-password",
-  ({ session, username, currentPassword, newPassword }) =>
+  ({ session, username, currentPassword, newPassword, account }) =>
     receive({ session, currentPassword, newPassword })
       .then(Sessioning.current({ session }).responds({ subject: username }))
       .then(
@@ -75,18 +75,18 @@ const ChangeBoardPassword = endpoint(
           username,
           currentPassword,
           newPassword,
-        }).responds({ username }),
+        }).responds({ account }),
       )
-      .then(respond({ username })),
+      .then(respond({ account })),
 );
 
 const DeleteBoardAccount = endpoint(
   "/message-board/delete-account",
-  ({ session, username, password }) =>
+  ({ session, username, password, account }) =>
     receive({ session, password })
       .then(Sessioning.current({ session }).responds({ subject: username }))
-      .then(Authenticating.unregister({ username, password }).responds({ username }))
-      .then(respond({ username })),
+      .then(Authenticating.unregister({ username, password }).responds({ account }))
+      .then(respond({ account })),
 );
 
 const PublishMessageBoardPost = endpoint(

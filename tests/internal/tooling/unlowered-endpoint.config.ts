@@ -1,16 +1,7 @@
 import { assemble } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
-import { vocabulary } from "@sync-engine/advanced";
 import { Frames } from "@sync-engine/internal/reads/frames";
-
-class SessioningConcept {
-  current({ session }: { session: string }) {
-    return { user: session };
-  }
-}
-
-const declared = vocabulary({ concepts: { Sessioning: SessioningConcept }, computations: {} });
-const { Sessioning } = declared.concepts;
+import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
 
 const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
   receive({})
@@ -20,8 +11,14 @@ const ClosureEndpoint = endpoint("/closure", ({ hidden, user }) =>
 );
 
 export default {
-  assemble: () => assemble({ vocabulary: declared, composition: { Api: { ClosureEndpoint } } }),
+  assemble: () =>
+    assemble({ vocabulary: vocabularyDeclaration, composition: { Api: { ClosureEndpoint } } }),
   title: "Incomplete application",
-  design: { version: 1, documents: [] },
-  conceptSet: { module: new URL("../../../src/language/index.ts", import.meta.url) },
+  design: {
+    version: 1,
+    documents: [new URL("./fixtures/generated-artifacts/api-closure.md", import.meta.url)],
+  },
+  conceptSet: {
+    module: new URL("./fixtures/generated-artifacts/vocabulary.ts", import.meta.url),
+  },
 };

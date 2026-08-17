@@ -2,6 +2,25 @@
 
 A workshop gathers members around one current item while keeping membership and selection under their respective concept owners.
 
+## Application types and instances
+
+```types
+concrete Person
+  A workshop participant identity supplied by the application.
+
+concrete WorkshopItem
+  An item that a workshop may select.
+```
+
+```instances
+instantiate Gathering with
+  Person is Person
+
+instantiate Selecting with
+  Scope is Gathering.Gathering
+  Item is WorkshopItem
+```
+
 ## Compositions
 
 ### WorkshopMembership

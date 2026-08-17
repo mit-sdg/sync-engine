@@ -38,10 +38,17 @@ if (sourceWorker) {
   const coreRoot = new URL("../../../../", import.meta.url);
   const enginePrefix = ["@engine", "/"].join("");
   const rootPrefix = ["@root", "/"].join("");
+  const ssfSpecifier = ["@", "ssf"].join("");
   registerHooks({
     resolve(specifier, context, nextResolve) {
       if (specifier === "@mit-sdg/sync-engine/tooling") {
         return { url: new URL("src/tooling/index.ts", coreRoot).href, shortCircuit: true };
+      }
+      if (specifier === ssfSpecifier) {
+        return {
+          url: new URL("packages/ssf/src/index.ts", coreRoot).href,
+          shortCircuit: true,
+        };
       }
       if (specifier.startsWith(enginePrefix)) {
         return {

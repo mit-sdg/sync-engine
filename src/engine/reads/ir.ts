@@ -418,6 +418,7 @@ export interface SpecificationStateIR {
   /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
   body: string;
   prose: string;
+  /** Origin of `body` after surrounding blank fence lines are removed. */
   location: SpecificationLocationIR;
 }
 

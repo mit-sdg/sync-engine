@@ -210,8 +210,8 @@ A \`[code forgery](view:Forged.*)\` is inert.
   });
 });
 
-describe("application type declarations", () => {
-  test("parses concrete declarations, direct bindings, optional explanations, prose, and computations", () => {
+describe("application instance and type declarations", () => {
+  test("parses bare, renamed, inline, and detached forms with exact provenance", () => {
     const typesDocument = parseApplicationDesignDocument(
       `# Forum application types
 
@@ -220,11 +220,16 @@ Institution identities are used throughout. [refresh](reaction:Forum.Refresh)
 \`\`\`types
 concrete Person
   A stable identity supplied by the institution.
+\`\`\`
 
+\`\`\`instances
+instantiate Posting
+instantiate Commenting as PostComments with
+  Target is Posting.Post
+\`\`\`
+Authors are institution identities.
+\`\`\`bindings
 PostComments.User is Person
-  Authors are institution identities.
-
-PostComments.Target is Posting.Post
 \`\`\`
 
 \`\`\`computations
@@ -242,33 +247,53 @@ formatName(person: Person) : String
         location: { source: "design/types.md", line: 6, column: 1 },
       },
     ]);
+    expect(typesDocument.instances).toEqual([
+      expect.objectContaining({
+        definition: "Posting",
+        instance: "Posting",
+        bindings: [],
+        location: { source: "design/types.md", line: 11, column: 1 },
+      }),
+      expect.objectContaining({
+        definition: "Commenting",
+        instance: "PostComments",
+        bindings: [
+          expect.objectContaining({
+            placement: "inline",
+            external: "Target",
+            target: { kind: "qualified", instance: "Posting", type: "Post" },
+            location: { source: "design/types.md", line: 13, column: 3 },
+          }),
+        ],
+      }),
+    ]);
     expect(typesDocument.bindings).toEqual([
       expect.objectContaining({
         instance: "PostComments",
         external: "User",
+        placement: "detached",
         target: { kind: "concrete", name: "Person" },
-        explanation: "Authors are institution identities.",
-      }),
-      expect.objectContaining({
-        instance: "PostComments",
-        external: "Target",
-        target: { kind: "qualified", instance: "Posting", type: "Post" },
+        location: { source: "design/types.md", line: 17, column: 1 },
       }),
     ]);
     expect(typesDocument.computations).toHaveLength(1);
   });
 
-  test("combines types fences across registered documents and reports global duplicates", () => {
+  test("combines declarations across documents and reports global duplicates", () => {
     const concrete = parseApplicationDesignDocument(
       "# Shared types\n\n```types\nconcrete Person\n  An application identity.\n```\n",
       "types.md",
     );
+    const instances = parseApplicationDesignDocument(
+      "# Instances\n\n```instances\ninstantiate Commenting as Comments\n```\n",
+      "instances.md",
+    );
     const bindings = parseApplicationDesignDocument(
-      "# Identity bindings\n\n```types\nComments.User is Person\n```\n",
+      "# Identity bindings\n\n```bindings\nComments.User is Person\n```\n",
       "comments.md",
     );
     const duplicate = parseApplicationDesignDocument(
-      "# Duplicate declarations\n\n```types\nconcrete Person\n  A duplicate identity.\nComments.User is Person\n```\n",
+      "# Duplicate declarations\n\n```types\nconcrete Person\n  A duplicate identity.\n```\n```instances\ninstantiate Commenting as Comments\n```\n```bindings\nComments.User is Person\n```\n",
       "duplicate.md",
     );
     const selected = {
@@ -276,23 +301,182 @@ formatName(person: Person) : String
       views: [],
       formers: [],
       computations: [],
-      concepts: [{ instance: "Comments", externalTypes: ["User"] }],
+      concepts: [{ instance: "Comments", definition: "Commenting", externalTypes: ["User"] }],
     };
 
-    expect(validateAuthoredApplicationDesign([concrete, bindings], selected)).toEqual([]);
+    expect(validateAuthoredApplicationDesign([concrete, bindings, instances], selected)).toEqual(
+      [],
+    );
     expect(
-      validateAuthoredApplicationDesign([concrete, bindings, duplicate], selected).map(
+      validateAuthoredApplicationDesign([concrete, bindings, instances, duplicate], selected).map(
         ({ code }) => code,
       ),
-    ).toEqual(expect.arrayContaining(["DUPLICATE_CONCRETE_TYPE", "DUPLICATE_TYPE_BINDING"]));
+    ).toEqual(
+      expect.arrayContaining([
+        "DUPLICATE_CONCRETE_TYPE",
+        "DUPLICATE_INSTANCE",
+        "DUPLICATE_EXTERNAL_BINDING",
+      ]),
+    );
+  });
+
+  test("accepts an instances-only application document", () => {
+    expect(
+      parseApplicationDesignDocument("# Inventory\n\n```instances\ninstantiate Timing\n```\n")
+        .instances,
+    ).toHaveLength(1);
+  });
+
+  test("merges detached declarations without depending on document order", () => {
+    const declaration = parseApplicationDesignDocument(
+      "# Inventory\n\n```instances\ninstantiate Commenting as Comments\n```\n",
+      "instances.md",
+    );
+    const binding = parseApplicationDesignDocument(
+      "# Bindings\n\n```bindings\nComments.User is Person\n```\n",
+      "bindings.md",
+    );
+    const concrete = parseApplicationDesignDocument(
+      "# Types\n\n```types\nconcrete Person\n  A person.\n```\n",
+      "types.md",
+    );
+    const selected = {
+      reactions: [],
+      views: [],
+      formers: [],
+      computations: [],
+      concepts: [{ instance: "Comments", definition: "Commenting", externalTypes: ["User"] }],
+    };
+    expect(validateAuthoredApplicationDesign([binding, concrete, declaration], selected)).toEqual(
+      [],
+    );
+    expect(validateAuthoredApplicationDesign([declaration, binding, concrete], selected)).toEqual(
+      [],
+    );
+  });
+
+  test("uses mixed placement as the sole binding-mode diagnostic for external definitions", () => {
+    const mixed = parseApplicationDesignDocument(
+      `# Mixed
+
+\`\`\`types
+concrete Person
+  A person.
+\`\`\`
+
+\`\`\`instances
+instantiate Commenting as Comments with
+  User is Person
+  User is Person
+\`\`\`
+
+\`\`\`bindings
+Comments.User is Person
+\`\`\`
+`,
+      "mixed.md",
+    );
+    expect(
+      validateAuthoredApplicationDesign([mixed], {
+        reactions: [],
+        views: [],
+        formers: [],
+        computations: [],
+        concepts: [
+          {
+            instance: "Comments",
+            definition: "Commenting",
+            externalTypes: ["User", "Target"],
+          },
+        ],
+      }).map(({ code }) => code),
+    ).toEqual(["MIXED_BINDING_PLACEMENT"]);
+  });
+
+  test("treats zero-external bindings as unknown without inventing a placement mode", () => {
+    const document = parseApplicationDesignDocument(
+      `# No external parameters
+
+\`\`\`types
+concrete Person
+  A person.
+\`\`\`
+
+\`\`\`instances
+instantiate Timing with
+  UnknownInline is Person
+\`\`\`
+
+\`\`\`bindings
+Timing.UnknownDetached is MissingType
+\`\`\`
+`,
+      "zero-external.md",
+    );
+    expect(
+      validateAuthoredApplicationDesign([document], {
+        reactions: [],
+        views: [],
+        formers: [],
+        computations: [],
+        concepts: [{ instance: "Timing", definition: "Timing", externalTypes: [] }],
+      }).map(({ code }) => code),
+    ).toEqual(["UNKNOWN_EXTERNAL_BINDING", "UNKNOWN_EXTERNAL_BINDING"]);
+  });
+
+  test("suppresses unknown and missing cascades while external binding placement is mixed", () => {
+    const document = parseApplicationDesignDocument(
+      `# Unknown mixed bindings
+
+\`\`\`types
+concrete Person
+  A person.
+\`\`\`
+
+\`\`\`instances
+instantiate Linking with
+  UnknownInline is Person
+\`\`\`
+
+\`\`\`bindings
+Linking.UnknownDetached is Person
+\`\`\`
+`,
+      "unknown-mixed.md",
+    );
+    expect(
+      validateAuthoredApplicationDesign([document], {
+        reactions: [],
+        views: [],
+        formers: [],
+        computations: [],
+        concepts: [{ instance: "Linking", definition: "Linking", externalTypes: ["Required"] }],
+      }).map(({ code }) => code),
+    ).toEqual(["MIXED_BINDING_PLACEMENT"]);
   });
 
   test.each([
     ["# V\n", /must cite/],
     ["# V\n```types\nconcrete Person\n```\n", /prose definition/],
-    ["# V\n```types\nA.B becomes C\n```\n", /accepts only/],
-  ])("rejects malformed type declarations", (markdown, message) => {
+    ["# V\n```types\nA.B is C\n```\n", /accepts only/],
+    ["# V\n```instances\ninstantiate A with\n```\n", /empty `with`/],
+    ["# V\n```instances\ninstantiate A\n  User is Person\n```\n", /without `with`/],
+    ["# V\n```bindings\nA.User is B.External.More\n```\n", /accepts only/],
+    [
+      "# V\n```bindings\nA.User is Person\n  Explanations belong outside this fence.\n```\n",
+      /declarations only/,
+    ],
+  ])("rejects malformed declaration forms", (markdown, message) => {
     expect(() => parseApplicationDesignDocument(markdown)).toThrow(message);
+  });
+
+  test.each([
+    ["concrete name", "```types\nconcrete Person-Type\n  Invalid.\n```"],
+    ["instance name", "```instances\ninstantiate Posting as Forum-Posts\n```"],
+    ["qualified target instance", "```bindings\nComments.User is Forum-Posts.Post\n```"],
+    ["concrete target", "```bindings\nComments.User is App-Person\n```"],
+  ])("rejects a hyphenated %s", (_name, fence) => {
+    expect(() => parseApplicationDesignDocument(`# Invalid\n\n${fence}\n`)).toThrow();
   });
 });
 
@@ -317,9 +501,13 @@ formatName(person: Person) : String
 \`\`\`types
 concrete Person
   An institution identity.
+\`\`\`
 
-Comments.User is Person
-Comments.Target is Posting.Post
+\`\`\`instances
+instantiate Commenting as Comments with
+  User is Person
+  Target is Posting.Post
+instantiate Posting
 \`\`\`
 `,
       "design/types.md",
@@ -332,8 +520,8 @@ Comments.Target is Posting.Post
         formers: ["Forum.FormFeed"],
         computations: [{ name: "formatName", inputs: [{ name: "person", optional: false }] }],
         concepts: [
-          { instance: "Comments", externalTypes: ["User", "Target"] },
-          { instance: "Posting", externalTypes: [] },
+          { instance: "Comments", definition: "Commenting", externalTypes: ["User", "Target"] },
+          { instance: "Posting", definition: "Posting", externalTypes: [] },
         ],
       }),
     ).toEqual([]);
@@ -358,8 +546,12 @@ extra(value?: String) : String
 \`\`\`types
 concrete Unused
   A defined but unused type.
+\`\`\`
 
-Comments.User is Other.External
+\`\`\`instances
+instantiate Commenting as Comments with
+  User is Other.External
+instantiate Other
 \`\`\`
 `,
       "types.md",
@@ -370,8 +562,8 @@ Comments.User is Other.External
       formers: [],
       computations: [{ name: "extra", inputs: [{ name: "value", optional: false }] }],
       concepts: [
-        { instance: "Comments", externalTypes: ["User", "Target"] },
-        { instance: "Other", externalTypes: ["External"] },
+        { instance: "Comments", definition: "Commenting", externalTypes: ["User", "Target"] },
+        { instance: "Other", definition: "Other", externalTypes: ["External"] },
       ],
     }).map(({ code }) => code);
 
@@ -380,11 +572,102 @@ Comments.User is Other.External
         "UNRESOLVED_LINK",
         "MISSING_COVERAGE",
         "COMPUTATION_INPUT_MISMATCH",
-        "EXTERNAL_TARGET",
-        "MISSING_BINDING",
-        "UNUSED_CONCRETE",
+        "EXTERNAL_BINDING_TARGET",
+        "MISSING_EXTERNAL_BINDING",
+        "UNUSED_CONCRETE_TYPE",
       ]),
     );
+  });
+
+  test("compares authored definitions and instances exactly without mismatch cascades", () => {
+    const document = parseApplicationDesignDocument(
+      `# Inventory
+
+\`\`\`instances
+instantiate Categorizing as TaskLists with
+  Item is MissingType
+instantiate Timing as Extra
+\`\`\`
+`,
+      "inventory.md",
+    );
+    const issues = validateAuthoredApplicationDesign([document], {
+      reactions: [],
+      views: [],
+      formers: [],
+      computations: [],
+      concepts: [
+        {
+          instance: "TaskLists",
+          definition: "Tagging",
+          externalTypes: ["Member"],
+        },
+        { instance: "SelectedOnly", definition: "Timing", externalTypes: [] },
+      ],
+    });
+    expect(issues.map(({ code }) => code)).toEqual([
+      "INSTANCE_DEFINITION_MISMATCH",
+      "UNSELECTED_INSTANCE",
+      "UNDECLARED_SELECTED_INSTANCE",
+    ]);
+    expect(issues.some(({ code }) => code === "UNRESOLVED_BINDING_TARGET")).toBe(false);
+    expect(issues.some(({ code }) => code === "MISSING_EXTERNAL_BINDING")).toBe(false);
+  });
+
+  test("accepts direct owned-target cycles and uses the optional SSF owned-name seam", () => {
+    const document = parseApplicationDesignDocument(
+      `# Cyclic inventory
+
+\`\`\`instances
+instantiate Alpha with
+  Peer is Beta.BetaIdentity
+instantiate Beta with
+  Peer is Alpha.AlphaIdentity
+\`\`\`
+`,
+      "cycles.md",
+    );
+    const selected = {
+      reactions: [],
+      views: [],
+      formers: [],
+      computations: [],
+      concepts: [
+        {
+          instance: "Alpha",
+          definition: "Alpha",
+          externalTypes: ["Peer"],
+          ownedTypes: ["AlphaIdentity"],
+        },
+        {
+          instance: "Beta",
+          definition: "Beta",
+          externalTypes: ["Peer"],
+          ownedTypes: ["BetaIdentity"],
+        },
+      ],
+    };
+    expect(validateAuthoredApplicationDesign([document], selected)).toEqual([]);
+    const typo = parseApplicationDesignDocument(
+      `# Typo
+
+\`\`\`instances
+instantiate Alpha with
+  Peer is Beta.BetaIdentitx
+instantiate Beta with
+  Peer is Alpha.AlphaIdentity
+\`\`\`
+`,
+      "typo.md",
+    );
+    expect(validateAuthoredApplicationDesign([typo], selected)).toEqual([
+      expect.objectContaining({ code: "UNRESOLVED_BINDING_TARGET" }),
+    ]);
+    const withoutSsf = {
+      ...selected,
+      concepts: selected.concepts.map(({ ownedTypes: _ownedTypes, ...concept }) => concept),
+    };
+    expect(validateAuthoredApplicationDesign([typo], withoutSsf)).toEqual([]);
   });
 
   test("reports duplicate and unselected computations and every invalid binding category", () => {
@@ -420,10 +703,17 @@ duplicate() : String
 \`\`\`types
 concrete Person
   A person.
+\`\`\`
+
+\`\`\`instances
+instantiate Commenting as Comments with
+  Missing is Person
+  User is MissingType
+  Target is Absent.Value
+\`\`\`
+
+\`\`\`bindings
 Unknown.User is Person
-Comments.Missing is Person
-Comments.User is MissingType
-Comments.Target is Absent.Value
 \`\`\`
 `,
       "types.md",
@@ -434,7 +724,13 @@ Comments.Target is Absent.Value
       views: [],
       formers: [],
       computations: [{ name: "selected" }],
-      concepts: [{ instance: "Comments", externalTypes: ["User", "Target", "Unbound"] }],
+      concepts: [
+        {
+          instance: "Comments",
+          definition: "Commenting",
+          externalTypes: ["User", "Target", "Unbound"],
+        },
+      ],
     }).map(({ code }) => code);
 
     expect(codes).toEqual(
@@ -442,9 +738,10 @@ Comments.Target is Absent.Value
         "DUPLICATE_COMPUTATION",
         "UNREGISTERED_COMPUTATION",
         "MISSING_COVERAGE",
-        "UNKNOWN_EXTERNAL",
-        "UNRESOLVED_TYPE_TARGET",
-        "MISSING_BINDING",
+        "UNDECLARED_BINDING_INSTANCE",
+        "UNKNOWN_EXTERNAL_BINDING",
+        "UNRESOLVED_BINDING_TARGET",
+        "MISSING_EXTERNAL_BINDING",
       ]),
     );
   });

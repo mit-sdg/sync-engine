@@ -11,7 +11,7 @@ describe("Authenticating", () => {
   test("its principle: register and prove a password without exposing its verifier", () => {
     const authenticating = new AuthenticatingConcept(() => "salt-1");
     expect(authenticating.register({ username: "ari", password: "correct horse" })).toEqual({
-      username: "ari",
+      account: "ari",
     });
     expect(authenticating._registered({ username: "ari" })).toEqual({ registered: true });
 
@@ -24,7 +24,7 @@ describe("Authenticating", () => {
     expect(wrong).toThrow(InvalidCredentials);
     expect(wrong).toThrow("The username or password is incorrect.");
     expect(authenticating.authenticate({ username: "ari", password: "correct horse" })).toEqual({
-      username: "ari",
+      account: "ari",
     });
   });
 

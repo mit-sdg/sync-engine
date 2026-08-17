@@ -14,20 +14,20 @@ Defined in [Authenticating](../design/concepts/Authenticating.md), line 1.
 
 #### Actions
 
-- `register(username: Username, password: Password) : return (username: Username)`
+- `register(username: Username, password: Password) : return (account: Account)`
   - Refuses `INVALID_USERNAME`: A username must contain 3 to 32 letters, numbers, underscores, or hyphens.
   - Refuses `WEAK_PASSWORD`: A password must contain 8 to 128 characters.
   - Refuses `USERNAME_TAKEN`: That username is already registered.
-- `authenticate(username: Username, password: Password) : return (username: Username)`
+- `authenticate(username: Username, password: Password) : return (account: Account)`
   - Refuses `INVALID_CREDENTIALS`: The username or password is incorrect.
 
 #### Queries
 
 - `_registered(username: Username) : one (registered: Flag)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Authenticating`
+- `Authenticating` — instance of `Authenticating` — [Message Board Application Types](../design/types.md), line 22.
 
 ### Commenting
 
@@ -44,12 +44,12 @@ Defined in [Commenting](../design/concepts/Commenting.md), line 1.
 
 - `_for(target: Target) : many (comment: Comment, author: Author, content: Content)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Commenting`
-  - `Commenting.Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 18.
-  - `Commenting.Target` is `Posting.Post` — [Message Board Application Types](../design/types.md), line 21.
-  - `Commenting.Content` is `CommentContent` — [Message Board Application Types](../design/types.md), line 24.
+- `Commenting` — instance of `Commenting` — [Message Board Application Types](../design/types.md), line 30.
+  - `Author` is `Authenticating.Account` — [Message Board Application Types](../design/types.md), line 31.
+  - `Content` is `CommentContent` — [Message Board Application Types](../design/types.md), line 33.
+  - `Target` is `Posting.Post` — [Message Board Application Types](../design/types.md), line 32.
 
 ### Posting
 
@@ -65,10 +65,10 @@ Defined in [Posting](../design/concepts/Posting.md), line 1.
 - `_all() : many (post: Post, author: Author, content: String)`
 - `_get(post: Post) : optional (author: Author, content: String)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Posting`
-  - `Posting.Author` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 15.
+- `Posting` — instance of `Posting` — [Message Board Application Types](../design/types.md), line 27.
+  - `Author` is `Authenticating.Account` — [Message Board Application Types](../design/types.md), line 28.
 
 ### Sessioning
 
@@ -86,16 +86,16 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 - `_active(session: Session) : optional (subject: Subject, expiresAt: Time)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Sessioning`
-  - `Sessioning.Subject` is `Authenticating.Username` — [Message Board Application Types](../design/types.md), line 12.
+- `Sessioning` — instance of `Sessioning` — [Message Board Application Types](../design/types.md), line 24.
+  - `Subject` is `Authenticating.Account` — [Message Board Application Types](../design/types.md), line 25.
 
 ## Application types
 
 Concrete types:
 
-- `CommentContent` — [Message Board Application Types](../design/types.md), line 9.
+- `CommentContent` — [Message Board Application Types](../design/types.md), line 17.
 
 ## Formers
 
@@ -297,7 +297,7 @@ then
 ### Sessions.CurrentAccount.CurrentUser
 
 Authored path: `Sessions.CurrentAccount.CurrentUser`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 11.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 12.
 
 ```reaction
 when RequestBoundary.request (path: "/auth/current", requestId, session)
@@ -308,7 +308,7 @@ then
 ### Sessions.CurrentAccount.CurrentUser#2
 
 Authored path: `Sessions.CurrentAccount.CurrentUser`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 11.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 12.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Sessions.CurrentAccount.CurrentUser
@@ -335,9 +335,9 @@ Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
 
 ```reaction
-when Authenticating.register (password, username), asked by Sessions.EnteringApplication.Register
+when Authenticating.register (password, username, account), asked by Sessions.EnteringApplication.Register
 then
-  Sessioning.start (subject: username)
+  Sessioning.start (subject: account)
 ```
 
 ### Sessions.EnteringApplication.Register#3
@@ -346,17 +346,17 @@ Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by Sessions.EnteringApplication.Register#2
+when Sessioning.start (subject: account, expiresAt, session), asked by Sessions.EnteringApplication.Register#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/register", requestId, username)
 then
-  RequestBoundary.respond (expiresAt, requestId, session, username)
+  RequestBoundary.respond (account, expiresAt, requestId, session)
 ```
 
 ### Sessions.EnteringApplication.SignIn
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 7.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 8.
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
@@ -367,31 +367,31 @@ then
 ### Sessions.EnteringApplication.SignIn#2
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 7.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 8.
 
 ```reaction
-when Authenticating.authenticate (password, username), asked by Sessions.EnteringApplication.SignIn
+when Authenticating.authenticate (password, username, account), asked by Sessions.EnteringApplication.SignIn
 then
-  Sessioning.start (subject: username)
+  Sessioning.start (subject: account)
 ```
 
 ### Sessions.EnteringApplication.SignIn#3
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 7.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 8.
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by Sessions.EnteringApplication.SignIn#2
+when Sessioning.start (subject: account, expiresAt, session), asked by Sessions.EnteringApplication.SignIn#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
 then
-  RequestBoundary.respond (expiresAt, requestId, session, username)
+  RequestBoundary.respond (account, expiresAt, requestId, session)
 ```
 
 ### Sessions.LeavingApplication.SignOut
 
 Authored path: `Sessions.LeavingApplication.SignOut`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 15.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 16.
 
 ```reaction
 when RequestBoundary.request (path: "/auth/sign-out", requestId, session)
@@ -402,7 +402,7 @@ then
 ### Sessions.LeavingApplication.SignOut#2
 
 Authored path: `Sessions.LeavingApplication.SignOut`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 15.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 16.
 
 ```reaction
 when Sessioning.end (session, ended: signedOut), asked by Sessions.LeavingApplication.SignOut

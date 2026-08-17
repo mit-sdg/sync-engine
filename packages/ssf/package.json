@@ -1,0 +1,21 @@
+{
+  "name": "@mit-sdg/sync-engine-ssf",
+  "version": "1.0.0-beta.12",
+  "private": true,
+  "description": "Private Simple State Form parser for the sync-engine workspace",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {},
+  "scripts": {
+    "prepack": "bun ../../scripts/build.ts"
+  },
+  "engines": {
+    "bun": ">=1.3.14 <1.4",
+    "node": ">=24 <25"
+  }
+}

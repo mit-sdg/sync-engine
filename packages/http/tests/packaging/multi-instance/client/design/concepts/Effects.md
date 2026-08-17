@@ -18,7 +18,7 @@ external Operation
 ## State
 
 ```state
-a sequence of Observations with
+a seq of Observations with
   an operation Operation
   an entryId String
 ```

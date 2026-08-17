@@ -40,8 +40,10 @@ rule and permits a concept to participate in another composition.
 Keep authored intent, executable declarations, and generated evidence distinct.
 A concept specification records reusable concept-local behavior. Registered
 application prose records the decisions realized by selected reactions, views, and
-formers, while `types` fences in those documents resolve every concept-external type
-for that application. Concept specifications are imported by `registerConcept` and
+formers. `instances` fences inventory every selected application instance and
+resolve its external parameters inline; optional `bindings` fences hold complete
+detached bindings for an instance. `types` fences declare concrete application
+types only. Concept specifications are imported by `registerConcept` and
 are not application documents listed again in `design.documents`.
 
 For a new application, use `design/concepts/*.md`, `design/compositions/*.md`, and
@@ -58,8 +60,8 @@ src/
 ```
 
 Each concept document is one reusable concept-local contract. `design/types.md`
-closes the application's external types. Each composition document conventionally
-pairs with one `src/compositions/*.ts` module and explains the application decisions
+normally records the complete static instance and external-type closure. Each
+composition document conventionally pairs with one `src/compositions/*.ts` module and explains the application decisions
 realized by that module. Put exact `reaction:`, `view:`, `former:`, and
 `computation:` links next to the prose claims they support; do not separate a design
 memo from a mechanical link inventory.
@@ -77,22 +79,42 @@ One link names one exact dotted composition path; wildcards and implied descenda
 not exist. The checker resolves a link but cannot judge whether the surrounding prose
 states the declaration's decision honestly.
 
-`design/types.md` normally contains the registered `types` fence. Use `concrete` to
-introduce an application type and `is` to bind one selected concept instance's
-external parameter directly:
+`design/types.md` normally contains separate `types` and `instances` fences. Use
+`concrete` only for application types, inventory every selected application
+instance, and bind every external parameter directly:
 
 ```types
 concrete Person
   A stable identity supplied by the institution.
-
-PostComments.User is Person
-PostComments.Target is Posting.Post
 ```
 
-A right side names either a concrete type or a type owned by a selected concept
-instance. Bindings do not transfer ownership, establish TypeScript assignability, or
-provide runtime validation. Chains, bindings to external parameters, missing
-bindings, and unused concrete declarations are invalid.
+```instances
+instantiate Posting
+
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+```
+
+`instantiate Definition` is shorthand for `instantiate Definition as Definition`;
+a same-name instance has no special semantics. A definition can have several named
+instances or no same-name instance. Each instance supplies all bindings inline, as
+above, or supplies all of them in detached `bindings` fences. Splitting one instance
+between the two placements, repeating a binding, omitting an external parameter, or
+binding an unknown parameter is invalid.
+
+A right side names either a concrete type or an SSF-owned type of another declared,
+selected instance. Bindings do not transfer ownership, establish TypeScript
+assignability, configure adapters or storage, or provide runtime validation.
+External-to-external targets and binding chains are invalid. Direct dependencies on
+qualified owned types are resolved independently, so cycles among those instance
+dependencies are valid. Unused concrete declarations are invalid.
+
+Use several instances when a finite set of application domains needs separate
+semantic identities for one unchanged concept contract. Instance declarations are
+not dynamic tenants, aliases, replicas, floor choices, or storage configuration.
+They do not prove that implementation objects use separate durable resources; the
+host must configure that isolation explicitly.
 
 Declare named computations in `computations` fences in the composition document that
 uses them, or in `design/types.md` when several modules share their meaning. Each
@@ -148,18 +170,23 @@ lifecycle stage of each managed entity, and any order, multiplicity, or invarian
 that changes behavior. Tables, documents, indexes, caches, and serialization
 formats are implementation choices unless they alter the observable contract.
 
-The required `State` fence is normalized and retained but remains unparsed. Authors
-must nevertheless use Simple State Form (SSF): set, sequence, singleton, and subset
-declarations with indented relation fields; implicit set identity rather than synthetic
-ID fields; capitalized types, lowercase field names, uppercase enumeration values, and
-SSF primitives. Registration derives no schema from it. `check-design` rejects a small
-published set of recognized, mechanically repairable SSF form errors while leaving
-unrecognized lines opaque. See [`State`](reference/concept-specification.md#state).
-Names introduced by State and conventional names used in operation signatures do not
-require declarations in the external-only Types fence. Record owned facts in State and
-put each enforced invariant or value refinement in the action branch that checks it.
-Do not compensate for deferred authoritative SSF parsing with local type aliases, a
-heuristic type scan, or a private notation dialect.
+The required `State` fence uses Simple State Form (SSF): set, sequence, singleton,
+and subset declarations with indented relation fields; implicit set identity rather
+than synthetic ID fields; capitalized types, lowercase field names, uppercase
+enumeration values, and SSF primitives. A bounded structural parser checks these
+declarations, relates only exact evidenced collection spellings, records subset structure,
+and inventories nonexternal type names introduced by declaration subjects, subset
+parents, and structural fields. That inventory
+lets config-based checking prove qualified external-binding targets. See
+[`State`](reference/concept-specification.md#state).
+
+The parser deliberately does not interpret standalone invariant sentences or other
+admitted prose, derive a storage schema, prove action conditions or effects, or
+compare persistence with State. Names introduced by State and conventional names used
+in operation signatures do not require declarations in the external-only Types fence.
+Record owned facts in State and put each enforced invariant or value refinement in the
+action branch that checks it. Do not invent local aliases or a private notation
+dialect.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

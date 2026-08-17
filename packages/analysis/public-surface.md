@@ -69,8 +69,11 @@ The persisted formats on this surface are
 queries, authored reactions, authored views, authored formers, computations,
 and endpoints. Runtime lowering names remain in manifest definitions and are
 not substituted for authored design identities. `indexApplication()` builds the
-deterministic inventory and possible-impact graph from an exact V1 manifest.
-Older application manifests are rejected; analysis has no compatibility
+deterministic inventory and possible-impact graph from an exact V1 manifest,
+including authored instance/definition provenance, normalized external bindings, and
+exact evidenced SSF type inventories. Core validation independently rederives those
+inventories from included specifications before analysis uses the manifest. The beta V1 schema is the replaced static-instance schema. Older
+application manifests are rejected; analysis has no compatibility
 decoder. `traceApplicationImpact()` performs bounded deterministic traversal
 and reports explicit incompleteness when limits or unknown seeds prevent a
 complete trace.
@@ -115,7 +118,8 @@ from the supplied manifest. Its methods are:
 | `provenance()`  | Analyzer, manifest, project, revision, TypeScript, and files   |
 
 `describe()` returns a shared authored concept definition with all of its
-application instances when that provenance is present. Authored reaction
+application instances, declaration locations, and normalized bindings when that
+provenance is present. Authored reaction
 results group every portable or unlowered runtime entry carrying that identity;
 view and former results likewise retain their authored declaration separately
 from runtime lookup entries.
@@ -189,8 +193,8 @@ resolution attempt and can produce unresolved or ambiguous source evidence.
 
 `sync-engine.application-project-analysis` version 3 is the durable aggregate
 format. `indexApplicationSources()` is the TypeScript compiler-backed producer
-for metadata-only source indexes. For checked manifests it also indexes the
-authoritative concept-specification and design-coverage records in
+for metadata-only source indexes. For checked manifests it also indexes the authoritative concept specification,
+instance declarations, binding locations, and declaration-coverage records in
 `manifest.design`; it does not rediscover those records from registration or
 composition source. `designSourceBasePath` selects the project-relative
 directory from which manifest design-source paths are resolved. Source content

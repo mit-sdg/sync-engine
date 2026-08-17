@@ -171,6 +171,16 @@ describe("Types and State", () => {
     expect(parsed.state).toMatchObject({ body: raw, prose: "A cross-row invariant." });
   });
 
+  test("records the exact normalized State body origin after leading blank fence lines", () => {
+    const markdown = specification({ state: "\n\na set of Invitations" });
+    const expectedLine =
+      markdown.split("\n").findIndex((line) => line === "a set of Invitations") + 1;
+    expect(parseSpec(markdown).state.location).toEqual({ line: expectedLine, column: 1 });
+
+    const indented = indentFences(markdown, 3);
+    expect(parseSpec(indented).state.location).toEqual({ line: expectedLine, column: 4 });
+  });
+
   test("allows no Markdown around strict Types, Actions, or Queries fences", () => {
     for (const section of ["Types", "Actions", "Queries"]) {
       const markdown = specification().replace(

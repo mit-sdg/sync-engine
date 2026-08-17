@@ -31,8 +31,11 @@ bunx --no-install sync-engine-catalog source concept/selecting selecting.shared.
 
 The printed names identify inspiration, not a required name, contract, or destination.
 Copy only what the application needs: a design may be simplified, split, combined,
-renamed, or rejected. Browse implementation source only after choosing an approved
-concept to implement; examples may contain behavior outside an application's scope.
+renamed, or rejected. Recipe designs show a complete static instance inventory for
+their stated concept selection; adapt that inventory and every binding to the exact
+assembly variant you actually select. Browse implementation source only after choosing
+an approved concept to implement; examples may contain behavior outside an
+application's scope.
 
 The recommended application layout uses `design/concepts/*.md`,
 `design/compositions/*.md`, `design/types.md`, concept source under

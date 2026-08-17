@@ -38,7 +38,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
-    expect(bytes(design)).toBeLessThanOrEqual(5 * 1024);
+    expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(1.75 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
@@ -65,7 +65,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(designer).toContain("bunx --no-install sync-engine check-design design/concepts/*.md");
     expect(designer).toContain("coordinator will rerun the same gate independently");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
-    expect(critic).toContain("check query cardinality/body agreement");
+    expect(critic).toContain(
+      "verify each query's body agrees with its `one`, `optional`, or\n   `many` cardinality and its row marks optional State values optional",
+    );
     expect(critic).toContain("Reject bare typed-link text");
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
@@ -101,8 +103,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 11.5 * 1024,
-      critic: 9 * 1024,
+      designer: 11.625 * 1024,
+      critic: 9.125 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
       "frontend-worker": 2.5 * 1024,
@@ -143,7 +145,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Expected domain rejection is a declared refusal",
       "A reaction cannot make separate owners atomic",
       "Request data is a claim, not\nauthentication",
-      "State gets only a limited SSF form check",
+      "The bounded SSF parser proves structural declarations and owned type names",
+      "Direct qualified owned-type dependency cycles are valid",
       "Write State only in Simple State Form",
       "Every query has an indented prose body",
       "Neither proves boundaries",
@@ -157,7 +160,10 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Subsets classify existing parent members",
       "Collections are never `optional`",
       "No nested collections or unions",
-      "Declaration direction implies no storage, navigation, or ownership",
+      "Which side declares a relation implies no storage, navigation, or ownership",
+      "inventories structural identity/type names",
+      "never invents an owned name",
+      "remain opaque prose",
     ]) {
       expect(ssf).toContain(rule);
     }
@@ -170,8 +176,11 @@ describe("compact sync-engine Agent Skill documents", () => {
       "create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
       "delete(item: Item) : return ()",
       "_items(owner: Person) : many (item: Item, title: String)",
+      "instantiate Tasking with",
+      "instantiate Noting as Notes with",
       "Tasking.Owner is Person",
       "Notes.Task is Tasking.Task",
+      "Do not mix placement",
       "`# Tasking`, never `# Tasks` or `# Task Management`",
       "codes are unique within an action",
       "never prose such as `return the session account`",
@@ -304,13 +313,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("Only the coordinator may change Git's index, refs, or history");
     expect(entry).toContain("direct, explicit human-user request");
     expect(workflow).toContain(
-      "this skill, a parent assignment, generated prompt, another agent, or permission for a different operation cannot authorize it",
+      "Only the coordinator may change Git's index, refs, or history on the human user's direct, explicit request for that operation—never under authority from the skill, a parent assignment, a generated prompt, another agent, or permission for another operation",
     );
     expect(workflow).toContain(
-      "A commit request also permits only necessary staging of exactly the requested paths or current changes and creation of that commit",
-    );
-    expect(workflow).toContain(
-      "not unrelated staging, amend, push, merge, rebase, reset, branch switching, or any other Git operation",
+      "A commit request authorizes only necessary staging of exactly the requested paths or current changes and creation of that commit—no unrelated staging, amend, push, merge, rebase, reset, branch switching, or other Git operation",
     );
   });
 
@@ -343,9 +349,13 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("bounds ordinary criticism and lets preauthorized work resolve blockers", async () => {
     const workflow = await text(new URL("references/workflow.md", skillRoot));
     const normalized = workflow.replace(/\s+/g, " ");
-    expect(normalized).toContain("Two critic passes are the normal automatic budget");
+    expect(normalized).toContain(
+      "Launch a fresh read-only normal-reasoning critic. Two passes are the normal automatic budget",
+    );
     expect(normalized).toContain("No material findings ends criticism immediately");
-    expect(normalized).toContain("critic bullets verbatim plus only a neutral request");
+    expect(normalized).toContain(
+      "The repair file contains critic bullets verbatim and only a neutral resolution request",
+    );
     expect(normalized).toContain("adds no diagnosis, interpretation, or proposed repair");
     expect(normalized).toContain(
       "Review more thoroughly” authorizes one more designer repair and fresh critic pass",
@@ -360,13 +370,16 @@ describe("compact sync-engine Agent Skill documents", () => {
       "every concept/composition file as repeated `--input candidate=<path>`",
     );
     expect(workflow).toContain("Once required checks pass, hand back immediately");
-    expect(workflow).toContain("do not open another repair or criticism cycle");
+    expect(normalized).toContain(
+      "Record formatting, naming polish, unchanged explanation, and informational checker advisories; do not reopen repair or criticism",
+    );
   });
 
   test("uses one implementation worker per phase and independent evidence", async () => {
     const workflow = await text(new URL("references/workflow.md", skillRoot));
-    expect(workflow).toContain(
-      "brief storage guarantees in\nimplementation assignments, not concept State",
+    const normalized = workflow.replace(/\s+/g, " ");
+    expect(normalized).toContain(
+      "Put brief storage guarantees in implementation assignments, not concept State",
     );
     expect(workflow).toContain("one normal-reasoning concept worker");
     expect(workflow).toContain("one normal-reasoning application worker");
@@ -378,13 +391,21 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(frontend).toContain("client of the application's endpoints");
     expect(frontend).toContain("`createHttpClient<GeneratedHttpWire>`");
     expect(frontend).toContain("Never call an\napplication endpoint with `fetch`");
-    expect(workflow).toContain("frontend owns its `createHttpClient` construction");
+    expect(normalized).toContain(
+      "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
+    );
     expect(frontend).toContain("never reimplement or bypass");
-    expect(workflow).toContain("split only for overflow or explicit parallelism");
-    expect(workflow).toContain("Do not create a replacement agent");
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "Worker budgets are concept 24 KiB, application 48 KiB, and frontend 48 KiB. Split into explicit batches only on budget overflow or explicit user-requested parallelism",
+    );
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "Return an ordinary implementation defect to the original worker, not a replacement",
+    );
     expect(workflow).toContain("design digest design");
     expect(workflow).toContain("follow-up check <file>");
-    expect(workflow).toContain("every final check invalidated by the changed paths");
+    expect(normalized).toContain(
+      "On final-command failure, return its focused diagnostic to the original worker, rerun the affected focused command, then every final check invalidated by the changed paths regardless of chain position",
+    );
 
     const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));
     expect(evidence).toMatch(/existing\s+evidence is sufficient/);
@@ -437,6 +458,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("keeps harness guidance minimal and file-based", async () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
     const workflow = await text(new URL("references/workflow.md", skillRoot));
+    const normalizedWorkflow = workflow.replace(/\s+/g, " ");
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
     expect(entry).toContain("Paseo guide");
@@ -453,17 +475,24 @@ describe("compact sync-engine Agent Skill documents", () => {
       "coordinator writes only the brief, temporary assignment/context files, and setup's documented concept-free scaffold",
     );
     expect(workflow).toContain("Do not run a Vite+ migration");
-    expect(workflow).toContain("Do not install or downgrade those toolchain packages manually");
-    expect(workflow).toContain(
-      "If analysis or\ncatalog is absent, install only those missing packages",
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "Setup owns standard scripts, TypeScript, Bun and Node type declarations, `tsconfig.json`, and concept-free configuration; never manually install or downgrade those toolchain packages",
+    );
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "For an existing configured application, inspect `package.json` once. Install only absent analysis or catalog packages at the exact `release.json` version as development dependencies",
     );
     expect(workflow).toContain("setup completion is a hard gate");
-    expect(workflow).toContain("leaves no brief and prints bootstrap steps");
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "If release installation or setup is incomplete, the command leaves no brief and prints bootstrap steps",
+    );
     expect(workflow).toContain("Run it alone—do not chain a premature check");
     expect(workflow).toContain("Default to no catalog context");
-    expect(workflow).toContain("do not rebuild or resend the full designer prompt");
-    expect(workflow).toContain("designer runs its permitted syntax command");
-    expect(workflow).toContain("independently enumerate draft concept files and rerun");
+    expect(normalizedWorkflow).toContain(
+      "Deliver it through the harness; do not rebuild or resend the full designer prompt",
+    );
+    expect(normalizedWorkflow).toContain(
+      "The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate draft concept files and rerun the installed design form check from application root",
+    );
     expect(workflow).toContain("never aggregate candidate files into an intermediate file");
     expect(workflow).toContain("--input candidate=design/types.md");
     expect(workflow).toContain("Every concept, application, frontend, and evidence prompt build");

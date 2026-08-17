@@ -60,6 +60,10 @@
         "@mit-sdg/sync-engine-catalog": "1.0.0-beta.12",
       },
     },
+    "packages/ssf": {
+      "name": "@mit-sdg/sync-engine-ssf",
+      "version": "1.0.0-beta.12",
+    },
   },
   "overrides": {
     "@mit-sdg/sync-engine": "file:.",
@@ -129,6 +133,8 @@
     "@mit-sdg/sync-engine-http": ["@mit-sdg/sync-engine-http@workspace:packages/http"],
 
     "@mit-sdg/sync-engine-skill": ["@mit-sdg/sync-engine-skill@workspace:packages/skill"],
+
+    "@mit-sdg/sync-engine-ssf": ["@mit-sdg/sync-engine-ssf@workspace:packages/ssf"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@0.2.12", "", { "dependencies": { "@emnapi/core": "^1.4.3", "@emnapi/runtime": "^1.4.3", "@tybys/wasm-util": "^0.10.0" } }, "sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ=="],
 

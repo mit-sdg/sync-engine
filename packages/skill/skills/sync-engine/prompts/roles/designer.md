@@ -8,10 +8,9 @@
 
 ## Assignment
 
-Create the smallest complete concept design satisfying the brief. Work from mechanism
-and ownership, not endpoint/resource nouns. Explore alternatives mentally; write only
-the strongest design. Resolve brief-required behavior now. Mark only truly unspecified,
-nonblocking product choices as `Open decision:` with a safe provisional choice.
+Create the smallest complete design for the brief from mechanism and ownership, not
+endpoint nouns. Resolve required behavior now. Mark only truly unspecified,
+nonblocking choices as `Open decision:` with a safe provisional choice.
 
 You are the fresh design author, independent of implementation. Do not read or change
 source, tests, generated artifacts, dependencies, framework internals, or prior agent
@@ -34,7 +33,8 @@ Create or revise only:
 - `design/concepts/*.md` for reusable concept definitions;
 - `design/compositions/*.md` for application decisions and exact intended
   `reaction:`, `view:`, `former:`, and `computation:` links; and
-- `design/types.md` for application `concrete` declarations and `is` bindings.
+- `design/types.md` for application `concrete` declarations, the complete
+  `instances` inventory, and inline or detached external bindings.
 
 Create no index, `application.md`, memo, report, progress file, or workflow metadata.
 Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.

@@ -34,9 +34,9 @@ Each selection identifies a separate discussion. Choosing the same reading text
 in two circles therefore does not combine their responses.
 
 The authored application design lives in
-`design/compositions/ReadingCircle.md`, with cross-concept identity bindings in
-`design/types.md`. Its implementation in
-`src/compositions/ReadingCircle.ts` connects the concepts. When Selecting
+`design/compositions/ReadingCircle.md`, with the complete concept-instance
+inventory and cross-concept identity bindings in `design/types.md`. Its
+implementation in `src/compositions/ReadingCircle.ts` connects the concepts. When Selecting
 chooses a reading, a reaction opens a Discussing discussion for that selection.
 Two policy views divide response requests: a member may respond, while a
 nonmember receives `NOT_A_MEMBER`. The `CirclePage` former joins the three
@@ -60,23 +60,23 @@ checks the assembled behavior.
 
 ## Source map
 
-| Path                                                         | Role                                                     |
-| ------------------------------------------------------------ | -------------------------------------------------------- |
-| `design/concepts/*.md`                                       | Registered concept specifications                        |
-| `design/compositions/ReadingCircle.md`                       | Lean authored application composition                    |
-| `design/types.md`                                            | Application concrete types and cross-concept bindings    |
-| `src/concepts/*.ts`                                          | Flat concept implementations and registries              |
-| `src/concepts.ts`                                            | Named concept set, typed references, and implementations |
-| `src/compositions/ReadingCircle.ts`                          | Composition declarations grouped by exported namespace   |
-| `src/assembly.ts`                                            | Application assembly                                     |
-| `src/edge.ts`                                                | Standard gateway                                         |
-| `src/client.ts`                                              | Transport-neutral generated-contract client helper       |
-| `src/scenario.ts`                                            | Complete local-gateway workflow                          |
-| `tests/concepts/`                                            | Concept principle tests                                  |
-| `tests/compositions/ReadingCircle.test.ts`                   | Assembled behavior and deterministic scenario tests      |
-| `generated.config.ts`                                        | Artifact command configuration                           |
-| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                               |
-| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                          |
+| Path                                                         | Role                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------- |
+| `design/concepts/*.md`                                       | Registered concept specifications                         |
+| `design/compositions/ReadingCircle.md`                       | Lean authored application composition                     |
+| `design/types.md`                                            | Complete instances, concrete types, and external bindings |
+| `src/concepts/*.ts`                                          | Flat concept implementations and registries               |
+| `src/concepts.ts`                                            | Named concept set, typed references, and implementations  |
+| `src/compositions/ReadingCircle.ts`                          | Composition declarations grouped by exported namespace    |
+| `src/assembly.ts`                                            | Application assembly                                      |
+| `src/edge.ts`                                                | Standard gateway                                          |
+| `src/client.ts`                                              | Transport-neutral generated-contract client helper        |
+| `src/scenario.ts`                                            | Complete local-gateway workflow                           |
+| `tests/concepts/`                                            | Concept principle tests                                   |
+| `tests/compositions/ReadingCircle.test.ts`                   | Assembled behavior and deterministic scenario tests       |
+| `generated.config.ts`                                        | Artifact command configuration                            |
+| [`generated/reading-circle.md`](generated/reading-circle.md) | Pinned assembled read-back                                |
+| [`generated/wire.ts`](generated/wire.ts)                     | Pinned TypeScript wire contract                           |
 
 ## Individual checks
 
@@ -91,6 +91,6 @@ Run `bun run artifacts:pin` only after an intentional composition,
 specification, or contract change, then review both generated files.
 
 Use the [application design authoring guide](../../docs/user/guide/authoring.md)
-to register strict specifications, type bindings, prose coverage, and generated
-evidence around an executable application. Use the [read construction
+to register strict specifications, complete instances and bindings, prose
+coverage, and generated evidence around an executable application. Use the [read construction
 cookbook](../../docs/user/guide/read-construction.md) for smaller former examples.

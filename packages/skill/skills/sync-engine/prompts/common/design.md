@@ -1,7 +1,5 @@
 # Design rules
 
-Design only the brief; parser success does not prove quality.
-
 ## Useful independent concepts
 
 A concept owns one coherent mechanism: purpose, state, actions, queries. Layout,
@@ -54,8 +52,8 @@ only a trace token.
 ## Composition and failure
 
 Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; independent consequences get separate reactions;
-named siblings are cases, not priority.
+decision. Stages express causality; independent consequences get separate reactions; named sibling
+reaction cases are alternatives whose order carries no priority.
 
 Composition owns cross-concept policy, workflow, context, adaptation, notification,
 compensation, and repair—not owner invariants, mutation, race decisions, or
@@ -74,20 +72,22 @@ For each protected effect identify actor, authenticated identity, resource, fact
 owners, condition, and enforcement point. Request data is a claim, not authentication.
 Composition may deny early; owner actions enforce non-bypassable rules.
 
-Command/process/filesystem/clock/network are concepts only with observable choices,
-state, lifecycle, expected problems, or useful tests; otherwise adapt thinly and keep
-policy in composition.
+Model a host effect as a concept only if it has observable policy, state, lifecycle, or
+failure or needs its own tests; otherwise adapt thinly.
 
 ## Authored application design
 
-Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paired with
-`src/compositions/*.ts`. Deviations need a benefit and explicit mapping.
+Inventory exact selected static instances except `RequestBoundary`. A definition may
+have zero or more instances; none need carry its name. Bind each external once to a
+concrete or SSF-owned type. Reject aliases, external targets, mixed placement of inline
+and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
+unused concretes. Direct qualified
+owned-type dependency cycles are valid: edges resolve independently. Bindings convey
+identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
+storage isolation.
 
-A definition may have many instances. Bind each external type once to a nonempty
-concrete or selected concept-owned type. Reject chains, external targets, missing or
-duplicate bindings, unresolved names, and unused concretes. Binding conveys identity,
-not ownership, validation, or TypeScript equivalence. State gets only a limited SSF
-form check; review its meaning manually.
+The bounded SSF parser proves structural declarations and owned type names, not opaque
+invariants/prose, storage, or behavior.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
 wildcards. Cover each authored endpoint/reaction tree, named view/former; declare

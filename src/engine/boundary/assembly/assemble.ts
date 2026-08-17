@@ -328,6 +328,31 @@ function instanceConstructorName(instance: object): string | undefined {
   return undefined;
 }
 
+interface SelectedConceptImplementation {
+  readonly name: string;
+  readonly cls: ConceptClass;
+  readonly implementation: unknown;
+  readonly selectedVia: "default" | "initialize" | "instances";
+}
+
+/** Reject raw identity aliases before metadata or instrumentation mutates any implementation. */
+function assertDistinctRawConceptImplementations(
+  selected: readonly SelectedConceptImplementation[],
+): void {
+  const firstNameByImplementation = new Map<object, string>();
+  for (const { name, implementation } of selected) {
+    if (implementation === null || typeof implementation !== "object") continue;
+    const firstName = firstNameByImplementation.get(implementation);
+    if (firstName !== undefined) {
+      throw new Error(
+        `assemble: raw concept implementation object is selected under both "${firstName}" and "${name}"; ` +
+          "each selected name in one assembly requires a distinct object.",
+      );
+    }
+    firstNameByImplementation.set(implementation, name);
+  }
+}
+
 /**
  * A value the composition walk may descend into: a plain record or a module
  * namespace. Namespaces are recognized by their `Symbol.toStringTag` as well
@@ -394,6 +419,46 @@ export function assemble<T extends Record<string, ConceptClass>>(
   if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
     throw new Error('assemble: queryCache must be "memoize" or "none".');
   }
+
+  // Resolve every selected raw object before attaching metadata or instrumenting any of them.
+  // The identity check is deliberately local to this assembly construction.
+  const classes = vocabularyClasses(vocabularyDeclaration);
+  if (Object.hasOwn(classes, "RequestBoundary")) {
+    throw new Error('assemble: "RequestBoundary" is reserved for the core request boundary.');
+  }
+  for (const source of [options.instances, options.initialize]) {
+    for (const name of Object.keys(source ?? {})) {
+      if (!Object.hasOwn(classes, name)) {
+        throw new Error(`assemble: "${name}" is not a name in the vocabulary.`);
+      }
+    }
+  }
+  const supplied = options.instances as Record<string, object> | undefined;
+  const selectedConcepts: SelectedConceptImplementation[] = [];
+  for (const [name, cls] of Object.entries(classes)) {
+    const provided =
+      supplied !== undefined && Object.hasOwn(supplied, name) ? supplied[name] : undefined;
+    let implementation: unknown = provided;
+    let selectedVia: SelectedConceptImplementation["selectedVia"] = "instances";
+    if (implementation === undefined) {
+      const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
+      const args =
+        initialization !== undefined && Object.hasOwn(initialization, name)
+          ? initialization[name]
+          : undefined;
+      selectedVia = args === undefined ? "default" : "initialize";
+      if (args === undefined && cls.length > 0) {
+        throw new Error(
+          `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
+        );
+      }
+      const Constructor = cls as new (...ctorArgs: unknown[]) => object;
+      implementation = new Constructor(...(args ?? []));
+    }
+    selectedConcepts.push({ name, cls, implementation, selectedVia });
+  }
+  assertDistinctRawConceptImplementations(selectedConcepts);
+
   const operational = new OperationalEvents(options.observers);
   const lifecycle = new RuntimeLifecycle(options.executionLimits, operational);
   const store = new MemoryStore(options.retention ?? { window: 100 }, options.logSink);
@@ -443,43 +508,13 @@ export function assemble<T extends Record<string, ConceptClass>>(
     },
   ];
 
-  // ── Concepts: instances win, initialize supplies args, no-arg classes default-construct ──
-  const classes = vocabularyClasses(vocabularyDeclaration);
-  if (Object.hasOwn(classes, "RequestBoundary")) {
-    throw new Error('assemble: "RequestBoundary" is reserved for the core request boundary.');
-  }
-  for (const source of [options.instances, options.initialize]) {
-    for (const name of Object.keys(source ?? {})) {
-      if (!Object.hasOwn(classes, name)) {
-        throw new Error(`assemble: "${name}" is not a name in the vocabulary.`);
-      }
-    }
-  }
+  // ── Concepts: validate and instrument the preflighted raw implementations ──
   const concepts: Record<string, object> = {};
   const metadataByName = vocabularyMetadata(vocabularyDeclaration);
-  for (const [name, cls] of Object.entries(classes)) {
-    const supplied = options.instances as Record<string, object> | undefined;
-    const provided =
-      supplied !== undefined && Object.hasOwn(supplied, name) ? supplied[name] : undefined;
+  for (const { name, cls, implementation, selectedVia } of selectedConcepts) {
+    validateConceptImplementation("assemble", name, cls, implementation);
+    const instance = implementation;
     const metadata = Object.hasOwn(metadataByName, name) ? metadataByName[name] : undefined;
-    let instance = provided;
-    let selectedVia: "default" | "initialize" | "instances" = "instances";
-    if (instance === undefined) {
-      const initialization = options.initialize as Record<string, readonly unknown[]> | undefined;
-      const args =
-        initialization !== undefined && Object.hasOwn(initialization, name)
-          ? initialization[name]
-          : undefined;
-      selectedVia = args === undefined ? "default" : "initialize";
-      if (args === undefined && cls.length > 0) {
-        throw new Error(
-          `assemble: concept "${name}" requires constructor arguments; supply initialize or instances.`,
-        );
-      }
-      const Constructor = cls as new (...ctorArgs: unknown[]) => object;
-      instance = new Constructor(...(args ?? []));
-    }
-    validateConceptImplementation("assemble", name, cls, instance);
     const canonicalConstructorName = classConstructorName(cls);
     const selectedConstructorName =
       selectedVia === "instances" ? instanceConstructorName(instance) : undefined;

@@ -13,6 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 const coreWorkspace = workspaceById("core");
+const ssfWorkspace = workspaceById("ssf");
 const analysisWorkspace = workspaceById("analysis");
 const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
 
@@ -256,6 +257,14 @@ function verifyManifestPolicy(workspace: Workspace, manifest: PackageManifest): 
     );
   }
   rejectForbiddenManifestDependencies(workspace, manifest);
+  if (
+    workspace.id === coreWorkspace.id &&
+    workspaceDependencies(manifest).some(
+      (dependencies) => ssfWorkspace.packageName in (dependencies ?? {}),
+    )
+  ) {
+    throw new Error(`${workspace.id} packed package must internalize the private SSF parser`);
+  }
 }
 
 async function verifyPackedWorkspace(
@@ -601,11 +610,19 @@ async function verifyCoreOnlyConsumer(
 
   const installed = resolve(consumer, "node_modules", ...core.workspace.packageName.split("/"));
   await verifyInstalledWorkspace(core, installed);
-  for (const forbiddenId of core.workspace.forbiddenWorkspaceIds) {
-    const forbidden = workspaceById(forbiddenId);
+  for (const forbidden of [
+    ...core.workspace.forbiddenWorkspaceIds.map(workspaceById),
+    ssfWorkspace,
+  ]) {
     if (existsSync(resolve(consumer, "node_modules", ...forbidden.packageName.split("/")))) {
       throw new Error(`core-only installation unexpectedly installed ${forbidden.packageName}`);
     }
+  }
+  for (const internal of [
+    "dist/engine/tooling/ssf-package/index.js",
+    "dist/engine/tooling/ssf-package/index.d.ts",
+  ]) {
+    requireEntry(core.entries, internal);
   }
 
   await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports([core]));
@@ -1118,7 +1135,9 @@ try {
   await verifyMultiInstance(artifacts);
   await verifySetupAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
-  console.log("Package verification passed for core, analysis, HTTP, catalog, and skill.");
+  console.log(
+    "Package verification passed for private SSF, core, analysis, HTTP, catalog, and skill.",
+  );
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

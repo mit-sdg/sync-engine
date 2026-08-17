@@ -246,15 +246,19 @@ they retain their existing behavior and do not create concept-set anchors.
 `src/engine/boundary/assembly/concept-set.ts` turns plain concept registrations
 and optional named computation functions into one application-facing concept
 set with typed references, default implementations, floor-specific factories,
-complete implementation maps, and refusal metadata. A host-created
+complete implementation maps, and refusal metadata. Each
+`implementations(floor, context)` call validates floor completeness before any
+construction, then calls one factory per selected key with that key as the
+instance name; repeated calls repeat construction. A host-created
 `ConceptFloor` descriptor separately groups one such map with resources and a
 `close()` operation. Private process-wide WeakMap associations retain named-floor
 hints across complete implementation maps and, when unambiguous, object-preserving
 spreads without mutating application objects.
 `src/engine/boundary/assembly/assemble.ts` creates one engine, its internal
-occurrence index, and an optional independent audit sink;
-instruments its selected instances; collects tagged composition exports; and
-returns the application-facing invoker/form interface. It also selects query
+occurrence index, and an optional independent audit sink; performs an
+assembly-local raw-object identity preflight so two selected names cannot share
+one object; instruments its selected instances; collects tagged composition
+exports; and returns the application-facing invoker/form interface. It also selects query
 memoization, installs privileged raw-fault reporting, and makes ordinary
 instrumentation reject undeclared advanced refusal codes. Plain concept actions
 may be synchronous, but the assembled `concepts` surface types every action as
@@ -277,23 +281,27 @@ index, load an existing file, replay entries, or expose a close operation.
 
 The generated config is the tooling root for one application variant. Its
 `design.version` and document URLs explicitly select the application-level
-authored corpus. Any registered document may contain application `types` fences. Selected concept registrations supply
-imported concept Markdown. Tooling resolves these local sources, parses the authored concept and application contracts, joins them with the exact
-selected assembly, and checks application types and declaration coverage. Runtime assembly remains independent
+authored corpus. Any registered document may contain application `types`,
+`instances`, or `bindings` fences. Selected concept registrations supply imported concept
+Markdown. Tooling resolves these local sources, uses the workspace-private
+`packages/ssf` parser to check bounded structural State forms and derive exact, evidenced owned names,
+parses the authored application contracts, joins them with the exact selected assembly's
+non-core instance/definition facts, and checks complete bindings and declaration
+coverage. Runtime assembly remains independent
 of authored Markdown availability.
 
 `src/engine/tooling/inspection.ts` projects one assembly into executable app IR,
 concept inventories, input contracts, and diagnostic read-back. Design
-processing augments those facts with concept definition/instance identities,
-raw State, resolved application types, exact authored declaration links, computation
-signatures, normalized document provenance, and source locations. The manifest
-schema is `sync-engine.application-manifest` version 1; previous manifest
-versions are not decoded.
+processing augments those facts with authored concept definition/instance
+provenance, full State text, instance-owned external bindings, resolved application types, exact authored declaration links,
+computation signatures, normalized document provenance, and source locations.
+The manifest schema remains `sync-engine.application-manifest` version 1 during
+the beta reset; the earlier beta shape and prior versions are not decoded.
 
 Artifact planning validates the complete design before rendering either output.
 Generated Markdown reports reaction lowering, views, formers, structured concept
-contracts, application type bindings, computations, and every covering source
-location. It links to authored prose rather than copying it. Full normalized
+contracts, explicit instances and external bindings, computations, and every
+covering source location. It links to authored prose rather than copying it. Full normalized
 document contents contribute to input digests, so prose-only changes invalidate
 pinned artifacts. Generated wire remains derived from executable boundary facts
 and does not provide runtime validation.

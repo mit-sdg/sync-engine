@@ -1,6 +1,8 @@
 import type { OutcomeContracts } from "./outcomes.ts";
+import { specificationsAreCompatible } from "./concept-spec.ts";
 import type { ConceptSpecificationIR } from "@engine/reads/ir";
 import type { QueryPromise } from "@engine/reads/query-metadata";
+import { canonicallyEqual } from "@engine/utils/canonical-json";
 
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 
@@ -83,10 +85,55 @@ export interface ConceptMetadata {
 
 const metadataByConcept = new WeakMap<object, ConceptMetadata>();
 
+function sameRefusals(left: RefusalContracts | undefined, right: RefusalContracts | undefined) {
+  const leftActions = Object.keys(left ?? {}).sort();
+  const rightActions = Object.keys(right ?? {}).sort();
+  if (!canonicallyEqual(leftActions, rightActions)) return false;
+  return leftActions.every((action) => {
+    const leftBranches = left?.[action] ?? [];
+    const rightBranches = right?.[action] ?? [];
+    return (
+      leftBranches.length === rightBranches.length &&
+      leftBranches.every((branch, index) => {
+        const candidate = rightBranches[index];
+        return (
+          candidate !== undefined &&
+          branch.code === candidate.code &&
+          branch.message === candidate.message &&
+          branch.error === candidate.error
+        );
+      })
+    );
+  });
+}
+
+/** Metadata compatibility is semantic; object identity is never assembly-global authority. */
+function metadataCompatible(left: ConceptMetadata, right: ConceptMetadata): boolean {
+  const specificationsCompatible =
+    left.specification === undefined || right.specification === undefined
+      ? left.specification === right.specification
+      : specificationsAreCompatible(left.specification, right.specification);
+  return (
+    specificationsCompatible &&
+    left.purpose === right.purpose &&
+    left.principle === right.principle &&
+    canonicallyEqual(left.queries, right.queries) &&
+    canonicallyEqual(left.outcomes, right.outcomes) &&
+    canonicallyEqual(left[CONCEPT_PROTOCOL], right[CONCEPT_PROTOCOL]) &&
+    canonicallyEqual(left[CONCEPT_MEMBER_ROLES], right[CONCEPT_MEMBER_ROLES]) &&
+    sameRefusals(left.refusals, right.refusals)
+  );
+}
+
 export function attachConceptMetadata(concept: object, metadata: ConceptMetadata): void {
   const existing = metadataByConcept.get(concept);
-  if (existing !== undefined && existing !== metadata) {
-    throw new Error("One concept instance cannot carry two vocabulary declarations.");
+  if (existing !== undefined) {
+    if (existing !== metadata && !metadataCompatible(existing, metadata)) {
+      throw new Error(
+        "One concept instance cannot carry two vocabulary declarations with incompatible contracts.",
+      );
+    }
+    return;
   }
   metadataByConcept.set(concept, metadata);
 }

@@ -22,11 +22,11 @@ Defined in [Alerting](../design/concepts/Alerting.md), line 1.
 
 - `_openFor(recipient: Person) : many (alert: Alert, recipient: Person, subject: Subject)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Alerting`
-  - `Alerting.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 29.
-  - `Alerting.Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 32.
+- `Alerting` — instance of `Alerting` — [Operations Room Application Types](../design/types.md), line 37.
+  - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 38.
+  - `Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 39.
 
 ### Discussing
 
@@ -46,11 +46,11 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 - `_openFor(subject: Subject) : optional (discussion: Discussion)`
 - `_responses(discussion: Discussion) : many (response: Response, discussion: Discussion, author: Person, text: String)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Discussing`
-  - `Discussing.Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 23.
-  - `Discussing.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 26.
+- `Discussing` — instance of `Discussing` — [Operations Room Application Types](../design/types.md), line 33.
+  - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 35.
+  - `Subject` is `Selecting.Selection` — [Operations Room Application Types](../design/types.md), line 34.
 
 ### Gathering
 
@@ -72,10 +72,10 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 - `_members(gathering: Gathering) : many (member: Person)`
 - `_membership(gathering: Gathering, member: Person) : one (joined: Flag)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Gathering`
-  - `Gathering.Person` is `Person` — [Operations Room Application Types](../design/types.md), line 14.
+- `Gathering` — instance of `Gathering` — [Operations Room Application Types](../design/types.md), line 26.
+  - `Person` is `Person` — [Operations Room Application Types](../design/types.md), line 27.
 
 ### Selecting
 
@@ -92,18 +92,18 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 - `_current(scope: Scope) : optional (selection: Selection, scope: Scope, item: Item)`
 - `_get(selection: Selection) : optional (selection: Selection, scope: Scope, item: Item)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Selecting`
-  - `Selecting.Scope` is `Gathering.Gathering` — [Operations Room Application Types](../design/types.md), line 17.
-  - `Selecting.Item` is `Mitigation` — [Operations Room Application Types](../design/types.md), line 20.
+- `Selecting` — instance of `Selecting` — [Operations Room Application Types](../design/types.md), line 29.
+  - `Item` is `Mitigation` — [Operations Room Application Types](../design/types.md), line 31.
+  - `Scope` is `Gathering.Gathering` — [Operations Room Application Types](../design/types.md), line 30.
 
 ## Application types
 
 Concrete types:
 
-- `Person` — [Operations Room Application Types](../design/types.md), line 8.
-- `Mitigation` — [Operations Room Application Types](../design/types.md), line 11.
+- `Mitigation` — [Operations Room Application Types](../design/types.md), line 21.
+- `Person` — [Operations Room Application Types](../design/types.md), line 18.
 
 ## Views
 

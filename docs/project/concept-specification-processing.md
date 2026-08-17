@@ -11,10 +11,10 @@ questions.
 Tooling combines two authored input families for the exact assembly selected by
 one generated config:
 
-| Input                             | Machine-readable contribution                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Registered concept specifications | Definition identity, external parameters, raw State, structured actions/queries, and source provenance |
-| Registered application documents  | Links, computations, concrete types, external bindings, full normalized source, and locations          |
+| Input                             | Machine-readable contribution                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Registered concept specifications | Definition identity, external parameters, full State text, actions/queries, and provenance                          |
+| Registered application documents  | Links, computations, concrete types, complete instances, inline/detached bindings, normalized source, and locations |
 
 The executable assembly supplies selected concept instances, authored reaction
 and endpoint trees, named views, named formers, and executable computations.
@@ -29,8 +29,8 @@ generated config
   -> assemble the selected variant
   -> parse concept specifications and application documents
   -> resolve TypeScript declaration shapes
-  -> join definition and instance identities
-  -> validate application types and declaration coverage
+  -> join exact assembled definition/instance identities
+  -> validate complete instances, bindings, and declaration coverage
   -> canonicalize provenance and source digests
   -> inspect lowering and executable contracts
   -> emit manifest/read-back/wire or compare pinned artifacts
@@ -53,7 +53,7 @@ Its version-1 IR retains:
 - concept-definition name;
 - Purpose and Principle;
 - ordered external declarations and their optional explanations;
-- normalized raw State fence text;
+- normalized full State fence text;
 - structured action inputs and named result rows;
 - structured branches and terminal return/refusal outcomes;
 - query inputs, cardinality, named rows, and optional prose bodies; and
@@ -63,27 +63,39 @@ The format remains named `sync-engine.concept-specification`, version `1`. This
 is a beta redefinition, not compatibility with the former version-1 grammar.
 There is no legacy parser or format auto-detection.
 
-### State is deliberately raw
+### State has a bounded structural parser
 
-The State fence is normalized and retained but not parsed into structured IR. Its
-intended language is SSF; the grammar is not yet stable enough for an authoritative
-parser. Registration and assembly therefore do not depend on a partial parser,
-heuristic type scan, or private dialect.
+The workspace-private, unpublished `packages/ssf` package owns SSF tokenization,
+canonical structural diagnostics, evidence-based type-name joins, and structured State IR.
+It remains `private: true`, has no release-owned publication entry, and has no
+dependency on sync-engine Markdown or source-location types. It returns text spans or
+line/column offsets, and the tooling adapter maps those spans from the exact normalized
+State-body origin retained by the concept parser to `DesignSourceLocation`; leading
+blank fence lines therefore do not shift diagnostics. Keep this parser as the one implementation used both for
+repair diagnostics and checked-model owned-name extraction; do not recreate a second
+repair parser under `src/engine/tooling`. The manifest decoder has a deliberately
+independent, security-boundary derivation from already parsed specification IR so it
+does not trust a persisted inventory.
 
-The independent `simple-state-form.ts` tooling module receives source-positioned
-Markdown fence lines and reports only a fixed set of recognized, mechanically
-repairable form issues. `check-design` runs it after the concept parser accepts the
-document and fails with every repair for that file. The validator ignores every line
-it cannot positively classify and neither changes concept IR nor runs during
-registration. New rules must preserve that recovering boundary and provide one
-concrete better form.
+The parser increment is deliberately bounded. It authoritatively parses structural
+set, sequence, element, subset, and field declarations and records subset structure.
+Declaration and subset spellings remain exact. A non-element declaration acquires a
+singular/plural alias only when that exact candidate is evidenced by a State field type
+or parsed action/query type expression in the same specification. Fields and subset
+parents do not independently introduce owned types. Element names remain exact. Structural-looking malformed declarations and fields produce diagnostics;
+truly standalone invariant sentences remain opaque. The concept IR continues to
+preserve the complete normalized State text. The parser must not claim to prove those sentences,
+conditions, effects, query meaning, storage layout, State/storage agreement, or
+implementation semantics.
 
-Consequently source checking cannot yet prove state-owned type use, external
-parameter use, State/storage agreement, or the final owned type on a qualified
-type-binding target. Named types used by State, actions, and queries do not need
-local declarations; Types inventories only external application parameters.
-These absent proofs are explicit limitations rather than warnings generated from
-guesses.
+Config-based binding validation uses only the established owned-name inventory. A
+qualified target must name an owned type of the selected target instance's definition;
+an external parameter is independently invalid. Checked manifests persist the sorted
+accepted owned-name inventory. Their codec independently rederives the authoritative
+inventory from the included full specification, requires exact canonical equality, and
+validates every qualified target against the derived fact. This proof does not imply that every
+action/query type must be declared in State: conventional and refinement names remain
+valid in operation signatures under the public contract.
 
 ## Static source agreement
 
@@ -104,37 +116,62 @@ machine comparison until a separately designed State contract exists.
 ## Definition and instance joins
 
 The H1 identifies a reusable concept definition. A `conceptSet` property
-identifies an application instance. Canonicalization stores both.
+identifies an application instance. Advanced `vocabulary(...)` assembly remains
+supported, so full checking derives canonical `(instance, definition)` facts from
+the exact assembled variant rather than treating syntactic concept-set discovery as
+the selected inventory. Static concept-set discovery remains a configured source and
+TypeScript anchor. The core-owned `RequestBoundary` is excluded from authored
+completeness.
+
+Authored `instances` declarations merge across configured application documents and
+must match those assembled facts bidirectionally. `instantiate D` normalizes to
+`(definition: D, instance: D)`; `instantiate D as I` normalizes to `(D, I)`. A
+definition may have no same-name instance. Every instance name is globally unique.
+Definition mismatches should suppress external-closure diagnostics for that instance
+to avoid checking against the wrong parameter list.
 
 When selected registrations share a definition name, their canonical
 specifications must be equal. Implementation class or floor may differ without
-changing definition identity. Generated read-back renders one definition
-contract and lists its selected instances and bindings rather than duplicating
+changing definition identity. Generated read-back renders one definition contract
+and lists its selected instances, declarations, and bindings rather than duplicating
 the contract.
 
-## Application-type processing
+## Instance and application-type processing
 
-Any registered application document can contain `types` fences. The parser
-records `concrete` declarations with required prose definitions and
-`ConceptInstance.External is Target` bindings with optional explanations.
-Validation combines every fence in the registered corpus.
+Any registered application document can contain `types`, `instances`, and
+`bindings` fences. `types` contains only `concrete` declarations with required prose.
+An instance declaration is bare, renamed, or followed by a nonempty indented `with`
+body of local bindings. Detached bindings use
+`ConceptInstance.External is Target` in dedicated `bindings` fences. Arbitrary prose
+is not part of either declaration body; migration retains old binding explanations as
+adjacent ordinary Markdown.
 
-Validation joins against the exact selected assembly and enforces:
+Validation combines the complete configured corpus and enforces:
 
-- every selected external parameter is bound exactly once;
-- every left side names a selected instance and declared external parameter;
-- every right side directly names a concrete type or selected concept-owned
-  type;
-- no target is an external parameter;
-- no chain, cycle, duplicate, missing, or unresolved binding exists; and
+- every assembled non-core instance has exactly one authored instantiation and every
+  authored instance is assembled;
+- the authored definition equals the selected specification H1;
+- every selected external parameter is bound exactly once, and no unknown external is
+  bound;
+- each instance supplies all bindings inline or all detached, never a mixture;
+- every right side directly names a declared concrete type or an SSF-owned type of a
+  declared and selected target instance;
+- no target is an external parameter and no binding chain is resolved;
+- duplicates are invalid even when targets are textually identical; and
 - every concrete type is used.
 
-The current unparsed-State boundary permits checking the target instance but not
-proving its final owned type name. That proof remains deferred.
+Declaration order has no semantics. Direct qualified targets resolve independently,
+so cyclic instance dependencies are valid when every edge ends at an owned type.
+External-to-external edges remain invalid, including cycles, because they would be
+aliases with no direct concrete or owned target. For a definition with external
+parameters, one mixed-placement diagnostic suppresses duplicate, unknown, missing, and
+target-resolution cascades until placement is repaired. Zero-external instances have no
+placement mode and each supplied binding is instead diagnosed as unknown.
 
-The containing document's prose is included in digests and may also contain
-typed links and computation fences. The concept-set source has no Markdown
-import/export path; `design.documents` is the sole registration path.
+The containing document's prose is included in digests and may also contain typed
+links and computation fences. An instances-only document is valid application
+content. The concept-set source has no Markdown import/export path;
+`design.documents` is the sole registration path.
 
 ## Application-document processing
 
@@ -182,15 +219,17 @@ Canonical provenance includes normalized complete contents of every registered
 application document, not only extracted links. A prose-only change changes the
 input digest.
 
-The application manifest resets to `sync-engine.application-manifest`, version
-`1`. It retains raw State, structured declarations, definition/instance joins,
-application-type resolution, source locations, and design digests. Old manifest
-versions are rejected without upconversion.
+The application manifest remains `sync-engine.application-manifest`, version
+`1` under the intentional pre-1.0 beta reset. It retains full State text, structured
+action/query declarations, authored definition/instance provenance,
+instance-owned normalized bindings, application-type resolution, source locations,
+and design digests. The earlier beta version-1 shape and prior versions are
+rejected without upconversion.
 
 Generated Markdown links to prose rather than copying it. Paths are relative and
 host-independent; one-based lines are shown separately. It lists every source
 location covering a declaration. Concept read-back omits Purpose, Principle,
-raw State, action/query bodies, and application prose while still exposing
+full State text, action/query bodies, and application prose while still exposing
 structured signatures, cardinality, refusals, instances, bindings, computation
 signatures, and executable lowering.
 
@@ -200,16 +239,16 @@ TypeScript concept class signatures and registered vocabulary computation
 function signatures, not Markdown types or results, drive authoring types and
 wire provenance.
 
-| Property                                                      | Enforcement owner                        |
-| ------------------------------------------------------------- | ---------------------------------------- |
-| Section and fence grammar                                     | Concept and application document parsers |
-| Source text and TypeScript shape agreement                    | Config-based static checker              |
-| Selected definition/instance inventory                        | Assembly inspection plus checker join    |
-| Application-type closure                                      | Design checker                           |
-| Reaction/view/former/computation coverage                     | Design checker                           |
-| Design source digests and links                               | Manifest/artifact tooling                |
-| Query cardinality during evaluated reads                      | Runtime read evaluation                  |
-| Prose truth, State meaning, storage, transactions, durability | Review and tests                         |
+| Property                                                   | Enforcement owner                        |
+| ---------------------------------------------------------- | ---------------------------------------- |
+| Section and fence grammar                                  | Concept and application document parsers |
+| Source text and TypeScript shape agreement                 | Config-based static checker              |
+| Exact non-core definition/instance inventory and closure   | Assembly inspection plus design checker  |
+| Qualified target ownership                                 | Private SSF parser plus design checker   |
+| Reaction/view/former/computation coverage                  | Design checker                           |
+| Design source digests and links                            | Manifest/artifact tooling                |
+| Query cardinality during evaluated reads                   | Runtime read evaluation                  |
+| Opaque prose/invariants, storage, transactions, durability | Review and tests                         |
 
 Repository-owned catalog validation may use internal validation until a
 supported low-level checker is designed. The installed CLI no longer exposes
@@ -225,7 +264,7 @@ and generated artifacts must move together before downstream applications.
 
 ## Deferred design questions
 
-1. **Authoritative SSF grammar and parser.** Choose the final external grammar, parse State into structured IR, validate owned and parameter types, and compare type-binding targets with state-owned types. The limited form validator is deliberately not this parser.
+1. **Broader SSF semantics.** Decide whether later parser increments should typecheck all operation vocabulary or formalize invariant sentences without making prose claims the structure cannot prove.
 2. **Concrete-type taxonomy.** Reconsider whether provisional `concrete` should distinguish application-owned, platform-owned, and externally supplied types.
 3. **Reaction-tree granularity.** Reconsider whether authored reaction and endpoint trees should require branch- or consequence-level design coverage.
 4. **Low-level concept checker.** Design a supported concept-only checker to replace the removed `--vocabulary-module` mode without weakening config-based application guarantees.

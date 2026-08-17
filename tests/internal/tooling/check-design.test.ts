@@ -26,7 +26,9 @@ external Person
 ## State
 
 \`\`\`state
-a set of Notes with an author Person and text String
+a set of Notes with
+  an author Person
+  a text String
 \`\`\`
 
 ## Actions
@@ -62,7 +64,14 @@ const types = `# Notes application types
 \`\`\`types
 concrete Person
   A stable application identity.
+\`\`\`
 
+\`\`\`instances
+instantiate Commenting as Comments
+instantiate Posting
+\`\`\`
+
+\`\`\`bindings
 Comments.User is Person
 Comments.Target is Posting.Post
 \`\`\`
@@ -97,6 +106,19 @@ describe("authored design form check", () => {
     }
   });
 
+  test("accepts a partial detached-binding corpus without requiring its instance document", async () => {
+    const root = await fixture({
+      "bindings.md": "# Detached bindings\n\n```bindings\nComments.User is Person\n```\n",
+    });
+    try {
+      await expect(checkDesignFiles(["bindings.md"], root)).resolves.toEqual([
+        { path: "bindings.md", kind: "application" },
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test.each([
     ["wildcard reaction", "[bad](reaction:Notes.*)", /exact non-wildcard/],
     ["empty view", "[bad](view:)", /exact non-wildcard/],
@@ -124,13 +146,13 @@ describe("authored design form check", () => {
     ],
     [
       "binding left side",
-      "# Bad binding\n\n```types\nUser is Person\n```\n",
-      /accepts only `concrete Name` or `Instance.External is Target`/,
+      "# Bad binding\n\n```bindings\nUser is Person\n```\n",
+      /accepts only `Instance.External is Target`/,
     ],
     [
       "binding target",
-      "# Bad target\n\n```types\nComments.User is Other..Person\n```\n",
-      /accepts only `concrete Name` or `Instance.External is Target`/,
+      "# Bad target\n\n```bindings\nComments.User is Other..Person\n```\n",
+      /accepts only `Instance.External is Target`/,
     ],
   ])("rejects malformed %s form", async (_name, markdown, expected) => {
     const root = await fixture({ "bad.md": markdown });
@@ -172,12 +194,16 @@ concrete Person
       "binding",
       `# Duplicate binding
 
-\`\`\`types
+\`\`\`instances
+instantiate Commenting as Comments
+\`\`\`
+
+\`\`\`bindings
 Comments.User is Person
 Comments.User is Posting.Author
 \`\`\`
 `,
-      "DUPLICATE_TYPE_BINDING",
+      "DUPLICATE_EXTERNAL_BINDING",
     ],
   ])("rejects a duplicate %s across the supplied corpus", async (_name, duplicate, code) => {
     const root = await fixture({ "valid.md": composition, "duplicate.md": duplicate });
@@ -203,7 +229,7 @@ Comments.User is Posting.Author
 
   test("fails recognized noncanonical SSF with deterministic repairs", async () => {
     const malformed = concept.replace(
-      "a set of Notes with an author Person and text String",
+      "a set of Notes with\n  an author Person\n  a text String",
       "a sequence of Notes\n  a discardedAt optional DateTime",
     );
     const root = await fixture({ "broken.md": malformed });

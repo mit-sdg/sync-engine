@@ -39,6 +39,8 @@ describe("catalog documentation", () => {
       expect(source).toContain('import spec from "./spec.md" with { type: "text" };');
       expect(source).toContain("export { spec };");
       expect(source).not.toMatch(/export \{ design \}|export const (?!compositions|views|formers)/);
+      expect(spec).toContain("## Application types and instances");
+      expect(spec).toContain("```instances");
       expect(spec).toContain("## Compositions");
       expect(spec).not.toMatch(
         /^## (Purpose|Concepts|Decisions|Endpoints|Failure|Failure and repair|Host variants)$/m,

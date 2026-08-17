@@ -1,152 +1,138 @@
 # Coordinator workflow
 
 This reference owns product decisions, stage transitions, role launches, validation,
-and handback; compiled role prompts own delegated boundaries and outputs. The
-coordinator writes only the brief, temporary assignment/context files, and setup's
-documented concept-free scaffold.
+and handback; compiled prompts own delegated boundaries and outputs. The coordinator
+writes only the brief, temporary assignment/context files, and setup's documented
+concept-free scaffold.
 
 ## Start safely
 
-Read repository instructions, inspect tracked and untracked work, and preserve unrelated
-changes. Resolve the application root once and run application commands from it. At the
-outset, infer or ask once whether the user wants autonomous delivery, agent-led work with
-approvals, or user-led collaboration. Default to agent-led approvals; do not launch design
-or implementation while a user-led discussion is still active. Only the coordinator may
-change Git's index, refs, or history, solely for an
-operation the human user directly and explicitly requests; this skill, a parent
-assignment, generated prompt, another agent, or permission for a different operation
-cannot authorize it. A commit request also permits only necessary staging of exactly the
-requested paths or current changes and creation of that commit—not unrelated staging,
-amend, push, merge, rebase, reset, branch switching, or any other Git operation.
+Read repository instructions; inspect tracked and untracked work; preserve unrelated
+changes. Resolve the application root once; run commands there. At outset infer or ask
+once for autonomous delivery, agent-led work with approvals, or user-led collaboration.
+Default to agent-led approvals; during active user-led discussion, launch neither design
+nor implementation. Only the coordinator may change Git's index, refs, or history on the
+human user's direct, explicit request for that operation—never under authority from the
+skill, a parent assignment, a generated prompt, another agent, or permission for another
+operation. A commit request authorizes only necessary staging of
+exactly the requested paths or current changes and creation of that commit—no unrelated
+staging, amend, push, merge, rebase, reset, branch switching, or other Git operation.
 
-Resolve `<skill-root>` once as the absolute directory containing the loaded `SKILL.md`.
-The bundled compiler is `bun "<skill-root>/scripts/command.ts"`; substitute the actual
-shell-quoted path in every command. Read `<skill-root>/release.json` for exact package
-versions and canonical toolchain facts.
+Resolve `<skill-root>` once as the loaded `SKILL.md`'s absolute directory. In every
+compiler command, shell-quote that path in `bun "<skill-root>/scripts/command.ts"`. Read
+`<skill-root>/release.json` for exact versions and canonical toolchain facts.
 
-In an empty application directory, create only a minimal `package.json` before invoking
-Bun: a name, `private: true`, `type: "module"`, and `packageManager` using the exact Bun
-version in `release.json`. Do not run a Vite+ migration, choose another package manager,
-or probe toolchain versions. Install `@mit-sdg/sync-engine` at the exact release
-version and matching `@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog`
-as development dependencies. Do not install the skill package into the application. Before setup or
-catalog use, verify exact versions and executable targets with:
+In an empty application directory, create before Bun only a minimal `package.json`:
+name, `private: true`, `type: "module"`, and `packageManager` with `release.json`'s exact
+Bun version. Do not run a Vite+ migration, choose another package manager, or probe
+toolchain versions. Install exact-release `@mit-sdg/sync-engine` and matching
+`@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog` as development
+dependencies; never install the skill package. Before setup or catalog use, verify exact
+versions and executable targets:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" release check .
 ```
 
-Only after that succeeds, run the installed `sync-engine setup`. Setup owns the standard
-scripts, TypeScript, Bun and Node type declarations, `tsconfig.json`, and concept-free
-configuration. Do not install or downgrade those toolchain packages manually. If setup's
-installation fails, stop and report that bootstrap failure instead of probing alternate
+After success, run installed `sync-engine setup`. Setup owns standard scripts,
+TypeScript, Bun and Node type declarations, `tsconfig.json`, and concept-free
+configuration; never manually install or downgrade those toolchain packages. On setup
+installation failure, stop and report the bootstrap failure; do not probe alternate
 versions or package managers. For a new application, setup completion is a hard gate:
-do not write the brief, inspect the catalog, or launch a role until `package.json`,
-`tsconfig.json`, and concept-free configuration exist.
+`package.json`, `tsconfig.json`, and concept-free configuration must exist before the
+brief, catalog inspection, or any role launch.
 
-For an existing configured application, inspect `package.json` once. If analysis or
-catalog is absent, install only those missing packages at the exact `release.json`
-version as development dependencies, then run the same release check before its
-documented baseline. Do not change an existing core version to force a match, and do
-not rerun setup merely to impose default files or scripts.
+For an existing configured application, inspect `package.json` once. Install only absent
+analysis or catalog packages at the exact `release.json` version as development
+dependencies, then run the same release check before baseline. Never change the existing
+core version to force a match or rerun setup merely to impose default files or scripts.
 
-A short-lived start must exit successfully. For a long-running start, wait for its
-documented readiness signal, request graceful shutdown, and require a successful exit.
-A timeout, missing readiness condition, forced kill, or nonzero exit is a failed
-baseline.
+A short-lived start must exit successfully. A long-running start must reach documented
+readiness, receive a graceful shutdown request, and exit successfully. Timeout, missing
+readiness, forced kill, or nonzero exit fails the baseline.
 
 Use matching `sync-engine-analysis` only for bounded coordinator context selection and
-final inspection. Keep raw analysis output internal; never give it or its instructions
-to the designer or critic. Repository search and broader application source reading are
-fallback for unavailable, incomplete, or ambiguous analysis and files outside its
-manifest. If a concrete framework compiler or runtime failure requires internal
-investigation, stop this application workflow and report it as a separate framework
-issue.
+final inspection. Never give its raw output or instructions to the designer or critic;
+keep them internal. Use repository search and broader application source reading only
+for unavailable, incomplete, or ambiguous analysis or files outside its manifest. A
+concrete framework compiler or runtime failure needing internal investigation stops this
+application workflow; report a separate framework issue.
 
 ## Maintain the product brief
 
 Initialize a new brief from the packaged template; never guess or recreate its grammar.
-The command leaves no brief and prints bootstrap steps when release installation or setup
-is incomplete. Run it alone—do not chain a premature check:
+If release installation or setup is incomplete, the command leaves no brief and prints
+bootstrap steps. Run it alone—do not chain a premature check:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief init design/brief.md
 ```
 
-Read the initialized file and replace its placeholders from the user's request and
-decisions, keeping it brief. Use `User` authority for requested or interactively
-settled decisions and `Assumption` for conservative coordinator choices. Validate once
-after filling it:
+Briefly replace placeholders from the user's request and decisions. Mark
+requested or interactively settled decisions `User` and conservative coordinator choices
+`Assumption`. Validate once:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief check design/brief.md
 ```
 
-Open implementation choices and out-of-scope behavior may remain. Ask a question only
-when no reasonable assumption permits a coherent and safe design or when the answer
-materially changes ownership, visible behavior, authorization, lifecycle, persistence,
-or failure. In interactive discussion ask one or two questions per turn, offer concise
-options and one recommendation, and do not seek exhaustive specification.
+Open implementation choices and out-of-scope behavior may remain. Ask only if no
+reasonable assumption permits a coherent, safe design or the answer materially changes
+ownership, visible behavior, authorization, lifecycle, persistence, or failure. Interactively, ask one or two questions per turn; offer concise options and one
+recommendation; never seek exhaustive specification.
 
-Autonomous delivery is preauthorized; the other modes require approval before
-implementation. Preauthorization is not inferred from an ordinary implementation request.
+Autonomous delivery is preauthorized; other modes require approval before
+implementation. An ordinary implementation request does not imply preauthorization.
 
 ## Select compact context
 
-Resolve the exact installed skill, core, catalog, and analysis release.
-Default to no catalog context: zero entries is valid. When a relevant alternative is
-needed, use only the release-checked `sync-engine-catalog` executable without package
-download:
+Default to no catalog context; zero entries is valid. For relevant alternatives, use only the release-checked `sync-engine-catalog`
+executable without package download:
 
 ```sh
 bunx --no-install sync-engine-catalog list
 bunx --no-install sync-engine-catalog show <entry> --raw
 ```
 
-Add one entry only when a named design uncertainty is not resolved by the brief and
-compact rules; never browse merely to gather examples. The hard maximum is three
-concept designs and one recipe; broader exploration requires an explicit user request.
-Catalog designs are alternatives, never mandatory names or contracts. Never repair,
-alias, or replace a missing catalog executable; release check must fail first.
+Add one entry only for a named design uncertainty unresolved by the brief and compact
+rules; never browse for examples. At most three concept designs and one recipe; more requires explicit user request. Catalog designs are alternatives, never mandatory
+names or contracts. A missing catalog executable must fail release check; never repair,
+alias, or replace it.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
-the output file through the selected harness guide. Do not concatenate prompts with
+the output file through the selected harness guide. Never concatenate prompts with
 Python, heredocs, or shell strings. Put stable role content before dynamic inputs. A
-budget failure lists
-source contributions; select tighter context first and use an explicit `--max-bytes`
-only when the legitimate application material requires it.
+budget failure lists source contributions; tighten context first and set explicit
+`--max-bytes` only for legitimate application material.
 
 ## Design and criticism
 
-Build the designer prompt directly and launch one fresh normal-reasoning designer:
+Build the prompt and launch one fresh normal-reasoning designer:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role designer \
   --input brief=design/brief.md --output <prompt-file>
 ```
 
-Add a selected catalog file only when the rule above requires it. The prompt limits
-designer writes to its listed `design/` paths; `design/brief.md` is read-only. If the
-designer returns at most two material questions, settle them, update the brief, and send
-a small file containing only the answers to the same designer.
+The prompt limits designer writes to its listed `design/` paths; `design/brief.md` is
+read-only. If it returns at most two material questions, settle them, update the brief, and send the
+same designer a small answer-only file.
 
-The designer runs its permitted syntax command and repairs syntax before returning.
-Then independently enumerate draft concept files and rerun the installed design form
-check from the application root:
+The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate
+draft concept files and rerun the installed design form check from application root:
 
 ```sh
 bunx --no-install sync-engine check-design design/concepts/*.md \
   design/compositions/*.md design/types.md
 ```
 
-Return diagnostics to the same designer in one file of at most 4 KiB containing only
-the check output, affected paths, and repair request. Deliver that file directly
-through the harness; do not rebuild or resend the full designer prompt. Form-check
-failure blocks criticism. The coordinator does not repair design Markdown.
+Send the same designer one file of at most 4 KiB containing only check output, affected
+paths, and repair request. Deliver it through the harness; do not rebuild or resend the
+full designer prompt.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Pass
 `types.md` and every concept/composition file as repeated `--input candidate=<path>`
-arguments to `prompt build`; never aggregate candidate files into an intermediate file:
+arguments; never aggregate candidate files into an intermediate file:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role critic \
@@ -155,139 +141,131 @@ bun "<skill-root>/scripts/command.ts" prompt build --role critic \
   --input candidate=design/compositions/<name>.md --output <prompt-file>
 ```
 
-Launch a fresh read-only normal-reasoning critic. Two critic passes are the normal
-automatic budget:
+Launch a fresh read-only normal-reasoning critic. Two passes are the normal automatic
+budget:
 
 1. Critic pass 1 reviews the candidate.
 2. No material findings ends criticism immediately.
-3. Material findings may return once to the designer. The repair file contains the
-   critic bullets verbatim plus only a neutral request to resolve them; the coordinator
-   adds no diagnosis, interpretation, or proposed repair. Rerun syntax after repair,
-   then launch fresh critic pass 2.
+3. Otherwise return once to the designer. The repair file contains critic bullets
+   verbatim and only a neutral resolution request; the coordinator adds no diagnosis,
+   interpretation, or proposed repair. Rerun syntax, then launch fresh critic pass 2.
 
-After pass 2, behavior depends on authorization mode:
+After pass 2, use the authorization mode:
 
 - **Interactive:** show remaining material findings and stop. “Review more thoroughly”
-  authorizes one more designer repair and fresh critic pass; each further pass needs
+  authorizes one more designer repair and fresh critic pass; every later pass requires
   another explicit request.
 - **Preauthorized:** do not ask permission merely because the count reached two.
-  Classify each remaining finding. If it blocks safe coherent implementation or
-  brief-visible success, and a conservative resolution follows from the brief, record
-  the assumption, repair through the same designer, rerun syntax, and launch a fresh
-  critic. Continue only for a named blocker with a concrete repair and only while each
-  pass removes or narrows it. If the same blocker returns unchanged, stop for the user.
-  A finding that does not block safe coherent implementation may remain open: record it
-  in the brief's Open decisions and final handback, then proceed without calling the
-  design clean. Never defer missing authority, non-bypassable authorization, ownership,
-  or behavior required for visible success.
+  Classify every remaining finding. For any finding that blocks safe coherent implementation or
+  brief-visible success and has a conservative resolution from the brief, record the
+  assumption, use the same designer to repair, rerun syntax, and launch a fresh critic.
+  Continue only for a named blocker with a concrete repair while each pass removes or
+  narrows it. If the same blocker returns unchanged, stop for the user. A nonblocking
+  finding may remain: record it in the brief's Open decisions and final handback, then
+  proceed without calling the design clean. Never defer missing authority,
+  non-bypassable authorization, ownership, or behavior required for visible success.
 
-Implementation diagnostics do not create critic passes unless they expose a material
-contract mismatch. In interactive mode, link the brief and design and require explicit
-approval. In preauthorized mode, proceed without an artificial pause once no blocking
-finding remains. Either mode stops when a blocking uncertainty has no safe conservative
-resolution. The coordinator never approves its own design.
+Only a material contract mismatch in implementation diagnostics creates a critic pass.
+In interactive mode, link the brief and design and require explicit approval; in
+preauthorized mode, proceed without an artificial pause once no blocking finding remains. Either mode stops when a
+blocking uncertainty has no safe conservative resolution. The coordinator never
+approves its own design.
 
-After criticism and authorization close, digest every authored Markdown file under
-`design/` and keep the digest in active coordinator context:
+After criticism and authorization close, digest all authored Markdown under `design/`; keep
+the digest in active coordinator context:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" design digest design
 ```
 
-Every concept, application, frontend, and evidence prompt build requires both
-`--design-root design` and `--design-digest <sha256>`. The compiler rejects drift.
-Include the digest in each temporary assignment and verify it before every diagnostic
-follow-up with `follow-up check`. Any design change invalidates the digest, downstream
-prompts, and conclusions: stop downstream work, rerun syntax and fresh criticism as
-applicable, complete authorization, then capture a new digest.
+Every concept, application, frontend, and evidence prompt build requires
+`--design-root design` and `--design-digest <sha256>`; the compiler rejects drift. Put
+the digest in each temporary assignment and verify it before every diagnostic follow-up
+with `follow-up check`. Any design change invalidates the digest, downstream prompts,
+and conclusions: stop downstream work, rerun syntax and fresh criticism as applicable,
+complete authorization, and capture a new digest.
 
 ## Implement in bounded phases
 
-Write each role's paths, commands, and return contract to a small temporary Markdown
-assignment file using filesystem APIs, not shell interpolation. Enumerate exact allowed
-application read and write paths. Never include framework checkout source, installed
+Use filesystem APIs, never shell interpolation, to write each small temporary Markdown
+assignment listing exact allowed application read and write paths, commands,
+and return contract. Never include framework checkout source, installed
 package contents, build output, source maps, or paths reached by following framework
-imports. Supply any needed framework information through selected application examples
-and exact public API references. If those are insufficient, the worker returns a
-context blocker instead of searching internals. Put brief storage guarantees in
-implementation assignments, not concept State.
+imports. Supply framework information only through exact public API references and selected
+application examples: at most one useful implementation example per concept and one
+useful example per mechanism; if insufficient,
+the worker returns a context blocker instead of searching internals. Put brief storage
+guarantees in implementation assignments, not concept State.
 
-The downstream compiler slot contract is:
+Compiler slots are:
 
 - `concept-worker`: required `assignment`, `specifications`; optional `examples`, `reference`;
-- `application-worker`: required `assignment`, `brief`, `design`, `concept-surfaces`,
-  `shared-wiring`; optional `examples`, `reference`;
-- `frontend-worker`: required `assignment`, `brief`, `public-interface`; optional
-  `examples`, `reference`; and
-- `evidence-worker`: required `assignment`, `brief`, `contracts`, `public-interface`;
-  optional `existing-tests`.
+- `application-worker`: required `assignment`, `brief`, approved `design`, completed
+  public `concept-surfaces` rather than internals, existing `shared-wiring`; optional
+  `examples`, `reference`;
+- `frontend-worker`: required `assignment`, `brief`, assembled `public-interface`;
+  optional `examples`, `reference`; and
+- `evidence-worker`: required `assignment`, `brief`, scenario-relevant approved
+  `contracts`, assembled `public-interface`; optional selected relevant `existing-tests`.
 
-Use each name as `--input <slot>=<path>` and repeat a slot for multiple files.
+Use `--input <slot>=<path>`; repeat slots for multiple files.
 
-Start one normal-reasoning concept worker for all approved concepts that fit the 24 KiB
-budget. It owns only assigned concept and focused test paths. Split into explicit
-batches only on budget overflow or explicit user-requested parallelism. Each concept
-remains independent and receives at most one useful implementation example.
+Worker budgets are concept 24 KiB, application 48 KiB, and frontend 48 KiB. Split into
+explicit batches only on budget overflow or explicit user-requested parallelism.
 
-After concept validation passes, start one normal-reasoning application worker. It
-owns assigned compositions, types, registrations, concept set, assembly,
-configuration, host wiring, and generated integration paths. Supply approved design,
-completed concept public surfaces rather than complete internals, existing shared
-wiring, and at most one useful example per mechanism. Its default budget is 48 KiB;
-split only for overflow or explicit parallelism.
+Start one normal-reasoning concept worker for all approved concepts, owning only assigned
+concept and focused test paths. Concepts remain independent.
 
-When the brief requests a frontend, start one frontend worker after application
-validation passes. It owns only assigned frontend paths and implements the requested
-form—browser, command-line, or another shell—strictly as a client of the assembled
-endpoints. Supply the brief, the assembled public interface, and at most one useful
-example per mechanism. For a web application, name the projected HTTP wire and base path
-in the frontend assignment; the frontend owns its `createHttpClient` construction. Also
-pass the packaged HTTP reference `<skill-root>/prompts/inputs/http.md` as a `reference`
-input to the application and frontend workers; do not read it yourself. Its default
-budget is 48 KiB; split only for overflow or explicit parallelism.
+After concept validation passes, start one normal-reasoning application worker owning assigned
+compositions, types, registrations, concept set, assembly, configuration, host wiring,
+and generated integration paths.
 
-Finally start one fresh normal-reasoning evidence worker. Supply the brief,
-scenario-relevant approved contracts, assembled public interface, selected existing
-relevant tests, and focused commands—not the complete application. It may return that
-existing evidence is sufficient. It may edit only assigned scenario/test paths.
+If the brief requests a frontend, after application validation passes start one frontend worker owning
+only assigned frontend paths. It implements the requested browser, command-line, or other
+shell strictly as a client of the assembled endpoints. A web-application assignment
+names the projected HTTP wire and base path; the frontend owns its
+`createHttpClient` construction. Pass packaged HTTP reference
+`<skill-root>/prompts/inputs/http.md` to application and frontend workers as `reference`;
+do not read it yourself.
 
-Return an ordinary implementation defect to the original worker with a file containing
-only the new diagnostic, affected paths, and affected command. Before delivery require:
+Finally start one fresh normal-reasoning evidence worker. Supply focused commands, not
+the complete application. It may report existing evidence sufficient and edit only
+assigned scenario/test paths.
+
+Return an ordinary implementation defect to the original worker, not a replacement, in
+a file containing only the new diagnostic, affected paths, and affected command. Do not
+resend its full prompt. Before delivery require:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" follow-up check <file> \
   --design-root design --design-digest <sha256>
 ```
 
-Do not create a replacement agent or resend its full prompt. Concept workers run only
-assigned concept tests and a necessary focused type check. Application workers run
-focused source-agreement, artifact, integration, and bounded host checks for their
-assigned wiring. Evidence workers run assigned scenarios or tests, not a
+Concept workers run only assigned concept tests and a necessary focused type check;
+application workers run focused source-agreement, artifact, integration, and bounded
+host checks for assigned wiring; evidence workers run assigned scenarios or tests, not a
 production-wide build chain. A mismatch is material when implementation requires a new
 owner, action, refusal, lifecycle, application policy, external type binding,
-cross-concept failure rule, or visible behavior. Return a material mismatch to design;
-never silently change approved Markdown.
+cross-concept failure rule, or visible behavior. Return it to design; never silently
+change approved Markdown.
 
 ## Validate once and stop
 
-After evidence completes, the coordinator runs the complete application-owned
-source-agreement, artifact, typecheck, check, test, build, generation, scenario, and
-bounded host chain.
-Run that complete acceptance chain once; never hand-edit generated output. If a final
-command fails, return its focused diagnostic to the original worker, rerun the affected
-focused command, then rerun every final check invalidated by the changed paths regardless
-of its position in the chain. Do not repeat unaffected final commands.
+After evidence, the coordinator runs the complete application-owned source-agreement,
+artifact, typecheck, check, test, build, generation, scenario, and bounded host chain
+once; never hand-edit generated output. On final-command failure, return its focused
+diagnostic to the original worker, rerun the affected focused command, then every final
+check invalidated by the changed paths regardless of chain position. Do not repeat
+unaffected final commands.
 
-Inspect complete status and relevant diffs, including untracked files. Verify that the
-brief and approved design were not silently changed and that all returned changes stay
-inside assigned boundaries.
+Inspect complete status and relevant diffs, including untracked files; verify the brief
+and approved design unchanged and returned changes inside assigned boundaries.
 
-A failing required command, missing objective evidence, or material design mismatch
-blocks handback. Once required checks pass, hand back immediately. Formatting, naming
-polish, unchanged explanation, and informational checker advisories are recorded but
-do not open another repair or criticism cycle.
+Required-command failure, missing objective evidence, or material design mismatch blocks
+handback. Once required checks pass, hand back immediately. Record formatting, naming
+polish, unchanged explanation, and informational checker advisories; do not reopen repair
+or criticism.
 
-The handback lists changed implementation areas, exact validation commands and
-outcomes, known limits or remaining material uncertainty, and one request to accept,
-revise, or ask for evidence. Do not dump routine transcripts. Acceptance closes the
-conversation.
+The handback lists changed implementation areas, exact validation commands and outcomes,
+known limits or remaining material uncertainty, and one request to accept, revise, or ask
+for evidence. Omit routine transcripts. Acceptance closes conversation.

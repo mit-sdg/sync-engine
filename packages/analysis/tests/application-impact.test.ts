@@ -447,7 +447,12 @@ Touching a note updates the feed.[touch]
           definition: "SharedNotes",
           source: "concept-1",
           specification,
-          instances: concepts.map(({ name }) => ({ name, bindings: [] })),
+          ownedTypes: [],
+          instances: concepts.map(({ name }) => ({
+            name,
+            declaration: { source: "document-1", line: 3, column: 1 },
+            bindings: [],
+          })),
         },
       ],
       computations: [],
@@ -899,14 +904,21 @@ describe("application impact analysis", () => {
       }),
     );
     for (const concept of ["PrimaryNotes", "ArchiveNotes"]) {
-      expect(
-        sourceIndex.entries.find(({ ref }) => ref.kind === "concept" && ref.concept === concept)
-          ?.sources,
-      ).toContainEqual(
+      const conceptSources = sourceIndex.entries.find(
+        ({ ref }) => ref.kind === "concept" && ref.concept === concept,
+      )?.sources;
+      expect(conceptSources).toContainEqual(
         expect.objectContaining({
           role: "specification",
           resolution: "manifest-provenance",
           range: expect.objectContaining({ path: "design/SharedNotes.md" }),
+        }),
+      );
+      expect(conceptSources).toContainEqual(
+        expect.objectContaining({
+          role: "design-coverage",
+          resolution: "manifest-provenance",
+          range: expect.objectContaining({ path: "design/forum.md" }),
         }),
       );
     }
@@ -1038,6 +1050,11 @@ describe("application impact analysis", () => {
     const malformed = fixture();
     malformed.digest = "stale";
     expect(() => indexApplication(malformed)).toThrow(/canonical digest/);
+
+    const forgedOwnedTypes = authoredFixture().manifest;
+    forgedOwnedTypes.design.concepts[0]!.ownedTypes = ["Invented"];
+    redigest(forgedOwnedTypes);
+    expect(() => indexApplication(forgedOwnedTypes)).toThrow(/ownedTypes.*independently derived/);
 
     const firstManifest = fixture();
     const firstIndex = indexApplication(firstManifest);

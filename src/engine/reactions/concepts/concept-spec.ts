@@ -225,15 +225,22 @@ function proseOf(section: DocumentSection): string {
   return text;
 }
 
-function normalizedFenceBody(lines: readonly SourceLine[]): string {
+function normalizedFenceBody(
+  lines: readonly SourceLine[],
+  fallback: SpecLocation,
+): { body: string; location: SpecLocation } {
   let start = 0;
   let end = lines.length;
   while (start < end && lines[start].text === "") start += 1;
   while (end > start && lines[end - 1].text === "") end -= 1;
-  return lines
-    .slice(start, end)
-    .map(({ text }) => text)
-    .join("\n");
+  const retained = lines.slice(start, end);
+  return {
+    body: retained.map(({ text }) => text).join("\n"),
+    location:
+      retained[0] === undefined
+        ? { line: fallback.line + 1, column: fallback.column }
+        : at(retained[0], fallback.column),
+  };
 }
 
 function fencedSection(
@@ -597,6 +604,7 @@ export function parseSpec(markdown: string): ConceptSpec {
   const stateFence = fencedSection(state, "state", true);
   const actionFence = fencedSection(actions, "actions");
   const queryFence = fencedSection(queries, "queries");
+  const stateBody = normalizedFenceBody(stateFence.contents, stateFence.location);
   const parsedActions = parseEach(actionFence.contents, parseAction, "action");
   if (parsedActions.length === 0)
     fail("the Actions fence must declare at least one action", {
@@ -611,9 +619,9 @@ export function parseSpec(markdown: string): ConceptSpec {
     principle: proseOf(principle),
     externalTypes: externalTypesOf(typesFence.contents),
     state: {
-      body: normalizedFenceBody(stateFence.contents),
+      body: stateBody.body,
       prose: stateFence.prose,
-      location: stateFence.location,
+      location: stateBody.location,
     },
     actions: parsedActions,
     queries: parseEach(queryFence.contents, parseQuery, "query"),

@@ -2,30 +2,27 @@
 
 ```text
 schema := (setDecl | subsetDecl)*
-setDecl := [a|an] (element|set|seq) [of] Type [with field+]
-subsetDecl := [a|an] Subtype (element|set) [of] (Type|Subtype) [with field+]
+setDecl := (a|an) (element|set|seq) [of] Type [with field+]
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype) [with field+]
 field := [a|an] [optional] [name] (scalar|collection)
 scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
 collection := (set|seq) [of] scalar
 primitive := Number | String | Flag | Date | DateTime
 ```
 
-One declaration per line; indent fields. Types/subtypes/parameters start uppercase,
-fields lowercase, enum values all-uppercase. Identifiers start with a letter then use
-letters/digits/`_`. Consistent singular/plural type names are equivalent.
+Use one declaration per line and indent fields. Types start uppercase, fields lowercase,
+enums uppercase; identifiers use letters/digits/`_`. Declaration and subset spellings
+are exact. A collection spelling is related to a singular/plural spelling only when the
+second exact name also appears in a State field type or action/query signature in this
+specification. `element` names remain exact. The parser never invents an owned name.
+It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
+remain opaque prose.
 
-A field name may be omitted only for an object/parameter scalar or collection; infer
-lowercase singular/plural from its type. Names are unique through an acyclic subset
-hierarchy. Collections are never `optional` (empty means absent). No nested collections
-or unions.
-
-Sets introduce identities—never add ID fields. Subsets classify existing parent members,
-may overlap, and add relations. `element` has exactly one member. Scalar, optional, set,
-and seq mean one, zero-or-one, zero-or-more, and ordered zero-or-more. Declaration
-direction implies no storage, navigation, or ownership of referenced identities.
-Standalone invariant sentences such as
-`at most one Membership has each gathering and member pair` may follow the
-declarations inside the fence.
+Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
+means absent). No nested collections or unions. Sets introduce identities—never add ID
+fields. Subsets classify existing parent members, may overlap, and add relations;
+`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
+invariant, not a proved behavior.
 
 ```state
 a set of Items with
