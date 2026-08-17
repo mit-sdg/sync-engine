@@ -1,6 +1,6 @@
 # @mit-sdg/sync-engine-http
 
-`@mit-sdg/sync-engine-http` exposes an assembled application over POST/JSON
+`@mit-sdg/sync-engine-http` exposes an assembled system over POST/JSON
 through a Fetch handler, typed client, and generated wire projection. The host
 opens and owns the listener. HTTP policy adds cookies, request-origin protection,
 a route prefix, body limits, or public error mappings; browser policy adds CORS.
@@ -18,12 +18,13 @@ bun add --exact @mit-sdg/sync-engine@1.0.0-beta.11 @mit-sdg/sync-engine-http@1.0
 The current beta is ESM-only and supports Node.js 24 (`>=24 <25`). The package
 has no root export and no supported deep imports.
 
-| Public subpath                      | Purpose                                      |
-| ----------------------------------- | -------------------------------------------- |
-| `@mit-sdg/sync-engine-http/policy`  | Immutable deployment policy and policy types |
-| `@mit-sdg/sync-engine-http/handler` | Fetch handler and handler options            |
-| `@mit-sdg/sync-engine-http/client`  | Typed Fetch client and lower-level transport |
-| `@mit-sdg/sync-engine-http/tooling` | Generated HTTP wire projection               |
+| Public subpath                          | Purpose                                      |
+| --------------------------------------- | -------------------------------------------- |
+| `@mit-sdg/sync-engine-http/realization` | POST/JSON Fetch realization                  |
+| `@mit-sdg/sync-engine-http/policy`      | Immutable deployment policy and policy types |
+| `@mit-sdg/sync-engine-http/handler`     | Fetch handler and handler options            |
+| `@mit-sdg/sync-engine-http/client`      | Typed Fetch client and lower-level transport |
+| `@mit-sdg/sync-engine-http/tooling`     | Generated HTTP wire projection               |
 
 ## Tier 0: plain POST/JSON
 

@@ -1,5 +1,17 @@
 # Public API
 
+## `@mit-sdg/sync-engine-http/realization`
+
+<!-- register:http-realization:start -->
+
+`FetchClaim`, `FetchRealization`, `defineFetchRealization`, `isFetchRealization`, `realize`
+
+<!-- register:http-realization:end -->
+
+`realize({ system, interface })` returns a checked POST/JSON Fetch realization
+for the selected endpoint declarations. `defineFetchRealization(...)` is the
+first-party floor constructor used by other Fetch realization packages.
+
 `@mit-sdg/sync-engine-http` has no root export or supported deep imports. The
 registers below are exact; generated declarations define complete structural
 types.
@@ -7,12 +19,13 @@ types.
 Install the HTTP companion and core at the same exact beta version. The HTTP
 package is ESM-only and supports Node.js 24 (`>=24 <25`).
 
-| Package path                                    | Role                                  |
-| ----------------------------------------------- | ------------------------------------- |
-| [`@mit-sdg/sync-engine-http/policy`](#policy)   | Validated immutable deployment policy |
-| [`@mit-sdg/sync-engine-http/handler`](#handler) | Fetch handler                         |
-| [`@mit-sdg/sync-engine-http/client`](#client)   | Fetch transport and typed client      |
-| [`@mit-sdg/sync-engine-http/tooling`](#tooling) | Generated HTTP wire projection        |
+| Package path                                                                   | Role                                  |
+| ------------------------------------------------------------------------------ | ------------------------------------- |
+| [`@mit-sdg/sync-engine-http/realization`](#mit-sdgsync-engine-httprealization) | POST/JSON realization                 |
+| [`@mit-sdg/sync-engine-http/policy`](#policy)                                  | Validated immutable deployment policy |
+| [`@mit-sdg/sync-engine-http/handler`](#handler)                                | Fetch handler                         |
+| [`@mit-sdg/sync-engine-http/client`](#client)                                  | Fetch transport and typed client      |
+| [`@mit-sdg/sync-engine-http/tooling`](#tooling)                                | Generated HTTP wire projection        |
 
 Policy supplies public and browser origins, public error mappings, and cookie
 bindings. The package derives CORS, request-origin checks, cookie attributes,

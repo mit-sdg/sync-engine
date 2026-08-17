@@ -93,6 +93,14 @@ import type { EndpointDeclaration } from "./endpoint-portability.ts";
 import { assertApplicationLocality } from "./locality-validation.ts";
 import { validateConceptImplementation } from "./concept-set.ts";
 import { implementationFloorOf } from "./implementation-registry.ts";
+import { walkValueTree } from "@engine/reads/value-tree";
+import {
+  installInterfaceDeclarationIdentity,
+  isInterfaceDefinition,
+  type AssembledInterfaces,
+  type AssembledInterfaceDefinition,
+  type AssembledInterfaceDeclaration,
+} from "../protocol/interface-definition.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -224,6 +232,8 @@ export interface AssembleBaseOptions<
    * declarations are boundary-specialized reactions.
    */
   composition: Record<string, unknown>;
+  /** Flat canonical declaration exports and named participant interfaces. */
+  interfaces?: Record<string, unknown>;
   /** Interpreter diagnostics; defaults to `Logging.OFF`. */
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
@@ -280,6 +290,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   authoredDeclarations: readonly AuthoredDeclarationIdentity[];
   /** Every authored endpoint declaration, independent of lowering. */
   endpoints: readonly EndpointDeclaration[];
+  /** Process-local canonical interface declarations and named selections. */
+  interfaces: AssembledInterfaces;
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
@@ -524,6 +536,55 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const formers: Array<readonly [FormerRef, AuthoredDeclarationIdentity]> = [];
   const activeContainerPaths = new WeakMap<object, string>();
   const shownContainerPath = (path: string): string => (path === "" ? "<composition>" : path);
+  const interfaceDeclarations: Record<string, AssembledInterfaceDeclaration> = {};
+  const interfaceDefinitions: Array<{
+    identity: string;
+    definition: AssembledInterfaceDefinition["definition"];
+  }> = [];
+  const canonicalInterfaceName = new WeakMap<object, string>();
+  const endpointDependencies = new Map<string, Set<string>>();
+
+  for (const [identity, value] of Object.entries(options.interfaces ?? {})) {
+    if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+      throw new TypeError(
+        `assemble: interface export ${JSON.stringify(identity)} must be a declaration or named interface.`,
+      );
+    }
+    const object = value as object;
+    const previous = canonicalInterfaceName.get(object);
+    if (previous !== undefined) {
+      throw new Error(
+        `assemble: the same interface value is exported as both ${JSON.stringify(previous)} and ${JSON.stringify(identity)}; one value has one canonical identity.`,
+      );
+    }
+    canonicalInterfaceName.set(object, identity);
+    if (isInterfaceDefinition(value)) {
+      interfaceDefinitions.push({ identity, definition: value });
+      continue;
+    }
+    installInterfaceDeclarationIdentity(value, identity);
+    setOwn(interfaceDeclarations, identity, {
+      identity,
+      value,
+      kind: isEndpointDef(value) ? "endpoint" : "declaration",
+    });
+  }
+
+  for (const { identity, definition } of interfaceDefinitions) {
+    for (const [member, value] of Object.entries(definition.members)) {
+      const canonical = interfaceDeclarations[member];
+      if (canonical === undefined || canonical.value !== value) {
+        const exported = canonicalInterfaceName.get(value);
+        const detail =
+          exported === undefined
+            ? "is not a canonical top-level interface export"
+            : `is canonically exported as ${JSON.stringify(exported)}`;
+        throw new Error(
+          `assemble: interface ${JSON.stringify(identity)} member ${JSON.stringify(member)} ${detail}.`,
+        );
+      }
+    }
+  }
 
   const visit = (value: unknown, name: string): void => {
     if (isReaction(value)) {
@@ -539,6 +600,20 @@ export function assemble<T extends Record<string, ConceptClass>>(
       const declared = value.reaction($vars);
       const declarations = declarationsOf(declared);
       declarations.forEach((entry) => pinToPath(entry, value.path));
+      const dependencies = new Set<string>();
+      walkValueTree(declared, (node) => {
+        if (typeof node !== "object" || node === null) return;
+        const candidate = node as { format?: unknown; identity?: unknown };
+        if (candidate.format === "sync-engine.renderer" && typeof candidate.identity === "string") {
+          if (interfaceDeclarations[candidate.identity] === undefined) {
+            throw new Error(
+              `assemble: endpoint ${JSON.stringify(name)} reaches renderer ${JSON.stringify(candidate.identity)} outside the complete interface exports.`,
+            );
+          }
+          dependencies.add(candidate.identity);
+        }
+      });
+      endpointDependencies.set(name, dependencies);
       const reactionNames = declarations.map((_, index) =>
         index === 0 ? name : `${name}:${index + 1}`,
       );
@@ -600,6 +675,9 @@ export function assemble<T extends Record<string, ConceptClass>>(
     // material by the tag's contract: only tagged values register.
   };
   visit(options.composition, "");
+  for (const declaration of Object.values(interfaceDeclarations)) {
+    if (declaration.kind === "endpoint") visit(declaration.value, declaration.identity);
+  }
 
   // Name order, deliberately: registration order carries no meaning.
   const ordered: Record<string, Reaction> = {};
@@ -673,6 +751,29 @@ export function assemble<T extends Record<string, ConceptClass>>(
     ),
   };
 
+  const assembledInterfaces: AssembledInterfaces = Object.freeze({
+    declarations: Object.freeze({ ...interfaceDeclarations }),
+    definitions: Object.freeze(
+      interfaceDefinitions.map(({ identity, definition }) =>
+        Object.freeze({
+          identity,
+          definition,
+          members: Object.freeze(Object.keys(definition.members).sort(ordinal)),
+          dependencies: Object.freeze(
+            Object.fromEntries(
+              Object.keys(definition.members)
+                .sort(ordinal)
+                .map((member) => [
+                  member,
+                  Object.freeze([...(endpointDependencies.get(member) ?? [])].sort(ordinal)),
+                ]),
+            ),
+          ),
+        }),
+      ),
+    ),
+  });
+
   return {
     engine,
     invoker,
@@ -690,6 +791,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
       ordinal(`${left.identity}\0${left.kind}`, `${right.identity}\0${right.kind}`),
     ),
     endpoints,
+    interfaces: assembledInterfaces,
     form: (fused) => engine.form(fused),
   };
 }

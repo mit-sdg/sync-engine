@@ -4,6 +4,13 @@ import ts from "typescript";
 import { describe, expect, test } from "vite-plus/test";
 
 const register = {
+  realization: [
+    "FetchClaim",
+    "FetchRealization",
+    "defineFetchRealization",
+    "isFetchRealization",
+    "realize",
+  ],
   policy: [
     "HttpBrowserPolicy",
     "HttpCookieBinding",
@@ -52,13 +59,17 @@ describe("HTTP package public API", () => {
     };
     expect(Object.keys(manifest.exports).sort()).toEqual(
       Object.keys(register)
-        .map((subpath) => `./${subpath}`)
+        .map((key) => `./${key}`)
         .sort(),
     );
 
     const reference = readFileSync(resolve(packageRoot, "public-surface.md"), "utf8");
     for (const subpath of Object.keys(register) as Array<keyof typeof register>) {
-      const sourceText = readFileSync(resolve(packageRoot, "src", subpath, "index.ts"), "utf8");
+      const sourceDirectory = subpath;
+      const sourceText = readFileSync(
+        resolve(packageRoot, "src", sourceDirectory, "index.ts"),
+        "utf8",
+      );
       const source = ts.createSourceFile("index.ts", sourceText, ts.ScriptTarget.Latest, true);
       expect(source.statements.every(ts.isExportDeclaration), `${subpath} exports only`).toBe(true);
       const actual = source.statements.flatMap((statement) =>
@@ -71,9 +82,8 @@ describe("HTTP package public API", () => {
       expect(actual.sort(), subpath).toEqual([...register[subpath]].sort());
 
       const block = referenceBlock(subpath);
-      expect(reference, `${subpath} full package path`).toContain(
-        `@mit-sdg/sync-engine-http/${subpath}`,
-      );
+      const packagePath = `@mit-sdg/sync-engine-http/${subpath}`;
+      expect(reference, `${subpath} full package path`).toContain(packagePath);
       expect(reference, `${subpath} reference unit`).toContain(block);
       expect(reference.indexOf(block), `${subpath} reference unit is unique`).toBe(
         reference.lastIndexOf(block),

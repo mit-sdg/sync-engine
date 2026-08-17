@@ -6,10 +6,12 @@
     "noEmit": false,
     "outDir": "dist",
     "paths": {
-      "@mit-sdg/sync-engine/*": ["../../dist/*/index.d.ts"]
+      "@mit-sdg/sync-engine/*": ["../../dist/*/index.d.ts"],
+      "@mit-sdg/sync-engine-http/realization": ["../http/dist/realization/index.d.ts"]
     },
     "rewriteRelativeImportExtensions": true,
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["bun"]
   },
   "include": ["src"],
   "exclude": ["tests"]

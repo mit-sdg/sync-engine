@@ -25,6 +25,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./realization": {
+      "types": "./dist/realization/index.d.ts",
+      "import": "./dist/realization/index.js"
+    },
     "./policy": {
       "types": "./dist/policy/index.d.ts",
       "import": "./dist/policy/index.js"

@@ -7,3 +7,4 @@ export { faulted } from "@engine/reactions/authoring/channels";
 export { custom } from "@engine/reads/where-ops";
 export { Refuse } from "@engine/reactions/concepts/refuse";
 export type { EngineObserver, LogEvent } from "@engine/reactions/runtime/logging";
+export { interfaceDeclaration } from "@engine/boundary/protocol/interface-definition";

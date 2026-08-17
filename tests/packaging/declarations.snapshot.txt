@@ -10,6 +10,7 @@ export { faulted } from "../engine/reactions/authoring/channels.ts";
 export { custom } from "../engine/reads/where-ops.ts";
 export { Refuse } from "../engine/reactions/concepts/refuse.ts";
 export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/logging.ts";
+export { interfaceDeclaration } from "../engine/boundary/protocol/interface-definition.ts";
 
 === dist/assembly/index.d.ts ===
 /** Install an application concept set and composition into one coherent running system. */
@@ -29,6 +30,10 @@ export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogSink, ReactionF
 /** Declare the public requests a composition can receive and answer. */
 export { endpoint, receive, respond } from "../engine/boundary/assembly/assemble.ts";
 export type { EndpointDef, EndpointOptions } from "../engine/boundary/assembly/assemble.ts";
+export { defineInterface } from "../engine/boundary/protocol/interface-definition.ts";
+export type { InterfaceDefinition } from "../engine/boundary/protocol/interface-definition.ts";
+export { bindInterface } from "../engine/boundary/gateway/interface-binding.ts";
+export type { InterfaceBinding } from "../engine/boundary/gateway/interface-binding.ts";
 export type { InputContractDecl } from "../engine/boundary/protocol/endpoints.ts";
 export type { EndpointValidator, EndpointValidators, ValidationResult, } from "../engine/boundary/protocol/validation.ts";
 export { FrameworkErrorCode } from "../engine/boundary/protocol/types.ts";
@@ -143,6 +148,7 @@ import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import type { EndpointDeclaration } from "./endpoint-portability.ts";
+import { type AssembledInterfaces } from "../protocol/interface-definition.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
@@ -195,6 +201,8 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
      * declarations are boundary-specialized reactions.
      */
     composition: Record<string, unknown>;
+    /** Flat canonical declaration exports and named participant interfaces. */
+    interfaces?: Record<string, unknown>;
     /** Interpreter diagnostics; defaults to `Logging.OFF`. */
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
@@ -242,6 +250,8 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     authoredDeclarations: readonly AuthoredDeclarationIdentity[];
     /** Every authored endpoint declaration, independent of lowering. */
     endpoints: readonly EndpointDeclaration[];
+    /** Process-local canonical interface declarations and named selections. */
+    interfaces: AssembledInterfaces;
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
@@ -551,6 +561,23 @@ export interface Gateway<C extends ContractShape> extends Invoker<C> {
 /** Decorate an application invoker with transport-neutral gateway policy and lifecycle. */
 export declare function createGateway<C extends ContractShape = ContractShape>(options: GatewayOptions): Gateway<C>;
 
+=== dist/engine/boundary/gateway/interface-binding.d.ts ===
+import type { Assembly } from "../assembly/assembly-facade.ts";
+import type { AssembledInterfaceDeclaration, InterfaceDefinition } from "../protocol/interface-definition.ts";
+type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
+export interface InterfaceBinding {
+    readonly identity: string;
+    readonly members: readonly AssembledInterfaceDeclaration[];
+    readonly dependencies: Readonly<Record<string, readonly AssembledInterfaceDeclaration[]>>;
+    readonly declarations: Readonly<Record<string, AssembledInterfaceDeclaration>>;
+}
+/** Bind one named interface to the assembly that canonically admitted it. */
+export declare function bindInterface(options: {
+    system: AnyAssembly;
+    interface: InterfaceDefinition;
+}): InterfaceBinding;
+export {};
+
 === dist/engine/boundary/gateway/transport-binding.d.ts ===
 import type { Assembly } from "../assembly/assembly-facade.ts";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
@@ -797,6 +824,34 @@ export declare function rememberApplicationInvoker(invoker: object, identity: ob
 export declare function applicationBehindInvoker(invoker: object): RegisteredApplication | undefined;
 export declare function rememberGatewayApplication(gateway: object, application: RegisteredApplication): void;
 export declare function applicationBehindGateway(gateway: object): object | undefined;
+export {};
+
+=== dist/engine/boundary/protocol/interface-definition.d.ts ===
+type DeclarationValue = object | ((...args: never[]) => unknown);
+export interface InterfaceDefinition<Members extends Readonly<Record<string, DeclarationValue>> = Readonly<Record<string, DeclarationValue>>> {
+    readonly members: Members;
+}
+/** Select the canonically exported declarations one participant may use. */
+export declare function defineInterface<Members extends Readonly<Record<string, DeclarationValue>>>(members: Members): InterfaceDefinition<Members>;
+export declare function isInterfaceDefinition(value: unknown): value is InterfaceDefinition;
+/** First-party declaration floors use this hook; application authors use their declaration helper. */
+export declare function interfaceDeclaration<T extends DeclarationValue>(value: T, installIdentity: (identity: string) => void): T;
+export declare function installInterfaceDeclarationIdentity(value: DeclarationValue, identity: string): void;
+export interface AssembledInterfaceDeclaration {
+    readonly identity: string;
+    readonly value: DeclarationValue;
+    readonly kind: "endpoint" | "declaration";
+}
+export interface AssembledInterfaceDefinition {
+    readonly identity: string;
+    readonly definition: InterfaceDefinition;
+    readonly members: readonly string[];
+    readonly dependencies: Readonly<Record<string, readonly string[]>>;
+}
+export interface AssembledInterfaces {
+    readonly declarations: Readonly<Record<string, AssembledInterfaceDeclaration>>;
+    readonly definitions: readonly AssembledInterfaceDefinition[];
+}
 export {};
 
 === dist/engine/boundary/protocol/route-path.d.ts ===

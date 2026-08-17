@@ -1,6 +1,10 @@
 /** Declare the public requests a composition can receive and answer. */
 export { endpoint, receive, respond } from "@engine/boundary/assembly/assemble";
 export type { EndpointDef, EndpointOptions } from "@engine/boundary/assembly/assemble";
+export { defineInterface } from "@engine/boundary/protocol/interface-definition";
+export type { InterfaceDefinition } from "@engine/boundary/protocol/interface-definition";
+export { bindInterface } from "@engine/boundary/gateway/interface-binding";
+export type { InterfaceBinding } from "@engine/boundary/gateway/interface-binding";
 export type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 export type {
   EndpointValidator,

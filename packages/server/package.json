@@ -1,0 +1,29 @@
+{
+  "name": "@mit-sdg/sync-engine-server",
+  "version": "1.0.0-beta.11",
+  "private": true,
+  "description": "Serving host for Fetch realizations of @mit-sdg/sync-engine",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "files": [
+    "README.md",
+    "public-surface.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": true,
+  "exports": {
+    "./serve": {
+      "types": "./dist/serve/index.d.ts",
+      "import": "./dist/serve/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.11",
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.11"
+  },
+  "engines": {
+    "bun": ">=1.3.14 <1.4",
+    "node": ">=24 <25"
+  }
+}

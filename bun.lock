@@ -55,12 +55,29 @@
         "@mit-sdg/sync-engine": "1.0.0-beta.11",
       },
     },
+    "packages/server": {
+      "name": "@mit-sdg/sync-engine-server",
+      "version": "1.0.0-beta.11",
+      "peerDependencies": {
+        "@mit-sdg/sync-engine": "1.0.0-beta.11",
+        "@mit-sdg/sync-engine-http": "1.0.0-beta.11",
+      },
+    },
     "packages/skill": {
       "name": "@mit-sdg/sync-engine-skill",
       "version": "1.0.0-beta.11",
       "dependencies": {
         "@mit-sdg/sync-engine-analysis": "1.0.0-beta.11",
         "@mit-sdg/sync-engine-catalog": "1.0.0-beta.11",
+      },
+    },
+    "packages/web": {
+      "name": "@mit-sdg/sync-engine-web",
+      "version": "1.0.0-beta.11",
+      "peerDependencies": {
+        "@mit-sdg/sync-engine": "1.0.0-beta.11",
+        "@mit-sdg/sync-engine-http": "1.0.0-beta.11",
+        "@mit-sdg/sync-engine-rendering": "1.0.0-beta.11",
       },
     },
   },
@@ -133,7 +150,11 @@
 
     "@mit-sdg/sync-engine-rendering": ["@mit-sdg/sync-engine-rendering@workspace:packages/rendering"],
 
+    "@mit-sdg/sync-engine-server": ["@mit-sdg/sync-engine-server@workspace:packages/server"],
+
     "@mit-sdg/sync-engine-skill": ["@mit-sdg/sync-engine-skill@workspace:packages/skill"],
+
+    "@mit-sdg/sync-engine-web": ["@mit-sdg/sync-engine-web@workspace:packages/web"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@0.2.12", "", { "dependencies": { "@emnapi/core": "^1.4.3", "@emnapi/runtime": "^1.4.3", "@tybys/wasm-util": "^0.10.0" } }, "sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ=="],
 
@@ -641,7 +662,13 @@
 
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
+    "@mit-sdg/sync-engine-http/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
+
     "@mit-sdg/sync-engine-rendering/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
+
+    "@mit-sdg/sync-engine-server/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
+
+    "@mit-sdg/sync-engine-web/@mit-sdg/sync-engine": ["@mit-sdg/sync-engine@root:", {}],
 
     "rolldown/@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 

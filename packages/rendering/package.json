@@ -19,6 +19,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./compiled": {
+      "types": "./dist/compiled/index.d.ts",
+      "import": "./dist/compiled/index.js"
+    },
     "./language": {
       "types": "./dist/language/index.d.ts",
       "import": "./dist/language/index.js"

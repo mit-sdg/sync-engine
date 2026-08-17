@@ -215,6 +215,34 @@ export interface HttpPolicy extends HttpPolicyInit {
 }
 export {};
 
+=== packages/http/dist/realization/index.d.ts ===
+export { defineFetchRealization, isFetchRealization, realize } from "./realization.ts";
+export type { FetchClaim, FetchRealization } from "./realization.ts";
+
+=== packages/http/dist/realization/realization.d.ts ===
+import { type InterfaceDefinition } from "@mit-sdg/sync-engine/boundary";
+import type { Assembly } from "@mit-sdg/sync-engine/assembly";
+type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
+export interface FetchClaim {
+    readonly method: string;
+    readonly path: string;
+    readonly declarations: readonly string[];
+}
+export interface FetchRealization {
+    readonly interface: string;
+    readonly claims: readonly FetchClaim[];
+    fetch(request: Request): Promise<Response>;
+}
+export declare function isFetchRealization(value: unknown): value is FetchRealization;
+/** First-party realization floors use this constructor for checked Fetch values. */
+export declare function defineFetchRealization(value: FetchRealization): FetchRealization;
+/** Realize the selected interface as ordinary POST/JSON Fetch claims. */
+export declare function realize(options: {
+    system: AnyAssembly;
+    interface: InterfaceDefinition;
+}): FetchRealization;
+export {};
+
 === packages/http/dist/stream.d.ts ===
 export type CappedTextRead = {
     ok: true;

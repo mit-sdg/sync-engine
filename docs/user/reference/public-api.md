@@ -273,9 +273,27 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `InputContractDecl`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `createGateway`, `endpoint`, `receive`, `respond`, `serializeJsonValue`
+`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `InputContractDecl`, `InterfaceBinding`, `InterfaceDefinition`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `bindInterface`, `createGateway`, `defineInterface`, `endpoint`, `receive`, `respond`, `serializeJsonValue`
 
 <!-- register:boundary:end -->
+
+### Interfaces
+
+| API               | Compact signature                               |
+| ----------------- | ----------------------------------------------- |
+| `defineInterface` | `defineInterface({ ExportedDeclaration, ... })` |
+| `bindInterface`   | `bindInterface({ system, interface })`          |
+
+`defineInterface` selects canonically exported declarations for one participant
+without renaming them. Its member keys must therefore match the declarations'
+top-level names in the system's flat `interfaces` namespace. The same declaration
+may participate in more than one interface.
+
+`bindInterface` resolves that selection against the system that admitted it. The
+resulting `InterfaceBinding` includes the selected declarations and any
+declarations on which they depend, allowing a realization to inspect exactly the
+interface it is realizing. A definition from another system is refused rather
+than silently rebound.
 
 ### Endpoints
 
@@ -678,7 +696,7 @@ defines derivation guarantees.
 
 <!-- register:advanced:start -->
 
-`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `VocabularyAssemblyOptions`, `createEngine`, `custom`, `faulted`, `vocabulary`
+`Engine`, `EngineObserver`, `EngineOptions`, `LogEvent`, `Refuse`, `VocabularyAssemblyOptions`, `createEngine`, `custom`, `faulted`, `interfaceDeclaration`, `vocabulary`
 
 <!-- register:advanced:end -->
 
@@ -692,6 +710,7 @@ It follows the same beta compatibility policy as other public subpaths.
 | `VocabularyAssemblyOptions` | Direct-vocabulary option type accepted by `assemble` |
 | `custom`                    | `custom(fn, inputs, outputs)`                        |
 | `faulted`                   | `faulted(pattern, { by?, except?, exceptBy? }?)`     |
+| `interfaceDeclaration`      | First-party hook for canonical declaration identity  |
 
 `vocabulary` is the low-level declaration API for callers that deliberately do
 not use registered specifications or implementation floors. Concept entries are
@@ -705,6 +724,10 @@ vocabulary can still be passed to `assemble` through the advanced
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`
 becomes the refusal's `error` field and takes precedence over an `error` field in
 its optional data.
+`interfaceDeclaration` is the floor-level hook used by declaration packages such
+as rendering. It lets assembly install the declaration's canonical exported
+identity; application authors use the declaration package's ordinary helper
+instead.
 `EngineOptions` accepts `retention` and `logSink`; the default retention policy
 is `"keepAll"`. The engine still owns its internal occurrence index. The optional
 sink receives a synchronous audit copy and must return `undefined` from each
