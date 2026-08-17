@@ -117,8 +117,8 @@ form("register").addEventListener("submit", (event) => {
     if ("error" in result) show(`Could not register: ${result.error}`, true);
     else {
       form("register").reset();
-      show(`Account created. Signed in as ${result.username}.`);
-      signedIn(result.username);
+      show(`Account created. Signed in as ${result.account}.`);
+      signedIn(result.account);
     }
   })();
 });
@@ -133,8 +133,8 @@ form("sign-in").addEventListener("submit", (event) => {
     });
     if ("error" in result) show(`Could not sign in: ${result.error}`, true);
     else {
-      show(`Signed in as ${result.username}.`);
-      signedIn(result.username);
+      show(`Signed in as ${result.account}.`);
+      signedIn(result.account);
     }
   })();
 });

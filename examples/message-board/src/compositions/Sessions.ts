@@ -2,8 +2,9 @@
  * Accounts and browser sessions: registering, signing in and out, and resolving
  * the current user.
  *
- * Authenticating proves a username. Sessioning holds an opaque session for an
- * external subject. Neither names the other; the adaptation lives here.
+ * Authenticating proves an account reference represented by its username.
+ * Sessioning holds an opaque session for an external subject. Neither names the
+ * other; the adaptation lives here.
  */
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 
@@ -20,11 +21,11 @@ const { Authenticating, Sessioning } = concepts;
 
 const Register = endpoint(
   "/auth/register",
-  ({ username, password, session, expiresAt }) =>
+  ({ username, password, account, session, expiresAt }) =>
     receive({ username, password })
-      .then(Authenticating.register({ username, password }).responds({ username }))
-      .then(Sessioning.start({ subject: username }).responds({ session, expiresAt }))
-      .then(respond({ username, session, expiresAt })),
+      .then(Authenticating.register({ username, password }).responds({ account }))
+      .then(Sessioning.start({ subject: account }).responds({ session, expiresAt }))
+      .then(respond({ account, session, expiresAt })),
   {
     input: { required: ["username", "password"] },
     validators: { input: credentialsInput, output: issuedSessionOutput },
@@ -33,11 +34,11 @@ const Register = endpoint(
 
 const SignIn = endpoint(
   "/auth/sign-in",
-  ({ username, password, session, expiresAt }) =>
+  ({ username, password, account, session, expiresAt }) =>
     receive({ username, password })
-      .then(Authenticating.authenticate({ username, password }).responds({ username }))
-      .then(Sessioning.start({ subject: username }).responds({ session, expiresAt }))
-      .then(respond({ username, session, expiresAt })),
+      .then(Authenticating.authenticate({ username, password }).responds({ account }))
+      .then(Sessioning.start({ subject: account }).responds({ session, expiresAt }))
+      .then(respond({ account, session, expiresAt })),
   {
     input: { required: ["username", "password"] },
     validators: { input: credentialsInput, output: issuedSessionOutput },

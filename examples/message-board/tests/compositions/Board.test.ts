@@ -102,7 +102,7 @@ describe("message board application", () => {
     });
     expect(registration.status).toBe(200);
     expect(await registration.json()).toEqual({
-      username: "api-user",
+      account: "api-user",
       session: expect.any(String),
       expiresAt: expect.any(String),
     });
@@ -134,14 +134,14 @@ describe("message board application", () => {
 
     await expect(
       client.auth.register({ username: "ari", password: "correct horse" }),
-    ).resolves.toEqual({ username: "ari" });
+    ).resolves.toEqual({ account: "ari" });
     expect(jar.cookie()).toMatch(/^__Host-message-board-session=/);
     await expect(client.auth.current({})).resolves.toEqual({ username: "ari" });
 
     await expect(client.auth["sign-out"]({})).resolves.toEqual({ signedOut: true });
     await expect(
       client.auth["sign-in"]({ username: "ari", password: "correct horse" }),
-    ).resolves.toEqual({ username: "ari" });
+    ).resolves.toEqual({ account: "ari" });
 
     const posted = await client.board.post({ content: "A small complete app" });
     if ("error" in posted) throw new Error(`Could not publish: ${posted.error}`);
@@ -238,7 +238,7 @@ describe("message board application", () => {
     );
     const cookie = signedIn.headers.get("Set-Cookie")?.split(";", 1)[0];
     if (cookie === undefined) throw new Error("Expected a session cookie.");
-    expect(await signedIn.json()).toEqual({ username: "ari" });
+    expect(await signedIn.json()).toEqual({ account: "ari" });
 
     const spoofedSession = await handler(
       post("/board/post", { session: "invented", content: "accepted" }, cookie),

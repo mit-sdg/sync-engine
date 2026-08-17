@@ -39,8 +39,8 @@ bun run start:api
 ```
 
 The API listens at <http://localhost:3000/api> by default. Registration and
-sign-in return `session` and `expiresAt`. Send that `session` in the JSON body of
-current-user, sign-out, board-list, post, comment, and comment-retraction
+sign-in return `account`, `session`, and `expiresAt`. Send that `session` in the
+JSON body of current-user, sign-out, board-list, post, comment, and comment-retraction
 requests. This host serves no frontend, reads no cookies, and emits no cookie or
 CORS headers.
 
@@ -66,9 +66,9 @@ Four independent concepts own this behavior:
 - **Commenting** owns ordered attachments between an external target, author,
   and content identity, including author-controlled retraction.
 
-Composition connects them. Registration and sign-in pass an authenticated
-username to Sessioning. Protected endpoints resolve the session and use its
-subject as Posting's or Commenting's external author. The `Board` composition
+Composition connects them. Registration and sign-in pass the returned account
+reference, which is the authenticated username, to Sessioning. Protected
+endpoints resolve the session and use its subject as Posting's or Commenting's external author. The `Board` composition
 module owns the board former, which lists Posting's posts and nests Commenting
 attachments whose target is each post.
 Before adding a comment, the endpoint checks that its target post exists.

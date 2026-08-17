@@ -92,7 +92,7 @@ export async function exerciseMessageBoard(instances: CatalogInstances): Promise
     password: "correct horse",
   });
   expect(registration).toEqual({
-    username: "ari",
+    account: "ari",
     session: expect.any(String),
     expiresAt: expect.any(Date),
   });
@@ -121,7 +121,7 @@ export async function exerciseMessageBoard(instances: CatalogInstances): Promise
       currentPassword: "correct horse",
       newPassword: "new correct horse",
     }),
-  ).resolves.toEqual({ ok: true, value: { username: "ari" } });
+  ).resolves.toEqual({ ok: true, value: { account: "ari" } });
   await expect(
     invoke(application, "/message-board/sign-in", {
       username: "ari",
@@ -259,7 +259,7 @@ export async function exerciseRegistrationPartialFailure(
     password: "correct horse",
   });
   expect(signedIn).toEqual({
-    username: "partial-user",
+    account: "partial-user",
     session: expect.any(String),
     expiresAt: expect.any(Date),
   });
@@ -335,7 +335,7 @@ export async function exerciseMessageBoardSecurity(instances: CatalogInstances):
       currentPassword: "correct horse",
       newPassword: "new correct horse",
     }),
-  ).resolves.toEqual({ ok: true, value: { username: "ari-secure" } });
+  ).resolves.toEqual({ ok: true, value: { account: "ari-secure" } });
   await expect(
     invoke(application, "/message-board/sign-in", {
       username: "ari-secure",
@@ -355,7 +355,7 @@ export async function exerciseMessageBoardSecurity(instances: CatalogInstances):
       username: "bo-secure",
       password: "correct horse",
     }),
-  ).resolves.toMatchObject({ ok: true, value: { username: "bo-secure" } });
+  ).resolves.toMatchObject({ ok: true, value: { account: "bo-secure" } });
 
   await expect(
     invoke(application, "/message-board/delete-account", {
@@ -363,7 +363,7 @@ export async function exerciseMessageBoardSecurity(instances: CatalogInstances):
       username: "bo-secure",
       password: "new correct horse",
     }),
-  ).resolves.toEqual({ ok: true, value: { username: "ari-secure" } });
+  ).resolves.toEqual({ ok: true, value: { account: "ari-secure" } });
   expect(await instances.Authenticating._registered({ username: "ari-secure" })).toEqual({
     registered: false,
   });

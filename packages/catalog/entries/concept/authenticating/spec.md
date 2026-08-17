@@ -31,7 +31,7 @@ a set of Accounts with
 ## Actions
 
 ```actions
-register (username: Username, password: Password) : return (username: Account)
+register (username: Username, password: Password) : return (account: Account)
   where username is not 3 to 32 ASCII letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
@@ -44,17 +44,19 @@ register (username: Username, password: Password) : return (username: Account)
   where username and password are accepted
   then
     add a new Account with username, a fresh salt, and a verifier derived from password and that salt
-    return username
+    bind account to that Account
+    return account
 
-authenticate (username: Username, password: Password) : return (username: Account)
+authenticate (username: Username, password: Password) : return (account: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
   where password verifies
   then
-    return username
+    bind account to the verified Account
+    return account
 
-changePassword (username: Username, currentPassword: Password, newPassword: Password) : return (username: Account)
+changePassword (username: Username, currentPassword: Password, newPassword: Password) : return (account: Account)
   where newPassword is shorter than 8 characters or longer than 128 characters
   then
     refuse WEAK_PASSWORD "A password must contain 8 to 128 characters."
@@ -64,16 +66,18 @@ changePassword (username: Username, currentPassword: Password, newPassword: Pass
   where currentPassword verifies and newPassword is accepted
   then
     replace the Account salt and verifier using newPassword and a fresh salt
-    return username
+    bind account to that Account
+    return account
 
-unregister (username: Username, password: Password) : return (username: Account)
+unregister (username: Username, password: Password) : return (account: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
   where password verifies
   then
-    delete the Account
-    return username
+    bind account to the verified Account
+    delete that Account
+    return account
 ```
 
 ## Queries

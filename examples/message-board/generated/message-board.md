@@ -14,11 +14,11 @@ Defined in [Authenticating](../design/concepts/Authenticating.md), line 1.
 
 #### Actions
 
-- `register(username: Username, password: Password) : return (username: Account)`
+- `register(username: Username, password: Password) : return (account: Account)`
   - Refuses `INVALID_USERNAME`: A username must contain 3 to 32 letters, numbers, underscores, or hyphens.
   - Refuses `WEAK_PASSWORD`: A password must contain 8 to 128 characters.
   - Refuses `USERNAME_TAKEN`: That username is already registered.
-- `authenticate(username: Username, password: Password) : return (username: Account)`
+- `authenticate(username: Username, password: Password) : return (account: Account)`
   - Refuses `INVALID_CREDENTIALS`: The username or password is incorrect.
 
 #### Queries
@@ -297,7 +297,7 @@ then
 ### Sessions.CurrentAccount.CurrentUser
 
 Authored path: `Sessions.CurrentAccount.CurrentUser`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 11.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 12.
 
 ```reaction
 when RequestBoundary.request (path: "/auth/current", requestId, session)
@@ -308,7 +308,7 @@ then
 ### Sessions.CurrentAccount.CurrentUser#2
 
 Authored path: `Sessions.CurrentAccount.CurrentUser`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 11.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 12.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Sessions.CurrentAccount.CurrentUser
@@ -335,9 +335,9 @@ Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
 
 ```reaction
-when Authenticating.register (password, username), asked by Sessions.EnteringApplication.Register
+when Authenticating.register (password, username, account), asked by Sessions.EnteringApplication.Register
 then
-  Sessioning.start (subject: username)
+  Sessioning.start (subject: account)
 ```
 
 ### Sessions.EnteringApplication.Register#3
@@ -346,17 +346,17 @@ Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by Sessions.EnteringApplication.Register#2
+when Sessioning.start (subject: account, expiresAt, session), asked by Sessions.EnteringApplication.Register#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/register", requestId, username)
 then
-  RequestBoundary.respond (expiresAt, requestId, session, username)
+  RequestBoundary.respond (account, expiresAt, requestId, session)
 ```
 
 ### Sessions.EnteringApplication.SignIn
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 7.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 8.
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
@@ -367,31 +367,31 @@ then
 ### Sessions.EnteringApplication.SignIn#2
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 7.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 8.
 
 ```reaction
-when Authenticating.authenticate (password, username), asked by Sessions.EnteringApplication.SignIn
+when Authenticating.authenticate (password, username, account), asked by Sessions.EnteringApplication.SignIn
 then
-  Sessioning.start (subject: username)
+  Sessioning.start (subject: account)
 ```
 
 ### Sessions.EnteringApplication.SignIn#3
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 7.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 8.
 
 ```reaction
-when Sessioning.start (subject: username, expiresAt, session), asked by Sessions.EnteringApplication.SignIn#2
+when Sessioning.start (subject: account, expiresAt, session), asked by Sessions.EnteringApplication.SignIn#2
 where
   earlier, RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
 then
-  RequestBoundary.respond (expiresAt, requestId, session, username)
+  RequestBoundary.respond (account, expiresAt, requestId, session)
 ```
 
 ### Sessions.LeavingApplication.SignOut
 
 Authored path: `Sessions.LeavingApplication.SignOut`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 15.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 16.
 
 ```reaction
 when RequestBoundary.request (path: "/auth/sign-out", requestId, session)
@@ -402,7 +402,7 @@ then
 ### Sessions.LeavingApplication.SignOut#2
 
 Authored path: `Sessions.LeavingApplication.SignOut`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 15.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 16.
 
 ```reaction
 when Sessioning.end (session, ended: signedOut), asked by Sessions.LeavingApplication.SignOut
