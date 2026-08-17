@@ -1,7 +1,5 @@
 # Design rules
 
-Design only the brief; parser success does not prove quality.
-
 ## Useful independent concepts
 
 A concept owns one coherent mechanism: purpose, state, actions, queries. Layout,
@@ -74,21 +72,21 @@ For each protected effect identify actor, authenticated identity, resource, fact
 owners, condition, and enforcement point. Request data is a claim, not authentication.
 Composition may deny early; owner actions enforce non-bypassable rules.
 
-Command/process/filesystem/clock/network are concepts only with observable choices,
-state, lifecycle, expected problems, or useful tests; otherwise adapt thinly and keep
-policy in composition.
+Model host effects as concepts only with observable policy, state, lifecycle, failure,
+or useful tests; otherwise adapt thinly.
 
 ## Authored application design
 
-Use `design/concepts/*.md`, `design/types.md`, `design/compositions/*.md`, paired with
-`src/compositions/*.ts`. Deviations need a benefit and explicit mapping.
+Inventory exact selected static instances except `RequestBoundary`. Definitions may
+have many or no same-name instance. Bind each external once to a concrete or SSF-owned
+type, all inline or all detached per instance. Reject aliases, external targets, mixed,
+missing, duplicate, or unresolved bindings, and unused concretes. Direct qualified
+owned-type dependency cycles are valid: edges resolve independently. Bindings convey
+identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
+storage isolation.
 
-Declare each selected instance once (`instantiate D` or `instantiate D as I`). Bind
-externals once, all inline or detached, to concrete or selected qualified owned types.
-Direct cycles are valid; reject mixed placement, aliases, gaps, duplicates, unresolved
-names, external targets, and unused concretes. Binding conveys identity, not ownership,
-validation, or TypeScript equivalence. SSF tooling parses structure and owned names;
-review opaque lines and meaning manually.
+The bounded SSF parser proves structural declarations and owned type names, not opaque
+invariants/prose, storage, or behavior.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
 wildcards. Cover each authored endpoint/reaction tree, named view/former; declare

@@ -143,7 +143,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Expected domain rejection is a declared refusal",
       "A reaction cannot make separate owners atomic",
       "Request data is a claim, not\nauthentication",
-      "SSF tooling parses structure and owned names",
+      "The bounded SSF parser proves structural declarations and owned type names",
+      "Direct qualified owned-type dependency cycles are valid",
       "Write State only in Simple State Form",
       "Every query has an indented prose body",
       "Neither proves boundaries",
@@ -158,6 +159,8 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Collections are never `optional`",
       "No nested collections or unions",
       "Declaration direction implies no storage, navigation, or ownership",
+      "inventories owned identity/type names",
+      "remain opaque prose",
     ]) {
       expect(ssf).toContain(rule);
     }
@@ -170,8 +173,11 @@ describe("compact sync-engine Agent Skill documents", () => {
       "create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
       "delete(item: Item) : return ()",
       "_items(owner: Person) : many (item: Item, title: String)",
-      "instantiate Tasking with Owner is Person",
-      "instantiate Noting as Notes with Task is Tasking.Task",
+      "instantiate Tasking with",
+      "instantiate Noting as Notes with",
+      "Tasking.Owner is Person",
+      "Notes.Task is Tasking.Task",
+      "Do not mix placement",
       "`# Tasking`, never `# Tasks` or `# Task Management`",
       "codes are unique within an action",
       "never prose such as `return the session account`",

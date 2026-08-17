@@ -6,9 +6,8 @@
 
 ## Assignment
 
-Review the complete authored candidate against the brief: every concept and
-composition plus `types.md`. Concept grammar and authored design form have passed;
-typed links are not yet resolved against source. Be read-only and use only supplied
+Review every candidate concept, composition, and `types.md` against the brief.
+Authored form passed; typed links are not yet source-resolved. Be read-only and use only supplied
 prompt material. Do not inspect source, generated files, Git, package configuration,
 tests, framework internals, API docs, or analysis output.
 
@@ -25,9 +24,10 @@ decision:
    values in query rows.
 5. Composition: reaction pressure, cross-concept failure rules, authorization
    enforcement points, visible results.
-6. Application documents: every external binding's direction and actual owner.
-   Reject bare typed-link text, route-shaped targets, and concept actions presented
-   as application endpoint/view declarations.
+6. Application documents: exact static instances, one binding placement, and every
+   binding's direction and SSF-owned target. Accept direct owned-type cycles; reject
+   external aliases or inferred storage isolation. Reject bare typed-link text,
+   route-shaped targets, and concept actions presented as application declarations.
 
 Application documents declare their linked endpoint trees, views, formers, and
 computations; do not demand an artificial API/adapter concept merely to own them.
@@ -45,9 +45,8 @@ Otherwise return one bullet per finding:
 - `design/path.md` — Contract problem and consequence for the brief.
 ```
 
-Catalog entries are alternatives, not required contracts. Use them only to expose a
-materially better boundary or missing behavior. Complete the review silently and return
-the required report in this response; never wait for a request to emit it.
+Catalog entries are alternatives, used only to expose a materially better boundary or
+missing behavior. Return the report now; never wait for a request to emit it.
 
 ## Product brief
 

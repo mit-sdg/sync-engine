@@ -31,7 +31,7 @@ Start with [Getting started](guide/getting-started.md), then read the
 3. [Reading Circle](../../examples/reading-circle/README.md) provides the
    smallest complete concept, composition, assembly, gateway, and client.
 4. [Application design authoring](guide/authoring.md) registers strict concept
-   specifications, application types, typed prose, and generated evidence
+   specifications, complete instances and bindings, typed prose, and generated evidence
    around the selected executable application.
 
 Use the [read construction cookbook](guide/read-construction.md) when a former
@@ -48,23 +48,23 @@ decisions.
 This catalog is exhaustive. References are under `reference/`; procedures are
 under `guide/`.
 
-| Path                                                                                 | Class        | Scope                                                          |
-| ------------------------------------------------------------------------------------ | ------------ | -------------------------------------------------------------- |
-| [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                           |
-| [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Package-local document map and constraints for software agents |
-| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                                 |
-| [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Strict concepts, application types, typed prose, and artifacts |
-| [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Semantic, authored-contract, and coverage review               |
-| [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts                  |
-| [`docs/user/guide/persistence-recovery.md`](guide/persistence-recovery.md)           | How-to guide | Persistence, restart, occurrence evidence, and recovery        |
-| [`docs/user/overview.md`](overview.md)                                               | Explanation  | Application model and guarantee boundaries                     |
-| [`docs/user/design.md`](design.md)                                                   | Explanation  | Concept boundaries, ownership, actions, and composition        |
-| [`docs/user/reference/public-api.md`](reference/public-api.md)                       | Reference    | Exact core exports and principal API shapes                    |
-| [`docs/user/reference/semantics.md`](reference/semantics.md)                         | Reference    | Execution, failure, ordering, and settlement contracts         |
-| [`docs/user/reference/concept-specification.md`](reference/concept-specification.md) | Reference    | Concept-file grammar and validation boundaries                 |
-| [`docs/user/reference/cli.md`](reference/cli.md)                                     | Reference    | Installed command syntax and behavior                          |
-| [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities        |
-| [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                          |
+| Path                                                                                 | Class        | Scope                                                           |
+| ------------------------------------------------------------------------------------ | ------------ | --------------------------------------------------------------- |
+| [`docs/user/index.md`](index.md)                                                     | Index        | Human-readable task and document map                            |
+| [`docs/user/llms.txt`](llms.txt)                                                     | Index        | Package-local document map and constraints for software agents  |
+| [`docs/user/guide/getting-started.md`](guide/getting-started.md)                     | Tutorial     | Concept-free application setup                                  |
+| [`docs/user/guide/authoring.md`](guide/authoring.md)                                 | How-to guide | Strict concepts, complete instances, typed prose, and artifacts |
+| [`docs/user/guide/reviewing-a-design.md`](guide/reviewing-a-design.md)               | How-to guide | Semantic, authored-contract, and coverage review                |
+| [`docs/user/guide/read-construction.md`](guide/read-construction.md)                 | How-to guide | Small tested read constructions and contrasts                   |
+| [`docs/user/guide/persistence-recovery.md`](guide/persistence-recovery.md)           | How-to guide | Persistence, restart, occurrence evidence, and recovery         |
+| [`docs/user/overview.md`](overview.md)                                               | Explanation  | Application model and guarantee boundaries                      |
+| [`docs/user/design.md`](design.md)                                                   | Explanation  | Concept boundaries, ownership, actions, and composition         |
+| [`docs/user/reference/public-api.md`](reference/public-api.md)                       | Reference    | Exact core exports and principal API shapes                     |
+| [`docs/user/reference/semantics.md`](reference/semantics.md)                         | Reference    | Execution, failure, ordering, and settlement contracts          |
+| [`docs/user/reference/concept-specification.md`](reference/concept-specification.md) | Reference    | Concept-file grammar and validation boundaries                  |
+| [`docs/user/reference/cli.md`](reference/cli.md)                                     | Reference    | Installed command syntax and behavior                           |
+| [`docs/user/reference/operations.md`](reference/operations.md)                       | Reference    | Deployment selection, limits, and host responsibilities         |
+| [`docs/user/reference/glossary.md`](reference/glossary.md)                           | Reference    | Preferred terminology                                           |
 
 ## Packages, examples, and policies
 

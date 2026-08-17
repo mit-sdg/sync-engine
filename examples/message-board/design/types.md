@@ -5,6 +5,14 @@ session subject. Comments attach directly to post identities. Comment bodies are
 application-supplied text because Commenting deliberately treats their content
 as opaque.
 
+The bindings preserve these application decisions:
+
+- A session identifies the account username whose credentials were accepted.
+- Published posts are attributed to account usernames.
+- Comments are attributed to account usernames.
+- Every board comment attaches to a published post.
+- The board stores comment text as Commenting's opaque content value.
+
 ```types
 concrete CommentContent
   Text supplied by a signed-in account for a comment.
@@ -12,24 +20,15 @@ concrete CommentContent
 
 ```instances
 instantiate Authenticating
-instantiate Commenting
-instantiate Posting
-instantiate Sessioning
-```
 
-```bindings
-Sessioning.Subject is Authenticating.Username
-  A session identifies the account username whose credentials were accepted.
+instantiate Sessioning with
+  Subject is Authenticating.Username
 
-Posting.Author is Authenticating.Username
-  Published posts are attributed to account usernames.
+instantiate Posting with
+  Author is Authenticating.Username
 
-Commenting.Author is Authenticating.Username
-  Comments are attributed to account usernames.
-
-Commenting.Target is Posting.Post
-  Every board comment attaches to a published post.
-
-Commenting.Content is CommentContent
-  The board stores comment text as Commenting's opaque content value.
+instantiate Commenting with
+  Author is Authenticating.Username
+  Target is Posting.Post
+  Content is CommentContent
 ```

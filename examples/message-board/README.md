@@ -76,8 +76,8 @@ Before adding a comment, the endpoint checks that its target post exists.
 The authored application design lives under `design/`: concept specifications
 state each independent concept's contract, composition documents explain how
 the application connects them with exact typed links, and `design/types.md`
-records the complete concept-instance inventory, concrete types, and cross-concept bindings. Principle tests live under
-`tests/concepts/`. The [technical notes](TECHNICAL.md) describe implementation choices, endpoint
+records concrete types plus the complete concept-instance inventory and bindings.
+Principle tests live under `tests/concepts/`. The [technical notes](TECHNICAL.md) describe implementation choices, endpoint
 branches, HTTP policy, cookie projection, runtime validation, execution limits,
 failure boundaries, session cleanup, generated contracts, and network-test
 evidence.
@@ -120,7 +120,7 @@ composition, or contract change, then review both generated files.
 | ---------------------------------------------------------- | --------------------------------------------------------- |
 | `design/concepts/*.md`                                     | Standalone concept specifications                         |
 | `design/compositions/*.md`                                 | Host-independent application composition design           |
-| `design/types.md`                                          | Complete instance inventory, concrete types, and bindings |
+| `design/types.md`                                          | Complete instances, concrete types, and external bindings |
 | `src/concepts/*.ts`, `src/concepts/*.registry.ts`          | Concept implementations and registrations                 |
 | `src/concepts.ts`                                          | Application concept set and typed composition references  |
 | `src/compositions/Sessions.ts`                             | Session endpoint groups                                   |

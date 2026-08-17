@@ -10,13 +10,13 @@ collection := (set|seq) [of] scalar
 primitive := Number | String | Flag | Date | DateTime
 ```
 
-One declaration per line; indent fields. Types/subtypes/parameters start uppercase,
-fields lowercase, enum values all-uppercase. Identifiers start with a letter then use
-letters/digits/`_`. Consistent singular/plural type names are equivalent.
+One declaration per line; indent fields. Types start uppercase, fields lowercase,
+enum values uppercase. Identifiers start with a letter and use letters/digits/`_`.
+Singular/plural types are equivalent. The parser records subsets and inventories owned
+identity/type names for binding proof.
 
-A field name may be omitted only for an object/parameter scalar or collection; infer
-lowercase singular/plural from its type. Names are unique through an acyclic subset
-hierarchy. Collections are never `optional` (empty means absent). No nested collections
+Omit a field name only for an object/parameter; infer lowercase singular/plural.
+Names are unique through an acyclic subset hierarchy. Collections are never `optional` (empty means absent). No nested collections
 or unions.
 
 Sets introduce identities—never add ID fields. Subsets classify existing parent members,
@@ -25,7 +25,7 @@ and seq mean one, zero-or-one, zero-or-more, and ordered zero-or-more. Declarati
 direction implies no storage, navigation, or ownership of referenced identities.
 Standalone invariant sentences such as
 `at most one Membership has each gathering and member pair` may follow the
-declarations inside the fence.
+declarations inside the fence. They remain opaque prose; parsing proves no invariant, effect, storage, or behavior.
 
 ```state
 a set of Items with

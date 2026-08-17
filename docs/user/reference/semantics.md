@@ -13,7 +13,6 @@ cookbook](../guide/read-construction.md).
 | Trigger matching and consequence paths      | [Reactions](#reactions)                                                                   |
 | Consequences held until causal work drains  | [Deferred triggers and settlement frontiers](#deferred-triggers-and-settlement-frontiers) |
 | Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                               |
-| Concept construction and raw identity       | [Concept implementation construction](#concept-implementation-construction)               |
 | In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                   |
 | Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                              |
 | Query promises, caching, and equality       | [Queries](#queries)                                                                       |
@@ -220,32 +219,6 @@ artifact write is exposed. Manual engines under the `advanced` subpath may
 execute local constructs, but they do not gain ordinary assembly's application
 boundary or portability guarantees.
 
-## Concept implementation construction
-
-Every concept-set key is a selected application name. Within one
-`assemble(...)` call, each selected name must resolve to a distinct raw
-implementation object. Assembly checks object identity before attaching concept
-metadata or instrumenting any selected implementation and rejects an alias with
-a diagnostic naming both selected names. Distinct objects may still connect to
-the same collection, schema, file, cache, or service; this check does not prove
-storage isolation.
-
-`conceptSet.implementations(floor, context)` is an explicit construction helper.
-On each successful call, it invokes the selected floor factory once for every
-concept-set key, passing the exact `context` followed by that key. Calls are not
-memoized: a later call invokes the factories again and returns another
-implementation map. A factory controls the identities it returns.
-
-Assembly does not implicitly call a floor factory. It may use ready `instances`,
-per-name `initialize` arguments, or default constructors. To select a registered
-floor, the host calls `implementations(...)` and supplies that result as
-`instances`.
-
-The raw-identity check is assembly-local, not a process-global ownership claim.
-The same raw object may be supplied as one selected name to separate assemblies
-or manual engines. Those engines still create separate action queues and query
-caches.
-
 ## Execution and concurrency
 
 For an instrumented action, the engine performs these steps in order:
@@ -267,17 +240,18 @@ ordinary action body is released. Same-concept requested consequences use an
 internal reservation release to make progress without changing body-arrival
 order.
 
-One action body runs at a time per raw concept instance within one engine. The
+One action body runs at a time per selected concept instance within one engine.
+Ordinary assembly rejects one raw implementation object supplied under two
+instance names in the same assembly, before instrumentation. The
 queue awaits a structural `PromiseLike`: any returned object or function whose
 `then` property is callable. This includes native promises from another
 JavaScript realm and non-native thenables. The queue reads `then` once and
 invokes it in a microtask. A throwing `then` accessor, or a `then` call that
 throws before settlement, faults the action. A thenable that never settles holds
 the serial line just as a never-settling promise does. Supplying one raw instance
-as one selected name to several engines creates separate queues and query caches
-and does not serialize those engines. One assembly cannot select that object
-under several names. Different concept instances and separate root flows can
-overlap.
+to separate engines is allowed and creates separate queues and query caches; it
+does not serialize those engines. Different concept instances and separate root
+flows can overlap.
 Ordinary reactions for one landed occurrence are currently evaluated
 sequentially. Their trigger and `where` stages all finish before any matching
 consequence is dispatched, so one sibling consequence cannot change another
@@ -681,16 +655,14 @@ evaluates projectors in declaration order, and a projector or validation failure
 occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
-format and package SemVer. The application-manifest schema remains version 1,
-but this beta replaces the earlier beta version-1 shape in place: instances own
-normalized bindings and authored provenance, while application types own
-concrete declarations. No decoder accepts the old beta shape. Upgrading requires
-regenerating all manifests and generated artifacts.
+format and package SemVer. This pre-1.0 beta reset keeps schema version 1 but has
+no decoder for the earlier beta shape or any prior version. Upgrading across the
+reset requires regenerating all manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
-application instances with declaration and binding provenance, raw concept
-State, concrete application types, executable application identities,
-implementation provenance, registered design source locations, and
+authored application instance declarations and bindings, full concept State and
+bounded structural IR, resolved application types, executable application
+identities, implementation provenance, registered design source locations, and
 normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.
 
@@ -699,10 +671,9 @@ and renderer version. It links each selected authored reaction tree, view,
 former, computation, concept, concrete type, and binding to every applicable
 authored source location. It shows structured concept signatures,
 cardinalities, refusals, definition/instance relationships, and executable
-lowering. It does not copy ordinary application prose, Purpose, Principle, raw State,
-action/query bodies, or computation bodies. Retained detached binding
-explanations appear with their normalized bindings. These authored statements
-do not become runtime validation or executable assertions.
+lowering. It does not copy application prose, Purpose, Principle, full State text,
+action/query bodies, adjacent binding explanations, or computation bodies. These
+authored statements do not become runtime validation or executable assertions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
 requires explicit input, successful-output, and domain-error validators; none is
@@ -783,11 +754,11 @@ frontier.
 
 Action bodies run one at a time per concept instance within one engine, in
 arrival order. The queue awaits native promises and structural thenables as
-described under [Execution and concurrency](#execution-and-concurrency). Sharing
-one raw instance as one selected name between engines does not share a queue or
-query cache; selecting it under several names in one assembly is invalid. This
-is an in-process guarantee. A concept's implementation and storage must supply
-any atomicity or coordination required across processes. A reaction consequence
+described under [Execution and concurrency](#execution-and-concurrency). One
+assembly cannot install the same raw object under two names. Sharing one raw
+instance between separate engines does not share a queue or query cache. This is
+an in-process guarantee. A concept's implementation and storage must supply any
+atomicity or coordination required across processes. A reaction consequence
 chain commits each action independently. Earlier actions remain committed when a
 later action refuses or faults.
 The runtime provides no retry deduplication or exactly-once guarantee. A retry

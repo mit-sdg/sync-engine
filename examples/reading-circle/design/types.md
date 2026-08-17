@@ -4,6 +4,14 @@ People host and join circles and author discussion responses under one shared
 application identity. A reading is supplied by the application; selecting it
 creates the identity to which its discussion is attached.
 
+The bindings preserve these application decisions:
+
+- Circle hosts and members are reading-circle people.
+- Each circle has its own current reading.
+- The selectable items are readings.
+- A discussion belongs to one particular reading selection.
+- Discussion responses are authored by reading-circle people.
+
 ```types
 concrete Person
   A person who may host or join a reading circle.
@@ -13,24 +21,14 @@ concrete Reading
 ```
 
 ```instances
-instantiate Gathering
-instantiate Selecting
-instantiate Discussing
-```
+instantiate Gathering with
+  Person is Person
 
-```bindings
-Gathering.Person is Person
-  Circle hosts and members are reading-circle people.
+instantiate Selecting with
+  Scope is Gathering.Gathering
+  Item is Reading
 
-Selecting.Scope is Gathering.Gathering
-  Each circle has its own current reading.
-
-Selecting.Item is Reading
-  The selectable items are readings.
-
-Discussing.Subject is Selecting.Selection
-  A discussion belongs to one particular reading selection.
-
-Discussing.Person is Person
-  Discussion responses are authored by reading-circle people.
+instantiate Discussing with
+  Subject is Selecting.Selection
+  Person is Person
 ```

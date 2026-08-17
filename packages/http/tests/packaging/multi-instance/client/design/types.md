@@ -1,6 +1,13 @@
 # Multi-instance application types
 
-The entry, observation, and fault contracts refer to the same caller-supplied domain operation identity.
+The entry, observation, and fault contracts refer to the same caller-supplied
+domain operation identity.
+
+The bindings preserve these contract decisions:
+
+- Entry idempotency is scoped to the initiating operation.
+- Observations retain the operation that caused the entry action.
+- Requested faults remain associated with the initiating operation.
 
 ```types
 concrete OperationId
@@ -15,11 +22,6 @@ instantiate Faulting
 
 ```bindings
 Entries.Operation is OperationId
-  Entry idempotency is scoped to the initiating operation.
-
 Effects.Operation is OperationId
-  Observations retain the operation that caused the entry action.
-
 Faulting.Operation is OperationId
-  Requested faults remain associated with the initiating operation.
 ```

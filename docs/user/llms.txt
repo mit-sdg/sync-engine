@@ -55,10 +55,12 @@ inferring an answer from implementation source.
 
 - Use only the package subpaths listed in the Public API. The package root and deep imports are unsupported.
 - Keep concept implementations independent of peer concepts and application composition.
-- Keep concept specifications, registered composition documents, authored instance/binding/type declarations, executable declarations, and generated read-back distinct.
+- Keep concept specifications, registered composition documents, complete static instance/type declarations, executable declarations, and generated read-back distinct.
 - For new applications, author `design/concepts/*.md`, `design/compositions/*.md`, and `design/types.md`; conventionally pair one composition document with one source module.
-- Form-check draft concepts, compositions, instances, detached bindings, and concrete types with config-free `sync-engine check-design`; then treat each generated config as the implemented design root: declare every selected instance exactly, use explicit local URLs and exact typed links, and run config-based `sync-engine check` for per-variant closure and coverage. Do not use the removed vocabulary-module mode.
-- Author Concept State in SSF. Version 1 retains raw State while bounded tooling parses structural declarations and owned names; `check-design` reports recognized canonical repairs. Config-based checking uses that inventory to prove qualified binding targets. Review opaque lines and semantics manually, and do not infer runtime schemas from checker success.
+- Form-check draft concepts, compositions, concrete types, instances, and bindings with config-free `sync-engine check-design`; then treat the generated config as the implemented design root: use explicit local URLs, exact typed links, and config-based `sync-engine check` for exact assembled-variant resolution and coverage. Do not use the removed vocabulary-module mode. The authored inventory excludes core-owned `RequestBoundary`.
+- Author Concept State in SSF. Version 1 retains full text and bounded structural IR; `check-design` parses declarations and owned names, while invariant/prose meaning, storage, and implementation semantics remain manual review and test obligations.
+- Put every instance's external bindings all inline or all detached. Direct qualified owned-type dependency cycles are valid; external-to-external targets and alias chains are invalid.
+- Treat instances as finite static semantic identities, not dynamic tenants or storage allocation. Configure persistent repositories or namespaces explicitly.
 - Give every query an indented body explaining its answers, empty or unknown case, and deterministic ordering for `many`.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.

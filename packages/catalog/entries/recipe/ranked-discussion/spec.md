@@ -2,6 +2,28 @@
 
 A ranked discussion keeps responses independent from popularity while presenting each response with its current aggregate score.
 
+## Application types and instances
+
+```types
+concrete Subject
+  A topic supplied by the discussion application.
+
+concrete Person
+  An author or voter identity supplied by the application.
+```
+
+```instances
+instantiate Timing
+
+instantiate Discussing with
+  Subject is Subject
+  Author is Person
+
+instantiate Upvoting with
+  Item is Discussing.Response
+  Voter is Person
+```
+
 ## Compositions
 
 ### DiscussionLifecycle

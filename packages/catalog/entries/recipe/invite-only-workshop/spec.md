@@ -2,6 +2,24 @@
 
 An invite-only workshop requires a directed accepted invitation before a person joins.
 
+## Application types and instances
+
+```types
+concrete Person
+  A participant identity supplied by the workshop application.
+```
+
+```instances
+instantiate Timing
+
+instantiate Gathering with
+  Person is Person
+
+instantiate Inviting with
+  Target is Gathering.Gathering
+  Person is Person
+```
+
 ## Compositions
 
 ### WorkshopMembership

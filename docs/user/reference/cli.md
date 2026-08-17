@@ -14,16 +14,16 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                        | Result                                                                                | Writes files                                   |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files         | `package.json`, Bun install, missing templates |
-| `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly           | No                                             |
-| `check [--config path]`                        | Checks concept source, registered design, application types, and declaration coverage | No                                             |
-| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design                       | No                                             |
-| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                                 | Yes                                            |
-| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                                   | Yes                                            |
-| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                                 | Yes                                            |
-| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                                     | No                                             |
+| Command                                        | Result                                                                        | Writes files                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
+| `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
+| `check [--config path]`                        | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
+| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design               | No                                             |
+| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                         | Yes                                            |
+| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                           | Yes                                            |
+| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                         | Yes                                            |
+| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                             | No                                             |
 
 ## `sync-engine setup`
 
@@ -101,39 +101,50 @@ Concept documents must pass the strict version-1 concept parser.
 Application-design documents use the same parser and assembly-independent validator as
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
-- recognized SSF declarations and fields avoid repairable near-miss keywords, article
-  errors, misplaced or collection-valued `optional`, and a missing `with` before
-  indented fields; unrecognized State lines remain opaque;
+- SSF structural declarations and fields parse canonically, including articles,
+  multiplicity, `optional`, `with`, identifiers, singular/plural normalization, and
+  subset structure; standalone invariant sentences and admitted prose remain opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
 - `computations` declarations have valid signatures, distinct input names, balanced
   type delimiters, and indented prose bodies;
 - application `types` fences contain only `concrete Name` declarations with prose;
-- `instances` fences accept bare, renamed, and nonempty inline-`with` declarations;
-- detached `bindings` fences use direct `SelectedInstance.External is Target` form;
-- a binding target has either a concrete-name or qualified `SelectedInstance.Type`
-  form, never a chain;
-- one instance does not mix inline and detached placement; and
+- `instances` fences contain bare, renamed, or inline-bound instance declarations,
+  and every `with` has at least one indented local binding;
+- `bindings` fences contain only detached `Instance.External is Target` declarations;
+- binding targets have concrete-name or qualified `Instance.Type` shape;
+- one instance does not mix inline and detached placement within the supplied corpus;
+  and
 - computation names, concrete type names, instance names, and binding left sides are
   not duplicated across the supplied application-design documents.
 
-Definition and external names use `[A-Za-z_][A-Za-z0-9_]*`. Instance and concrete
-name segments retain authored-path form `[A-Za-z_][A-Za-z0-9_-]*`; the final type
-name of a qualified target uses identifier form.
+Application declaration syntax is:
 
-The command does not discover additional files or require assembly completeness.
-It merges all supplied application documents before corpus checks, so detached
-bindings may precede their instance declaration in operand order. Its SSF validation
-uses the shared bounded structural parser but reports only canonical repair issues;
-parser success is not a runtime schema or semantic State proof. It does not resolve
-typed links, binding left sides, or binding targets against selected instances or
-concept declarations. It also does not require
-declaration coverage, compare computation inputs with TypeScript, validate concept source agreement, or
+```text
+concrete-type        = "concrete" Name, indented-nonempty-prose
+instance             = "instantiate" Definition ("as" Instance)? ("with" local-bindings)?
+local-binding        = External "is" Target
+detached-binding     = Instance "." External "is" Target
+Target               = Concrete | Instance "." OwnedType
+```
+
+`with` requires one or more indented local bindings. Instance, definition,
+external, concrete, and owned type names use ASCII letters, digits, and `_`,
+beginning with a letter or `_`; they do not use the hyphens permitted in dotted
+application declaration paths. Arbitrary prose is not admitted inside
+`instances` or `bindings` fences.
+
+The command does not discover additional files or require a complete corpus. Its
+bounded SSF parser establishes structural declarations and owned-name inventories,
+not a storage schema or invariant/prose semantics. It does not resolve typed links,
+instance definitions, external names, or binding targets against an assembled
+selection. It also does not require complete instances or declaration coverage,
+compare computation inputs with TypeScript, validate concept source agreement, or
 inspect ordinary prose and computation-body semantics. Those checks need the selected
 assembly and remain the job of config-based `sync-engine check`. In particular, a
-binding target is accepted by shape even when the concept or concrete declaration is
-outside the supplied partial corpus; rejecting it would make partial-corpus checks
-produce false positives.
+binding target is accepted by shape even when its concrete declaration or target
+concept is outside the supplied partial corpus; rejecting it would make
+partial-corpus checks produce false positives.
 
 `check-design` reads no generated config, assembly, TypeScript project, or Git state and
 writes no files.
@@ -151,9 +162,12 @@ unsupported.
 
 The config must default-export an application descriptor with an `assemble`
 function and a versioned `design` block. The checker assembles the selected
-application once and checks the exact variant returned by that descriptor.
-Built-in engine concepts and core-generated reactions are excluded from
-author-owned coverage requirements.
+application once and checks the exact variant returned by that descriptor. It
+uses assembly-exported instance/definition facts rather than only syntactically
+discovered `conceptSet` entries, so advanced `vocabulary(...)` assembly remains
+supported. The core-owned `RequestBoundary`, other built-in concepts, and
+core-generated reactions are excluded from author-owned completeness and
+coverage requirements.
 
 ### Concept checks
 
@@ -176,10 +190,10 @@ being skipped. `field?: T` and `field: T | undefined` have equivalent
 optionality.
 
 The checker does not claim semantic equivalence between authored type names and
-TypeScript types or require non-external names to have Types declarations. It retains
-raw State and does not compare its bounded structural inventory with class fields or
-storage. Config-based instance checking does use the inventory to prove qualified
-binding targets are definition-owned.
+TypeScript types or require conventional and refinement names to have Types
+declarations. It retains full State text and parses bounded SSF structure to
+inventory owned binding targets. It does not interpret invariant sentences or
+other prose, or compare State with class fields or storage.
 
 ### Application-design checks
 
@@ -188,21 +202,25 @@ For the configured design corpus, `check`:
 - accepts only explicit local `file:` URLs;
 - parses links, computations, and application `types`, `instances`, and `bindings`
   fences in every listed document;
-- inventories all normalized source contents, instance declarations, binding
-  explanations, and exact locations for provenance and digests;
-- compares the mandatory authored instance inventory with the exact assembled variant,
-  excluding core-owned `RequestBoundary`;
-- validates one binding placement mode per instance, complete external closure,
-  concrete declarations, and direct binding targets;
+- inventories all normalized source contents for provenance and digests;
+- requires an exact one-to-one match between authored instances and the assembled
+  variant's non-core `(instance, definition)` facts;
+- validates application `concrete` declarations, one binding placement per instance,
+  and complete external binding closure;
+- proves qualified binding targets against the selected definition's SSF-owned names,
+  while rejecting external-to-external targets and alias chains;
 - resolves every `reaction:`, `view:`, `former:`, and `computation:` link;
 - requires coverage for every selected authored reaction/endpoint tree, named
   view, and named former;
 - requires exactly one declaration for every executable computation; and
 - rejects authored declarations that are absent from the selected assembly.
 
-The checker validates links and coverage, not the truth of ordinary prose. Its bounded
-State parsing does not prove opaque invariant lines, State semantics, or
-computation-body semantics.
+Every binding edge resolves directly. Cycles among qualified owned-type instance
+dependencies are valid; a cycle does not turn an external parameter into a valid
+target.
+
+The checker validates links and coverage, not the truth of ordinary prose. It
+does not interpret State invariants or prove computation-body semantics.
 
 `--fail-on-warnings` promotes application warnings. Errors always fail;
 informational diagnostics remain advisory. The command modifies no files.
@@ -221,13 +239,12 @@ design: {
 }
 ```
 
-`documents` can be empty only when the assembled variant selects no
-application-owned concepts or other authored declarations. Any listed document
-may contain `types`, `instances`, or `bindings` fences. Every selected instance
-requires one authored instantiation and complete per-instance external bindings
-across the registered corpus. All URLs must be local `file:` URLs. A separate
-assembly variant uses a separate config and is checked against its own exact
-inventory.
+`documents` can be empty only when the assembled variant selects no application
+concept instances. Any listed document may contain `types`, `instances`, and
+`bindings` fences. Selected instances and external types require complete exact
+closure across the registered corpus; `RequestBoundary` is exempt. All URLs must
+be local `file:` URLs. A separate assembly variant uses a separate config and is
+checked independently.
 
 Configuration source must be statically inspectable where a command needs
 source provenance. Import, config, assembly, source, design, and projection
@@ -264,18 +281,15 @@ successful partial design.
 
 ### `manifest`
 
-Prints canonical JSON for `sync-engine.application-manifest`, version `1`. The
-schema is a hard reset: earlier application-manifest versions are rejected and
-have no compatibility decoder.
+Prints canonical JSON for `sync-engine.application-manifest`, version `1`. This
+pre-1.0 beta reset replaces the version-1 schema in place: earlier beta shapes
+and prior versions are rejected and have no compatibility decoder.
 
-The manifest retains normalized raw concept State, structured concept
-declarations, definition and instance identities, each instance declaration
-location, per-instance normalized bindings and binding provenance, concrete
-application types, application declaration identities, computation signatures,
-source locations, and digests over registered design contents. This beta
-replaces the earlier version-1 shape in place: `design.types` contains concrete
-types only, and instances own bindings. There is no compatibility decoder for
-the former beta schema. It excludes executable functions,
+The manifest retains normalized full concept State and bounded structural IR,
+structured concept declarations, authored definition/instance identities and
+bindings, resolved application types, application declaration identities,
+computation signatures, source locations,
+and digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
 other runtime-only values.
 
@@ -287,14 +301,14 @@ Prints generated Markdown read-back. It shows:
 - named view and former definitions;
 - all source locations that cover each selected declaration;
 - structured concept signatures, cardinalities, refusals, definition names,
-  instances, and source links;
+  authored instances and binding source links;
 - concrete types and resolved external bindings; and
 - computation signatures and source links.
 
-It does not copy ordinary application prose, Purpose, Principle, raw State,
-action/query bodies, or computation bodies. Retained detached binding
-explanations are shown beneath their normalized instance bindings. Concept State remains
-in the manifest and digest even though it is omitted from read-back.
+It does not copy application prose, Purpose, Principle, full State text,
+action/query bodies, adjacent binding explanations, or computation bodies.
+Concept State and structural IR remain in the manifest and digest even though
+the State body is omitted from read-back.
 
 ### `wire`
 

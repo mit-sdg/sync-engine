@@ -7,6 +7,9 @@ API.
 
 An entry is an adaptable example, not a required name, destination, or contract.
 Consumers may copy, simplify, split, combine, rename, or reject its design and source.
+Recipe assets include the complete static concept-instance inventory and external
+bindings for the recipe's stated selection; consumers must adapt them to the exact
+assembled variant.
 
 ## Commands
 

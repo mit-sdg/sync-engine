@@ -69,8 +69,10 @@ The persisted formats on this surface are
 queries, authored reactions, authored views, authored formers, computations,
 and endpoints. Runtime lowering names remain in manifest definitions and are
 not substituted for authored design identities. `indexApplication()` builds the
-deterministic inventory and possible-impact graph from an exact V1 manifest.
-Older application manifests are rejected; analysis has no compatibility
+deterministic inventory and possible-impact graph from an exact V1 manifest,
+including authored instance/definition provenance and normalized external
+bindings. The beta V1 schema is the replaced static-instance schema. Older
+application manifests are rejected; analysis has no compatibility
 decoder. `traceApplicationImpact()` performs bounded deterministic traversal
 and reports explicit incompleteness when limits or unknown seeds prevent a
 complete trace.

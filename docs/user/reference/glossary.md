@@ -28,8 +28,9 @@ another runtime.
 ## Authored design
 
 Application-owned concept specifications and explicitly configured application
-documents containing prose, application types, and computations. It is distinct from executable TypeScript
-declarations and generated read-back.
+documents containing prose, complete static concept-instance declarations,
+application types and bindings, and computations. It is distinct from executable
+TypeScript declarations and generated read-back.
 
 ## Binding
 
@@ -54,10 +55,10 @@ concept APIs; composition connects them.
 ## Concept specification
 
 A strict Markdown document containing ordered Purpose, Principle, external
-Types, raw State, structured Actions, and Queries for one reusable definition.
-Only the contracts in the [concept specification
-reference](concept-specification.md) are enforced. Raw State and
-natural-language behavior are not runtime schemas.
+Types, structurally parsed SSF State, structured Actions, and Queries for one
+reusable definition. Only the contracts in the [concept specification
+reference](concept-specification.md) are enforced. Opaque invariant/prose
+semantics and natural-language behavior are not runtime schemas.
 
 ## Concept floor
 
@@ -67,17 +68,19 @@ implementations without changing the concept set or specifications.
 
 ## Concept instance
 
-One statically named application selection of a reusable concept definition. Its
-name is a `conceptSet` key and is declared in the authored `instances` corpus.
-Distinct instance names do not by themselves allocate or isolate durable storage.
+One statically named application selection of a reusable concept definition.
+Its instance name identifies composition references, occurrences, inspection,
+and runtime scheduling within an assembly. A distinct instance name does not by
+itself allocate or isolate persistent storage.
 
 ## Concept set
 
 The registered selection of named concept instances used by one application
-variant. `conceptSet(...)` returns the complete object passed to `assemble`.
-Its `.concepts` property contains typed references for authoring composition;
-its `.implementations(...)` method constructs implementation maps. The property
-is a facet of the set, not a second set.
+variant. Each `conceptSet(...)` key is an instance name and its value is the
+registered definition that instance realizes. The function returns the complete
+object passed to `assemble`. Its `.concepts` property contains typed references
+for authoring composition; its `.implementations(...)` method constructs
+implementation maps. The property is a facet of the set, not a second set.
 
 ## Consequence
 
@@ -251,10 +254,18 @@ until resolved against an engine.
 
 ## Application types
 
-Concrete application-owned types declared in `types` fences. The complete
-selected inventory is declared in `instances` fences; each instance's direct
-external bindings are inline there or in detached `bindings` fences. Tooling
-checks these declarations rather than loading them at runtime.
+Concrete application types declared in `types` fences. External bindings are
+instead declared inline in `instances` fences or detached in `bindings` fences.
+Tooling checks both against the exact configured assembly; runtime does not load
+the declarations.
+
+## External type binding
+
+One direct assignment of a selected concept instance's external parameter to a
+concrete application type or another selected instance's SSF-owned type. Every
+instance places all its bindings inline or all detached. A binding establishes
+semantic identity, not TypeScript equivalence, behavior, adapter configuration,
+or persistent storage ownership.
 
 ## Wire contract
 

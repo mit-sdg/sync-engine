@@ -59,12 +59,9 @@ standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are uniqu
 within an action and never shared across actions. Return declared names only:
 `return account`, never prose such as `return the session account`.
 
-Action names start with a letter; queries start `_`. Query resolution precedes the
-named row: `: one (...)`, `: optional (...)`, or `: many (...)`. Mark optional State
-values as optional row fields, for example `dueAt?: DateTime`. A `one` body always
+Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
+before the named row. Mark optional State values `field?: Type`. A `one` body always
 promises one row; only `optional` may say no row.
-
-Application `design/types.md` separates concrete types from the complete inventory:
 
 ```types
 concrete Person
@@ -78,12 +75,23 @@ instantiate Noting as Notes with
   Task is Tasking.Task
 ```
 
-`instantiate D` means `instantiate D as D`. An instance binds all externals inline or
-all in detached `bindings` fences, never both. Targets are concrete or selected
-qualified non-external types. Concept files contain no application links or
-computations.
+Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once
+except `RequestBoundary`; bind all externals inline or all detached:
 
-Each composition document has one nonempty H1 and decision prose. References are actual
+```instances
+instantiate Tasking
+instantiate Noting as Notes
+```
+
+```bindings
+Tasking.Owner is Person
+Notes.Task is Tasking.Task
+```
+
+Do not mix placement. Targets are concrete or SSF-owned types; external
+aliases are invalid and direct owned-type cycles valid. Concept files contain no application links, instances, bindings, or computations.
+
+Each composition document has nonempty H1 and decision prose. References are
 Markdown links to application declarations—not bare `view:` lines, routes, or
 concept actions:
 
@@ -93,8 +101,8 @@ The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
 Visibility follows the [readability policy](view:Forum.posts.Readable).
 ```
 
-Declare each executable computation once with an indented body, in the using
-composition document or in `design/types.md` when shared:
+Declare each computation once with an indented body where used, or in
+`design/types.md` when shared:
 
 ```computations
 normalizeTitle(raw: String) : String

@@ -6,8 +6,9 @@ TypeScript-independent version-1 representation. The specification defines a
 concept definition; an application may instantiate that definition more than
 once under different concept-set keys.
 
-Application composition, concrete application types, typed design links, and
-computations do not belong in a concept specification. They belong in
+Application composition, concrete application types, concept instance
+inventories and bindings, typed design links, and computations do not belong in
+a concept specification. They belong in
 [registered application design](../guide/authoring.md#6-register-explicit-design-urls).
 
 For a new application, put one definition per
@@ -145,29 +146,29 @@ type universe nor requires every named type to have a declaration.
 ## `State`
 
 `State` contains exactly one `state` fence. The concept parser normalizes and
-retains the fence contents verbatim in concept-specification IR and application
-manifests. Registration does not derive a runtime schema from State.
+retains its full contents in concept-specification IR and application manifests.
+A bounded SSF parser also produces structural State IR.
 
 Authors must use Simple State Form (SSF), based on the
 [conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
-The config-free `check-design` command uses a bounded structural parser shared with
-SSF tooling. It recognizes set, sequence, element, subset, field, enumeration,
-primitive, and external-reference forms, including equivalent singular/plural type
-spellings. It fails with a concrete repair when a recognized declaration or field uses
-a near-miss structural keyword, the wrong article before a structural keyword or
-`optional`, a misplaced `optional`, `optional` on a collection, or omits `with` before
-indented fields.
+The parser recognizes set, sequence, element, and subset declarations; their
+indented fields and multiplicities; structural keywords; and SSF identifier and
+article placement. It normalizes consistent singular and plural type names,
+records subset relationships, and inventories the identity/type names introduced
+by the definition. Malformed structural declarations fail with source-located
+canonical-form diagnostics.
 
-Standalone invariant sentences and lines outside the bounded structural grammar
-remain opaque. The parser inventories structurally declared owned identity/type names,
-but it does not prove invariant prose, action or query meaning, State/storage
-agreement, or runtime schemas. Review those semantics and any unrecognized State lines
-manually.
+This is intentionally not a prose semantics parser. Standalone invariant
+sentences and other admitted non-structural lines remain opaque text. The parser
+does not prove those invariants, action conditions or effects, query meaning,
+storage layout, State/storage agreement, or implementation behavior. It also
+does not require every conventional or refinement name in an operation signature
+to appear in State.
 
-The current application-binding checker has not yet adopted the owned-type inventory,
-so it still does not prove that the final name on a qualified binding target is
-introduced by the target concept's State. State changes continue to affect canonical
-design digests.
+Config-based application checking uses the owned-name inventory for one specific
+proof: a qualified external-binding target must name a type owned by the target
+instance's definition. An external parameter is not an owned type and cannot be
+a binding target. State changes continue to affect canonical design digests.
 
 ## `Actions`
 
@@ -276,30 +277,32 @@ conceptSet({
 })
 ```
 
-The registered application corpus must declare the same inventory:
+`conceptSet` maps every selected application instance name to the registered
+concept definition it realizes. Both entries above use the `Commenting`
+definition. The configured application corpus must declare that exact static
+selection:
 
 ```instances
-instantiate Commenting as PostComments
-instantiate Commenting as AnswerComments
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+
+instantiate Commenting as AnswerComments with
+  User is Person
+  Target is Answering.Answer
 ```
 
-`instantiate Definition` is shorthand for `instantiate Definition as
-Definition`; a same-name instance is not conventional or privileged. Every
-selected application instance has exactly one declaration, and every declaration
-must be selected by the exact assembled config variant. `RequestBoundary` is
-core-owned and is not authored.
+`instantiate Definition` means exactly `instantiate Definition as Definition`.
+A definition does not require a same-name instance. Every config is checked
+against the exact assembly it returns, and the core-owned `RequestBoundary` is
+excluded from authored completeness. Generated design output records definition
+and instance names separately.
 
-Both example instances use the `Commenting` definition. Generated design output
-records each declaration location and groups both under the shared definition.
 If selected registrations use the same definition name, their canonical
 specifications must be identical. Different implementation classes or floors
 may implement that shared contract; incompatible specifications cannot claim
-the same definition name.
-
-External bindings belong to each instance, either inline in its declaration or
-entirely in detached `bindings` fences. Supplying a semantic type binding does
-not configure an implementation floor, allocate storage, or specialize action
-and query signatures.
+the same definition name. Authored instance declarations are a finite design
+inventory, not runtime instance creation or storage allocation.
 
 ## Source provenance
 

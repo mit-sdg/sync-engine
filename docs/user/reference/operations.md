@@ -40,9 +40,9 @@ policy](../../../SUPPORT.md) defines the support window and generated-format rul
 
 One action body runs at a time per concept instance within one engine. Different
 concept instances, root flows, assemblies, and processes may overlap. One
-assembly requires a distinct raw implementation object for every selected name.
-The same raw object may be used as one selected name in separate assemblies;
-each assembly creates its own queue and does not serialize the other.
+assembly rejects the same raw implementation object under two selected names.
+Sharing one raw instance between separate assemblies remains allowed and creates
+separate queues; the engine does not serialize those assemblies.
 
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query
@@ -54,6 +54,23 @@ earlier action. Put uniqueness, capacity, first-writer, and answer-once decision
 inside the state-owning action. Retryable operations need domain idempotency keys
 and durable deduplication where required. [Ordering and state-read
 timing](semantics.md#ordering-and-state-read-timing) defines exact ordering.
+
+## Static concept instances and persistence
+
+An authored `instances` inventory is a finite set of application identities. It
+does not create instances at runtime, create one instance per tenant, user,
+project, or workspace, discover deployments, provide aliases or replicas, or
+allocate storage. Keep unbounded domains as identities in concept State and
+action inputs; use separate assemblies when deployment-level isolation requires
+them.
+
+Within one assembly, each selected name has a distinct raw implementation object
+and its own scheduling identity. That does not prove durable isolation. Separate
+objects can still reach the same Mongo collection, SQL schema, file, cache key
+space, remote account, or endpoint. Persistent floor factories should use the
+instance-name argument to select explicit repositories or namespaces. Configure
+intentional sharing explicitly and provide any required transaction and
+coordination guarantees in the implementation and store.
 
 ## Supported multi-instance topology
 
@@ -68,26 +85,6 @@ Reactions remain local to the assembly that observed the action. The engine does
 not provide a distributed scheduler, cross-process serialization, occurrence
 replay, reaction resumption, rollback across actions, correlation-id
 deduplication, or exactly-once action or reaction execution.
-
-## Concept construction and resources
-
-A successful `conceptSet.implementations(floor, context)` call invokes each
-selected floor factory exactly once, with the exact context and its selected
-concept-set key. The helper is not a singleton registry: each later call invokes
-the factories again and constructs another map. Factories remain responsible
-for the identities and external resources they return.
-
-Assembly does not invoke a floor factory merely because the floor was
-registered. It can default-construct canonical classes, apply `initialize`
-arguments, or accept ready `instances`. A host selects a floor by calling
-`implementations(...)` and passing the result as `instances`; the host also
-owns that floor's resource lifecycle.
-
-The per-assembly raw-object identity check prevents two selected names from
-sharing instrumentation identity. It cannot detect two distinct objects using
-the same database collection, schema, file, cache key space, remote account, or
-service. Configure per-instance resources explicitly when durable isolation is
-required.
 
 ## Timeouts, abort, and shutdown
 

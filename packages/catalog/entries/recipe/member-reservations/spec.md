@@ -2,6 +2,27 @@
 
 Current gathering members may claim reservable resources while Reserving remains the sole owner of exclusive allocation.
 
+## Application types and instances
+
+```types
+concrete Person
+  A member identity supplied by the reservation application.
+
+concrete Resource
+  A reservable unit selected by the application.
+```
+
+```instances
+instantiate Timing
+
+instantiate Gathering with
+  Person is Person
+
+instantiate Reserving with
+  Resource is Resource
+  Claimant is Person
+```
+
 ## Compositions
 
 ### Reservations

@@ -76,7 +76,7 @@ changing the four concept classes.
 | -------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `design/concepts/*.md`                                         | Registered concept specifications                                |
 | `design/compositions/*.md`                                     | Composition-group intent and shared view/former design           |
-| `design/types.md`                                              | Complete instance inventory, concrete types, and bindings        |
+| `design/types.md`                                              | Complete instances, concrete types, and external bindings        |
 | `src/concepts/`                                                | PascalCase concept classes and adjacent registries               |
 | `src/concepts.ts`                                              | Named concept set, typed references, and deterministic floor     |
 | `src/compositions/Room.ts`                                     | Room endpoint groups and the single owning path for room formers |
@@ -104,5 +104,5 @@ Run `bun run artifacts:pin` only after an intentional composition,
 specification, or contract change, then review both generated files.
 
 Use the [application design authoring guide](../../docs/user/guide/authoring.md)
-to register strict specifications, application types, typed prose, and generated
-evidence for a selected assembly variant.
+to register strict specifications, the complete instance and binding inventory,
+typed prose, and generated evidence for a selected assembly variant.

@@ -126,31 +126,32 @@ command grammar and interface policy belong in composition, not in a generic hos
 concept. A direct inert adapter is permitted when it introduces none of those
 semantics; do not manufacture a pass-through concept solely to wrap an API call.
 
-## 6. Check application types and external identities
+## 6. Check instances, application types, and external identities
 
-Compare every executable concept-set key with exactly one `instantiate Definition`
-or `instantiate Definition as Instance` declaration in the registered corpus. The
-instance name must match the selected key and the definition must match the selected
-specification H1. Same-name and renamed instances follow the same rule; core-owned
-`RequestBoundary` is exempt.
+Compare the configured corpus with the exact assembled variant. Require one globally
+unique authored declaration for every selected application instance and no others;
+the specification H1 must match the authored definition. Do not require the core-owned
+`RequestBoundary`. Review each config independently rather than accepting a union of
+possible variants.
 
-Inventory every `ConceptInstance.ExternalType` and require one direct binding,
-either entirely inline under that instance's `with` block or entirely in detached
-`bindings` fences. A right side must directly name either:
+Inventory every `ConceptInstance.ExternalType` and require one direct binding. An
+instance supplies all bindings inline in its `instances` declaration or all through
+detached `bindings` fences. Reject a split between placements, repeated bindings even
+when equal, unknown or missing externals, and bindings on undeclared instances. An
+instance with no external parameters has no placement mode.
+
+A right side must directly name either:
 
 - an application `concrete` type with a nonempty prose definition; or
-- a qualified type on a selected concept instance.
+- a type the bounded SSF parser proves is owned by another declared, selected
+  instance's definition.
 
-Reject mixed placement, alias chains, bindings to another external parameter,
-duplicate or missing bindings, unresolved names, and unused concrete declarations.
-Allow cycles among direct qualified targets: they are instance dependencies, not
-external aliases. A binding establishes identity correspondence, not transferred
-ownership, storage allocation, runtime validation, or general TypeScript
-assignability.
-
-Because version 1 retains State without parsing it, manually review whether a
-qualified non-external target is really owned by that concept. Do not claim the
-checker proved the final State type name.
+Reject external-to-external targets, alias chains, unresolved names, and unused
+concrete declarations. Do not reject a cycle merely because instance A targets an
+owned type of B while B targets an owned type of A: direct qualified targets resolve
+independently and such dependency cycles are valid. A binding establishes identity
+correspondence, not transferred ownership, runtime validation, general TypeScript
+assignability, adapter configuration, or durable storage isolation.
 
 ## 7. Review each composition document beside its source responsibility
 
@@ -190,8 +191,8 @@ sync-engine check-design design/concepts/*.md design/compositions/*.md design/ty
 ```
 
 This command checks strict concept syntax and the form of composition links,
-computations, and application types. It deliberately leaves resolution and coverage
-for config-based `sync-engine check` because the supplied corpus can be partial.
+computations, concrete types, instances, and bindings. It deliberately leaves
+resolution and coverage for config-based `sync-engine check` because the supplied corpus can be partial.
 
 For every concept, also verify manually that:
 
@@ -203,10 +204,10 @@ For every concept, also verify manually that:
   for reference material;
 - Types contains one `types` fence with only explicit `external` declarations;
   concept-owned and conventional names do not need local declarations;
-- State contains one raw `state` fence and follows SSF declaration, identity, type,
-  multiplicity, naming, and indentation rules; `check-design` structurally parses the
-  bounded grammar and reports its published repairable forms, so review opaque lines
-  and semantics manually;
+- State contains one `state` fence and follows SSF declaration, identity, type,
+  multiplicity, naming, and indentation rules; `check-design` parses the bounded
+  structural declarations and inventories owned names, while invariant sentences
+  and other admitted prose remain a manual semantic review;
 - every action has explicit `where`/`then` branches and one terminal return or refusal
   per branch;
 - action results and query rows use parenthesized named fields;
@@ -229,14 +230,17 @@ sync-engine artifacts check
 
 Inspect failed-closed TypeScript shape diagnostics; do not waive unresolved input,
 action-result, or query-row shapes. Confirm definition-name duplicates have identical
-canonical specifications, every selected external type is bound, every typed link
-resolves, every executable computation has one declaration, and generated source
-locations point to the prose that honestly covers each declaration.
+canonical specifications, the authored instance inventory exactly matches the
+assembled variant, every selected external type is bound in one placement, every
+typed link resolves, every executable computation has one declaration, and generated
+source locations point to the prose that honestly covers each declaration.
 
 Generated read-back is evidence of the selected assembly, not a replacement for
 Markdown or behavior tests. Registration does not prove semantic type equivalence,
-State/storage agreement, natural-language effects, persistence, transactions, or
-durability.
+State/storage agreement, invariant or natural-language effects, persistence,
+transactions, or durability. Distinct instance declarations do not prove that their
+implementations use separate collections, schemas, files, caches, or remote
+resources.
 
 ## 10. Trace objective-driven scenarios
 

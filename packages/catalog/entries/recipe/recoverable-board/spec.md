@@ -2,6 +2,34 @@
 
 A recoverable board publishes and discusses posts, organizes them with labels, and keeps visibility reversible until purge.
 
+## Application types and instances
+
+```types
+concrete Person
+  An author identity supplied by the board application.
+
+concrete BoardScope
+  The fixed labeling scope for this recoverable board.
+```
+
+```instances
+instantiate Timing
+
+instantiate Posting with
+  Author is Person
+
+instantiate Commenting with
+  Target is Posting.Post
+  Author is Person
+
+instantiate Labeling with
+  Scope is BoardScope
+  Item is Posting.Post
+
+instantiate Trashing with
+  Item is Posting.Post
+```
+
 ## Compositions
 
 ### BoardContent
