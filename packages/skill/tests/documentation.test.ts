@@ -376,6 +376,9 @@ describe("compact sync-engine Agent Skill documents", () => {
 
     const frontend = await text(new URL("roles/frontend-worker.md", promptRoot));
     expect(frontend).toContain("client of the application's endpoints");
+    expect(frontend).toContain("`createHttpClient<GeneratedHttpWire>`");
+    expect(frontend).toContain("Never call an\napplication endpoint with `fetch`");
+    expect(workflow).toContain("frontend owns its `createHttpClient` construction");
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow).toContain("split only for overflow or explicit parallelism");
     expect(workflow).toContain("Do not create a replacement agent");
