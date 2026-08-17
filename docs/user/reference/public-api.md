@@ -198,10 +198,19 @@ needed by assembly and tooling.
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
 supplied floor value must be a factory function. Call
 `set.implementations(floor, context)` to construct a named implementation map.
-Each factory receives that exact caller-supplied `context`, followed by the
-concept's registration name; TypeScript requires the context to satisfy every
-selected factory's first parameter. This context is separate from
-`ConceptFloor.resources`.
+On each successful call, the set invokes every selected registration's factory
+once. Each factory receives that exact caller-supplied `context`, followed by
+the concept-set key that selected it; reusing one registration under several
+keys therefore invokes its factory once with each key. TypeScript requires the
+context to satisfy every selected factory's first parameter. This context is
+separate from `ConceptFloor.resources`.
+
+Calls to `implementations(...)` are not memoized. Every call constructs another
+map and invokes the selected factories again; a factory controls the identities
+it returns. Assembly does not choose or invoke a registered floor implicitly.
+It may instead use ready `instances`, `initialize` arguments, or default
+constructors. Pass an `implementations(...)` result as `instances` to assemble
+that floor.
 
 A floor name is available through the typed `implementations(...)` overload only
 when every concept supplies it. If an incomplete floor is selected by bypassing
@@ -215,8 +224,11 @@ records before constructing one set; refs from separate concept sets cannot be
 combined.
 
 `conceptFloor` validates a complete implementation map and returns the supplied
-descriptor. Assembly does not install, own, or call the floor's `close()`
-method. The host owns floor selection and lifecycle.
+descriptor. Assembly requires a distinct raw implementation object for every
+selected name in that assembly. This identity check neither proves distinct
+storage nor prevents one raw object from being used as one selected name in
+separate assemblies. Assembly does not install, own, or call the floor's
+`close()` method. The host owns floor selection and lifecycle.
 
 `RegisteredConcept.specification` is the machine-readable version-1
 `ConceptSpec` extracted from the strict ordered Purpose, Principle, Types, State,

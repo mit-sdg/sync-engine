@@ -13,6 +13,7 @@ cookbook](../guide/read-construction.md).
 | Trigger matching and consequence paths      | [Reactions](#reactions)                                                                   |
 | Consequences held until causal work drains  | [Deferred triggers and settlement frontiers](#deferred-triggers-and-settlement-frontiers) |
 | Portable and local definitions              | [Portable and local behavior](#portable-and-local-behavior)                               |
+| Concept construction and raw identity       | [Concept implementation construction](#concept-implementation-construction)               |
 | In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                   |
 | Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                              |
 | Query promises, caching, and equality       | [Queries](#queries)                                                                       |
@@ -219,6 +220,32 @@ artifact write is exposed. Manual engines under the `advanced` subpath may
 execute local constructs, but they do not gain ordinary assembly's application
 boundary or portability guarantees.
 
+## Concept implementation construction
+
+Every concept-set key is a selected application name. Within one
+`assemble(...)` call, each selected name must resolve to a distinct raw
+implementation object. Assembly checks object identity before attaching concept
+metadata or instrumenting any selected implementation and rejects an alias with
+a diagnostic naming both selected names. Distinct objects may still connect to
+the same collection, schema, file, cache, or service; this check does not prove
+storage isolation.
+
+`conceptSet.implementations(floor, context)` is an explicit construction helper.
+On each successful call, it invokes the selected floor factory once for every
+concept-set key, passing the exact `context` followed by that key. Calls are not
+memoized: a later call invokes the factories again and returns another
+implementation map. A factory controls the identities it returns.
+
+Assembly does not implicitly call a floor factory. It may use ready `instances`,
+per-name `initialize` arguments, or default constructors. To select a registered
+floor, the host calls `implementations(...)` and supplies that result as
+`instances`.
+
+The raw-identity check is assembly-local, not a process-global ownership claim.
+The same raw object may be supplied as one selected name to separate assemblies
+or manual engines. Those engines still create separate action queues and query
+caches.
+
 ## Execution and concurrency
 
 For an instrumented action, the engine performs these steps in order:
@@ -247,9 +274,10 @@ JavaScript realm and non-native thenables. The queue reads `then` once and
 invokes it in a microtask. A throwing `then` accessor, or a `then` call that
 throws before settlement, faults the action. A thenable that never settles holds
 the serial line just as a never-settling promise does. Supplying one raw instance
-to several engines creates separate queues and query caches and does not
-serialize those engines. Different concept instances and separate root flows
-can overlap.
+as one selected name to several engines creates separate queues and query caches
+and does not serialize those engines. One assembly cannot select that object
+under several names. Different concept instances and separate root flows can
+overlap.
 Ordinary reactions for one landed occurrence are currently evaluated
 sequentially. Their trigger and `where` stages all finish before any matching
 consequence is dispatched, so one sibling consequence cannot change another
@@ -756,9 +784,10 @@ frontier.
 Action bodies run one at a time per concept instance within one engine, in
 arrival order. The queue awaits native promises and structural thenables as
 described under [Execution and concurrency](#execution-and-concurrency). Sharing
-one raw instance between engines does not share a queue or query cache. This is
-an in-process guarantee. A concept's implementation and storage must supply any
-atomicity or coordination required across processes. A reaction consequence
+one raw instance as one selected name between engines does not share a queue or
+query cache; selecting it under several names in one assembly is invalid. This
+is an in-process guarantee. A concept's implementation and storage must supply
+any atomicity or coordination required across processes. A reaction consequence
 chain commits each action independently. Earlier actions remain committed when a
 later action refuses or faults.
 The runtime provides no retry deduplication or exactly-once guarantee. A retry
