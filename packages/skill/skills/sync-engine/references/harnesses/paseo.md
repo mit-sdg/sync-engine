@@ -12,7 +12,17 @@ Inspect the coordinator exactly once through `$PASEO_AGENT_ID`:
 paseo inspect "$PASEO_AGENT_ID" --json
 ```
 
-Cache its exact provider and model in active context. Do not infer the provider from the
+Resolve the absolute application root. If it differs from the inspected coordinator
+`Cwd`, create one local application workspace and cache its returned workspace ID:
+
+```sh
+paseo workspace create --isolation local --path "$application_root" --json
+```
+
+Use `--workspace "$application_workspace_id"` on every role launch in place of
+`--cwd "$PWD"`. An agent-scoped `--cwd` alone does not override the caller workspace.
+
+Cache the coordinator's exact provider and model in active context. Do not infer the provider from the
 model ID: Pi `openai-codex/...` models still use `pi`, not `codex`. When the user has
 explicitly supplied descendant provider, model, and reasoning, use those values without
 provider discovery. Do not pass `--mode` unless the user also supplied a mode that the
@@ -32,9 +42,11 @@ paseo run --provider <provider> --model <model> --thinking <normal> --cwd "$PWD"
 ```
 
 Capture the child identifier. If launch output does not attest resolved parent,
-provider, model, reasoning, and working directory, inspect the child once. Stop before
-assignment on any mismatch. Never launch implementation or evidence roles in a
-sync-engine framework checkout.
+provider, model, reasoning, and application working directory, inspect the child once.
+Stop before assignment on a parent, provider, model, or reasoning mismatch. If only the
+working directory is wrong, archive the unassigned child and retry once through the local
+application workspace; do not ask the user to restart. Never launch implementation or
+evidence roles in a sync-engine framework checkout.
 
 Deliver initial and diagnostic files without blocking:
 

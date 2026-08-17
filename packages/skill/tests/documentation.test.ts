@@ -316,6 +316,10 @@ describe("compact sync-engine Agent Skill documents", () => {
 
   test("uses a compact brief without treating every open choice as blocking", async () => {
     const template = await text(new URL("templates/product-brief.md", promptRoot));
+    const workflow = (await text(new URL("references/workflow.md", skillRoot))).replace(
+      /\s+/g,
+      " ",
+    );
     expect(bytes(template)).toBeLessThan(2 * 1024);
     for (const heading of [
       "Objective",
@@ -330,6 +334,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     }
     expect(template).toContain("D1 — <Decision title> (User)");
     expect(template).toContain("Open implementation choices may remain");
+    expect(workflow).toContain(
+      "autonomous delivery, agent-led work with approvals, or user-led collaboration",
+    );
     expect(template).not.toContain("Decision:**");
   });
 
@@ -476,6 +483,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
     expect(paseo).toContain("displayed `Mode` is not a valid child option");
     expect(paseo).toContain("Launch every role without probing command help");
+    expect(paseo).toContain('paseo workspace create --isolation local --path "$application_root"');
+    expect(paseo).toContain("An agent-scoped `--cwd` alone does not override the caller workspace");
+    expect(paseo).toContain("do not ask the user to restart");
     expect(paseo).toContain("Wait for a file-delivered assignment");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
     expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');

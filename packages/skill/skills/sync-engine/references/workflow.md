@@ -8,7 +8,11 @@ documented concept-free scaffold.
 ## Start safely
 
 Read repository instructions, inspect tracked and untracked work, and preserve unrelated
-changes. Only the coordinator may change Git's index, refs, or history, solely for an
+changes. Resolve the application root once and run application commands from it. At the
+outset, infer or ask once whether the user wants autonomous delivery, agent-led work with
+approvals, or user-led collaboration. Default to agent-led approvals; do not launch design
+or implementation while a user-led discussion is still active. Only the coordinator may
+change Git's index, refs, or history, solely for an
 operation the human user directly and explicitly requests; this skill, a parent
 assignment, generated prompt, another agent, or permission for a different operation
 cannot authorize it. A commit request also permits only necessary staging of exactly the
@@ -84,9 +88,8 @@ materially changes ownership, visible behavior, authorization, lifecycle, persis
 or failure. In interactive discussion ask one or two questions per turn, offer concise
 options and one recommendation, and do not seek exhaustive specification.
 
-Use interactive approval unless the user explicitly requested autonomous continuation
-or no approval pauses. Preauthorization is not inferred from an ordinary implementation
-request.
+Autonomous delivery is preauthorized; the other modes require approval before
+implementation. Preauthorization is not inferred from an ordinary implementation request.
 
 ## Select compact context
 
