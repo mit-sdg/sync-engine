@@ -21,4 +21,32 @@ describe("serve", () => {
       }),
     ).rejects.toThrow('GET / is claimed by both "Browser" and "Preview"');
   });
+
+  test("refuses overlapping exact and prefix claims before opening a listener", async () => {
+    const family = defineFetchRealization({
+      interface: "Browser",
+      claims: [
+        {
+          method: "GET",
+          path: "/welcome/",
+          match: "prefix",
+          declarations: ["Browser.Room"],
+        },
+      ],
+      async fetch() {
+        return new Response("family");
+      },
+    });
+    const atlas = defineFetchRealization({
+      interface: "Preview",
+      claims: [{ method: "GET", path: "/welcome/atlas", declarations: ["Preview.Atlas"] }],
+      async fetch() {
+        return new Response("atlas");
+      },
+    });
+
+    await expect(
+      serve({ at: { hostname: "127.0.0.1", port: 0 }, realizations: [family, atlas] }),
+    ).rejects.toThrow("GET /welcome/atlas overlaps claims");
+  });
 });

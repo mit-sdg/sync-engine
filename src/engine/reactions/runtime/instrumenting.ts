@@ -12,7 +12,11 @@ import { isRefuse, refusalMapping } from "../concepts/refuse.ts";
 import { actionId, actionSettlement, byReaction, flow } from "../context.ts";
 import type { ActionSettlement } from "../context.ts";
 import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
-import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
+import {
+  queryIdentityOf,
+  queryPromiseOf,
+  validateQueryContracts,
+} from "@engine/reads/query-contracts";
 import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
@@ -192,11 +196,13 @@ export function instrumentConcept<T extends object>(
           queryName?: string;
           queryLabel?: string;
           queryPromise?: import("@engine/reads/query-contracts").QueryPromise;
+          queryIdentity?: readonly string[];
         };
         instrumentedQuery.concept = concept;
         instrumentedQuery.queryName = String(property);
         instrumentedQuery.queryLabel = displayName;
         instrumentedQuery.queryPromise = queryPromiseOf(concept, String(property));
+        instrumentedQuery.queryIdentity = queryIdentityOf(concept, String(property));
         registerEvaluationQuery(
           instrumentedQuery as import("../types.ts").InstrumentedQuery,
           withCache as import("../types.ts").InstrumentedQuery,

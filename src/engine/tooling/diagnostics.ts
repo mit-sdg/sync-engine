@@ -553,8 +553,9 @@ function firstOverlap(
 }
 
 function endpointPathOf(path: AnswerPath): string | undefined {
-  if (!Object.hasOwn(path.request, "path")) return undefined;
-  const value = literalValue(path.request.path);
+  const member = Object.hasOwn(path.request, "route") ? path.request.route : path.request.path;
+  if (member === undefined) return undefined;
+  const value = literalValue(member);
   return value.known && typeof value.value === "string" ? value.value : undefined;
 }
 

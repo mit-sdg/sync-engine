@@ -2,7 +2,7 @@
 
 === packages/rendering/dist/compiled/html-rendering.d.ts ===
 import type { InterfaceBinding } from "@mit-sdg/sync-engine/boundary";
-import { type RendererInvocation } from "../language/renderer.ts";
+import { type RendererInvocation, type RendererRead } from "../language/renderer.ts";
 export interface FormedHtmlContent {
     readonly format: "html";
     readonly value: string;
@@ -10,31 +10,153 @@ export interface FormedHtmlContent {
 export interface FormedHtml {
     readonly holder: string;
     readonly content: FormedHtmlContent;
+    readonly fields: readonly string[];
+    readonly asks: readonly FormedAsk[];
+    readonly reads: readonly FormedRead[];
+    /** The server-side standing structure from which exact live patches are derived. */
+    readonly tree: FormedHtmlTree;
 }
+export interface FormedRead {
+    readonly concept: string;
+    readonly query: string;
+    readonly input: Readonly<Record<string, unknown>>;
+}
+export type FormedAskInput = {
+    readonly source: "field";
+    readonly name: string;
+    readonly address: string;
+} | {
+    readonly source: "value";
+    readonly value: unknown;
+};
+export interface FormedAskOutput {
+    readonly name: string;
+    readonly address: string;
+}
+export interface FormedAsk {
+    readonly id: string;
+    readonly concept: string;
+    readonly action: string;
+    readonly input: Readonly<Record<string, FormedAskInput>>;
+    readonly output: Readonly<Record<string, FormedAskOutput>>;
+}
+export interface FormedHtmlTree {
+    readonly kind: "root";
+    readonly address: "root";
+    readonly children: readonly FormedHtmlNode[];
+}
+export interface FormedRendererNode {
+    readonly kind: "renderer";
+    readonly address: string;
+    readonly renderer: string;
+    readonly children: readonly FormedHtmlNode[];
+}
+export interface FormedShowNode {
+    readonly kind: "show";
+    readonly address: string;
+    readonly value: string;
+}
+export interface FormedRowNode {
+    readonly kind: "row";
+    readonly address: string;
+    /** Marked HTML suitable for inserting this exact row into its clause. */
+    readonly html: string;
+    readonly children: readonly FormedHtmlNode[];
+}
+export interface FormedClauseNode {
+    readonly kind: "clause";
+    readonly address: string;
+    readonly cardinality: "each" | "where";
+    readonly identity?: readonly string[];
+    /** HTML between the clause's persistent start and end markers. */
+    readonly html: string;
+    readonly rows: readonly FormedRowNode[];
+}
+export type FormedHtmlNode = FormedRendererNode | FormedShowNode | FormedClauseNode;
+export type FormedHtmlPatch = {
+    readonly kind: "root";
+    readonly html: string;
+} | {
+    readonly kind: "show";
+    readonly address: string;
+    readonly value: string;
+} | {
+    readonly kind: "clause";
+    readonly address: string;
+    readonly html: string;
+} | {
+    readonly kind: "rows";
+    readonly address: string;
+    readonly order: readonly string[];
+    readonly entered: readonly {
+        readonly address: string;
+        readonly html: string;
+    }[];
+    readonly left: readonly string[];
+};
 export interface CompiledHtmlRendering {
     readonly interface: string;
     readonly renderers: readonly string[];
-    form(invocation: RendererInvocation): FormedHtml;
+    form(invocation: RendererInvocation, reader?: RenderingReader): Promise<FormedHtml>;
+}
+export interface RenderingReader {
+    read(read: Pick<RendererRead, "concept" | "query">, input: Record<string, unknown>): Promise<unknown>;
 }
 /** Compile the HTML renderer closure admitted by one named interface. */
 export declare function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering;
+/** Derive exact, provenance-addressed changes between two formations of one holder. */
+export declare function diffHtml(previous: FormedHtml, next: FormedHtml): readonly FormedHtmlPatch[];
 
 === packages/rendering/dist/compiled/index.d.ts ===
-export { compileHtml } from "./html-rendering.ts";
-export type { CompiledHtmlRendering, FormedHtml, FormedHtmlContent } from "./html-rendering.ts";
+export { compileHtml, diffHtml } from "./html-rendering.ts";
+export type { RenderingReader } from "./html-rendering.ts";
+export type { CompiledHtmlRendering, FormedAsk, FormedAskInput, FormedAskOutput, FormedClauseNode, FormedHtml, FormedHtmlContent, FormedHtmlNode, FormedHtmlPatch, FormedHtmlTree, FormedRead, FormedRendererNode, FormedRowNode, FormedShowNode, } from "./html-rendering.ts";
 
 === packages/rendering/dist/language/index.d.ts ===
-export { html, isRenderer, isRendererInvocation, renderer } from "./renderer.ts";
-export type { HtmlNode, Renderer, RendererBindings, RendererBuilder, RendererDeclaration, RendererInputs, RendererInvocation, RenderingNode, } from "./renderer.ts";
+export { each, html, isRenderer, isRendererInvocation, renderer, where } from "./renderer.ts";
+export type { HtmlNode, Renderer, RendererAsk, RendererBindings, RendererBuilder, RendererDeclaration, RendererInputs, RendererInvocation, RendererRead, RendererValueRef, RenderingNode, } from "./renderer.ts";
 
 === packages/rendering/dist/language/renderer.d.ts ===
+import type { ReadLine } from "@mit-sdg/sync-engine/language";
 export type RendererInputs = Record<string, unknown>;
 export type RendererBindings = Record<string, unknown>;
+export interface RendererValueRef {
+    readonly scope: "input" | "binding" | "field";
+    readonly name: string;
+}
+export interface RendererAsk {
+    readonly concept: string;
+    readonly action: string;
+    readonly input: Readonly<Record<string, unknown>>;
+    readonly output: Readonly<Record<string, RendererValueRef>>;
+}
+export interface RendererRead {
+    readonly concept: string;
+    readonly query: string;
+    /** Result fields whose values identify rows, as promised by the query declaration. */
+    readonly identity?: readonly string[];
+    readonly input: Readonly<Record<string, unknown>>;
+    readonly output: Readonly<Record<string, RendererValueRef>>;
+}
 export interface HtmlNode {
     readonly kind: "html";
     readonly parts: readonly ({
         readonly kind: "literal";
         readonly value: string;
+    } | {
+        readonly kind: "show";
+        readonly value: RendererValueRef;
+    } | {
+        readonly kind: "field";
+        readonly field: RendererValueRef;
+    } | {
+        readonly kind: "ask";
+        readonly ask: RendererAsk;
+    } | {
+        readonly kind: "read";
+        readonly cardinality: "each" | "where";
+        readonly read: RendererRead;
+        readonly body: HtmlNode;
     } | {
         readonly kind: "renderer";
         readonly invocation: RendererInvocation;
@@ -57,7 +179,18 @@ export interface Renderer<Inputs extends RendererInputs = RendererInputs> {
     readonly declaration: RendererDeclaration;
 }
 export type RendererBuilder<Inputs extends RendererInputs = RendererInputs, Bindings extends RendererBindings = RendererBindings, Fields extends RendererBindings = RendererBindings> = (inputs: Inputs, bindings: Bindings, fields: Fields) => RenderingNode;
+type OpenRendererBag = Record<string, any>;
 export declare function html(strings: TemplateStringsArray, ...statements: readonly unknown[]): HtmlNode;
-export declare function renderer<Inputs extends RendererInputs = Record<string, never>, Bindings extends RendererBindings = Record<string, never>, Fields extends RendererBindings = Record<string, never>>(description: string, build: RendererBuilder<Inputs, Bindings, Fields>): Renderer<Inputs>;
+type ReadPlacement = Extract<HtmlNode["parts"][number], {
+    kind: "read";
+}>;
+interface RendererReadBuilder {
+    html(strings: TemplateStringsArray, ...statements: readonly unknown[]): ReadPlacement;
+}
+export declare function each(line: ReadLine): RendererReadBuilder;
+export declare function where(line: ReadLine): RendererReadBuilder;
+export declare function renderer(description: string, build: RendererBuilder<OpenRendererBag, OpenRendererBag, OpenRendererBag>): Renderer<RendererInputs>;
+export declare function renderer<Inputs extends RendererInputs, Bindings extends RendererBindings = Record<string, never>, Fields extends RendererBindings = Record<string, never>>(description: string, build: RendererBuilder<Inputs, Bindings, Fields>): Renderer<Inputs>;
 export declare function isRenderer(value: unknown): value is Renderer;
 export declare function isRendererInvocation(value: unknown): value is RendererInvocation;
+export {};

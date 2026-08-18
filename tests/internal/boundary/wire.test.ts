@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test } from "vite-plus/test";
-import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { endpoint, endpointPrefix, receive, respond } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/advanced";
 import { each, former, no, reaction, view, when, where, whether } from "@sync-engine/language";
 import type { Vars } from "@sync-engine/internal/reactions/types";
@@ -746,5 +746,28 @@ describe("wire contracts", () => {
     if (ordered.output.kind !== "object") throw new Error("expected object output");
 
     expect(ordered.output.fields.map(({ key }) => key)).toEqual(["A", "_", "a", "~", "é"]);
+  });
+
+  test("preserves a prefix claim while deriving actual path output", () => {
+    const Welcome = endpointPrefix("/welcome/", (_vars, { path }) =>
+      receive().then(respond({ space: path })),
+    );
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: {}, computations: {} }),
+      composition: { Welcome },
+    });
+
+    expect(wireContracts(app.engine.exportReactions())).toMatchObject({
+      endpoints: [
+        {
+          path: "/welcome/",
+          match: "prefix",
+          output: {
+            kind: "object",
+            fields: [{ key: "space", type: { kind: "json" } }],
+          },
+        },
+      ],
+    });
   });
 });

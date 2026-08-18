@@ -8,6 +8,8 @@ const register = {
     "FetchClaim",
     "FetchRealization",
     "defineFetchRealization",
+    "fetchClaimMatches",
+    "fetchClaimsOverlap",
     "isFetchRealization",
     "realize",
   ],

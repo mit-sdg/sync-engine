@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { endpoint, receive, respond } from "@sync-engine/boundary";
+import { endpoint, endpointPrefix, receive, respond } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/advanced";
 import type { Vars } from "@sync-engine/internal/reactions/types";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
@@ -244,6 +244,57 @@ describe("endpoint", () => {
   ])("rejects a nonportable %s", (_case, path) => {
     expect(() => endpoint(path, () => receive().then(respond({})))).toThrow(
       /endpoint\(\.\.\.\): path/,
+    );
+  });
+
+  test("a prefix binds each admitted request's actual path through explicit route context", async () => {
+    const WelcomeSpace = endpointPrefix("/welcome/", (_vars, { path }) =>
+      receive().then(respond({ space: path })),
+    );
+    const app = assemble({ vocabulary: emptyVocabulary, composition: { WelcomeSpace } });
+
+    const reaction = app.engine
+      .exportReactions()
+      .reactions.find(({ name }) => name === "WelcomeSpace");
+    expect(reaction?.when[0]).toMatchObject({
+      kind: "action",
+      concept: "RequestBoundary",
+      action: "request",
+      input: { route: "/welcome/" },
+    });
+    expect(await app.invoker.invoke("/welcome/atlas" as never, {})).toEqual({
+      ok: true,
+      value: { space: "/welcome/atlas" },
+    });
+    expect(app.publicInterface.prefixes).toEqual({ "/welcome/": {} });
+  });
+
+  test("a prefix admits nonempty descendants but not its root or siblings", async () => {
+    const WelcomeSpace = endpointPrefix("/welcome/", () => receive().then(respond({ ok: true })));
+    const app = assemble({ vocabulary: emptyVocabulary, composition: { WelcomeSpace } });
+
+    await expect(app.invoker.invoke("/welcome/" as never, {})).resolves.toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
+    await expect(app.invoker.invoke("/welcoming/atlas" as never, {})).resolves.toMatchObject({
+      ok: false,
+      error: { code: "NOT_FOUND" },
+    });
+  });
+
+  test("rejects overlapping exact and prefix routes instead of inventing precedence", () => {
+    const Family = endpointPrefix("/welcome/", () => receive().then(respond({ family: true })));
+    const Atlas = endpoint("/welcome/atlas", () => receive().then(respond({ atlas: true })));
+
+    expect(() => assemble({ vocabulary: emptyVocabulary, composition: { Family, Atlas } })).toThrow(
+      /overlaps exact path "\/welcome\/atlas"/,
+    );
+  });
+
+  test.each(["/", "/welcome", "/welcome/?tab=all"])("rejects invalid prefix %s", (prefix) => {
+    expect(() => endpointPrefix(prefix, () => receive().then(respond({})))).toThrow(
+      /endpointPrefix\(\.\.\.\):/,
     );
   });
 });

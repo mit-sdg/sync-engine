@@ -91,7 +91,7 @@ formers](semantics.md#views-and-formers).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `SettledChange`, `SettledChangeObserver`, `SettledOccurrence`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -125,10 +125,19 @@ Every assembly owns an internal occurrence index; `logSink` neither replaces it
 nor restricts `retention`.
 
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
-`whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
+`whenIdle()`, `observeSettledChanges(observer)`, and `form(fusedFormer)`. Drain closes root admission immediately;
 both lifecycle promises resolve when accepted action, query, and former work
 actually settles. `form(...)` resolves to the formed runtime value; an optional
 record former contributes `null` to that result.
+
+`observeSettledChanges(...)` reports one conservative change after each causal
+flow containing at least one successful non-boundary concept occurrence has
+fully settled. The event carries a process-local monotonic `sequence`, the
+ordered concept/action occurrence identities, and a deduplicated concept list.
+It does not expose occurrence inputs, outputs, or private State. A refusal,
+fault, or request-boundary-only flow produces no change. The returned function
+removes the observer; a throwing or rejected observer cannot disrupt settlement
+or another observer.
 `ActionRefusal` is the direct-action refusal result.
 For a registered exception, it contains the specification code and sentence as
 `detail`. The standard boundary refusal funnel exposes the code without that
@@ -273,7 +282,7 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `InputContractDecl`, `InterfaceBinding`, `InterfaceDefinition`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `bindInterface`, `createGateway`, `defineInterface`, `endpoint`, `receive`, `respond`, `serializeJsonValue`
+`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointRouteContext`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `InputContractDecl`, `InterfaceBinding`, `InterfaceDefinition`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `bindInterface`, `createGateway`, `defineInterface`, `endpoint`, `endpointPrefix`, `receive`, `respond`, `serializeJsonValue`
 
 <!-- register:boundary:end -->
 
@@ -297,17 +306,25 @@ than silently rebound.
 
 ### Endpoints
 
-| API        | Compact signature                                                                        |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| `endpoint` | `endpoint(path, vars => receive(input)...then(respond(body)), { input?, validators? }?)` |
-| `receive`  | `receive(input?)`                                                                        |
-| `respond`  | `respond(body?)`                                                                         |
+| API              | Compact signature                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `endpoint`       | `endpoint(path, vars => receive(input)...then(respond(body)), { input?, validators? }?)`                     |
+| `endpointPrefix` | `endpointPrefix(prefix, (vars, { path }) => receive(input)...then(respond(body)), { input?, validators? }?)` |
+| `receive`        | `receive(input?)`                                                                                            |
+| `respond`        | `respond(body?)`                                                                                             |
 
 `EndpointDef`, `EndpointOptions`, and `InputContractDecl` name the declaration
 and optional runtime outer-shape contract. `EndpointValidator`,
 `EndpointValidators`, and `ValidationResult` define schema-library-neutral
 input, successful-output, and domain-error checks. The domain-error validator
 receives exactly the value of the authored response's top-level `error` field.
+
+`endpointPrefix` claims every nonempty descendant of a canonical absolute
+prefix ending in `/`. Its second callback argument is closed route context:
+`path` is a stable binding populated with the actual request pathname, while
+the first `vars` argument remains ordinary open authoring variables. Distinct
+exact and prefix declarations whose claims overlap are rejected; routing does
+not establish hidden precedence.
 
 | Type                 | Shape                                                    |
 | -------------------- | -------------------------------------------------------- |

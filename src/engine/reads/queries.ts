@@ -6,6 +6,7 @@
 import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import { bindInputMapping } from "./frames.ts";
 import type { QueryMetadata } from "./query-metadata.ts";
+import { canonicalValue } from "@engine/utils/canonical-json";
 
 const evaluationQueries = new WeakMap<InstrumentedQuery, InstrumentedQuery>();
 
@@ -101,6 +102,39 @@ function rowsOfAnswer(value: unknown, query: NamedQuery): unknown[] {
   );
 }
 
+function validateRowIdentity(rows: readonly unknown[], query: NamedQuery): void {
+  const fields = query.queryIdentity;
+  if (fields === undefined) return;
+  const label = labelOf(query);
+  const seen = new Map<string, number>();
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index] as Record<string, unknown>;
+    for (const field of fields) {
+      if (!Object.hasOwn(row, field)) {
+        throw new QueryAnswerFault(
+          `Query ${label} promises row identity by (${fields.join(", ")}), but row ${index + 1} has no "${field}" field.`,
+        );
+      }
+    }
+    let key: string;
+    try {
+      key = JSON.stringify(canonicalValue(fields.map((field) => row[field])));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new QueryAnswerFault(
+        `Query ${label} promises portable row identity by (${fields.join(", ")}), but row ${index + 1} is invalid: ${reason}`,
+      );
+    }
+    const prior = seen.get(key);
+    if (prior !== undefined) {
+      throw new QueryAnswerFault(
+        `Query ${label} promises unique row identity by (${fields.join(", ")}), but rows ${prior + 1} and ${index + 1} have the same identity.`,
+      );
+    }
+    seen.set(key, index);
+  }
+}
+
 /**
  * Fill a query input pattern from the current frame, invoke the query, and
  * normalize its answer to rows. Each caller decides how to handle an unbound
@@ -112,5 +146,7 @@ export async function queryRows(
   frame: Frame,
 ): Promise<unknown[]> {
   const evaluate = evaluationQueries.get(query) ?? query;
-  return rowsOfAnswer(await evaluate(bindInputMapping(frame, input)), query);
+  const rows = rowsOfAnswer(await evaluate(bindInputMapping(frame, input)), query);
+  validateRowIdentity(rows, query);
+  return rows;
 }

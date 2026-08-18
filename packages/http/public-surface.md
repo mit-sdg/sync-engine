@@ -4,13 +4,16 @@
 
 <!-- register:http-realization:start -->
 
-`FetchClaim`, `FetchRealization`, `defineFetchRealization`, `isFetchRealization`, `realize`
+`FetchClaim`, `FetchRealization`, `defineFetchRealization`, `fetchClaimMatches`, `fetchClaimsOverlap`, `isFetchRealization`, `realize`
 
 <!-- register:http-realization:end -->
 
 `realize({ system, interface })` returns a checked POST/JSON Fetch realization
 for the selected endpoint declarations. `defineFetchRealization(...)` is the
 first-party floor constructor used by other Fetch realization packages.
+`FetchClaim.match` is absent for an exact path and is `"prefix"` for all
+nonempty descendants of a trailing-slash prefix. `fetchClaimMatches(...)` and
+`fetchClaimsOverlap(...)` apply that shared routing rule to host composition.
 
 `@mit-sdg/sync-engine-http` has no root export or supported deep imports. The
 registers below are exact; generated declarations define complete structural

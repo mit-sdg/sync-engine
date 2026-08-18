@@ -216,7 +216,7 @@ export interface HttpPolicy extends HttpPolicyInit {
 export {};
 
 === packages/http/dist/realization/index.d.ts ===
-export { defineFetchRealization, isFetchRealization, realize } from "./realization.ts";
+export { defineFetchRealization, fetchClaimMatches, fetchClaimsOverlap, isFetchRealization, realize, } from "./realization.ts";
 export type { FetchClaim, FetchRealization } from "./realization.ts";
 
 === packages/http/dist/realization/realization.d.ts ===
@@ -226,6 +226,7 @@ type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 export interface FetchClaim {
     readonly method: string;
     readonly path: string;
+    readonly match?: "prefix";
     readonly declarations: readonly string[];
 }
 export interface FetchRealization {
@@ -234,6 +235,8 @@ export interface FetchRealization {
     fetch(request: Request): Promise<Response>;
 }
 export declare function isFetchRealization(value: unknown): value is FetchRealization;
+export declare function fetchClaimMatches(claim: FetchClaim, method: string, path: string): boolean;
+export declare function fetchClaimsOverlap(left: FetchClaim, right: FetchClaim): boolean;
 /** First-party realization floors use this constructor for checked Fetch values. */
 export declare function defineFetchRealization(value: FetchRealization): FetchRealization;
 /** Realize the selected interface as ordinary POST/JSON Fetch claims. */

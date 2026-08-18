@@ -45,6 +45,16 @@ class BrokenConcept {
   }
 }
 
+class IdentifiedRowsConcept {
+  static readonly queries = { _rows: "many" } as const;
+  static readonly queryIdentities = { _rows: ["entry"] } as const;
+  rows: { entry: unknown; label: string }[] = [];
+
+  _rows(_: Record<string, never>): { entry: unknown; label: string }[] {
+    return this.rows;
+  }
+}
+
 class UndeclaredQueriesConcept {
   _single(_: Record<string, never>): { value: number } {
     return { value: 1 };
@@ -60,11 +70,13 @@ const testVocabulary = vocabulary({
     Balances: { class: BalancesConcept },
     Broken: { class: BrokenConcept },
     UndeclaredQueries: { class: UndeclaredQueriesConcept },
+    IdentifiedRows: { class: IdentifiedRowsConcept },
   },
 });
 const BalancesReads = testVocabulary.concepts.Balances;
 const BrokenReads = testVocabulary.concepts.Broken;
 const UndeclaredReads = testVocabulary.concepts.UndeclaredQueries;
+const IdentifiedRowsReads = testVocabulary.concepts.IdentifiedRows;
 
 function setup<T extends object>(instance: T, name: string): { reacting: Reacting; concept: T } {
   const reacting = quietReacting();
@@ -132,5 +144,29 @@ describe("query answers", () => {
 
     expect(await reacting.form(single({}))).toEqual([{ value: 1 }]);
     expect(await reacting.form(rows({}))).toEqual([{ value: 1 }, { value: 2 }]);
+  });
+
+  test("an identified many query enforces present, portable, unique identity values", async () => {
+    const rows = former("identified rows ()", (_inputs, { entry, label }) =>
+      each(IdentifiedRowsReads._rows({}).is({ entry, label })).form({ entry, label }),
+    );
+    const faultFor = async (answers: { entry: unknown; label: string }[]) => {
+      const source = new IdentifiedRowsConcept();
+      source.rows = answers;
+      return setup(source, "IdentifiedRows").reacting.form(rows({}));
+    };
+
+    await expect(
+      faultFor([
+        { entry: "one", label: "first" },
+        { entry: "one", label: "duplicate" },
+      ]),
+    ).rejects.toThrow("same identity");
+    await expect(
+      faultFor([{ label: "missing" } as { entry: unknown; label: string }]),
+    ).rejects.toThrow('has no "entry" field');
+    await expect(faultFor([{ entry: Symbol("opaque"), label: "not portable" }])).rejects.toThrow(
+      "portable row identity",
+    );
   });
 });

@@ -402,6 +402,8 @@ export interface SpecificationQueryIR {
   result: SpecificationResultIR;
   body: string;
   promise: "one" | "optional" | "many";
+  /** Result fields whose portable values uniquely identify each row of a many answer. */
+  identity?: readonly string[];
   location: SpecificationLocationIR;
 }
 

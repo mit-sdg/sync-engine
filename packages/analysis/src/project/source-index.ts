@@ -103,7 +103,17 @@ interface ConceptSource {
   readonly canonical?: SourceInput;
 }
 
-const DECLARATION_APIS = new Set<PublicSourceApi>(["reaction", "endpoint", "view", "former"]);
+const DECLARATION_APIS = new Set<PublicSourceApi>([
+  "reaction",
+  "endpoint",
+  "endpointPrefix",
+  "view",
+  "former",
+]);
+
+function isEndpointApi(api: PublicSourceApi): boolean {
+  return api === "endpoint" || api === "endpointPrefix";
+}
 const EMPTY_SUBSTITUTIONS: ReadonlyMap<ts.Symbol, StaticValue> = new Map();
 
 function ordinal(left: string, right: string): number {
@@ -1761,7 +1771,7 @@ export function indexApplicationSourcesWithController<
       const family =
         exact.length === 0 ? (composition.get(reactionFamilyBase(reaction.name)) ?? []) : exact;
       const selected = family.filter(
-        ({ candidate }) => candidate.api === "reaction" || candidate.api === "endpoint",
+        ({ candidate }) => candidate.api === "reaction" || isEndpointApi(candidate.api),
       );
       const candidate = chooseCandidate(ref, selected);
       if (candidate !== undefined) {
@@ -1769,7 +1779,7 @@ export function indexApplicationSourcesWithController<
           ref,
           declarationAnchor(
             candidate,
-            candidate.api === "endpoint"
+            isEndpointApi(candidate.api)
               ? "manifest-location"
               : sourceResolution(candidate.recognition),
           ),
@@ -1814,7 +1824,7 @@ export function indexApplicationSourcesWithController<
       const ref: DesignRef = { kind: "endpoint", endpoint: endpoint.name, path: endpoint.path };
       const selected = (composition.get(endpoint.name) ?? []).filter(
         ({ candidate }) =>
-          candidate.api === "endpoint" && candidateLiteral(candidate) === endpoint.path,
+          isEndpointApi(candidate.api) && candidateLiteral(candidate) === endpoint.path,
       );
       const candidate = chooseCandidate(ref, selected, "AMBIGUOUS_ENDPOINT_SOURCE");
       if (candidate !== undefined) add(ref, declarationAnchor(candidate));

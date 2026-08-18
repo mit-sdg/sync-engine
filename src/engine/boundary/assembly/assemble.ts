@@ -27,7 +27,7 @@ import { declarationsOf } from "@engine/reactions/authoring/partitions";
 import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
 import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
-import { rolesOf } from "@engine/reactions/concepts/introspect";
+import { actionNameOf, conceptNameOf, rolesOf } from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { InstrumentedConcept, QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 import {
@@ -46,7 +46,6 @@ import type {
   ReactionDeclaration,
   ReactionPartition,
   ReactionResult,
-  Vars,
   WhenBuilder,
 } from "@engine/reactions/types";
 import { standardComputations, type ComputationFn } from "@engine/reads/computations";
@@ -70,10 +69,15 @@ import { ordinal } from "@engine/utils/ordinal";
 import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
 import { setOwn } from "@engine/utils/own-property";
+import { ListenerSet } from "@engine/utils/listener-set";
 import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
-import { assertPortableRoutePath } from "../protocol/route-path.ts";
+import {
+  assertPortableRoutePath,
+  assertPortableRoutePrefix,
+  routeClaimsOverlap,
+} from "../protocol/route-path.ts";
 import { assertEndpointValidators } from "../protocol/validation.ts";
 import type { EndpointValidators } from "../protocol/validation.ts";
 import { standardBoundaryOutcomeReactions } from "../invocation/funnel.ts";
@@ -119,6 +123,9 @@ export function receive(input: Mapping = {}): WhenBuilder {
   if (Object.hasOwn(input, "requestId")) {
     throw new Error('receive(...) cannot author the boundary-owned "requestId" field.');
   }
+  if (Object.hasOwn(input, "route")) {
+    throw new Error('receive(...) cannot author the boundary-owned "route" field.');
+  }
   return when(Boundary.request({ ...input, requestId: requestIdVar }).responds());
 }
 
@@ -136,11 +143,23 @@ export function respond(body: Mapping = {}) {
 
 const EndpointBrand: unique symbol = Symbol("EndpointBrand");
 
+// Endpoint variables are an open authoring proxy: every property access creates
+// one stable logic-variable symbol. TypeScript cannot express that guarantee
+// for arbitrary property names under `noUncheckedIndexedAccess`; `any` here is
+// confined to the fluent declaration callback, before patterns are checked.
+// biome-ignore lint/suspicious/noExplicitAny: open proxy keys are intentionally unenumerated.
+type EndpointVars = Record<string, any>;
+
 export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
   readonly path: string;
-  readonly reaction: (vars: Vars) => TResult;
+  readonly match?: "prefix";
+  readonly reaction: (vars: EndpointVars, route?: EndpointRouteContext) => TResult;
   readonly input?: InputContractDecl;
   readonly validators?: EndpointValidators;
+}
+
+export interface EndpointRouteContext {
+  readonly path: symbol;
 }
 
 export interface EndpointOptions {
@@ -157,12 +176,12 @@ export interface EndpointOptions {
  */
 export function endpoint(
   path: string,
-  reaction: (vars: Vars) => ReactionDeclaration,
+  reaction: (vars: EndpointVars) => ReactionDeclaration,
   opts?: EndpointOptions,
 ): EndpointDef<ReactionDeclaration>;
 export function endpoint(
   path: string,
-  reaction: (vars: Vars) => ReactionPartition,
+  reaction: (vars: EndpointVars) => ReactionPartition,
   opts?: EndpointOptions,
 ): EndpointDef<ReactionPartition>;
 export function endpoint(path: string, reaction: Reaction, opts?: EndpointOptions): EndpointDef {
@@ -170,6 +189,34 @@ export function endpoint(path: string, reaction: Reaction, opts?: EndpointOption
   if (opts?.validators !== undefined) assertEndpointValidators(opts.validators, path);
   const def = {
     path,
+    reaction,
+    ...(opts?.input !== undefined ? { input: opts.input } : {}),
+    ...(opts?.validators !== undefined ? { validators: opts.validators } : {}),
+  } as EndpointDef;
+  brand(def, EndpointBrand);
+  return def;
+}
+
+export function endpointPrefix(
+  prefix: string,
+  reaction: (vars: EndpointVars, route: EndpointRouteContext) => ReactionDeclaration,
+  opts?: EndpointOptions,
+): EndpointDef<ReactionDeclaration>;
+export function endpointPrefix(
+  prefix: string,
+  reaction: (vars: EndpointVars, route: EndpointRouteContext) => ReactionPartition,
+  opts?: EndpointOptions,
+): EndpointDef<ReactionPartition>;
+export function endpointPrefix(
+  prefix: string,
+  reaction: (vars: EndpointVars, route: EndpointRouteContext) => ReactionResult,
+  opts?: EndpointOptions,
+): EndpointDef {
+  assertPortableRoutePrefix(prefix, "endpointPrefix(...)");
+  if (opts?.validators !== undefined) assertEndpointValidators(opts.validators, prefix);
+  const def = {
+    path: prefix,
+    match: "prefix" as const,
     reaction,
     ...(opts?.input !== undefined ? { input: opts.input } : {}),
     ...(opts?.validators !== undefined ? { validators: opts.validators } : {}),
@@ -188,6 +235,16 @@ function pinToPath(decl: ReactionDeclaration, path: string): ReactionDeclaration
     if ("channel" in clause) continue;
     if (clause.action === Boundary.request) {
       clause.input = { ...clause.input, path };
+    }
+  }
+  return decl;
+}
+
+function pinToPrefix(decl: ReactionDeclaration, prefix: string, path: symbol): ReactionDeclaration {
+  for (const clause of decl.when) {
+    if ("channel" in clause) continue;
+    if (clause.action === Boundary.request) {
+      clause.input = { ...clause.input, path, route: prefix };
     }
   }
   return decl;
@@ -284,6 +341,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   validators: Readonly<Record<string, EndpointValidators>>;
   beginDrain(): Promise<void>;
   whenIdle(): Promise<void>;
+  observeSettledChanges(observer: SettledChangeObserver): () => void;
   /** The public route and admission facts a separate gateway may consume. */
   publicInterface: ApplicationInterface;
   /** Every selected authored declaration, once per installed composition object. */
@@ -295,6 +353,20 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
   /** Evaluate a fused former against this app's concepts, at the moment of asking. */
   form(fused: FusedFormer): Promise<unknown>;
 }
+
+export interface SettledOccurrence {
+  readonly concept: string;
+  readonly action: string;
+}
+
+export interface SettledChange {
+  /** Monotonic within one assembled application; suitable for delivery order, not persistence. */
+  readonly sequence: number;
+  readonly concepts: readonly string[];
+  readonly occurrences: readonly SettledOccurrence[];
+}
+
+export type SettledChangeObserver = (change: SettledChange) => void | Promise<void>;
 
 function isFormerRef(value: unknown): value is FormerRef {
   return typeof value === "function" && typeof (value as FormerRef).formerName === "string";
@@ -417,6 +489,8 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.queryCache,
   );
   engine.logging = options.logging ?? Logging.OFF;
+  const settledChangeObservers = new ListenerSet<SettledChangeObserver>();
+  let settledChangeSequence = 0;
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);
   engine.registerComputations(declaredComputations);
   const computations: ComputationInventoryIR[] = [
@@ -439,6 +513,29 @@ export function assemble<T extends Record<string, ConceptClass>>(
   engine.Action._onFlowQuiescent(({ flow, interpreterFailed }) => {
     if (interpreterFailed) settleRequestInterpreterFailure(boundary, flow);
     lifecycle.flowSettled(flow);
+    const occurrences = (engine.Action._getByFlow(flow) ?? [])
+      .filter(
+        (record) =>
+          record.outcome?.kind === "result" && conceptNameOf(record.concept) !== "RequestBoundary",
+      )
+      .map((record) =>
+        Object.freeze({
+          concept: conceptNameOf(record.concept),
+          action: actionNameOf(record.action),
+        }),
+      );
+    if (occurrences.length === 0) return;
+    const concepts = [...new Set(occurrences.map(({ concept }) => concept))].sort(ordinal);
+    const change = Object.freeze({
+      sequence: ++settledChangeSequence,
+      concepts: Object.freeze(concepts),
+      occurrences: Object.freeze(occurrences),
+    });
+    settledChangeObservers.notify(
+      (observer, event) => observer(event),
+      change,
+      (error) => logger.error("Settled change observer failed", { error }),
+    );
   });
   const instrumentedBoundary = engine.instrumentConcept(boundary, "RequestBoundary");
   const boundaryConstructorName = instanceConstructorName(boundary);
@@ -597,9 +694,15 @@ export function assemble<T extends Record<string, ConceptClass>>(
     }
     if (isEndpointDef(value)) {
       const authored = declarationIdentities.install(value, "endpoint", name);
-      const declared = value.reaction($vars);
+      const routeContext: EndpointRouteContext | undefined =
+        value.match === "prefix" ? Object.freeze({ path: Symbol("path") }) : undefined;
+      const declared = value.reaction($vars, routeContext);
       const declarations = declarationsOf(declared);
-      declarations.forEach((entry) => pinToPath(entry, value.path));
+      declarations.forEach((entry) =>
+        value.match === "prefix"
+          ? pinToPrefix(entry, value.path, routeContext!.path)
+          : pinToPath(entry, value.path),
+      );
       const dependencies = new Set<string>();
       walkValueTree(declared, (node) => {
         if (typeof node !== "object" || node === null) return;
@@ -617,7 +720,12 @@ export function assemble<T extends Record<string, ConceptClass>>(
       const reactionNames = declarations.map((_, index) =>
         index === 0 ? name : `${name}:${index + 1}`,
       );
-      endpoints.push({ name, path: value.path, reactions: reactionNames });
+      endpoints.push({
+        name,
+        path: value.path,
+        ...(value.match === "prefix" ? { match: "prefix" as const } : {}),
+        reactions: reactionNames,
+      });
       if (Object.hasOwn(reactions, name))
         throw new Error(`assemble: two reactions named "${name}".`);
       setOwn(reactions, name, () => declared);
@@ -679,6 +787,20 @@ export function assemble<T extends Record<string, ConceptClass>>(
     if (declaration.kind === "endpoint") visit(declaration.value, declaration.identity);
   }
 
+  for (let left = 0; left < endpoints.length; left += 1) {
+    for (let right = left + 1; right < endpoints.length; right += 1) {
+      const first = endpoints[left];
+      const second = endpoints[right];
+      if (first.path === second.path && first.match === second.match) continue;
+      if (routeClaimsOverlap(first, second)) {
+        throw new Error(
+          `assemble: endpoint route ${JSON.stringify(first.path)} from ${JSON.stringify(first.name)} overlaps ` +
+            `${second.match === "prefix" ? "prefix" : "exact path"} ${JSON.stringify(second.path)} from ${JSON.stringify(second.name)}.`,
+        );
+      }
+    }
+  }
+
   // Name order, deliberately: registration order carries no meaning.
   const ordered: Record<string, Reaction> = {};
   const orderedAuthored: Record<string, AuthoredDeclarationIdentity> = {};
@@ -712,13 +834,19 @@ export function assemble<T extends Record<string, ConceptClass>>(
   engine.registerReactions(boundaryOutcomes);
   engine.addObserver(respondRaceObserver);
 
-  const endpointPaths = new Set(endpoints.map(({ path }) => path));
+  const endpointPaths = new Set(
+    endpoints.filter(({ match }) => match !== "prefix").map(({ path }) => path),
+  );
+  const endpointPrefixes = new Set(
+    endpoints.filter(({ match }) => match === "prefix").map(({ path }) => path),
+  );
   const invoker = createInvoker({
     boundary,
     instrumented: instrumentedBoundary as unknown as RequestBoundaryActions,
     contracts,
     validators,
     routes: endpointPaths,
+    prefixes: endpointPrefixes,
     lifecycle,
     onInvalidResponse: ({ path, requestId, phase, errorClass }) => {
       engine.Action._recordIntegrityFailure({
@@ -749,6 +877,18 @@ export function assemble<T extends Record<string, ConceptClass>>(
         .sort()
         .map((path) => [path, canonicalValue(contracts[path] ?? {}) as InputContractDecl]),
     ),
+    ...(endpointPrefixes.size === 0
+      ? {}
+      : {
+          prefixes: Object.fromEntries(
+            [...endpointPrefixes]
+              .sort()
+              .map((prefix) => [
+                prefix,
+                canonicalValue(contracts[prefix] ?? {}) as InputContractDecl,
+              ]),
+          ),
+        }),
   };
 
   const assembledInterfaces: AssembledInterfaces = Object.freeze({
@@ -786,6 +926,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     validators,
     beginDrain: () => lifecycle.beginDrain(),
     whenIdle: () => lifecycle.whenIdle(),
+    observeSettledChanges: (observer) => settledChangeObservers.add(observer),
     publicInterface,
     authoredDeclarations: [...declarationIdentities.inventory()].sort((left, right) =>
       ordinal(`${left.identity}\0${left.kind}`, `${right.identity}\0${right.kind}`),

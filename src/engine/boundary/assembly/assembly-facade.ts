@@ -7,7 +7,16 @@ import type {
 import { rememberApplicationInvoker } from "../protocol/gateway-registry.ts";
 import { rememberAssembly } from "./assembly-registry.ts";
 import { assemble as assembleEngine } from "./assemble.ts";
-import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources } from "./assemble.ts";
+import type {
+  AssembleBaseOptions,
+  AssembledApp,
+  RequiredConstructionSources,
+  SettledChange,
+  SettledChangeObserver,
+  SettledOccurrence,
+} from "./assemble.ts";
+
+export type { SettledChange, SettledChangeObserver, SettledOccurrence };
 import type {
   AnyRegisteredConcept,
   ConceptClassesOfSet,
@@ -18,7 +27,13 @@ import type {
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
 export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<
   AssembledApp<TConcepts>,
-  "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form"
+  | "invoker"
+  | "concepts"
+  | "publicInterface"
+  | "beginDrain"
+  | "whenIdle"
+  | "observeSettledChanges"
+  | "form"
 >;
 
 type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => object>> =
@@ -69,6 +84,7 @@ export function assemble(
     publicInterface: assembled.publicInterface,
     beginDrain: assembled.beginDrain,
     whenIdle: assembled.whenIdle,
+    observeSettledChanges: assembled.observeSettledChanges,
     form: assembled.form,
   };
   rememberApplicationInvoker(facade.invoker, facade, facade.publicInterface);

@@ -20,6 +20,7 @@ import { setOwn } from "@engine/utils/own-property";
 
 export interface WireEndpoint {
   path: string;
+  match?: "prefix";
   input: WireType;
   output: WireType;
   /** Refusal codes this path's own and causally surrounding reactions can answer. */
@@ -46,7 +47,7 @@ export interface WireOptions {
 }
 
 /** The keys the request boundary injects; never part of a path's own input. */
-const RESERVED_BOUNDARY_KEYS = new Set(["path", "requestId", "correlationId"]);
+const RESERVED_BOUNDARY_KEYS = new Set(["path", "route", "requestId", "correlationId"]);
 
 interface BoundaryNames {
   concept: string;
@@ -263,10 +264,17 @@ function collectRequestPatternsByPath(
   const byPath = new Map<string, PatternIR[]>();
   for (const reaction of reactions) {
     for (const trigger of reaction.when) {
-      if (isBoundaryRequest(trigger, boundary) && typeof trigger.input.path === "string") {
-        const list = byPath.get(trigger.input.path) ?? [];
+      if (!isBoundaryRequest(trigger, boundary)) continue;
+      const path =
+        typeof trigger.input.route === "string"
+          ? trigger.input.route
+          : typeof trigger.input.path === "string"
+            ? trigger.input.path
+            : undefined;
+      if (path !== undefined) {
+        const list = byPath.get(path) ?? [];
         list.push(trigger.input);
-        byPath.set(trigger.input.path, list);
+        byPath.set(path, list);
       }
     }
   }
@@ -287,10 +295,13 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
   const isRequestTrigger = (trigger: ReactionIR["when"][number]): trigger is ActionTriggerIR =>
     isBoundaryRequest(trigger, boundary);
 
-  const pathOf = (reaction: ReactionIR): string | null => {
+  const routeOf = (reaction: ReactionIR): { path: string; match?: "prefix" } | null => {
     for (const trigger of reaction.when) {
+      if (isRequestTrigger(trigger) && typeof trigger.input.route === "string") {
+        return { path: trigger.input.route, match: "prefix" };
+      }
       if (isRequestTrigger(trigger) && typeof trigger.input.path === "string") {
-        return trigger.input.path;
+        return { path: trigger.input.path };
       }
     }
     for (const op of reaction.where) {
@@ -298,9 +309,11 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
         op.op === "earlier" &&
         op.when.concept === boundary.concept &&
         op.when.action === boundary.request &&
-        typeof op.when.input.path === "string"
+        (typeof op.when.input.route === "string" || typeof op.when.input.path === "string")
       ) {
-        return op.when.input.path;
+        return typeof op.when.input.route === "string"
+          ? { path: op.when.input.route, match: "prefix" }
+          : { path: op.when.input.path as string };
       }
     }
     return null;
@@ -308,10 +321,14 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
 
   const isGlobalGuard = (reaction: ReactionIR): boolean =>
     reaction.when.some(
-      (trigger) => isRequestTrigger(trigger) && typeof trigger.input.path !== "string",
+      (trigger) =>
+        isRequestTrigger(trigger) &&
+        typeof trigger.input.path !== "string" &&
+        typeof trigger.input.route !== "string",
     );
 
   interface Bucket {
+    match?: "prefix";
     requestPatterns: PatternIR[];
     inputOrigins: Map<string, ProvenanceCell[]>;
     outputs: WireType[];
@@ -323,10 +340,11 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
   const directByPath = new Map<string, ReactionIR[]>();
   const globalSeeds: ReactionIR[] = [];
 
-  const bucketFor = (path: string): Bucket => {
+  const bucketFor = (path: string, match?: "prefix"): Bucket => {
     let bucket = buckets.get(path);
     if (bucket === undefined) {
       bucket = {
+        ...(match === undefined ? {} : { match }),
         requestPatterns: requestPatternsByPath.get(path) ?? [],
         inputOrigins: new Map(),
         outputs: [],
@@ -342,17 +360,18 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
   for (const path of Object.keys(opts.contracts ?? {})) bucketFor(path);
 
   for (const reaction of app.reactions) {
-    const path = pathOf(reaction);
-    if (path === null) {
+    const route = routeOf(reaction);
+    if (route === null) {
       if (isGlobalGuard(reaction)) {
         globalSeeds.push(reaction);
       }
       continue;
     }
+    const { path } = route;
     const direct = directByPath.get(path) ?? [];
     direct.push(reaction);
     directByPath.set(path, direct);
-    const bucket = bucketFor(path);
+    const bucket = bucketFor(path, route.match);
     const provenance = analyzeReactionProvenance(reaction, boundary, viewsByName);
     for (const consequence of reaction.then) {
       if (consequence.concept === boundary.concept && consequence.action === boundary.respond) {
@@ -385,7 +404,7 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
     globalSeeds,
     refusalsOf,
     terminal,
-    (candidate) => pathOf(candidate) === null,
+    (candidate) => routeOf(candidate) === null,
   );
   const globalOnly = new Set(globalCausal);
   for (const reaction of globalCausal) {
@@ -399,8 +418,8 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
       refusalsOf,
       terminal,
       (reaction) => {
-        const ownedPath = pathOf(reaction);
-        return ownedPath === null || ownedPath === path;
+        const ownedRoute = routeOf(reaction);
+        return ownedRoute === null || ownedRoute.path === path;
       },
     );
     for (const reaction of causal) {
@@ -413,6 +432,7 @@ export function wireContracts(app: AppIR, opts: WireOptions = {}): WireContracts
     .sort(([left], [right]) => ordinal(left, right))
     .map(([path, bucket]) => ({
       path,
+      ...(bucket.match === undefined ? {} : { match: bucket.match }),
       input: inferInputWireType(
         bucket.requestPatterns,
         opts.contracts?.[path],

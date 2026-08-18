@@ -20,6 +20,7 @@ type Immutable<T> = T extends (...args: never[]) => unknown
 /** Immutable application facts a generated transport projection may inspect. */
 export interface WireProjectionFacts {
   readonly routes: Immutable<Readonly<Record<string, InputContractDecl>>>;
+  readonly prefixes: Immutable<Readonly<Record<string, InputContractDecl>>>;
   readonly logicalWire: Immutable<WireContractsIR>;
 }
 
@@ -47,6 +48,7 @@ export function wireProjectionFacts(
   const assembled = assemblyBehind(application);
   return Object.freeze({
     routes: copy(assembled.publicInterface.routes),
+    prefixes: copy(assembled.publicInterface.prefixes ?? {}),
     logicalWire: copy(
       logicalWire ??
         wireContracts(assembled.engine.exportReactions(), {
@@ -79,6 +81,9 @@ export function bindTransport<C extends ContractShape = ContractShape>(options: 
   return Object.freeze({
     get routes() {
       return facts().routes;
+    },
+    get prefixes() {
+      return facts().prefixes;
     },
     get logicalWire() {
       return facts().logicalWire;

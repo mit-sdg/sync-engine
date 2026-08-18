@@ -14,6 +14,7 @@ export type DomainErrorValue<T> = T extends { error: infer E } ? E : T;
  */
 export interface ApplicationInterface {
   readonly routes: Readonly<Record<string, InputContractDecl>>;
+  readonly prefixes?: Readonly<Record<string, InputContractDecl>>;
 }
 
 export type InvocationResult<TOutput = unknown, TDomainError = unknown> =

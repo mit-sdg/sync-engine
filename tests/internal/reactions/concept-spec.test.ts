@@ -260,6 +260,43 @@ describe("Queries and canonical compatibility", () => {
     );
   });
 
+  test("lets a many query promise stable row identity from required result fields", () => {
+    const query = parseSpec(
+      specification({
+        queries:
+          "_pending(workspace: Workspace) : many identified by (invitation) (invitation: Invitation, guest: Person)",
+      }),
+    ).queries[0];
+    expect(query).toMatchObject({
+      name: "_pending",
+      promise: "many",
+      identity: ["invitation"],
+    });
+
+    expect(() =>
+      parseSpec(
+        specification({
+          queries:
+            "_get(invitation: Invitation) : optional identified by (invitation) (invitation: Invitation)",
+        }),
+      ),
+    ).toThrow("only a `many` query");
+    expect(() =>
+      parseSpec(
+        specification({
+          queries: "_pending() : many identified by (missing) (invitation: Invitation)",
+        }),
+      ),
+    ).toThrow('identity field "missing" is not one of its result fields');
+    expect(() =>
+      parseSpec(
+        specification({
+          queries: "_pending() : many identified by (invitation) (invitation?: Invitation)",
+        }),
+      ),
+    ).toThrow('identity field "invitation" cannot be optional');
+  });
+
   test("canonical compatibility ignores source locations but not authored contracts", () => {
     const compact = parseSpec(specification());
     const shifted = parseSpec(`\n\n${specification()}`);

@@ -126,13 +126,23 @@ export function createGateway<C extends ContractShape = ContractShape>(
       let invocation: Promise<GatewayResult> | undefined;
       let result: GatewayResult;
       try {
-        if (!Object.hasOwn(application.publicInterface.routes, path)) {
+        const prefix = Object.keys(application.publicInterface.prefixes ?? {}).find(
+          (candidate) => path.length > candidate.length && path.startsWith(candidate),
+        );
+        const contractPath = Object.hasOwn(application.publicInterface.routes, path)
+          ? path
+          : prefix;
+        if (contractPath === undefined) {
           result = frameworkError(
             FrameworkErrorCode.NOT_FOUND,
             `Unknown endpoint: ${String(path)}`,
           );
         } else {
-          const admission = admitInput(application.publicInterface.routes[path] ?? {}, path, input);
+          const contract =
+            application.publicInterface.routes[contractPath] ??
+            application.publicInterface.prefixes?.[contractPath] ??
+            {};
+          const admission = admitInput(contract, path, input);
           if (!admission.ok) {
             result = frameworkError(FrameworkErrorCode.INVALID_INPUT);
           } else if (isAborted(invokeOptions.signal)) {

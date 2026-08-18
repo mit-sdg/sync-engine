@@ -1,5 +1,11 @@
 import { assemble, conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
-import { isFetchRealization, type FetchRealization } from "@mit-sdg/sync-engine-http/realization";
+import {
+  fetchClaimMatches,
+  fetchClaimsOverlap,
+  isFetchRealization,
+  type FetchClaim,
+  type FetchRealization,
+} from "@mit-sdg/sync-engine-http/realization";
 import {
   AdmissionAlreadyFinished,
   ServiceAlreadyExists,
@@ -33,10 +39,6 @@ export interface ServeOptions {
   readonly signal?: AbortSignal;
 }
 
-function claimKey(method: string, path: string): string {
-  return `${method.toUpperCase()} ${path}`;
-}
-
 async function untilAborted(signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return;
   await new Promise<void>((resolve) =>
@@ -49,7 +51,7 @@ export async function serve(options: ServeOptions): Promise<void> {
   if (options.realizations.length === 0) {
     throw new Error("Server.serve: supply at least one Fetch realization.");
   }
-  const routes = new Map<string, FetchRealization>();
+  const routes: { claim: FetchClaim; realization: FetchRealization }[] = [];
   for (const realization of options.realizations) {
     if (!isFetchRealization(realization)) {
       throw new TypeError(
@@ -57,14 +59,20 @@ export async function serve(options: ServeOptions): Promise<void> {
       );
     }
     for (const claim of realization.claims) {
-      const key = claimKey(claim.method, claim.path);
-      const previous = routes.get(key);
+      const previous = routes.find(({ claim: candidate }) => fetchClaimsOverlap(candidate, claim));
       if (previous !== undefined) {
+        const exactCollision =
+          previous.claim.match === undefined &&
+          claim.match === undefined &&
+          previous.claim.path === claim.path;
+        const description = `${claim.method.toUpperCase()} ${claim.path}${claim.match === "prefix" ? "*" : ""}`;
         throw new Error(
-          `Server.serve: ${key} is claimed by both ${JSON.stringify(previous.interface)} and ${JSON.stringify(realization.interface)}.`,
+          exactCollision
+            ? `Server.serve: ${description} is claimed by both ${JSON.stringify(previous.realization.interface)} and ${JSON.stringify(realization.interface)}.`
+            : `Server.serve: ${description} overlaps claims by both ${JSON.stringify(previous.realization.interface)} and ${JSON.stringify(realization.interface)}.`,
         );
       }
-      routes.set(key, realization);
+      routes.push({ claim, realization });
     }
   }
 
@@ -87,7 +95,10 @@ export async function serve(options: ServeOptions): Promise<void> {
     port: options.at.port,
     async fetch(request): Promise<Response> {
       if (!accepting) return new Response("Service unavailable", { status: 503 });
-      const route = routes.get(claimKey(request.method, new URL(request.url).pathname));
+      const path = new URL(request.url).pathname;
+      const route = routes.find(({ claim }) =>
+        fetchClaimMatches(claim, request.method, path),
+      )?.realization;
       if (route === undefined) return new Response("Not found", { status: 404 });
       const admission = crypto.randomUUID();
       const admitted = await host.concepts.Serving.admit({ service, admission });

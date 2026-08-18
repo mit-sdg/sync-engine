@@ -22,6 +22,7 @@ export interface QueryRef {
   readonly refQuery: string;
   readonly queryName: string;
   readonly queryPromise?: QueryPromise;
+  readonly queryIdentity?: readonly string[];
 }
 
 export function brandActionRef<T extends object>(value: T): T {

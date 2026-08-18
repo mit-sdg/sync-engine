@@ -1,6 +1,6 @@
 import type { OutcomeContracts } from "./outcomes.ts";
 import type { ConceptSpecificationIR } from "@engine/reads/ir";
-import type { QueryPromise } from "@engine/reads/query-metadata";
+import type { QueryIdentities, QueryPromise } from "@engine/reads/query-metadata";
 
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 
@@ -75,6 +75,7 @@ export interface ConceptMetadata {
   purpose?: string;
   principle?: string;
   queries?: Readonly<Record<string, QueryPromise>>;
+  queryIdentities?: QueryIdentities;
   outcomes?: OutcomeContracts;
   refusals?: RefusalContracts;
   /** Parsed authored contract; registration semantics use only selected fields. */

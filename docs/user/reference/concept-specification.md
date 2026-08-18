@@ -206,6 +206,7 @@ has this signature:
 _query(input: Type) : one (field: Type)
 _query(input: Type) : optional (field: Type)
 _query(input: Type) : many (field: Type)
+_query(input: Type) : many identified by (field) (field: Type, value: Type)
 ```
 
 Input and result fields are parenthesized and named. Bare result types are
@@ -224,6 +225,15 @@ The cardinalities retain their runtime meaning:
 Reactions, views, and formers enforce this container/cardinality contract when
 they evaluate a query. A query body remains a design statement rather than an
 executable assertion.
+
+A `many` query may additionally promise row identity with `identified by
+(field, ...)`. Every named identity field must be a required result field. At
+runtime every row must contain portable values for the complete tuple, and no
+two rows may answer the same tuple. The identity is part of the query's
+contract—not a renderer key or a consumer-side guess—so every consumer can
+refer to the same row while its position or other values change. `one` and
+`optional` queries cannot declare row identity because their cardinality
+already supplies the standing place.
 
 ## Names and type expressions
 

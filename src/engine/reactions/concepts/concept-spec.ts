@@ -335,6 +335,14 @@ class SignatureParser {
     this.#index += token.length;
     return true;
   }
+  #consumeWord(word: string): boolean {
+    this.#skipSpace();
+    if (!this.#line.text.startsWith(word, this.#index)) return false;
+    const following = this.#line.text[this.#index + word.length];
+    if (following !== undefined && /[A-Za-z0-9_]/.test(following)) return false;
+    this.#index += word.length;
+    return true;
+  }
   #expect(token: string, what: string): void {
     if (!this.#consume(token)) this.#fail(what);
   }
@@ -396,10 +404,23 @@ class SignatureParser {
     }
     return { fields, location };
   }
+  #names(role: string): string[] {
+    this.#expect("(", `${role} need an opening "("`);
+    if (this.#consume(")")) this.#fail(`${role} need at least one field name`);
+    const names: string[] = [];
+    while (true) {
+      const field = this.#identifier(`${role} need a field name`);
+      if (names.includes(field.name)) this.#fail(`${role} name "${field.name}" twice`);
+      names.push(field.name);
+      if (this.#consume(")")) return names;
+      this.#expect(",", `${role} need a comma or closing ")"`);
+    }
+  }
   parse(): {
     name: string;
     parameters: SpecField[];
     resolution: string;
+    identity?: string[];
     result: SpecResult;
     location: SpecLocation;
   } {
@@ -407,6 +428,11 @@ class SignatureParser {
     const parameters = this.#fields("input parameters").fields;
     this.#expect(":", "a signature needs a resolution after its inputs");
     const resolution = this.#identifier("a signature needs a resolution after its inputs").name;
+    let identity: string[] | undefined;
+    if (this.#consumeWord("identified")) {
+      if (!this.#consumeWord("by")) this.#fail('"identified" must be followed by "by"');
+      identity = this.#names("an identity declaration");
+    }
     this.#skipSpace();
     if (this.#index >= this.#line.text.length)
       this.#fail(`the "${resolution}" resolution needs parenthesized named result fields`);
@@ -416,7 +442,14 @@ class SignatureParser {
     this.#skipSpace();
     if (this.#index !== this.#line.text.length)
       this.#fail("the signature has unsupported trailing text");
-    return { name: member.name, parameters, resolution, result, location: member.location };
+    return {
+      name: member.name,
+      parameters,
+      resolution,
+      identity,
+      result,
+      location: member.location,
+    };
   }
 }
 
@@ -504,6 +537,8 @@ function parseAction(group: DeclarationGroup): SpecAction {
     fail(`"${signature.name}" is not an action name — queries begin with "_"`, group.signature);
   if (signature.resolution !== "return")
     fail("an action's signature resolves with `: return (…)`", group.signature);
+  if (signature.identity !== undefined)
+    fail("only a `many` query may declare `identified by (…)`", group.signature);
   return {
     name: signature.name,
     inputs: signature.parameters.map(({ name }) => name),
@@ -524,6 +559,18 @@ function parseQuery(group: DeclarationGroup): SpecQuery {
       `a query promises "one", "optional", or "many", not "${signature.resolution}"`,
       group.signature,
     );
+  if (signature.identity !== undefined && signature.resolution !== "many") {
+    fail("only a `many` query may declare `identified by (…)`", group.signature);
+  }
+  for (const name of signature.identity ?? []) {
+    const field = signature.result.fields.find((candidate) => candidate.name === name);
+    if (field === undefined) {
+      fail(`query identity field "${name}" is not one of its result fields`, group.signature);
+    }
+    if (field.optional) {
+      fail(`query identity field "${name}" cannot be optional`, group.signature);
+    }
+  }
   return {
     name: signature.name,
     inputs: signature.parameters.map(({ name }) => name),
@@ -531,6 +578,7 @@ function parseQuery(group: DeclarationGroup): SpecQuery {
     result: signature.result,
     body: bodyOf(group.body),
     promise: signature.resolution as QueryPromise,
+    ...(signature.identity === undefined ? {} : { identity: signature.identity }),
     location: signature.location,
   };
 }

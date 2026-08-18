@@ -15,7 +15,7 @@ export { interfaceDeclaration } from "../engine/boundary/protocol/interface-defi
 === dist/assembly/index.d.ts ===
 /** Install an application concept set and composition into one coherent running system. */
 export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
-export type { Assembly, ConceptSetAssemblyOptions, } from "../engine/boundary/assembly/assembly-facade.ts";
+export type { Assembly, ConceptSetAssemblyOptions, SettledChange, SettledChangeObserver, SettledOccurrence, } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, registerConcept } from "../engine/boundary/assembly/concept-set.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
 export { FileLogSink } from "../engine/hosting/file-store.ts";
@@ -28,8 +28,8 @@ export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogSink, ReactionF
 
 === dist/boundary/index.d.ts ===
 /** Declare the public requests a composition can receive and answer. */
-export { endpoint, receive, respond } from "../engine/boundary/assembly/assemble.ts";
-export type { EndpointDef, EndpointOptions } from "../engine/boundary/assembly/assemble.ts";
+export { endpoint, endpointPrefix, receive, respond } from "../engine/boundary/assembly/assemble.ts";
+export type { EndpointDef, EndpointOptions, EndpointRouteContext, } from "../engine/boundary/assembly/assemble.ts";
 export { defineInterface } from "../engine/boundary/protocol/interface-definition.ts";
 export type { InterfaceDefinition } from "../engine/boundary/protocol/interface-definition.ts";
 export { bindInterface } from "../engine/boundary/gateway/interface-binding.ts";
@@ -135,7 +135,7 @@ import { type LogSink, type RetentionPolicy } from "../../reactions/runtime/log-
 import { Logging } from "../../reactions/runtime/logging.ts";
 import type { OperationalObserver, RawFaultReporter } from "../../reactions/runtime/operational.ts";
 import { Reacting } from "../../reactions/runtime/reacting.ts";
-import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
+import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, WhenBuilder } from "../../reactions/types.ts";
 import { type ComputationFn } from "../../reads/computations.ts";
 import { type AnyRegisteredConcept, type ConceptClassesOfSet, type RegisteredConceptSet } from "./concept-set.ts";
 import { type AuthoredDeclarationIdentity } from "../../reads/declaration-identity.ts";
@@ -154,11 +154,16 @@ export declare function receive(input?: Mapping): WhenBuilder;
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
     requestId: symbol;
 }, Record<string, unknown>>;
+type EndpointVars = Record<string, any>;
 export interface EndpointDef<TResult extends ReactionResult = ReactionResult> {
     readonly path: string;
-    readonly reaction: (vars: Vars) => TResult;
+    readonly match?: "prefix";
+    readonly reaction: (vars: EndpointVars, route?: EndpointRouteContext) => TResult;
     readonly input?: InputContractDecl;
     readonly validators?: EndpointValidators;
+}
+export interface EndpointRouteContext {
+    readonly path: symbol;
 }
 export interface EndpointOptions {
     readonly input?: InputContractDecl;
@@ -171,8 +176,10 @@ export interface EndpointOptions {
  * several `endpoint(...)` exports with the same path; the contract may be
  * declared on at most one of them.
  */
-export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionDeclaration, opts?: EndpointOptions): EndpointDef<ReactionDeclaration>;
-export declare function endpoint(path: string, reaction: (vars: Vars) => ReactionPartition, opts?: EndpointOptions): EndpointDef<ReactionPartition>;
+export declare function endpoint(path: string, reaction: (vars: EndpointVars) => ReactionDeclaration, opts?: EndpointOptions): EndpointDef<ReactionDeclaration>;
+export declare function endpoint(path: string, reaction: (vars: EndpointVars) => ReactionPartition, opts?: EndpointOptions): EndpointDef<ReactionPartition>;
+export declare function endpointPrefix(prefix: string, reaction: (vars: EndpointVars, route: EndpointRouteContext) => ReactionDeclaration, opts?: EndpointOptions): EndpointDef<ReactionDeclaration>;
+export declare function endpointPrefix(prefix: string, reaction: (vars: EndpointVars, route: EndpointRouteContext) => ReactionPartition, opts?: EndpointOptions): EndpointDef<ReactionPartition>;
 type ConceptInitializers<T extends Record<string, ConceptClass>> = {
     [K in keyof T]?: ConstructorParameters<T[K]>;
 };
@@ -244,6 +251,7 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     validators: Readonly<Record<string, EndpointValidators>>;
     beginDrain(): Promise<void>;
     whenIdle(): Promise<void>;
+    observeSettledChanges(observer: SettledChangeObserver): () => void;
     /** The public route and admission facts a separate gateway may consume. */
     publicInterface: ApplicationInterface;
     /** Every selected authored declaration, once per installed composition object. */
@@ -255,6 +263,17 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
     /** Evaluate a fused former against this app's concepts, at the moment of asking. */
     form(fused: FusedFormer): Promise<unknown>;
 }
+export interface SettledOccurrence {
+    readonly concept: string;
+    readonly action: string;
+}
+export interface SettledChange {
+    /** Monotonic within one assembled application; suitable for delivery order, not persistence. */
+    readonly sequence: number;
+    readonly concepts: readonly string[];
+    readonly occurrences: readonly SettledOccurrence[];
+}
+export type SettledChangeObserver = (change: SettledChange) => void | Promise<void>;
 /**
  * Assemble the application: construct and instrument the vocabulary's
  * concepts, walk the composition registering every tagged export under its
@@ -269,10 +288,11 @@ export {};
 === dist/engine/boundary/assembly/assembly-facade.d.ts ===
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
-import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources } from "./assemble.ts";
+import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources, SettledChange, SettledChangeObserver, SettledOccurrence } from "./assemble.ts";
+export type { SettledChange, SettledChangeObserver, SettledOccurrence };
 import type { AnyRegisteredConcept, ConceptClassesOfSet, ConceptImplementation, RegisteredConceptSet } from "./concept-set.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
-export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
+export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "observeSettledChanges" | "form">;
 type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => object>> = AssembleBaseOptions<T, {
     [Name in keyof T]?: ConceptImplementation<T[Name]>;
 }> & RequiredConstructionSources<T>;
@@ -286,7 +306,6 @@ export type ConceptSetAssemblyOptions<S extends Record<string, AnyRegisteredConc
 };
 export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): Assembly<ConceptClassesOfSet<S>>;
 export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: VocabularyAssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
-export {};
 
 === dist/engine/boundary/assembly/assembly-registry.d.ts ===
 import type { AssembledApp } from "./assemble.ts";
@@ -298,7 +317,7 @@ import { type ConceptClass, type ConceptClassesOf, type ConceptEntry, type Decla
 import type { ErrorConstructor, RefusalContracts } from "../../reactions/concepts/concept-metadata.ts";
 import { type ConceptSpec } from "../../reactions/concepts/concept-spec.ts";
 import type { CheckedComputationFns, ComputationFn } from "../../reads/computations.ts";
-import type { QueryPromises } from "../../reads/query-metadata.ts";
+import type { QueryIdentities, QueryPromises } from "../../reads/query-metadata.ts";
 type ImplementationMember<Member> = Member extends (...args: infer Args) => infer Result ? (...args: Args) => Result | PromiseLike<Awaited<Result>> : Member;
 export type ConceptImplementation<C extends ConceptClass> = object & {
     [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown ? Name : never]: ImplementationMember<InstanceType<C>[Name]>;
@@ -347,6 +366,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
         purpose?: string;
         principle?: string;
         queries?: QueryPromises;
+        queryIdentities?: QueryIdentities;
         refusals?: RefusalContracts;
         specification?: ConceptSpec;
     };
@@ -383,6 +403,7 @@ export {};
 export interface EndpointDeclaration {
     readonly name: string;
     readonly path: string;
+    readonly match?: "prefix";
     readonly reactions: readonly string[];
 }
 
@@ -592,6 +613,7 @@ type Immutable<T> = T extends (...args: never[]) => unknown ? T : T extends read
 /** Immutable application facts a generated transport projection may inspect. */
 export interface WireProjectionFacts {
     readonly routes: Immutable<Readonly<Record<string, InputContractDecl>>>;
+    readonly prefixes: Immutable<Readonly<Record<string, InputContractDecl>>>;
     readonly logicalWire: Immutable<WireContractsIR>;
 }
 /** A verified server-adapter capability with no access to assembly internals. */
@@ -679,6 +701,8 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     validators?: Readonly<Record<string, EndpointValidators>>;
     /** When supplied, reject paths outside the assembled public route set. */
     routes?: ReadonlySet<string>;
+    /** Canonical prefixes whose nonempty descendant paths are admitted. */
+    prefixes?: ReadonlySet<string>;
     /** Record an invalid authored result without exposing validator detail. */
     onInvalidResponse?: (event: {
         path: string;
@@ -857,6 +881,14 @@ export {};
 === dist/engine/boundary/protocol/route-path.d.ts ===
 /** Require a path whose spelling survives URL pathname handling exactly. */
 export declare function assertPortableRoutePath(path: unknown, label: string): asserts path is string;
+/** Require a canonical absolute prefix whose members are nonempty descendants. */
+export declare function assertPortableRoutePrefix(prefix: unknown, label: string): asserts prefix is string;
+export declare function pathHasPrefix(path: string, prefix: string): boolean;
+export interface RouteClaim {
+    readonly path: string;
+    readonly match?: "prefix";
+}
+export declare function routeClaimsOverlap(left: RouteClaim, right: RouteClaim): boolean;
 
 === dist/engine/boundary/protocol/types.d.ts ===
 import type { FrameworkErrorCode as FrameworkErrorCodeValue } from "../../utils/framework-error-codes.ts";
@@ -877,6 +909,7 @@ export type DomainErrorValue<T> = T extends {
  */
 export interface ApplicationInterface {
     readonly routes: Readonly<Record<string, InputContractDecl>>;
+    readonly prefixes?: Readonly<Record<string, InputContractDecl>>;
 }
 export type InvocationResult<TOutput = unknown, TDomainError = unknown> = {
     ok: true;
@@ -947,6 +980,7 @@ import type { InputContractDecl } from "../protocol/endpoints.ts";
 import type { WireType } from "./wire-types.ts";
 export interface WireEndpoint {
     path: string;
+    match?: "prefix";
     input: WireType;
     output: WireType;
     /** Refusal codes this path's own and causally surrounding reactions can answer. */
@@ -1233,6 +1267,7 @@ export interface QueryRef {
     readonly refQuery: string;
     readonly queryName: string;
     readonly queryPromise?: QueryPromise;
+    readonly queryIdentity?: readonly string[];
 }
 export declare function brandActionRef<T extends object>(value: T): T;
 export declare function brandQueryRef<T extends object>(value: T): T;
@@ -1427,7 +1462,7 @@ export declare function where(...conditions: Array<Condition | CountOp>): Author
 === dist/engine/reactions/concepts/concept-metadata.d.ts ===
 import type { OutcomeContracts } from "./outcomes.ts";
 import type { ConceptSpecificationIR } from "../../reads/ir.ts";
-import type { QueryPromise } from "../../reads/query-metadata.ts";
+import type { QueryIdentities, QueryPromise } from "../../reads/query-metadata.ts";
 export type ErrorConstructor = abstract new (...args: never[]) => Error;
 /** One refusal branch: the code it returns, the class that signals it, and its sentence. */
 interface RefusalBranch {
@@ -1461,6 +1496,7 @@ export interface ConceptMetadata {
     purpose?: string;
     principle?: string;
     queries?: Readonly<Record<string, QueryPromise>>;
+    queryIdentities?: QueryIdentities;
     outcomes?: OutcomeContracts;
     refusals?: RefusalContracts;
     /** Parsed authored contract; registration semantics use only selected fields. */
@@ -3763,6 +3799,8 @@ export interface SpecificationQueryIR {
     result: SpecificationResultIR;
     body: string;
     promise: "one" | "optional" | "many";
+    /** Result fields whose portable values uniquely identify each row of a many answer. */
+    identity?: readonly string[];
     location: SpecificationLocationIR;
 }
 /** One opaque type parameter supplied by each application use of the concept. */
@@ -4033,7 +4071,10 @@ import type { QueryPromise } from "./query-metadata.ts";
 export type { QueryPromise, QueryPromises } from "./query-metadata.ts";
 /** The optional promise declared for one query. An undeclared query may answer one record or an array. */
 export declare function queryPromiseOf(concept: object, query: string): QueryPromise | undefined;
+/** The result fields that jointly identify one row of a declared many query. */
+export declare function queryIdentityOf(concept: object, query: string): readonly string[] | undefined;
 export declare function validateQueryContractMap(contracts: unknown, prototype: Record<string, unknown>, conceptName: string, className: string): void;
+export declare function validateQueryIdentityMap(identities: unknown, promises: unknown, prototype: Record<string, unknown>, conceptName: string, className: string): void;
 /** Validate a concept's declared query promises while its vocabulary is assembled. */
 export declare function validateQueryContracts(concept: object, conceptName: string): void;
 
@@ -4042,11 +4083,14 @@ export declare function validateQueryContracts(concept: object, conceptName: str
 /** The promised number of rows a concept query may answer. */
 export type QueryPromise = "one" | "optional" | "many";
 export type QueryPromises = Readonly<Record<string, QueryPromise>>;
+/** Declared result-field tuples that identify rows of selected many queries. */
+export type QueryIdentities = Readonly<Record<string, readonly string[]>>;
 /** Metadata carried by instrumented and authored query references. */
 export interface QueryMetadata {
     queryName?: string;
     queryLabel?: string;
     queryPromise?: QueryPromise;
+    queryIdentity?: readonly string[];
 }
 
 === dist/engine/reads/reaction-lowering.d.ts ===
@@ -5042,6 +5086,7 @@ import type { ApplicationDiagnostic } from "./diagnostics.ts";
 export interface ManifestEndpointV1 {
     name: string;
     path: string;
+    match?: "prefix";
     reactions: string[];
     input: InputContractDecl;
     validators: {

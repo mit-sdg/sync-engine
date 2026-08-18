@@ -37,6 +37,7 @@ declare module "@mit-sdg/sync-engine/assembly" {
 }
 declare module "@mit-sdg/sync-engine/boundary" {
   export function endpoint<T>(path: string, declaration: T): T;
+  export function endpointPrefix<T>(path: string, declaration: T): T;
 }
 declare module "@mit-sdg/sync-engine/language" {
   export function reaction<T>(declaration: T): T;
@@ -251,6 +252,34 @@ function sourcesFor(sourceIndex: ApplicationSourceIndex, ref: DesignRef) {
 }
 
 describe("symbol-aware application source index", () => {
+  test("recognizes endpointPrefix as an endpoint declaration source", () => {
+    const manifest = manifestFor({
+      concepts: [],
+      reactions: ["WelcomeSpace"],
+      endpoints: [{ name: "WelcomeSpace", path: "/welcome/", reactions: ["WelcomeSpace"] }],
+    });
+    const sourceIndex = index(manifest, {
+      "app.ts": `import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
+import { endpointPrefix } from "@mit-sdg/sync-engine/boundary";
+const words = vocabulary({ concepts: {}, computations: {} });
+const WelcomeSpace = endpointPrefix("/welcome/", () => null);
+assemble({ vocabulary: words, composition: { WelcomeSpace } });
+`,
+    });
+
+    expect(
+      sourcesFor(sourceIndex, {
+        kind: "endpoint",
+        endpoint: "WelcomeSpace",
+        path: "/welcome/",
+      })[0]?.range.path,
+    ).toBe("app.ts");
+    expect(sourceIndex.issues).not.toContainEqual(
+      expect.objectContaining({ code: "UNRESOLVED_DESIGN_SOURCE" }),
+    );
+  });
+
   test("follows aliases, namespaces, barrels, export-star, namespace re-exports, and rejects shadows", () => {
     const manifest = manifestFor({
       concepts: [{ name: "Logical", constructorName: "OddClass" }],

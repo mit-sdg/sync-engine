@@ -144,10 +144,20 @@ export function createHttpHandler(
   const preflightPaths =
     policy.browser === undefined
       ? undefined
-      : new Set([
-          ...Object.keys(binding.routes),
-          ...binding.logicalWire.endpoints.map(({ path }) => path),
-        ]);
+      : {
+          exact: new Set([
+            ...Object.keys(binding.routes),
+            ...binding.logicalWire.endpoints
+              .filter(({ match }) => match !== "prefix")
+              .map(({ path }) => path),
+          ]),
+          prefixes: [
+            ...Object.keys(binding.prefixes),
+            ...binding.logicalWire.endpoints
+              .filter(({ match }) => match === "prefix")
+              .map(({ path }) => path),
+          ],
+        };
 
   return async (request) => {
     const correlationId = correlationIdFor(request, correlation);
@@ -171,7 +181,10 @@ export function createHttpHandler(
     if (request.method === "OPTIONS" && policy.browser !== undefined) {
       const accepted =
         path !== undefined &&
-        preflightPaths?.has(path) === true &&
+        (preflightPaths?.exact.has(path) === true ||
+          preflightPaths?.prefixes.some(
+            (prefix) => path.length > prefix.length && path.startsWith(prefix),
+          ) === true) &&
         preflightAllowed(request, policy.browser);
       return finish(
         accepted ? new Response(null, { status: 204 }) : publicJson({ error: "FORBIDDEN" }, 403),

@@ -12,6 +12,7 @@ type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 export interface FetchClaim {
   readonly method: string;
   readonly path: string;
+  readonly match?: "prefix";
   readonly declarations: readonly string[];
 }
 
@@ -27,6 +28,23 @@ export function isFetchRealization(value: unknown): value is FetchRealization {
   return typeof value === "object" && value !== null && FetchRealizations.has(value);
 }
 
+export function fetchClaimMatches(claim: FetchClaim, method: string, path: string): boolean {
+  if (claim.method.toUpperCase() !== method.toUpperCase()) return false;
+  return claim.match === "prefix"
+    ? path.length > claim.path.length && path.startsWith(claim.path)
+    : path === claim.path;
+}
+
+export function fetchClaimsOverlap(left: FetchClaim, right: FetchClaim): boolean {
+  if (left.method.toUpperCase() !== right.method.toUpperCase()) return false;
+  if (left.match === "prefix" && right.match === "prefix") {
+    return left.path.startsWith(right.path) || right.path.startsWith(left.path);
+  }
+  if (left.match === "prefix") return fetchClaimMatches(left, right.method, right.path);
+  if (right.match === "prefix") return fetchClaimMatches(right, left.method, left.path);
+  return left.path === right.path;
+}
+
 /** First-party realization floors use this constructor for checked Fetch values. */
 export function defineFetchRealization(value: FetchRealization): FetchRealization {
   const realization: FetchRealization = Object.freeze({
@@ -36,6 +54,7 @@ export function defineFetchRealization(value: FetchRealization): FetchRealizatio
         Object.freeze({
           method: claim.method,
           path: claim.path,
+          ...(claim.match === undefined ? {} : { match: claim.match }),
           declarations: Object.freeze([...claim.declarations]),
         }),
       ),
@@ -54,35 +73,42 @@ export function realize(options: {
   const selected = bindInterface(options);
   const gateway = createGateway({ application: options.system });
   const handler = createHttpHandler({ application: options.system, gateway });
-  const declarationsByPath = new Map<string, string[]>();
+  const declarationsByClaim = new Map<
+    string,
+    { path: string; match?: "prefix"; names: string[] }
+  >();
 
   for (const member of selected.members) {
     if (member.kind !== "endpoint") continue;
-    const path = (member.value as EndpointDef).path;
-    const declarations = declarationsByPath.get(path) ?? [];
-    declarations.push(member.identity);
-    declarationsByPath.set(path, declarations);
+    const { path, match } = member.value as EndpointDef;
+    const key = `${match ?? "exact"}\0${path}`;
+    const claim = declarationsByClaim.get(key) ?? {
+      path,
+      ...(match === undefined ? {} : { match }),
+      names: [],
+    };
+    claim.names.push(member.identity);
+    declarationsByClaim.set(key, claim);
   }
 
   const claims = Object.freeze(
-    [...declarationsByPath]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([path, declarations]) =>
+    [...declarationsByClaim.values()]
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .map(({ path, match, names }) =>
         Object.freeze({
           method: "POST",
           path,
-          declarations: Object.freeze(
-            declarations.sort((left, right) => left.localeCompare(right)),
-          ),
+          ...(match === undefined ? {} : { match }),
+          declarations: Object.freeze(names.sort((left, right) => left.localeCompare(right))),
         }),
       ),
   );
-  const claimed = new Set(claims.map(({ path }) => path));
   return defineFetchRealization({
     interface: selected.identity,
     claims,
     async fetch(request: Request): Promise<Response> {
-      if (!claimed.has(new URL(request.url).pathname)) {
+      const path = new URL(request.url).pathname;
+      if (!claims.some((claim) => fetchClaimMatches(claim, request.method, path))) {
         return new Response(JSON.stringify({ error: "NOT_FOUND" }), {
           status: 404,
           headers: { "content-type": "application/json" },

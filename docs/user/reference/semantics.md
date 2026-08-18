@@ -325,6 +325,16 @@ rows, nested arrays, and cardinality violations fault. Other non-null,
 non-array objects pass; this is not row-schema validation. Missing `.is` fields
 do not match. Direct query roots bypass these container and cardinality checks.
 
+An authored `many identified by (field, ...)` query also promises that every
+answer row contains portable values for that required result-field tuple and
+that the tuples are unique within the answer. Engine-owned reads fault on a
+missing, non-portable, or duplicate identity. Identity does not sort the answer:
+the query still owns row order, while consumers can follow the same row across
+reordering and changes to non-identity fields. Queries without this optional
+promise retain their existing semantics; a consumer that needs stable row
+identity must use a coarser replacement boundary rather than infer identity
+from array position.
+
 An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
 actions invalidate the acted-on concept instance's query caches before and after
@@ -451,8 +461,10 @@ do not create a runtime join.
 At the boundary, `receive(...)` supplies the outside-request trigger. Path
 pinning, input contracts, correlation, response shaping, and wire derivation
 remain endpoint concerns.
-The endpoint's declared path is authoritative: `receive(...)` cannot author
-the boundary-owned `path`. Authored responses likewise cannot provide the
+An exact endpoint's declared path is authoritative. A prefix endpoint also
+pins its declared prefix and binds its actual request pathname through the
+explicit second callback argument, `(vars, { path })`. `receive(...)` cannot
+author the boundary-owned `path` or `route`. Authored responses likewise cannot provide the
 boundary-owned `requestId` or `errorKind`; framework classification travels on
 a separate internal response channel and accepts only declared framework codes.
 An endpoint records at most one answer. An uncovered input or a dropped plain

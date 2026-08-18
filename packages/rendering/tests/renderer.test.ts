@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { assemble, conceptSet } from "@mit-sdg/sync-engine/assembly";
+import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 import {
   bindInterface,
   defineInterface,
@@ -7,8 +8,9 @@ import {
   receive,
   respond,
 } from "@mit-sdg/sync-engine/boundary";
-import { compileHtml } from "../src/compiled/index.ts";
+import { compileHtml, diffHtml } from "../src/compiled/index.ts";
 import {
+  each,
   html,
   isRendererInvocation,
   renderer,
@@ -47,13 +49,19 @@ describe("renderer", () => {
     expect(isRendererInvocation(JSON.parse(JSON.stringify(invocation)))).toBe(true);
   });
 
-  test("caller inputs remain at the invocation mapping's top level", () => {
-    const Greeting = renderer<{ audience: string }>("Greets one audience.", ({ audience }) => {
-      void audience;
-      return html`<p>Hello.</p>`;
-    });
-    install({ Greeting });
+  test("caller inputs remain at the invocation mapping's top level", async () => {
+    const Greeting = renderer(
+      "Greets one audience.",
+      ({ audience }) => html`<p>Hello, ${audience}.</p>`,
+    );
+    const { Browser, system } = install({ Greeting });
+    const compiled = compileHtml(bindInterface({ system, interface: Browser }));
     expect(Greeting({ audience: "world" }).audience).toBe("world");
+    const formed = await compiled.form(Greeting({ audience: "<world>" }));
+    expect(formed.content.value).toContain("&lt;world&gt;");
+    expect(formed.tree.children).toMatchObject([
+      { kind: "show", address: "root/1/show", value: "<world>" },
+    ]);
     expect(() => Greeting({ audience: "world", $renderer: "shadow" } as never)).toThrow(
       'cannot be named "$renderer"',
     );
@@ -63,7 +71,7 @@ describe("renderer", () => {
     );
   });
 
-  test("a direct child invocation lowers as one named subtree placement", () => {
+  test("a direct child invocation lowers as one named subtree placement", async () => {
     const Heading = renderer("Shows the greeting heading.", () => html`<h1>Hello, world.</h1>`);
     const Hello = renderer("Composes the greeting.", () => html`<main>${Heading({})}</main>`);
     const { Browser, system } = install({ Heading, Hello });
@@ -78,21 +86,255 @@ describe("renderer", () => {
       ],
     });
     expect(compiled.renderers).toEqual(["Heading", "Hello"]);
-    expect(compiled.form(Hello({}))).toEqual({
+    expect(await compiled.form(Hello({}))).toEqual({
       holder: "Hello:root",
+      fields: [],
+      asks: [],
+      reads: [],
+      tree: {
+        kind: "root",
+        address: "root",
+        children: [
+          {
+            kind: "renderer",
+            address: "root/1/renderer",
+            renderer: "Heading",
+            children: [],
+          },
+        ],
+      },
       content: { format: "html", value: "<main><h1>Hello, world.</h1></main>" },
     });
+  });
+
+  test("fields and asks form checked element bindings", async () => {
+    class PresentingConcept {
+      create(_input: { name: string }): { profile: string } {
+        return { profile: "profile" };
+      }
+    }
+    class WelcomingConcept {
+      welcome(_input: { space: string; participant: string }): { welcome: string } {
+        return { welcome: "welcome" };
+      }
+    }
+    const { Presenting, Welcoming } = vocabulary({
+      concepts: { Presenting: PresentingConcept, Welcoming: WelcomingConcept },
+    }).concepts;
+    const Controls = renderer(
+      "Creates a Profile and welcomes it to one space.",
+      ({ space }, _bindings, { name, profile }) => html`
+        <input ${name} />
+        <button ${Presenting.create({ name }).responds({ profile })}>Create profile</button>
+        <input type="hidden" ${profile} />
+        <button ${Welcoming.welcome({ space, participant: profile })}>Enter space</button>
+      `,
+    );
+    const { Browser, system } = install({ Controls });
+    const formed = await compileHtml(bindInterface({ system, interface: Browser })).form(
+      Controls({ space: "atlas" }),
+    );
+
+    expect(formed.fields).toEqual(["name", "profile"]);
+    expect(formed.asks).toEqual([
+      {
+        id: "root/3/ask",
+        concept: "Presenting",
+        action: "create",
+        input: { name: { source: "field", name: "name", address: "root/1/field" } },
+        output: { profile: { name: "profile", address: "root/5/field" } },
+      },
+      {
+        id: "root/7/ask",
+        concept: "Welcoming",
+        action: "welcome",
+        input: {
+          space: { source: "value", value: "atlas" },
+          participant: { source: "field", name: "profile", address: "root/5/field" },
+        },
+        output: {},
+      },
+    ]);
+    expect(formed.content.value).toContain(
+      'data-rendered-field="name" data-rendered-seat="root/1/field"',
+    );
+    expect(formed.content.value).toContain('<button data-rendered-ask="root/3/ask">');
+  });
+
+  test("a repeated read binds rows and forms their shown values", async () => {
+    class ListingConcept {
+      _in(_input: { space: string }): Array<{ item: string; name: string }> {
+        return [];
+      }
+    }
+    const { Listing } = vocabulary({ concepts: { Listing: ListingConcept } }).concepts;
+    const List = renderer(
+      "Lists the named items in one space.",
+      ({ space }, { item, name }) =>
+        html`<ul>
+          ${each(Listing._in({ space }).is({ item, name })).html`<li>${name}</li>`}
+        </ul>`,
+    );
+    const { Browser, system } = install({ List });
+    const compiled = compileHtml(bindInterface({ system, interface: Browser }));
+
+    const formed = await compiled.form(List({ space: "atlas" }), {
+      async read(read, input) {
+        expect(read).toMatchObject({ concept: "Listing", query: "_in" });
+        expect(input).toEqual({ space: "atlas" });
+        return [
+          { item: "one", name: "<Maya>" },
+          { item: "two", name: "Ravi" },
+        ];
+      },
+    });
+    expect(formed.content.value).toContain("&lt;Maya&gt;");
+    expect(formed.content.value).toContain("Ravi");
+    expect(formed.reads).toEqual([{ concept: "Listing", query: "_in", input: { space: "atlas" } }]);
+  });
+
+  test("gives repeated fields and asks row-scoped addresses", async () => {
+    class ListingConcept {
+      static readonly queries = { _in: "many" } as const;
+      static readonly queryIdentities = { _in: ["item"] } as const;
+      _in(_: Record<string, never>): Array<{ item: string }> {
+        return [];
+      }
+    }
+    class EditingConcept {
+      save(_input: { item: string; value: string }): Record<string, never> {
+        return {};
+      }
+    }
+    const { Listing, Editing } = vocabulary({
+      concepts: { Listing: ListingConcept, Editing: EditingConcept },
+    }).concepts;
+    const Controls = renderer(
+      "Edits identified rows independently.",
+      (_inputs, { item }, { draft }) => html`
+        <ul>
+          ${each(Listing._in({}).is({ item })).html`
+            <li>
+              <input ${draft}>
+              <button ${Editing.save({ item, value: draft })}>Save</button>
+            </li>
+          `}
+        </ul>
+      `,
+    );
+    const { Browser, system } = install({ Controls });
+    const formed = await compileHtml(bindInterface({ system, interface: Browser })).form(
+      Controls({}),
+      {
+        async read() {
+          return [{ item: "one" }, { item: "two" }];
+        },
+      },
+    );
+
+    expect(formed.asks).toHaveLength(2);
+    const addresses = formed.asks.map((ask) => {
+      const source = ask.input.value;
+      if (source.source !== "field") throw new Error("expected a row field");
+      return source.address;
+    });
+    expect(new Set(addresses).size).toBe(2);
+    expect(addresses.every((address) => address.includes("/key-"))).toBe(true);
+    expect(formed.asks[0].input.item).toEqual({ source: "value", value: "one" });
+    expect(formed.asks[1].input.item).toEqual({ source: "value", value: "two" });
+  });
+
+  test("diffs identified rows by query-owned identity and preserves existing row addresses", async () => {
+    class ListingConcept {
+      static readonly queries = { _in: "many" } as const;
+      static readonly queryIdentities = { _in: ["item"] } as const;
+      _in(_input: { space: string }): Array<{ item: string; name: string }> {
+        return [];
+      }
+    }
+    const { Listing } = vocabulary({ concepts: { Listing: ListingConcept } }).concepts;
+    const List = renderer(
+      "Lists identified items.",
+      ({ space }, { item, name }) =>
+        html`<ul>
+          ${each(Listing._in({ space }).is({ item, name })).html`<li>${name}</li>`}
+        </ul>`,
+    );
+    const { Browser, system } = install({ List });
+    const compiled = compileHtml(bindInterface({ system, interface: Browser }));
+    let rows = [
+      { item: "one", name: "Maya" },
+      { item: "two", name: "Ravi" },
+    ];
+    const reader = {
+      async read() {
+        return rows;
+      },
+    };
+    const before = await compiled.form(List({ space: "atlas" }), reader);
+    rows = [
+      { item: "two", name: "Ravi" },
+      { item: "one", name: "May" },
+      { item: "three", name: "Lin" },
+    ];
+    const after = await compiled.form(List({ space: "atlas" }), reader);
+    const patches = diffHtml(before, after);
+
+    expect(patches.map(({ kind }) => kind)).toEqual(["rows", "show"]);
+    const rowPatch = patches[0];
+    if (rowPatch.kind !== "rows") throw new Error("expected an identified row patch");
+    expect(rowPatch.entered).toHaveLength(1);
+    expect(rowPatch.left).toEqual([]);
+    expect(rowPatch.order[1]).toBe(
+      (before.tree.children[0] as { rows: readonly { address: string }[] }).rows[0].address,
+    );
+    expect(patches).not.toContainEqual(expect.objectContaining({ kind: "root" }));
+  });
+
+  test("falls back to replacing one clause when a repeated query has no identity promise", async () => {
+    class ListingConcept {
+      static readonly queries = { _in: "many" } as const;
+      _in(_: Record<string, never>): Array<{ name: string }> {
+        return [];
+      }
+    }
+    const { Listing } = vocabulary({ concepts: { Listing: ListingConcept } }).concepts;
+    const List = renderer(
+      "Lists unidentified items.",
+      (_inputs, { name }) =>
+        html`<ul>
+          ${each(Listing._in({}).is({ name })).html`<li>${name}</li>`}
+        </ul>`,
+    );
+    const { Browser, system } = install({ List });
+    const compiled = compileHtml(bindInterface({ system, interface: Browser }));
+    let rows = [{ name: "Maya" }];
+    const reader = {
+      async read() {
+        return rows;
+      },
+    };
+    const before = await compiled.form(List({}), reader);
+    rows = [{ name: "May" }];
+    const after = await compiled.form(List({}), reader);
+
+    expect(diffHtml(before, after)).toMatchObject([{ kind: "clause", html: expect.any(String) }]);
   });
 
   test("refuses arbitrary values and renderer invocations in the wrong markup seat", () => {
     expect(() => html`<p>${"computed"}</p>`).toThrow("is not a checked authored statement");
 
     const Heading = renderer("Shows the greeting heading.", () => html`<h1>Hello.</h1>`);
-    install({ Heading });
+    const Greeting = renderer(
+      "Greets one audience.",
+      ({ audience }) => html`<p title="${audience}">Hello.</p>`,
+    );
+    install({ Heading, Greeting });
     expect(() => html`<main class="${Heading({})}"></main>`).toThrow("must occupy a subtree place");
+    expect(() => Greeting.declaration).toThrow("must be shown between elements");
   });
 
-  test("refuses an unexported or renamed child with a repairable identity error", () => {
+  test("refuses an unexported or renamed child with a repairable identity error", async () => {
     const HiddenHeading = renderer("Shows a hidden heading.", () => html`<h1>Hello.</h1>`);
     const HiddenHello = renderer(
       "Composes a hidden child.",
@@ -137,7 +379,7 @@ describe("renderer", () => {
     if (child?.kind !== "renderer") throw new Error("expected child placement");
     (child.invocation.$renderer as { identity: string }).identity = "RenamedHeading";
 
-    expect(() => compiled.form(renamed)).toThrow(
+    await expect(compiled.form(renamed)).rejects.toThrow(
       'renderer "RenamedHeading" is not admitted by interface "Browser"',
     );
   });

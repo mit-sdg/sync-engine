@@ -130,6 +130,11 @@ function printType(type: WireType, indent: string, anchored = false): string {
   }
 }
 
+function prefixKey(prefix: string): string {
+  const literal = prefix.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
+  return `[path: \`${literal}\${string}\`]`;
+}
+
 /** Emit the client-pluggable TypeScript contract module for one wire IR. */
 export function renderWireTypes(wire: WireContractsIR, moduleName?: string): string;
 export function renderWireTypes(wire: WireContractsIR, options?: WireRenderOptions): string;
@@ -202,7 +207,9 @@ export function renderWireTypes(
     const own = endpoint.errors.map((code) => JSON.stringify(code));
     if (endpoint.openError) own.push("string");
     const errorUnion = [appWideErrorName, ...own].join(" | ");
-    lines.push(`  ${JSON.stringify(endpoint.path)}: {`);
+    const key =
+      endpoint.match === "prefix" ? prefixKey(endpoint.path) : JSON.stringify(endpoint.path);
+    lines.push(`  ${key}: {`);
     lines.push(`    input: ${printType(endpoint.input, "    ", anchored)};`);
     lines.push(`    output: ${printType(endpoint.output, "    ", anchored)};`);
     lines.push(`    error: { error: ${errorUnion} };`);

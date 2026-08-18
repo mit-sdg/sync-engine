@@ -8,6 +8,7 @@ export type PublicSourceApi =
   | "vocabulary"
   | "reaction"
   | "endpoint"
+  | "endpointPrefix"
   | "view"
   | "former";
 
@@ -55,7 +56,7 @@ export interface ApiRecognition {
 const PUBLIC_APIS: Readonly<Record<string, ReadonlySet<PublicSourceApi>>> = {
   "@mit-sdg/sync-engine/assembly": new Set(["assemble", "conceptSet", "registerConcept"]),
   "@mit-sdg/sync-engine/advanced": new Set(["vocabulary"]),
-  "@mit-sdg/sync-engine/boundary": new Set(["endpoint"]),
+  "@mit-sdg/sync-engine/boundary": new Set(["endpoint", "endpointPrefix"]),
   "@mit-sdg/sync-engine/language": new Set(["reaction", "view", "former"]),
 };
 const EMPTY: ReadonlyMap<ts.Symbol, StaticValue> = new Map();

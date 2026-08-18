@@ -889,7 +889,7 @@ export declare function indexApplicationSourcesWithController<Programs extends t
 === packages/analysis/dist/project/source-resolver.d.ts ===
 import ts from "typescript";
 import type { AnalysisController } from "../ir/analysis-foundation.ts";
-export type PublicSourceApi = "assemble" | "conceptSet" | "registerConcept" | "vocabulary" | "reaction" | "endpoint" | "view" | "former";
+export type PublicSourceApi = "assemble" | "conceptSet" | "registerConcept" | "vocabulary" | "reaction" | "endpoint" | "endpointPrefix" | "view" | "former";
 export type StaticResolutionReason = "ambiguous" | "cycle" | "depth" | "dynamic" | "mutable" | "over-bound" | "unresolved-symbol";
 export type StaticResolution<Value> = {
     readonly kind: "resolved";

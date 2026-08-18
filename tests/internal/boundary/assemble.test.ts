@@ -83,6 +83,31 @@ describe("assemble", () => {
     expect(keepAll.engine.logging).toBe(Logging.TRACE);
   });
 
+  test("reports one ordered change after a successful concept flow settles", async () => {
+    const app = assemble({ vocabulary: vocab, composition: { Increment } });
+    const changes: Array<{
+      sequence: number;
+      concepts: readonly string[];
+      occurrences: readonly { concept: string; action: string }[];
+    }> = [];
+    const stop = app.observeSettledChanges((change) => {
+      changes.push(change);
+    });
+
+    await app.invoker.invoke("/counter/increment" as never, {});
+    expect(changes).toEqual([
+      {
+        sequence: 1,
+        concepts: ["Counting"],
+        occurrences: [{ concept: "Counting", action: "increment" }],
+      },
+    ]);
+
+    stop();
+    await app.concepts.Counting.increment({});
+    expect(changes).toHaveLength(1);
+  });
+
   test("selected nested declarations carry their dotted authored identities through lowering", () => {
     const Readable = view("the current count", (_inputs, { count }, _bindings) =>
       where(Counting._current({}).is({ count })),

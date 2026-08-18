@@ -7,6 +7,7 @@ import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endp
 import { fromEnvelope } from "../protocol/envelope.ts";
 import { FrameworkErrorCode, frameworkError } from "../protocol/types.ts";
 import { validateRuntimeValue } from "../protocol/validation.ts";
+import { pathHasPrefix } from "../protocol/route-path.ts";
 import type { EndpointValidator, EndpointValidators } from "../protocol/validation.ts";
 import { isAborted, raceDeadline } from "@engine/utils/deadline";
 import { requestTimeout, RuntimeLifecycle } from "./lifecycle.ts";
@@ -241,6 +242,8 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   validators?: Readonly<Record<string, EndpointValidators>>;
   /** When supplied, reject paths outside the assembled public route set. */
   routes?: ReadonlySet<string>;
+  /** Canonical prefixes whose nonempty descendant paths are admitted. */
+  prefixes?: ReadonlySet<string>;
   /** Record an invalid authored result without exposing validator detail. */
   onInvalidResponse?: (event: {
     path: string;
@@ -267,6 +270,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
     contracts,
     validators,
     routes,
+    prefixes,
     onInvalidResponse,
     onValidatorFault,
     lifecycle,
@@ -302,15 +306,20 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       if (isAborted(invokeOpts.signal)) {
         return settle(frameworkError(FrameworkErrorCode.ABORTED));
       }
-      if (routes !== undefined && !routes.has(path)) {
+      const exact = routes?.has(path) === true;
+      const prefix = exact
+        ? undefined
+        : [...(prefixes ?? [])].find((candidate) => pathHasPrefix(path, candidate));
+      if (routes !== undefined && !exact && prefix === undefined) {
         return settle(frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`));
       }
+      const contractPath = prefix ?? path;
       refresh?.();
       // Validate the declared outer shape before recording an ask. Required
       // keys test presence, defaults fill absent keys, and then the endpoint's
       // application-supplied validator checks the complete admitted value.
       try {
-        const contract = contracts?.[path];
+        const contract = contracts?.[contractPath];
         if (contract !== undefined) {
           const admitted = admitInput(contract, path, input);
           if (!admitted.ok) {
@@ -318,7 +327,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           }
           input = admitted.admitted as typeof input;
         }
-        const inputValidator = validators?.[path]?.input;
+        const inputValidator = validators?.[contractPath]?.input;
         if (inputValidator !== undefined) {
           const validation = validateRuntimeValue(inputValidator, input);
           if (!validation.ok) {
@@ -366,6 +375,7 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           requestId,
           correlationId,
           path,
+          ...(prefix === undefined ? {} : { route: prefix }),
           [flow]: requestId,
         };
       } catch {
@@ -381,8 +391,8 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       const deadline = performance.now() + timeoutMs;
       try {
         responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal, {
-          success: validators?.[path]?.output,
-          domainError: validators?.[path]?.domainError,
+          success: validators?.[contractPath]?.output,
+          domainError: validators?.[contractPath]?.domainError,
           onInvalid: (phase, errorClass) =>
             onInvalidResponse?.({ path, requestId, phase, errorClass }),
           onFault: (phase, error) => onValidatorFault?.({ path, requestId, phase, error }),

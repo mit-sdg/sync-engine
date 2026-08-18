@@ -30,3 +30,32 @@ export function assertPortableRoutePath(path: unknown, label: string): asserts p
     );
   }
 }
+
+/** Require a canonical absolute prefix whose members are nonempty descendants. */
+export function assertPortableRoutePrefix(
+  prefix: unknown,
+  label: string,
+): asserts prefix is string {
+  assertPortableRoutePath(prefix, label);
+  if (prefix === "/" || !prefix.endsWith("/")) {
+    throw new Error(`${label}: prefix must end with '/' and be more specific than '/'.`);
+  }
+}
+
+export function pathHasPrefix(path: string, prefix: string): boolean {
+  return path.length > prefix.length && path.startsWith(prefix);
+}
+
+export interface RouteClaim {
+  readonly path: string;
+  readonly match?: "prefix";
+}
+
+export function routeClaimsOverlap(left: RouteClaim, right: RouteClaim): boolean {
+  if (left.match === "prefix" && right.match === "prefix") {
+    return left.path.startsWith(right.path) || right.path.startsWith(left.path);
+  }
+  if (left.match === "prefix") return pathHasPrefix(right.path, left.path);
+  if (right.match === "prefix") return pathHasPrefix(left.path, right.path);
+  return left.path === right.path;
+}

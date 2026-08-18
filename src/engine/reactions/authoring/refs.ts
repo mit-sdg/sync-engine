@@ -54,8 +54,8 @@ import type {
   Reaction,
   TriggerActionLine,
 } from "../types.ts";
-import { validateQueryContractMap } from "@engine/reads/query-contracts";
-import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
+import { validateQueryContractMap, validateQueryIdentityMap } from "@engine/reads/query-contracts";
+import type { QueryIdentities, QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { setOwn } from "@engine/utils/own-property";
 import { brandActionRef, brandQueryRef, type ActionRef, type QueryRef } from "./references.ts";
 
@@ -79,7 +79,12 @@ function makeActionRef(concept: string, action: string): ActionRef {
   return brandActionRef(ref);
 }
 
-function makeQueryRef(concept: string, query: string, promise: QueryPromise | undefined): QueryRef {
+function makeQueryRef(
+  concept: string,
+  query: string,
+  promise: QueryPromise | undefined,
+  identity: readonly string[] | undefined,
+): QueryRef {
   // Calling the ref with an input pattern answers a line — the callable
   // vocabulary proxy. The ref itself stays inert data: the line carries it
   // by name, and only an assembled engine resolves and reads it.
@@ -90,6 +95,9 @@ function makeQueryRef(concept: string, query: string, promise: QueryPromise | un
   Object.defineProperty(ref, "queryName", { value: query, enumerable: true });
   if (promise !== undefined) {
     Object.defineProperty(ref, "queryPromise", { value: promise, enumerable: true });
+  }
+  if (identity !== undefined) {
+    Object.defineProperty(ref, "queryIdentity", { value: identity, enumerable: true });
   }
   return brandQueryRef(ref);
 }
@@ -265,8 +273,18 @@ function specifiedContracts(spec: string): ConceptMetadata {
   const specification = parseSpec(spec);
   const { purpose, principle, queries } = specification;
   const promises: Record<string, QueryPromise> = {};
-  for (const query of queries) setOwn(promises, query.name, query.promise);
-  return { purpose, principle, queries: promises, specification };
+  const identities: Record<string, readonly string[]> = {};
+  for (const query of queries) {
+    setOwn(promises, query.name, query.promise);
+    if (query.identity !== undefined) setOwn(identities, query.name, query.identity);
+  }
+  return {
+    purpose,
+    principle,
+    queries: promises,
+    ...(Object.keys(identities).length === 0 ? {} : { queryIdentities: identities }),
+    specification,
+  };
 }
 
 function classContracts(cls: ConceptClass): ConceptMetadata {
@@ -274,6 +292,7 @@ function classContracts(cls: ConceptClass): ConceptMetadata {
     purpose?: unknown;
     principle?: unknown;
     queries?: unknown;
+    queryIdentities?: unknown;
     outcomes?: unknown;
   };
   return {
@@ -282,6 +301,9 @@ function classContracts(cls: ConceptClass): ConceptMetadata {
     ...(canonical.queries === undefined
       ? {}
       : { queries: canonical.queries as ConceptMetadata["queries"] }),
+    ...(canonical.queryIdentities === undefined
+      ? {}
+      : { queryIdentities: canonical.queryIdentities as ConceptMetadata["queryIdentities"] }),
     ...(canonical.outcomes === undefined
       ? {}
       : { outcomes: canonical.outcomes as ConceptMetadata["outcomes"] }),
@@ -295,6 +317,13 @@ function validateConceptMetadata(
 ): void {
   const prototype = cls.prototype as Record<string, unknown>;
   validateQueryContractMap(metadata.queries, prototype, `Vocabulary: "${conceptName}"`, cls.name);
+  validateQueryIdentityMap(
+    metadata.queryIdentities,
+    metadata.queries,
+    prototype,
+    `Vocabulary: "${conceptName}"`,
+    cls.name,
+  );
   for (const action of new Set([
     ...Object.keys(metadata.outcomes ?? {}),
     ...Object.keys(metadata.refusals ?? {}),
@@ -335,6 +364,7 @@ function conceptRefProxy(
   conceptName: string,
   cls: ConceptClass,
   queryPromises?: QueryPromises,
+  queryIdentities?: QueryIdentities,
 ): object {
   const memo = new Map<string, ActionRef | QueryRef>();
   const prototype = cls.prototype as Record<string, unknown>;
@@ -357,6 +387,7 @@ function conceptRefProxy(
               prop,
               queryPromises?.[prop] ??
                 (cls as unknown as { queries?: Record<string, QueryPromise> }).queries?.[prop],
+              queryIdentities?.[prop],
             )
           : makeActionRef(conceptName, prop);
         memo.set(prop, ref);
@@ -431,7 +462,11 @@ export function vocabulary(
     };
     validateConceptMetadata(name, cls, declaredMetadata);
     setOwn(metadata, name, declaredMetadata);
-    setOwn(refs, name, conceptRefProxy(name, cls, declaredMetadata.queries));
+    setOwn(
+      refs,
+      name,
+      conceptRefProxy(name, cls, declaredMetadata.queries, declaredMetadata.queryIdentities),
+    );
   }
   Object.defineProperty(refs, VocabularyClasses, { value: { ...classes } });
 

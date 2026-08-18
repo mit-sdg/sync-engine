@@ -288,6 +288,25 @@ describe("wire TypeScript renderer", () => {
     expect(source).toContain("export type Json =");
   });
 
+  test("renders prefix claims as template-literal index signatures", async () => {
+    const source = renderWireTypes({
+      appWide: [],
+      endpoints: [
+        {
+          path: "/welcome/",
+          match: "prefix",
+          input: { kind: "object", fields: [] },
+          output: { kind: "object", fields: [] },
+          errors: [],
+          openError: false,
+        },
+      ],
+    });
+
+    expect(source).toContain("[path: `/welcome/${string}`]: {");
+    await typecheck({ "wire.ts": source });
+  });
+
   test("appends a named projection under shared helpers", () => {
     const logical = renderWireTypes(renderedFixture, { moduleName: "ApplicationWire" });
     const projected = renderWireTypes(renderedFixture, {

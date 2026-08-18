@@ -5,9 +5,13 @@ export type QueryPromise = "one" | "optional" | "many";
 
 export type QueryPromises = Readonly<Record<string, QueryPromise>>;
 
+/** Declared result-field tuples that identify rows of selected many queries. */
+export type QueryIdentities = Readonly<Record<string, readonly string[]>>;
+
 /** Metadata carried by instrumented and authored query references. */
 export interface QueryMetadata {
   queryName?: string;
   queryLabel?: string;
   queryPromise?: QueryPromise;
+  queryIdentity?: readonly string[];
 }

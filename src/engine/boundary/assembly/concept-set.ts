@@ -21,7 +21,7 @@ import {
 } from "@engine/reactions/concepts/concept-spec";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import type { CheckedComputationFns, ComputationFn } from "@engine/reads/computations";
-import type { QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
+import type { QueryIdentities, QueryPromises, QueryPromise } from "@engine/reads/query-metadata";
 import { setOwn } from "@engine/utils/own-property";
 import { rememberImplementations } from "./implementation-registry.ts";
 
@@ -273,6 +273,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     purpose?: string;
     principle?: string;
     queries?: QueryPromises;
+    queryIdentities?: QueryIdentities;
     refusals?: RefusalContracts;
     specification?: ConceptSpec;
   };
@@ -405,13 +406,18 @@ export function conceptSet<
       );
     }
     const promises: Record<string, QueryPromise> = {};
-    for (const query of queries) setOwn(promises, query.name, query.promise);
+    const identities: Record<string, readonly string[]> = {};
+    for (const query of queries) {
+      setOwn(promises, query.name, query.promise);
+      if (query.identity !== undefined) setOwn(identities, query.name, query.identity);
+    }
 
     setOwn(entries, conceptName, {
       class: registration.class,
       purpose,
       principle,
       ...(queries.length === 0 ? {} : { queries: promises }),
+      ...(Object.keys(identities).length === 0 ? {} : { queryIdentities: identities }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
       specification: registration.specification,
     });

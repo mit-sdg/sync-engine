@@ -28,6 +28,7 @@ import { applicationDiagnostics } from "./diagnostics.ts";
 export interface ManifestEndpointV1 {
   name: string;
   path: string;
+  match?: "prefix";
   reactions: string[];
   input: InputContractDecl;
   validators: { input: boolean; output: boolean; domainError?: true };
@@ -239,9 +240,10 @@ export function applicationAssemblyFacts(
     inventories: concepts,
   });
   const endpoints = assembled.endpoints
-    .map(({ name, path, reactions }) => ({
+    .map(({ name, path, match, reactions }) => ({
       name,
       path,
+      ...(match === undefined ? {} : { match }),
       reactions: [...reactions].sort(ordinal),
       input: assembled.contracts[path] ?? {},
       validators: {

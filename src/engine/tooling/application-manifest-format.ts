@@ -807,9 +807,10 @@ function assertInputContract(value: unknown, path: string): asserts value is Inp
 }
 
 function assertManifestEndpoint(value: unknown, path: string): asserts value is ManifestEndpointV1 {
-  const data = shape(value, path, ["name", "path", "reactions", "input", "validators"]);
+  const data = shape(value, path, ["name", "path", "reactions", "input", "validators"], ["match"]);
   nonemptyString(data.name, `${path}.name`);
   nonemptyString(data.path, `${path}.path`);
+  if (data.match !== undefined) literal(data.match, `${path}.match`, ["prefix"] as const);
   uniqueNonemptyStrings(data.reactions, `${path}.reactions`);
   assertInputContract(data.input, `${path}.input`);
   const validators = shape(
@@ -925,9 +926,11 @@ function assertWire(value: unknown, path: string): void {
       endpoint,
       endpointPath,
       ["path", "input", "output", "errors", "openError"],
-      ["inputAdmissionError"],
+      ["inputAdmissionError", "match"],
     );
     nonemptyString(endpointData.path, `${endpointPath}.path`);
+    if (endpointData.match !== undefined)
+      literal(endpointData.match, `${endpointPath}.match`, ["prefix"] as const);
     assertWireType(endpointData.input, `${endpointPath}.input`);
     assertWireType(endpointData.output, `${endpointPath}.output`);
     strings(endpointData.errors, `${endpointPath}.errors`);
