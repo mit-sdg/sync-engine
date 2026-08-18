@@ -112,6 +112,29 @@ export interface SetupResult {
 /** Initialize a supported concept-free application without replacing application-owned files. */
 export declare function setupProject(directory?: string, options?: SetupOptions): Promise<SetupResult>;
 
+=== dist/command/verify.d.ts ===
+export type VerificationStatus = "passed" | "failed" | "skipped";
+export type VerificationStepName = "check-design" | "check" | "artifacts check";
+export interface VerificationStepResult {
+    readonly name: VerificationStepName;
+    readonly status: VerificationStatus;
+    readonly detail?: string;
+}
+export interface VerificationConfiguration {
+    readonly status: "loaded" | "failed";
+    readonly documents: readonly string[];
+    readonly detail?: string;
+}
+/** A plain-data result that can also be rendered by a future machine-readable CLI format. */
+export interface VerificationReport {
+    readonly status: "passed" | "failed";
+    readonly config: string;
+    readonly configuration: VerificationConfiguration;
+    readonly steps: readonly VerificationStepResult[];
+}
+/** Run the existing configured validation commands and retain every independent result. */
+export declare function verifyCommand(args: readonly string[]): Promise<VerificationReport>;
+
 === dist/engine/boundary/assembly/assemble.d.ts ===
 /**
  * Assemble a vocabulary and composition into one application.

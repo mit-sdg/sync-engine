@@ -18,6 +18,7 @@ files are written.
 | ---------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
 | `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
 | `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
+| `verify [--config path] [--fail-on-warnings]`  | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
 | `check [--config path]`                        | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
 | `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design               | No                                             |
 | `artifacts pin [--config path]`                | Regenerates both configured artifacts                                         | Yes                                            |
@@ -149,6 +150,37 @@ rejecting them would make partial-corpus checks produce false positives.
 
 `check-design` reads no generated config, assembly, TypeScript project, or Git state and
 writes no files.
+
+## `sync-engine verify`
+
+```text
+sync-engine verify [--config path] [--fail-on-warnings]
+```
+
+`verify` is a runner, not another validator. It does not invoke Bun scripts, `tsc`, or a test
+suite. It reads the generated descriptor selected by `--config` (default
+`generated.config.ts`) to obtain its required, ordered `design.documents` local file URLs, then
+uses those exact files as the explicit operands of `check-design`. It does not scan directories
+or infer design paths. The same descriptor is then passed to the configured commands in this
+order:
+
+1. `sync-engine check-design <configured design documents>`;
+2. `sync-engine check [--config path]`; and
+3. `sync-engine artifacts check [--config path]`.
+
+When the configuration registers no design documents, `check-design` is reported as skipped:
+the standalone command requires at least one explicit operand, while an empty registration is
+valid for a concept-free application. `--fail-on-warnings` is passed only to `check`.
+
+After the configuration has loaded, a failed step does not prevent later steps from running.
+The checks each have independent useful results: source or diagnostic failures do not make an
+artifact mismatch irrelevant. If the configuration itself cannot load, `verify` cannot obtain
+safe operands or run either configured command, so it reports all three steps as skipped.
+
+The final report records configuration discovery and marks each step as `passed`, `failed`, or
+`skipped`; failure details are retained with their step. It exits successfully only when the
+configuration loads and every applicable step passes. The report is human-readable now and is
+kept as plain structured data so a later output format can serialize the same result.
 
 ## `sync-engine check`
 

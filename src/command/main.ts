@@ -4,6 +4,7 @@ import { artifactsCommand } from "./artifacts.ts";
 import { setupProject } from "./setup.ts";
 import { checkCommand } from "./check.ts";
 import { checkDesignCommand } from "./check-design.ts";
+import { verifyCommand } from "./verify.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
@@ -82,6 +83,12 @@ async function main(): Promise<void> {
 
   if (topic === "check") {
     await checkCommand(rest);
+    return;
+  }
+
+  if (topic === "verify") {
+    const report = await verifyCommand(rest);
+    if (report.status === "failed") process.exitCode = 1;
     return;
   }
 
