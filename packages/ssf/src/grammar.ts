@@ -1,17 +1,18 @@
 import { ENUM_VALUE, FIELD_NAME, inferredFieldName, TYPE_NAME } from "./names.ts";
-import type {
-  ParsedAlias,
-  ParsedDeclaration,
-  ParsedEnumeration,
-  ParsedField,
-  ParsedFieldType,
-  ParsedNamed,
-  ParsedReference,
-  SourceLine,
-  SsfDiagnostic,
-  SsfMultiplicity,
-  SsfRuleLine,
-  SsfToken,
+import {
+  error,
+  type ParsedAlias,
+  type ParsedDeclaration,
+  type ParsedEnumeration,
+  type ParsedField,
+  type ParsedFieldType,
+  type ParsedNamed,
+  type ParsedReference,
+  type SourceLine,
+  type SsfDiagnostic,
+  type SsfMultiplicity,
+  type SsfRuleLine,
+  type SsfToken,
 } from "./model.ts";
 import { lineSpan, ruleLine, span, words } from "./source.ts";
 
@@ -233,20 +234,18 @@ function nearMissRuleDiagnostic(line: SourceLine, marker: string): SsfDiagnostic
   const markerToken = line.tokens[0];
   const markerStart = (markerToken?.span.start.offset ?? line.start) - line.start;
   const markerEnd = (markerToken?.span.end.offset ?? line.start) - line.start;
-  return {
-    severity: "error",
+  return error({
     code: "SSF_NEAR_MISS_KEYWORD",
     message: `Use the exact SSF prose marker \`${RULE_MARKER}\` instead of \`${marker}\`.`,
     suggestion: `${line.text.slice(0, markerStart)}${RULE_MARKER}${line.text.slice(markerEnd)}`,
     span: markerToken?.span ?? lineSpan(line),
-  };
+  });
 }
 
 function orphanedLineDiagnostic(line: SourceLine, marker?: string): SsfDiagnostic {
   const nearMiss = marker !== undefined && marker !== RULE_MARKER;
   const subject = marker === undefined ? "valid SSF field" : `indented \`${marker}\` line`;
-  return {
-    severity: "error",
+  return error({
     code: "SSF_ORPHANED_LINE",
     message: `This ${subject} has no enclosing SSF declaration${nearMiss ? ` and does not use the exact \`${RULE_MARKER}\` marker` : ""}.`,
     suggestion:
@@ -256,7 +255,7 @@ function orphanedLineDiagnostic(line: SourceLine, marker?: string): SsfDiagnosti
           ? `Add an enclosing declaration and use \`${RULE_MARKER}\`; or unindent the corrected line to make it a top-level rule.`
           : "Add an enclosing declaration before this line, or remove its indentation to make it a top-level rule.",
     span: lineSpan(line),
-  };
+  });
 }
 
 function malformedLineDiagnostic(
@@ -264,21 +263,19 @@ function malformedLineDiagnostic(
   kind: "alias" | "declaration" | "field",
 ): SsfDiagnostic {
   if (kind === "alias")
-    return {
-      severity: "error",
+    return error({
       code: "SSF_MALFORMED_ALIAS",
       message: "This top-level line is not a complete SSF alias.",
       suggestion: "Use exactly `alias Name for Target` with uppercase SSF type names.",
       span: lineSpan(line),
-    };
+    });
   const field = kind === "field";
-  return {
-    severity: "error",
+  return error({
     code: field ? "SSF_MALFORMED_FIELD" : "SSF_MALFORMED_DECLARATION",
     message: `This ${field ? "indented" : "top-level"} line is not ${field ? "an SSF field or" : "an SSF declaration, alias, or"} \`${RULE_MARKER}\` line.`,
     suggestion: `Use a complete ${field ? "field" : "declaration or alias"}, or prefix prose with the exact \`${RULE_MARKER}\` marker.`,
     span: lineSpan(line),
-  };
+  });
 }
 
 function correctedTokens(
@@ -315,60 +312,66 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   const structuralToken = tokens[declaration.structuralIndex];
 
   if (declaration.declarationKind === "collection" && declaration.structuralIndex === 0) {
-    diagnostics.push({
-      severity: "error",
-      code: "SSF_ARTICLE",
-      message: `Use \`${articleFor(declaration.multiplicity)}\` before \`${canonical}\`.`,
-      suggestion: `${articleFor(declaration.multiplicity)} ${canonicalLine}`,
-      span: structuralToken?.span ?? declaration.signatureSpan,
-    });
+    diagnostics.push(
+      error({
+        code: "SSF_ARTICLE",
+        message: `Use \`${articleFor(declaration.multiplicity)}\` before \`${canonical}\`.`,
+        suggestion: `${articleFor(declaration.multiplicity)} ${canonicalLine}`,
+        span: structuralToken?.span ?? declaration.signatureSpan,
+      }),
+    );
   } else if (subsetMissingArticle) {
-    diagnostics.push({
-      severity: "error",
-      code: "SSF_ARTICLE",
-      message: `Add \`a\` or \`an\` before subset \`${declaration.name.text}\`.`,
-      suggestion: subsetArticleSuggestion,
-      span: declaration.name.span,
-    });
+    diagnostics.push(
+      error({
+        code: "SSF_ARTICLE",
+        message: `Add \`a\` or \`an\` before subset \`${declaration.name.text}\`.`,
+        suggestion: subsetArticleSuggestion,
+        span: declaration.name.span,
+      }),
+    );
   } else if (declaration.authoredStructural !== canonical && structuralToken !== undefined) {
-    diagnostics.push({
-      severity: "error",
-      code: "SSF_NEAR_MISS_KEYWORD",
-      message: `Use the SSF keyword \`${canonical}\` instead of \`${declaration.authoredStructural}\`.`,
-      suggestion: canonicalLine,
-      span: structuralToken.span,
-    });
+    diagnostics.push(
+      error({
+        code: "SSF_NEAR_MISS_KEYWORD",
+        message: `Use the SSF keyword \`${canonical}\` instead of \`${declaration.authoredStructural}\`.`,
+        suggestion: canonicalLine,
+        span: structuralToken.span,
+      }),
+    );
   } else if (collectionHasArticle) {
     const expected = articleFor(declaration.multiplicity);
     const article = authored[0];
     if ((article === "a" || article === "an") && article !== expected && tokens[0] !== undefined) {
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_ARTICLE",
-        message: `Use \`${expected}\` before \`${canonical}\`.`,
-        suggestion: canonicalLine,
-        span: tokens[0].span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_ARTICLE",
+          message: `Use \`${expected}\` before \`${canonical}\`.`,
+          suggestion: canonicalLine,
+          span: tokens[0].span,
+        }),
+      );
     }
   }
   if (declaration.hasWith && declaration.fields.length === 0 && !declaration.hasMalformedField) {
-    diagnostics.push({
-      severity: "error",
-      code: "SSF_MALFORMED_DECLARATION",
-      message: "A declaration ending in `with` must have at least one indented field.",
-      suggestion: "Remove `with` or add at least one indented field.",
-      span: tokens.at(-1)?.span ?? declaration.signatureSpan,
-    });
+    diagnostics.push(
+      error({
+        code: "SSF_MALFORMED_DECLARATION",
+        message: "A declaration ending in `with` must have at least one indented field.",
+        suggestion: "Remove `with` or add at least one indented field.",
+        span: tokens.at(-1)?.span ?? declaration.signatureSpan,
+      }),
+    );
   }
   if (hasFields && !declaration.hasWith) {
     const end = declaration.signatureSpan.end;
-    diagnostics.push({
-      severity: "error",
-      code: "SSF_MISSING_WITH",
-      message: "A declaration with indented fields must include `with`.",
-      suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
-      span: span(end, end),
-    });
+    diagnostics.push(
+      error({
+        code: "SSF_MISSING_WITH",
+        message: "A declaration with indented fields must include `with`.",
+        suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
+        span: span(end, end),
+      }),
+    );
   }
   return diagnostics;
 }
@@ -381,13 +384,12 @@ function fieldDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
   if (optionalIndex < 0) return undefined;
   const optionalToken = tokens[optionalIndex]!;
   if (tokens.some(({ text }) => text === "set" || text === "seq"))
-    return {
-      severity: "error",
+    return error({
       code: "SSF_OPTIONAL_COLLECTION",
       message: "SSF collections are never optional; an empty collection represents absence.",
       suggestion: "Remove `optional` from this field.",
       span: optionalToken.span,
-    };
+    });
   const expectedOptionalIndex = hasArticle ? 1 : 0;
   if (optionalIndex !== expectedOptionalIndex) {
     const withoutOptional = tokens
@@ -395,23 +397,21 @@ function fieldDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
       .map(({ text }) => text);
     if (hasArticle) withoutOptional[0] = "an";
     withoutOptional.splice(expectedOptionalIndex, 0, "optional");
-    return {
-      severity: "error",
+    return error({
       code: "SSF_MISPLACED_OPTIONAL",
       message:
         "The `optional` modifier must precede the field name and follow the article when present.",
       suggestion: `${indentation}${withoutOptional.join(" ")}`,
       span: optionalToken.span,
-    };
+    });
   }
   if (tokens[0]?.text === "a")
-    return {
-      severity: "error",
+    return error({
       code: "SSF_ARTICLE",
       message: "Use `an` before `optional`.",
       suggestion: `${indentation}${correctedTokens(tokens, new Map([[0, "an"]]))}`,
       span: tokens[0].span,
-    };
+    });
   return undefined;
 }
 

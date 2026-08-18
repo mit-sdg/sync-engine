@@ -1,6 +1,6 @@
 import { automaticAliasCandidates } from "./automatic-aliases.ts";
 import { PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
-import type { ParsedAlias, ParsedDeclaration, SsfDiagnostic } from "./model.ts";
+import { error, type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic } from "./model.ts";
 
 export interface ResolutionFacts {
   readonly validStructuralNames: ReadonlySet<string>;
@@ -52,34 +52,37 @@ export function validateTypeGraph(
 
   for (const [name, group] of declarationGroups) {
     for (const declaration of group.slice(1))
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_DUPLICATE_DECLARATION",
-        message: `Structural declaration ${JSON.stringify(name)} is declared more than once.`,
-        suggestion: "Give every structural declaration a unique exact type name.",
-        span: declaration.name.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_DUPLICATE_DECLARATION",
+          message: `Structural declaration ${JSON.stringify(name)} is declared more than once.`,
+          suggestion: "Give every structural declaration a unique exact type name.",
+          span: declaration.name.span,
+        }),
+      );
     for (const declaration of group) {
       if (external.has(name) || PRIMITIVE_NAMES.has(name))
-        diagnostics.push({
-          severity: "error",
-          code: "SSF_NAME_COLLISION",
-          message: `Structural declaration ${JSON.stringify(name)} collides with ${external.has(name) ? "an external type" : "an SSF primitive"}.`,
-          suggestion:
-            "Rename the structural declaration; owned, external, and primitive names are one exact namespace.",
-          span: declaration.name.span,
-        });
+        diagnostics.push(
+          error({
+            code: "SSF_NAME_COLLISION",
+            message: `Structural declaration ${JSON.stringify(name)} collides with ${external.has(name) ? "an external type" : "an SSF primitive"}.`,
+            suggestion:
+              "Rename the structural declaration; owned, external, and primitive names are one exact namespace.",
+            span: declaration.name.span,
+          }),
+        );
       const seenFields = new Set<string>();
       for (const field of declaration.fields) {
         if (seenFields.has(field.name))
-          diagnostics.push({
-            severity: "error",
-            code: "SSF_DUPLICATE_FIELD",
-            message: `Field ${JSON.stringify(field.name)} occurs more than once in declaration ${JSON.stringify(name)}.`,
-            suggestion:
-              "Use a unique effective field name within this declaration, including inferred names.",
-            span: field.nameSpan,
-          });
+          diagnostics.push(
+            error({
+              code: "SSF_DUPLICATE_FIELD",
+              message: `Field ${JSON.stringify(field.name)} occurs more than once in declaration ${JSON.stringify(name)}.`,
+              suggestion:
+                "Use a unique effective field name within this declaration, including inferred names.",
+              span: field.nameSpan,
+            }),
+          );
         seenFields.add(field.name);
         const enumeration =
           field.value.kind === "enumeration"
@@ -90,13 +93,14 @@ export function validateTypeGraph(
         const seenValues = new Set<string>();
         for (const value of enumeration?.valueReferences ?? []) {
           if (seenValues.has(value.text))
-            diagnostics.push({
-              severity: "error",
-              code: "SSF_DUPLICATE_ENUM_VALUE",
-              message: `Enumeration value ${JSON.stringify(value.text)} occurs more than once in this field.`,
-              suggestion: "List each enumeration value exactly once in this field.",
-              span: value.span,
-            });
+            diagnostics.push(
+              error({
+                code: "SSF_DUPLICATE_ENUM_VALUE",
+                message: `Enumeration value ${JSON.stringify(value.text)} occurs more than once in this field.`,
+                suggestion: "List each enumeration value exactly once in this field.",
+                span: value.span,
+              }),
+            );
           seenValues.add(value.text);
         }
       }
@@ -104,14 +108,15 @@ export function validateTypeGraph(
   }
   for (const [name, group] of aliasGroups) {
     for (const alias of occupied.has(name) ? group : group.slice(1))
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_ALIAS_NAME_COLLISION",
-        message: `Alias name ${JSON.stringify(name)} is already used in the SSF type namespace.`,
-        suggestion:
-          "Give the alias a unique exact name that is not structural, external, primitive, or another alias.",
-        span: alias.name.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_ALIAS_NAME_COLLISION",
+          message: `Alias name ${JSON.stringify(name)} is already used in the SSF type namespace.`,
+          suggestion:
+            "Give the alias a unique exact name that is not structural, external, primitive, or another alias.",
+          span: alias.name.span,
+        }),
+      );
   }
 
   const uniqueDeclarations = new Map(
@@ -166,17 +171,18 @@ export function validateTypeGraph(
       ? authoredParent
       : candidateAliases.get(authoredParent);
     if (parent === declaration.name.text) {
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_SUBSET_SELF_PARENT",
-        message:
-          authoredParent === declaration.name.text
-            ? `Subset ${JSON.stringify(declaration.name.text)} cannot be its own parent.`
-            : `Subset ${JSON.stringify(declaration.name.text)} cannot be its own parent through alias ${JSON.stringify(authoredParent)}.`,
-        suggestion:
-          "Name a different owned structural declaration or its alias as the subset parent.",
-        span: declaration.parent.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_SUBSET_SELF_PARENT",
+          message:
+            authoredParent === declaration.name.text
+              ? `Subset ${JSON.stringify(declaration.name.text)} cannot be its own parent.`
+              : `Subset ${JSON.stringify(declaration.name.text)} cannot be its own parent through alias ${JSON.stringify(authoredParent)}.`,
+          suggestion:
+            "Name a different owned structural declaration or its alias as the subset parent.",
+          span: declaration.parent.span,
+        }),
+      );
       continue;
     }
     if (parent === undefined) {
@@ -189,14 +195,15 @@ export function validateTypeGraph(
             : declarationGroups.has(authoredParent)
               ? "ambiguous duplicate declaration"
               : "unresolved name";
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_INVALID_SUBSET_PARENT",
-        message: `Subset parent ${JSON.stringify(authoredParent)} is an ${category}; a parent must be an exact owned structural declaration or explicit alias.`,
-        suggestion:
-          "Declare the parent as a unique identity or subset, or use an exact explicit alias for one.",
-        span: declaration.parent.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_PARENT",
+          message: `Subset parent ${JSON.stringify(authoredParent)} is an ${category}; a parent must be an exact owned structural declaration or explicit alias.`,
+          suggestion:
+            "Declare the parent as a unique identity or subset, or use an exact explicit alias for one.",
+          span: declaration.parent.span,
+        }),
+      );
       continue;
     }
     if (
@@ -214,13 +221,14 @@ export function validateTypeGraph(
       cyclicNames.has(declaration.name.text) &&
       declaration.parent !== undefined
     )
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_SUBSET_CYCLE",
-        message: `Subset parent edge ${JSON.stringify(`${declaration.name.text} -> ${declaration.parent.text}`)} participates in a cycle after exact alias resolution.`,
-        suggestion: "Make every subset chain terminate at a top-level identity declaration.",
-        span: declaration.parent.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_SUBSET_CYCLE",
+          message: `Subset parent edge ${JSON.stringify(`${declaration.name.text} -> ${declaration.parent.text}`)} participates in a cycle after exact alias resolution.`,
+          suggestion: "Make every subset chain terminate at a top-level identity declaration.",
+          span: declaration.parent.span,
+        }),
+      );
   }
 
   const validStructuralNames = new Set<string>();
@@ -253,14 +261,15 @@ export function validateTypeGraph(
       parentBySubset.has(declaration.name.text) &&
       !validStructuralNames.has(parentBySubset.get(declaration.name.text)!)
     ) {
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_INVALID_SUBSET_PARENT",
-        message: `Subset parent ${JSON.stringify(declaration.parent.text)} does not resolve to a valid owned subset because its canonical parent chain is invalid.`,
-        suggestion:
-          "Repair the parent chain so it terminates at a unique top-level identity declaration.",
-        span: declaration.parent.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_PARENT",
+          message: `Subset parent ${JSON.stringify(declaration.parent.text)} does not resolve to a valid owned subset because its canonical parent chain is invalid.`,
+          suggestion:
+            "Repair the parent chain so it terminates at a unique top-level identity declaration.",
+          span: declaration.parent.span,
+        }),
+      );
     }
   }
 
@@ -282,14 +291,15 @@ export function validateTypeGraph(
             : declarationGroups.has(target)
               ? "an invalid or ambiguous structural declaration"
               : "an unresolved name";
-      diagnostics.push({
-        severity: "error",
-        code: "SSF_INVALID_ALIAS_TARGET",
-        message: `Alias target ${JSON.stringify(target)} is ${category}; an alias must target one valid owned structural declaration.`,
-        suggestion:
-          "Target the exact name of a unique identity or subset declaration; do not target another alias.",
-        span: alias.target.span,
-      });
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_ALIAS_TARGET",
+          message: `Alias target ${JSON.stringify(target)} is ${category}; an alias must target one valid owned structural declaration.`,
+          suggestion:
+            "Target the exact name of a unique identity or subset declaration; do not target another alias.",
+          span: alias.target.span,
+        }),
+      );
     }
   }
   for (const [name, target] of candidateAutomaticAliases) {

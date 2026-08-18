@@ -1,17 +1,18 @@
 import type { GrammarResult } from "./grammar.ts";
 import { validateTypeGraph, type ResolutionFacts } from "./graph-validation.ts";
 import { PRIMITIVES, PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
-import type {
-  ParsedFieldType,
-  ParsedReference,
-  SsfAlias,
-  SsfDeclaration,
-  SsfDiagnostic,
-  SsfDocument,
-  SsfFieldType,
-  SsfParseOptions,
-  SsfStatement,
-  SsfTypeReference,
+import {
+  error,
+  type ParsedFieldType,
+  type ParsedReference,
+  type SsfAlias,
+  type SsfDeclaration,
+  type SsfDiagnostic,
+  type SsfDocument,
+  type SsfFieldType,
+  type SsfParseOptions,
+  type SsfStatement,
+  type SsfTypeReference,
 } from "./model.ts";
 
 function typeReference(
@@ -65,15 +66,16 @@ export function resolveGrammar(
     const invalidName = !TYPE_NAME.test(name);
     if (!invalidName && !PRIMITIVE_NAMES.has(name)) continue;
     external.delete(name);
-    diagnostics.push({
-      severity: "error",
-      code: invalidName ? "SSF_INVALID_EXTERNAL_NAME" : "SSF_NAME_COLLISION",
-      message: `External type ${JSON.stringify(name)} ${invalidName ? "is not a valid SSF type name." : "collides with the SSF primitive of the same name."}`,
-      suggestion: invalidName
-        ? "Start with uppercase ASCII; continue only with ASCII letters, digits, or `_`."
-        : "Rename the external type; external and primitive names share one namespace.",
-      externalType: name,
-    });
+    diagnostics.push(
+      error({
+        code: invalidName ? "SSF_INVALID_EXTERNAL_NAME" : "SSF_NAME_COLLISION",
+        message: `External type ${JSON.stringify(name)} ${invalidName ? "is not a valid SSF type name." : "collides with the SSF primitive of the same name."}`,
+        suggestion: invalidName
+          ? "Start with uppercase ASCII; continue only with ASCII letters, digits, or `_`."
+          : "Rename the external type; external and primitive names share one namespace.",
+        externalType: name,
+      }),
+    );
   }
   const facts = validateTypeGraph(
     grammar.declarations,
