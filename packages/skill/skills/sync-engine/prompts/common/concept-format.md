@@ -75,8 +75,8 @@ instantiate Noting as Notes with
   Task is Tasking.Task
 ```
 
-Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once
-except `RequestBoundary`; bind all externals inline or all detached:
+Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once;
+never declare core-owned `RequestBoundary`. Bind all externals inline or all detached:
 
 ```instances
 instantiate Tasking
@@ -88,9 +88,9 @@ Tasking.Owner is Person
 Notes.Task is Tasking.Task
 ```
 
-Do not mix placement. Target a concrete or SSF-owned type; external aliases are invalid
-and direct owned-type cycles valid. Concept files contain no application links,
-instances, bindings, or computations.
+Do not mix placement. Target a concrete or SSF-owned type; external aliases are invalid,
+direct owned-type cycles valid. Concept files contain no application links, instances,
+bindings, or computations.
 
 Give each composition document a nonempty H1 and decision prose. Reference application
 declarations with Markdown links, never bare `view:` lines, routes, or concept actions:

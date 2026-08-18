@@ -46,7 +46,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     const http = await text(new URL("inputs/http.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
-    expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
+    // Raised for the RequestBoundary clarification: the old "except `RequestBoundary`"
+    // read as an exemption from the once rule, and a trial designer duly declared five.
+    expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
