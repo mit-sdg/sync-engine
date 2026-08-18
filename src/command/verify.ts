@@ -135,7 +135,9 @@ export async function verifyCommand(args: readonly string[]): Promise<Verificati
       ? skippedStep("check-design", "no design documents are registered in the configuration")
       : await runStep("check-design", () => checkDesignCommand(documents)),
     await runStep("check", () => checkCommand(checkArguments)),
-    await runStep("artifacts check", () => artifactsCommand(["check", "--config", configPath])),
+    await runStep("artifacts check", async () => {
+      await artifactsCommand(["check", "--config", configPath]);
+    }),
   ];
   const report: VerificationReport = {
     status: steps.some(({ status }) => status === "failed") ? "failed" : "passed",

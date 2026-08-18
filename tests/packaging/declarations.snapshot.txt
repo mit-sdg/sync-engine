@@ -51,7 +51,8 @@ export { createLocalClient } from "../engine/boundary/client/local-client.ts";
 export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientResponseValidator, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
 
 === dist/command/artifacts.d.ts ===
-export declare function artifactsCommand(args: readonly string[]): Promise<void>;
+import { type ApplicationManifestDiffReport } from "../engine/tooling/application-manifest-diff.ts";
+export declare function artifactsCommand(args: readonly string[]): Promise<ApplicationManifestDiffReport | undefined>;
 
 === dist/command/check-design.d.ts ===
 export interface CheckedDesignDocument {
@@ -4607,6 +4608,87 @@ export declare function compute<Fn extends ComputationFn, const Input extends In
  */
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 export {};
+
+=== dist/engine/tooling/application-manifest-diff.d.ts ===
+import type { ApplicationManifestV1 } from "./manifest.ts";
+/** An endpoint's stable manifest identity for compatibility reporting. */
+export interface ManifestEndpointReference {
+    readonly name: string;
+    readonly path: string;
+}
+/** One refusal code declared by a named action in the manifest inventory. */
+export interface ManifestRefusalCodeReference {
+    readonly concept: string;
+    readonly action: string;
+    readonly code: string;
+}
+/** One SSF-owned type declared by a named concept definition. */
+export interface ManifestOwnedTypeReference {
+    readonly definition: string;
+    readonly type: string;
+}
+/** One compatibility-relevant change directly represented in an application manifest. */
+export type ApplicationManifestChange = {
+    readonly kind: "endpoint-added";
+    readonly endpoint: ManifestEndpointReference;
+} | {
+    readonly kind: "endpoint-removed";
+    readonly endpoint: ManifestEndpointReference;
+} | {
+    readonly kind: "input-required-added";
+    readonly path: string;
+    readonly key: string;
+} | {
+    readonly kind: "input-required-removed";
+    readonly path: string;
+    readonly key: string;
+} | {
+    readonly kind: "input-default-added";
+    readonly path: string;
+    readonly key: string;
+    readonly value: unknown;
+} | {
+    readonly kind: "input-default-removed";
+    readonly path: string;
+    readonly key: string;
+    readonly value: unknown;
+} | {
+    readonly kind: "input-default-changed";
+    readonly path: string;
+    readonly key: string;
+    readonly before: unknown;
+    readonly after: unknown;
+} | {
+    readonly kind: "refusal-code-added";
+    readonly refusal: ManifestRefusalCodeReference;
+} | {
+    readonly kind: "refusal-code-removed";
+    readonly refusal: ManifestRefusalCodeReference;
+} | {
+    readonly kind: "owned-type-added";
+    readonly ownedType: ManifestOwnedTypeReference;
+} | {
+    readonly kind: "owned-type-removed";
+    readonly ownedType: ManifestOwnedTypeReference;
+};
+/** A plain-data compatibility report suitable for a later machine-readable command format. */
+export interface ApplicationManifestDiffReport {
+    /** Whether the complete canonical manifests have matching digests. */
+    readonly status: "identical" | "changed";
+    readonly old: {
+        readonly digest: string;
+    };
+    readonly current: {
+        readonly digest: string;
+    };
+    readonly breaking: readonly ApplicationManifestChange[];
+    readonly nonBreaking: readonly ApplicationManifestChange[];
+}
+/**
+ * Compare two already-decoded version-1 manifests over the compatibility surface.
+ * Callers that receive untrusted JSON must parse it with `parseApplicationManifest` first.
+ */
+export declare function diffApplicationManifests(oldManifest: ApplicationManifestV1, currentManifest: ApplicationManifestV1): ApplicationManifestDiffReport;
 
 === dist/engine/tooling/application-manifest-format.d.ts ===
 import type { ConceptSpecificationIR } from "../reads/ir.ts";

@@ -15,12 +15,14 @@ const usage = `Usage: sync-engine <command> [arguments]
   sync-engine check-design <paths...>
     Check explicit authored-design Markdown without loading application code or configuration.
 
-  sync-engine artifacts <command> [--config path]
+  sync-engine artifacts <command> [arguments]
     check      Verify the assembled read-back and wire contract against the assembly.
     pin        Regenerate the assembled read-back and wire contract.
     pin-spec   Regenerate only the assembled read-back.
     pin-wire   Regenerate only the wire contract.
     manifest   Print the canonical application manifest as JSON.
+    diff <old-manifest> [--config path]
+               Compare a saved application manifest with the configured application.
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
@@ -77,7 +79,8 @@ async function main(): Promise<void> {
   }
 
   if (topic === "artifacts") {
-    await artifactsCommand(rest);
+    const report = await artifactsCommand(rest);
+    if (report !== undefined && report.breaking.length !== 0) process.exitCode = 1;
     return;
   }
 

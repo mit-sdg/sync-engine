@@ -14,17 +14,18 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                        | Result                                                                        | Writes files                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
-| `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
-| `verify [--config path] [--fail-on-warnings]`  | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
-| `check [--config path]`                        | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
-| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design               | No                                             |
-| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                         | Yes                                            |
-| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                           | Yes                                            |
-| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                         | Yes                                            |
-| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                             | No                                             |
+| Command                                         | Result                                                                        | Writes files                                   |
+| ----------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `setup [directory]`                             | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
+| `check-design <paths...>`                       | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
+| `verify [--config path] [--fail-on-warnings]`   | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
+| `check [--config path]`                         | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
+| `artifacts check [--config path]`               | Compares configured artifacts with the complete selected design               | No                                             |
+| `artifacts pin [--config path]`                 | Regenerates both configured artifacts                                         | Yes                                            |
+| `artifacts pin-spec [--config path]`            | Regenerates generated Markdown only                                           | Yes                                            |
+| `artifacts pin-wire [--config path]`            | Regenerates generated TypeScript only                                         | Yes                                            |
+| `artifacts manifest/spec/wire [--config path]`  | Prints one derived representation                                             | No                                             |
+| `artifacts diff <old-manifest> [--config path]` | Compares a saved manifest with the configured application                     | No                                             |
 
 ## `sync-engine setup`
 
@@ -286,7 +287,7 @@ errors occur before artifact comparison or writing.
 ## `sync-engine artifacts`
 
 ```text
-sync-engine artifacts <command> [--config path]
+sync-engine artifacts <command> [arguments]
 ```
 
 All artifact commands enforce the complete configured design contract. Runtime
@@ -325,6 +326,49 @@ application declaration identities, computation signatures, source locations, an
 digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
 other runtime-only values.
+
+### `diff`
+
+```text
+sync-engine artifacts diff <old-manifest> [--config path]
+```
+
+`diff` reads `<old-manifest>` as UTF-8 and decodes it as one complete canonical
+`sync-engine.application-manifest`, version `1`, before it imports the selected
+configuration. Invalid JSON, a stale digest, an unsupported version, and the
+replaced pre-1.0 version-1 shape all fail closed with an error naming the old
+manifest. The command does not infer a schema or partially compare an undecodable
+file.
+
+The current side is assembled and checked using the selected configuration, just
+as `manifest` does. The report keeps the old and current digests, reports
+`identical` only when those digests match, and separates the following direct
+manifest-inventory changes into breaking and non-breaking lists:
+
+| Change                                                | Classification                                                       |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Removed endpoint                                      | Breaking                                                             |
+| Added endpoint at a path absent from the old manifest | Non-breaking                                                         |
+| Added endpoint at an existing path                    | Breaking, because it can add a competing answer branch               |
+| Added required input key                              | Breaking                                                             |
+| Removed required input key                            | Non-breaking                                                         |
+| Added, removed, or changed input default              | Breaking, because an omitted key reaches the application differently |
+| Added or removed refusal code                         | Breaking; either changes a caller-facing error union                 |
+| Added owned type                                      | Non-breaking                                                         |
+| Removed owned type                                    | Breaking                                                             |
+
+Endpoints are identified by their manifest name and path. For input contracts at
+paths present on both sides, the report names each required key and each default
+key; a changed object or array default is one whole-value change rather than a
+deep value diff. Refusal codes are identified by concept, action, and code; owned
+types by definition and exact SSF spelling. Endpoint additions and removals carry
+their input contracts with them and do not produce a redundant contract entry.
+
+The comparison intentionally does not interpret `application` IR, reaction
+behavior, diagnostics, or prose. If the complete manifest digest changes without
+a listed inventory change, the report says so without guessing why. A zero exit
+status means no listed breaking change; a non-empty breaking list exits with
+status `1`, so `diff` can serve as a compatibility gate.
 
 ### `spec`
 
