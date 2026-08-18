@@ -1,9 +1,11 @@
 # Simple State Form (SSF)
 
 Simple State Form (SSF) is the State language for a concept specification. It is a
-small English-like notation for structural State declarations. Write one declaration,
-alias, or explicit `Rule:` statement per top-level line. Put a declaration's fields and
-attached rules on following indented lines.
+small English-like notation for structural State declarations. A concept's State section
+contains only its `state` fence: put opaque prose inside that fence as an explicit `Rule:`
+line because prose after the fence is rejected. Write one declaration, alias, or rule per
+top-level line. Put a declaration's fields and attached rules on following indented
+lines.
 
 ```state
 a set of Items with

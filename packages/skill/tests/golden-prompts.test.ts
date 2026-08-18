@@ -18,7 +18,7 @@ describe("representative prompt bytes", () => {
     expect(built.content).toBe(
       await file("packages/skill/tests/fixtures/task-manager/designer.prompt.txt"),
     );
-    expect(built.sha256).toBe("93245df68c060dfcded990913095c7649c6e668c3036c0f992702da4e2a14ccc");
+    expect(built.sha256).toBe("08c22960818941d52bcc198a17490f2cf4626b3263852d43c6c5dc12cd319517");
   });
 
   test("matches the message-board critic golden prompt", async () => {

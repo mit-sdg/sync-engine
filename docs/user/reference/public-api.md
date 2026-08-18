@@ -582,7 +582,7 @@ contract used by registration. It enforces the exact section order, parses exter
 declarations and structured action/query choices, and retains full State text. Private
 config and form-check tooling separately parses bounded SSF structure, safe plural
 aliases from exact State/operation evidence, and explicit aliases; validates subset
-graphs and local namespaces; and inventories exact owned type names. State field refinements and standalone prose remain open authored contracts;
+graphs and local namespaces; and inventories exact owned type names. State field refinements and marked `Rule:` prose remain open authored contracts;
 neither layer turns authored types into runtime schemas.
 
 Each concept inventory may carry a `sync-engine.concept-specification`

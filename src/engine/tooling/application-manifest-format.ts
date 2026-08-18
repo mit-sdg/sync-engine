@@ -669,9 +669,8 @@ function assertSpecification(
     assertLocation(item.location, `${externalPath}.location`);
   }
   uniqueFieldIndexes(data.externalTypes, `${path}.externalTypes`, "name");
-  const state = shape(data.state, `${path}.state`, ["body", "prose", "location"]);
+  const state = shape(data.state, `${path}.state`, ["body", "location"]);
   string(state.body, `${path}.state.body`);
-  string(state.prose, `${path}.state.prose`);
   assertLocation(state.location, `${path}.state.location`);
   const parsedActions = array(data.actions, `${path}.actions`);
   if (parsedActions.length === 0) fail(`${path}.actions`, "expected at least one action");

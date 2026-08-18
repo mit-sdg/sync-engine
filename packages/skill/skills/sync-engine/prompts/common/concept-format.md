@@ -49,8 +49,7 @@ _items(owner: Person) : many (item: Item, title: String)
 ```
 ````
 
-Types contains only `external Name` declarations or is empty. State uses supplied SSF;
-prefix every invariant prose line with exact `Rule:`.
+Types contains only `external Name` declarations or is empty. State uses supplied SSF; keep all State text in its fence and prefix every invariant prose line with exact `Rule:`.
 Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared

@@ -48,11 +48,11 @@ headings are also rejected: the six H2 sections are the complete document
 outline. `Purpose` and `Principle` must contain nonempty prose and no fenced
 blocks.
 
-`Types`, `Actions`, and `Queries` contain only their one matching fence and no
-surrounding Markdown. `State` contains one `state` fence and may have concise
-prose after it for invariants that the notation cannot express. Application
-design links and `computations` fences are rejected anywhere in a concept
-specification.
+`Types`, `State`, `Actions`, and `Queries` contain only their one matching fence and
+no surrounding Markdown. Opaque invariant prose belongs inside the `state` fence on
+lines beginning with exact `Rule:`. Prose after the closing fence is rejected at its
+source location with guidance to move it inside as a `Rule:` line. Application design
+links and `computations` fences are rejected anywhere in a concept specification.
 
 ## Complete example
 
@@ -149,10 +149,11 @@ type universe nor requires every named type to have a declaration.
 
 ## `State`
 
-`State` contains exactly one `state` fence. The concept parser normalizes and
-retains its full contents in concept-specification IR and application manifests.
-Private tooling also parses a bounded structural view for form checks and owned-name
-resolution; that view is not part of the public concept-specification IR.
+`State` contains exactly one `state` fence and no surrounding Markdown. The concept
+parser normalizes and retains the fence's full contents in concept-specification IR and
+application manifests. Private tooling also parses a bounded structural view for form
+checks and owned-name resolution; that view is not part of the public
+concept-specification IR.
 
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).

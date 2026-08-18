@@ -45,8 +45,10 @@ and therefore has no deployment-time dependency on Markdown.
 The concept parser recognizes one H1 and the exact ordered H2 sequence Purpose,
 Principle, Types, State, Actions, and Queries. Unknown, duplicate, missing, or
 reordered H2 sections and all subordinate headings fail. Purpose and Principle
-are nonempty prose without fenced blocks. Markdown application-design links and
-`computations` fences fail anywhere in the specification.
+are nonempty prose without fenced blocks. Each remaining section contains only its one
+matching fence. Opaque State prose must be inside that fence on an exact `Rule:` line;
+text after the closing fence fails at its source location with repair guidance. Markdown
+application-design links and `computations` fences fail anywhere in the specification.
 
 Its version-1 IR retains:
 
@@ -102,9 +104,10 @@ values have separately enforced uniqueness scopes.
 State field value names are deliberately open: the parser classifies owned, external,
 primitive, and unresolved references, but unresolved conventional or refinement names
 remain legal. Only the bounded unique plural relation can promote one of those exact
-references to an automatic owned alias. Every nonblank line must parse structurally or
-begin with exact `Rule:`; malformed lines produce diagnostics, while marked rule text
-remains opaque. The concept IR preserves the complete normalized State text. The parser
+references to an automatic owned alias. Every nonblank line inside the State fence must
+parse structurally or begin with exact `Rule:`; malformed lines produce diagnostics,
+while marked rule text remains opaque. The concept IR preserves the complete normalized
+State-fence text and has no separate prose field. The parser
 does not prove that text, field refinements, conditions, effects, query meaning, storage
 layout, State/storage agreement, or implementation semantics.
 
