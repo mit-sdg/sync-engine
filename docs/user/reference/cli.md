@@ -94,18 +94,17 @@ Each operand is an explicit Markdown file. At least one path is required and opt
 are not accepted. Operands can mix concept specifications, composition documents, and
 application-types documents in any order or location. The command classifies valid
 files by their contents rather than their names or paths, checks them in operand order,
-and stops at the first missing, non-regular, unreadable, or invalid file. Automatic-alias
-ambiguity is reported as advice without failing the check; otherwise success prints only
-the number of checked files.
+and stops at the first missing, non-regular, unreadable, or invalid file. An ambiguous
+plural pair is reported as advice without failing the check; otherwise success prints
+only the number of checked files.
 
 Concept documents must pass the strict version-1 concept parser.
 Application-design documents use the same parser and assembly-independent validator as
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
-- SSF structural declarations, safe evidenced aliases, explicit aliases, and fields
-  parse canonically, including articles, multiplicity, `optional`, `with`, exact
-  identifiers, subset graph integrity, and scoped uniqueness; every nonblank line must
-  parse structurally or begin with exact `Rule:`, whose marked prose remains opaque;
+- SSF declarations, aliases, and fields parse canonically, including articles,
+  multiplicity, `optional`, `with`, identifiers, the subset graph, and name uniqueness;
+  every line either parses or is a `Rule:` line, whose prose stays opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
 - `computations` declarations have valid signatures, distinct input names, balanced
@@ -137,7 +136,7 @@ application declaration paths. Arbitrary prose is not admitted inside
 `instances` or `bindings` fences.
 
 The command does not discover additional files or require a complete corpus. Its
-bounded SSF parser establishes exact structural, safely evidenced, and explicit-alias inventories,
+bounded SSF parser establishes the declaration and owned-name inventory,
 not a storage schema or invariant/prose semantics. It does not resolve typed links,
 instance definitions, external names, or binding targets against an assembled
 selection. It also does not require complete instances or declaration coverage,
@@ -194,8 +193,8 @@ optionality.
 The checker does not claim semantic equivalence between authored type names and
 TypeScript types or require conventional and refinement names to have Types
 declarations. It retains full State text and parses bounded SSF structure to
-inventory owned binding targets. It does not interpret text after an exact `Rule:`
-marker or compare State with class fields or storage.
+inventory owned binding targets. It does not interpret `Rule:` prose or compare State
+with class fields or storage.
 
 ### Application-design checks
 

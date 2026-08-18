@@ -19,33 +19,35 @@ primitive := Number|String|Flag|Date|DateTime
 ruleLine := Rule: TEXT
 ```
 
-Type/Subtype/Alias/Parameter start uppercase ASCII and fieldName lowercase; tails use
-ASCII letters, digits, or `_`. VALUE starts uppercase; its tail uses only uppercase ASCII
-letters, digits, or `_`. A `Rule:` line may be top-level or declaration-indented; its
-TEXT is retained verbatim, not proved. Every other nonblank line must parse. A top-level
-rule ends the preceding declaration
-body. Omit fieldName only for `named` or an inferred named collection, never an enum; SSF
-lowercases that exact name's first character.
+Start Type, Subtype, Alias, and Parameter uppercase ASCII and fieldName lowercase;
+continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
+with uppercase ASCII letters, digits, or `_` only. Omit fieldName only for `named` or an
+inferred named collection, never an enum; SSF lowercases its first character.
 
-SSF owns exact structures/subsets and accepted aliases. Named State fields and
-action/query input/result types supply alias candidates. Vendored `plur` must relate one
-candidate to one non-element owner, one-to-one. SSF generates no candidate or
-transitive/third spelling. Exact declarations win; externals, primitives, elements, and
+Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
+indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
+rule ends the preceding declaration body. End a first line with `with` only when a real
+field follows; a `Rule:` line does not count.
+
+SSF owns structures, subsets, and accepted aliases. Named State fields and
+action/query signatures supply alias candidates; SSF invents none. Vendored
+`plur` must relate one candidate to one non-element owner, one-to-one, and yields no
+transitive/third spelling. Declarations win; externals, primitives, elements, and
 ambiguous candidates get no automatic alias.
 
-A declaration ending in `with` needs a real field; a `Rule:` line does not count.
-Use explicit aliases for synonyms/ambiguity; they override automatic evidence. Targets
-are unique valid structures/subsets, never aliases. Parents accept structures, subsets,
-or either alias. Normalization rejects unresolved/external/primitive/invalid-alias
-parents, duplicate/ambiguous structures, self-parents, and cycles; forward chains work.
+Declare an alias for a synonym or ambiguous pair; it overrides automatic evidence.
+Target a unique valid structure or subset, never an alias. Parent a subset on a structure,
+subset, or either alias; forward chains work. Unresolved, external, primitive, and
+invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
+rejected.
 
-Structures/explicit aliases/externals/primitives share one exact State namespace. Fields
-are unique per declaration; VALUEs per enum. Unresolved field values are legal
-conventional/refinement references, not owned binding targets.
+Structures, aliases, externals, and primitives share one State namespace. Keep
+fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
+legal conventional/refinement reference, not an owned binding target.
 
 Collections are never `optional` (empty means absent) or nested; named-type unions are
-invalid. Sets/sequences introduce identities—never add ID fields. Subsets add no identity;
-they classify parent members, may overlap, and add relations. `element` has one
+invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
+identity; they classify parent members, may overlap, and add relations. `element` has one
 member. Which side declares a relation implies no storage, navigation, or ownership.
 
 ```state

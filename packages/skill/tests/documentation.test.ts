@@ -183,12 +183,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(unresolved).toEqual([]);
 
     const normalized = ssf.replace(/\s+/g, " ");
-    expect(normalized).toMatch(/fieldName lowercase; tails use ASCII letters, digits, or `_`/);
     expect(normalized).toMatch(
-      /VALUE starts uppercase; its tail uses only uppercase ASCII letters, digits, or `_`/,
+      /fieldName lowercase; continue both with ASCII letters, digits, or `_`/,
     );
     expect(normalized).toMatch(
-      /A `Rule:` line may be top-level or declaration-indented; its TEXT is retained verbatim, not proved\. Every other nonblank line must parse/,
+      /Start VALUE uppercase and continue with uppercase ASCII letters, digits, or `_` only/,
+    );
+    expect(normalized).toMatch(
+      /Make every nonblank line parse or start with `Rule:`\. Put a `Rule:` line at top level or indented under a declaration; SSF keeps its TEXT verbatim and proves nothing/,
     );
 
     const example = ssf.match(/```state\n([\s\S]*?)```/)?.[1];
@@ -216,16 +218,17 @@ describe("compact sync-engine Agent Skill documents", () => {
 
     for (const commitment of [
       "one candidate to one non-element owner, one-to-one",
-      "SSF generates no candidate or transitive/third spelling",
+      "supply alias candidates; SSF invents none",
+      "yields no transitive/third spelling",
       "externals, primitives, elements, and ambiguous candidates get no automatic alias",
-      "Targets are unique valid structures/subsets, never aliases",
-      "duplicate/ambiguous structures, self-parents, and cycles",
-      "Unresolved field values are legal conventional/refinement references, not owned binding targets",
-      "A declaration ending in `with` needs a real field; a `Rule:` line does not count",
+      "Target a unique valid structure or subset, never an alias",
+      "duplicate or ambiguous structures, self-parents, and cycles are rejected",
+      "An unresolved field value is a legal conventional/refinement reference, not an owned binding target",
+      "End a first line with `with` only when a real field follows; a `Rule:` line does not count",
       "A top-level rule ends the preceding declaration body",
       "Vendored `plur` must relate",
       "Collections are never `optional`",
-      "Sets/sequences introduce identities—never add ID fields",
+      "Sets and sequences introduce identities—never add ID fields",
       "Subsets add no identity",
       "`element` has one member",
       "Which side declares a relation implies no storage, navigation, or ownership",
@@ -280,7 +283,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Notes.Task is Tasking.Task",
       "Do not mix placement",
       "`# Tasking`, never `# Tasks` or `# Task Management`",
-      "codes are unique within an action",
+      "keep codes unique within an action",
       "never prose such as `return the session account`",
       "[refreshes content](reaction:Forum.posts.RefreshDerivedContent)",
       "[home feed](former:Forum.feed.HomeFeed)",

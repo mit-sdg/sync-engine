@@ -68,8 +68,8 @@ bootstrap steps. Run it alone—do not chain a premature check:
 bun "<skill-root>/scripts/command.ts" brief init design/brief.md
 ```
 
-Briefly replace placeholders from the user's request and decisions. Mark
-requested or interactively settled decisions `User` and conservative coordinator choices
+Replace placeholders from the user's request and decisions. Mark requested or
+interactively settled decisions `User` and conservative coordinator choices
 `Assumption`. Validate once:
 
 ```sh

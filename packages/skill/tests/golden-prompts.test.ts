@@ -18,7 +18,7 @@ describe("representative prompt bytes", () => {
     expect(built.content).toBe(
       await file("packages/skill/tests/fixtures/task-manager/designer.prompt.txt"),
     );
-    expect(built.sha256).toBe("08c22960818941d52bcc198a17490f2cf4626b3263852d43c6c5dc12cd319517");
+    expect(built.sha256).toBe("711fcf8315f53450a1b530bebea175a9841d9652ad11c10fb15ace7b48d0e94b");
   });
 
   test("matches the message-board critic golden prompt", async () => {
@@ -36,6 +36,6 @@ describe("representative prompt bytes", () => {
     expect(built.content).toBe(
       await file("packages/skill/tests/fixtures/message-board/critic.prompt.txt"),
     );
-    expect(built.sha256).toBe("1a6b54c49d84ae6b40d341567a2aa92bfaabdf4cd4cab693b2be0af9393b7a9a");
+    expect(built.sha256).toBe("7fe424d4176cf8878a1c0335b7595def9478d2bdb0dc39842e224075962e5d3b");
   });
 });

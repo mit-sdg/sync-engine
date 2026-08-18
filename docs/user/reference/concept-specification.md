@@ -21,7 +21,8 @@ sync-engine check-design design/concepts/*.md
 ```
 
 This command loads no application configuration or TypeScript source, writes nothing,
-and reports authored-design form failures plus non-fatal automatic-alias advice; it also accepts composition and
+and reports authored-design form failures along with advice that does not fail the check;
+it also accepts composition and
 application-types documents in the same invocation. Config-based `sync-engine check` adds
 registration provenance and TypeScript agreement after implementation.
 
@@ -49,10 +50,9 @@ outline. `Purpose` and `Principle` must contain nonempty prose and no fenced
 blocks.
 
 `Types`, `State`, `Actions`, and `Queries` contain only their one matching fence and
-no surrounding Markdown. Opaque invariant prose belongs inside the `state` fence on
-lines beginning with exact `Rule:`. Prose after the closing fence is rejected at its
-source location with guidance to move it inside as a `Rule:` line. Application design
-links and `computations` fences are rejected anywhere in a concept specification.
+no surrounding Markdown. Invariant prose goes inside the `state` fence on a `Rule:`
+line rather than after it. Application design links and `computations` fences are
+rejected anywhere in a concept specification.
 
 ## Complete example
 
@@ -134,11 +134,8 @@ external Name
 An external type is an opaque parameter supplied by each application that uses
 the concept. The explanation is retained as documentation. The `external`
 keyword is required; concrete types and bindings are application design,
-not concept-local declarations. Concept parsing accepts `Name` as a design
-identifier, but SSF namespace validation requires the uppercase type-name form.
-It diagnoses and omits lowercase or underscore-prefixed external names. An
-external name equal to an SSF primitive is also diagnosed and omitted, leaving
-the primitive as the sole inventory entry and reference classification.
+not concept-local declarations. Give an external type the uppercase type-name form
+SSF uses for every other type, and do not reuse the name of an SSF primitive.
 
 Other names in State, action signatures, and query signatures are descriptive
 vocabulary, not declarations that must be repeated in Types. A name may identify
@@ -157,52 +154,41 @@ concept-specification IR.
 
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
-The parser recognizes set, sequence, element, subset, explicit alias, and field
-declarations, including multiplicity, identifier, article, and graph constraints.
-Structural names remain exact. Named State field types and action/query parameter and
-result types supply exact alias candidates. SSF accepts a candidate automatically only
-when vendored `plur` pluralizes either it or one unique non-element structure or subset
-to the other exact authored spelling and that owner has no second automatic candidate.
-It does not insert the pluralizer's output. This supports regular and irregular pairs
-such as `Note`/`Notes`, `Mouse`/`Mice`, and `Person`/`People` while leaving ambiguity on
-either side unresolved. Candidate-side and owner-side ambiguity produces non-fatal advice
-that names the rejected spellings and owners.
+The parser recognizes set, sequence, element, subset, alias, and field declarations
+together with their multiplicities, identifiers, articles, and subset graph. Declared
+names are taken as written.
 
-`alias Alias for Target` explicitly handles domain synonyms and ambiguity. Explicit
-aliases take precedence, must target unique valid structures or subsets, and cannot
-form chains. Subset parents resolve independent of declaration order and may name a
-structural identity, subset, or automatic or explicit alias. Alias parent edges
-normalize to structural targets before cycle checks. External parameters, primitives,
-invalid aliases, unresolved parents, duplicate or ambiguous structures, self-parenting,
-and cycles fail with source-located diagnostics.
+Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
+the declaration, are joined when they form a singular and plural pair. Irregular pairs
+such as `Mouse`/`Mice` and `Person`/`People` join the same way. Both spellings have to be
+authored, and the pair has to be unambiguous on both sides; where it is not, the two
+names stay separate and the check reports advice. `alias Alias for Target` states a
+synonym directly. An alias takes precedence over a joined pair, targets a declaration or
+subset rather than another alias, and may appear before or after its target. Subset
+parents are likewise order-independent and may name a declaration, subset, or alias.
+Parents that name an external parameter or primitive, unresolved or duplicate names,
+self-parenting, and cycles fail with source-located diagnostics.
 
-Structural declaration and alias names share one whole-State namespace with external
-parameters and SSF primitives. Effective field names are unique within one declaration,
-and enum values are unique within one enum. Collection enums use `flags set of RED or BLUE` (or omit the collection
-`of`); `set of of RED or BLUE` is malformed. Enums require an explicit field name. The
-same field name in distinct declarations and the same enum value in distinct enums remain
-valid.
+Declaration and alias names are unique across the fence and share that namespace with
+external parameters and SSF primitives. Field names are unique within their declaration,
+and enumeration values within their enumeration.
 
-Opaque invariant prose must begin with the exact, case-sensitive `Rule:` marker. A rule
-may be a top-level statement or an indented line attached to a declaration; the parser
-retains the complete line but does not interpret or prove its text. Every other nonblank
-top-level line must parse as a declaration or alias, and every other nonblank indented
-line must parse as a field, or checking fails with a source-located diagnostic.
-State field value names are intentionally open because they may denote conventional or
-concept-local refinement types: an unresolved value reference is retained and
-classified as unresolved, but is not an SSF error. It becomes owned only through the
-bounded unique automatic-alias rule or an explicit alias. Operation signature types
-likewise need not occur in State. The parser does not prove invariants,
-refinement meaning, action conditions or effects, query meaning, storage layout,
-State/storage agreement, or implementation behavior.
+Invariant prose goes on a `Rule:` line, at the top level or indented under a
+declaration. The parser retains the line and makes no claim about it, while every other
+nonblank line must parse as a declaration, alias, or field. Field value names stay open,
+because they may denote conventional or concept-local refinement types: an unrecognized
+name is retained and classified as unresolved rather than rejected, and becomes owned
+only through a joined pair or an alias. Operation signature types need not appear in
+State. The parser does not prove rules, refinement meaning, action conditions or
+effects, query meaning, storage layout, State/storage agreement, or implementation
+behavior.
 
-Config-based checking uses the exact owned-name inventory for one proof: a
-qualified external-binding target must name a structural declaration or automatic or
-explicit alias owned by the selected target instance's definition. Checked manifests
-persist that inventory, and validation independently rederives it from State plus exact
-action/query type evidence. External, primitive, ambiguous, and unresolved names cannot
-be binding targets. State changes continue to
-affect canonical design digests.
+Config-based checking uses the owned-name inventory for one proof: a
+qualified external-binding target must name a declaration or alias owned by the selected
+target instance's definition. Checked manifests persist that inventory, and validation
+rederives it independently from State and operation signatures. External, primitive, and
+unresolved names cannot be binding targets. State changes continue to affect canonical
+design digests.
 
 ## `Actions`
 

@@ -20,7 +20,7 @@ scenarios able to disprove required visible success and applicable refusals,
 authorization, repetition, lifecycle, integration, host behavior, partial failure, or
 repair.
 
-Do not claim multi-action atomicity without one owner and transaction. Source agreement
+Never claim multi-action atomicity without one owner and transaction. Source agreement
 and artifacts are structural evidence, not proof of persistence, transactions,
 authorization, or behavior. Run assigned checks and report exact outcomes.
 

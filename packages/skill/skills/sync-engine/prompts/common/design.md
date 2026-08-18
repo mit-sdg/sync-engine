@@ -9,7 +9,7 @@ plausible design.
 
 Principle uses one or more short archetypal scenarios showing the mechanism's value,
 not a full specification. Include variants, errors, or refusals only when essential to
-the purpose. External context is allowed; peer behavior is not concept-owned.
+the purpose. External context is allowed; peer behavior is never concept-owned.
 
 Every element serves purpose and brief. Concepts never call, import, or require peers.
 Split a concept that mixes distinct purposes, lifecycles, authorities, state, failures,
@@ -19,13 +19,13 @@ owner, or reactions would reconstruct one operation.
 ## State and ownership
 
 State records observable identity, relations, lifecycle, order, multiplicity, and
-invariants—not storage. Each relation has one semantic owner. Runtime persistence
+invariants—not storage. Give each relation one semantic owner. Runtime persistence
 belongs to implementation and evidence, not State. Write State only in Simple State
 Form.
 
 External types are generic and identities opaque; relate but never inspect peer facts.
 For a necessary copy of a peer fact, state its authority, updates, staleness,
-divergence detection, and repair; mark historical snapshots. All behavior follows from
+divergence detection, and repair; mark historical snapshots. Derive all behavior from
 owned state, inputs, and explicit non-peer environment; otherwise change ownership,
 inputs, environment, or policy. Race-sensitive and security-critical rules
 stay in the action owning changed state.
@@ -39,8 +39,8 @@ local invariants. Getters are queries; loops are not actions.
 Expected domain rejection is a declared refusal with a stable code; other failure is a
 fault. State the post-refusal state: a refusal never partially applies the requested
 transition, though it may atomically record a separate declared fact. Queries have no
-effects. Every query has an indented prose body stating rows, unknown/empty case, and
-stable `many` ordering.
+effects. Every query has an indented prose body stating rows, the unknown or empty
+case, and stable `many` ordering.
 
 Cover each applicable lifecycle stage—creation, completion, expiry, retention,
 reversal, compensation, deletion, or permanence—and add no CRUD symmetry the
@@ -51,8 +51,8 @@ only a trace token.
 ## Composition and failure
 
 Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; independent consequences get separate reactions; named sibling
-reaction cases are alternatives whose order carries no priority.
+decision. Stages express causality; give independent consequences separate reactions;
+named sibling reaction cases are alternatives whose order carries no priority.
 
 Composition owns cross-concept policy, workflow, context, adaptation, notification,
 compensation, and repair—not owner invariants, mutation, race decisions, or
@@ -60,10 +60,10 @@ reconstructed operations. Pass-through reactions reveal a bad split or missing a
 
 A reaction cannot make separate owners atomic. For each cross-concept relation, state
 its owners, violation, repair and whether it is automatic, permitted false interval,
-and failure outcome. If no
-false interval is safe, combine ownership or transact. Decide relevant cycle
-termination, bounded fan-out/partial effects, idempotency, causal order, and stale
-reads. Never assume rollback, cancellation, or exactly-once execution.
+and failure outcome. If no false interval is safe, combine ownership or transact.
+Decide relevant cycle termination, bounded fan-out and partial effects, idempotency,
+causal order, and stale reads. Never assume rollback, cancellation, or exactly-once
+execution.
 
 ## Authorization and external effects
 
@@ -78,20 +78,19 @@ failure or needs its own tests; otherwise adapt thinly.
 
 Inventory exact selected static instances except `RequestBoundary`. A definition may
 have zero or more instances; none need carry its name. Bind each external once to a
-concrete or SSF-owned type. Reject external-to-external alias chains, undocumented
-alias syntax, external targets, mixed placement of inline
-and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
-unused concretes. Direct qualified
-owned-type dependency cycles are valid: edges resolve independently. Bindings convey
-identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
+concrete or SSF-owned type. Reject chains between externals, alias syntax other than
+`alias Alias for Target`, external targets, inline and detached bindings mixed on one
+instance, missing, duplicate, or unresolved bindings, and unused concretes. Direct
+qualified owned-type dependency cycles are valid: edges resolve independently. Bindings
+convey identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
 storage isolation.
 
 The bounded SSF parser proves structural declarations and owned type names, not opaque
 invariants/prose, storage, or behavior.
 
-Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
-wildcards. Cover each authored endpoint/reaction tree, named view/former; declare
-each executable computation once.
+Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
+wildcards. Cover each authored endpoint and reaction tree and each named view and
+former; declare each executable computation once.
 
 `check-design` proves grammar and authored form only. Config checking proves shapes,
 bindings, links, computations, source agreement. Neither proves boundaries, prose

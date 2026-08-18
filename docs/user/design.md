@@ -174,19 +174,19 @@ The required `State` fence uses Simple State Form (SSF): set, sequence, singleto
 and subset declarations with indented relation fields; implicit set identity rather
 than synthetic ID fields; capitalized types, lowercase field names, uppercase
 enumeration values, and SSF primitives. A bounded structural parser checks these
-declarations, validates subset graphs and exact explicit aliases, and inventories
-nonexternal structural names plus safe aliases evidenced by State and operation types. That inventory lets config-based checking prove qualified external-binding
-targets. See
+declarations, checks the subset graph, and inventories the type names a concept owns,
+including aliases. That inventory lets config-based checking prove qualified
+external-binding targets. See
 [`State`](reference/concept-specification.md#state).
 
-The parser deliberately does not interpret invariant prose after an exact `Rule:` marker,
-derive a storage schema, prove action conditions or effects, or compare persistence with
-State. Unmarked nonblank State lines must parse structurally. Names introduced by State and conventional names used
+The parser does not interpret `Rule:` prose, derive a storage schema, prove action
+conditions or effects, or compare persistence with State; every other State line must
+parse. Names introduced by State and conventional names used
 in operation signatures do not require declarations in the external-only Types fence.
 Record owned facts in State and put each enforced invariant or value refinement in the
-action branch that checks it. Use canonical `alias Alias for Target` declarations when
-needed; qualified bindings may target an owned alias spelling. Do not invent undocumented
-alias syntax or external-to-external alias chains.
+action branch that checks it. Where a concept needs a synonym, declare it with
+`alias Alias for Target`, which qualified bindings may target; do not invent other alias
+syntax or chain one external onto another.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

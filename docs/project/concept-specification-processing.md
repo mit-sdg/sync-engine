@@ -46,8 +46,8 @@ The concept parser recognizes one H1 and the exact ordered H2 sequence Purpose,
 Principle, Types, State, Actions, and Queries. Unknown, duplicate, missing, or
 reordered H2 sections and all subordinate headings fail. Purpose and Principle
 are nonempty prose without fenced blocks. Each remaining section contains only its one
-matching fence. Opaque State prose must be inside that fence on an exact `Rule:` line;
-text after the closing fence fails at its source location with repair guidance. Markdown
+matching fence. State prose belongs inside that fence on a `Rule:` line; text after the
+closing fence fails at its source location with repair guidance. Markdown
 application-design links and `computations` fences fail anywhere in the specification.
 
 Its version-1 IR retains:
@@ -68,57 +68,53 @@ There is no legacy parser or format auto-detection.
 ### State has a bounded structural parser
 
 The workspace-private, unpublished `packages/ssf` package owns SSF tokenization,
-grammar, exact-name resolution, graph and namespace validation, diagnostics, and
-structured State IR. Its former monolith is split into source, grammar, name/model,
-automatic-alias, graph, resolution, and facade modules. Graph validation builds the
-namespace groups once and uses them for both local integrity and edge resolution. A vendored,
-attributed `plur` implementation isolates the canonical plural relation. It remains `private: true`, has no release-owned
-publication entry, and has no dependency on sync-engine Markdown or source-location
-types. State-origin diagnostics return exact text spans and line/column offsets; external-option
-diagnostics instead name the external type, and the tooling adapter maps them through its
-`SpecificationExternalTypeIR.location`. State spans map from the normalized State-body
-origin retained by the concept parser to `DesignSourceLocation`, so leading blank fence
-lines do not shift diagnostics. Keep
-this parser as the one implementation used for repair diagnostics and checked-model
-owned-name extraction; do not recreate a parser under `src/engine/tooling`.
+grammar, name resolution, graph and namespace validation, diagnostics, and structured
+State IR, split across source, grammar, names and model, alias, graph, resolution, and
+facade modules. Graph validation builds the namespace groups once and uses them for both local
+integrity and edge resolution, and a vendored, attributed `plur` implementation supplies
+the plural relation. The package stays `private: true`, has no release-owned publication
+entry, and depends on neither sync-engine Markdown nor source-location types.
+Diagnostics from the State body carry text spans and line/column offsets; a diagnostic
+about a supplied external type names that type instead, and the tooling adapter maps it
+through `SpecificationExternalTypeIR.location`. State spans map from the normalized
+State-body origin retained by the concept parser to `DesignSourceLocation`, so leading
+blank fence lines do not shift them. Keep this parser as the one implementation behind
+both repair diagnostics and checked-model owned-name extraction; do not recreate a
+parser under `src/engine/tooling`.
 
-The parser authoritatively handles structural set, sequence, element, subset, alias,
-and field declarations. Structural and alias spellings remain exact. Named State field
-references and parsed action/query type expressions supply exact authored candidates.
-An automatic alias is accepted only when pluralizing either candidate or one unique
-non-element structure or subset name with vendored `plur` exactly yields the other and
-that owner has no second automatic candidate. No generated plural is inserted, no
-transitive closure runs, and external, primitive, element, exact
-declaration, ambiguous, and explicitly aliased candidates are excluded. Candidate-side
-and owner-side ambiguity emits non-fatal advice naming the rejected spellings and owners.
-A valid `alias Alias for Target` takes precedence and remains the escape hatch. Alias targets
-must be unique valid structures or subsets, and alias chains are rejected.
+The parser handles set, sequence, element, subset, alias, and field declarations and
+keeps their spellings as authored. Named State field references and parsed action and
+query type expressions supply alias candidates. A candidate joins an owner only when
+`plur` relates the two authored spellings and neither side has a second match; the
+pluralizer's output is never inserted, no transitive closure runs, and external,
+primitive, element, already-declared, ambiguous, and explicitly aliased candidates are
+excluded. Ambiguity on either side emits non-fatal advice naming the rejected spellings
+and owners. `alias Alias for Target` takes precedence and remains the escape hatch; its
+target is a unique declaration or subset, so chains cannot form.
 
-Subset parents resolve after structures and aliases are parsed, so forward references,
-automatic or explicit parent aliases, and valid chains work while unresolved, external,
-primitive, invalid-alias, duplicate or ambiguous structural, self, and cyclic parents
-fail at their authored spans. Parent alias edges normalize to their structural targets before cycle validation.
-Whole-State type names, declaration-local effective field names, and enumeration-local
-values have separately enforced uniqueness scopes.
+Subset parents resolve after declarations and aliases are parsed, which lets forward
+references, alias parents, and valid chains work, while unresolved, external, primitive,
+invalid-alias, duplicate, ambiguous, self, and cyclic parents fail at their authored
+spans. Alias parent edges normalize to their targets before cycle validation. Type
+names, declaration-local field names, and enumeration values have separate uniqueness
+scopes.
 
-State field value names are deliberately open: the parser classifies owned, external,
-primitive, and unresolved references, but unresolved conventional or refinement names
-remain legal. Only the bounded unique plural relation can promote one of those exact
-references to an automatic owned alias. Every nonblank line inside the State fence must
-parse structurally or begin with exact `Rule:`; malformed lines produce diagnostics,
-while marked rule text remains opaque. The concept IR preserves the complete normalized
-State-fence text and has no separate prose field. The parser
-does not prove that text, field refinements, conditions, effects, query meaning, storage
-layout, State/storage agreement, or implementation semantics.
+State field value names stay open: the parser classifies owned, external, primitive, and
+unresolved references, and an unresolved conventional or refinement name remains legal.
+Only the plural join or an alias makes such a reference owned. Every nonblank line in the
+fence must parse or begin with `Rule:`; malformed lines produce diagnostics, and rule
+text stays opaque. The concept IR preserves the complete normalized State-fence text and
+has no separate prose field. The parser does not prove that text, field refinements,
+conditions, effects, query meaning, storage layout, State/storage agreement, or
+implementation semantics.
 
-Config-based binding validation uses only the derived exact owned-name inventory. A
-qualified target must name a structural declaration, safe evidenced alias, or explicit
-alias of the selected target instance's definition; an external, primitive, ambiguous,
-or unresolved name is invalid. Checked manifests persist the sorted inventory. Their
-codec independently rederives it from included State plus action/query type evidence,
-requires exact canonical equality, and validates every qualified target against that
-derived fact. Operation types are not required to occur in State: conventional and
-refinement names remain valid, and only an exact unique plural pair affects ownership.
+Config-based binding validation uses only the derived owned-name inventory. A qualified
+target must name a declaration or alias of the selected target instance's definition; an
+external, primitive, ambiguous, or unresolved name is invalid. Checked manifests persist
+the sorted inventory, and their codec rederives it independently from the included State
+and operation types, requires canonical equality, and validates every qualified target
+against the derived fact. Operation types need not occur in State: conventional and
+refinement names remain valid, and only a unique plural pair affects ownership.
 
 ## Static source agreement
 

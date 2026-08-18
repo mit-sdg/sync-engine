@@ -1,11 +1,9 @@
 # Simple State Form (SSF)
 
-Simple State Form (SSF) is the State language for a concept specification. It is a
-small English-like notation for structural State declarations. A concept's State section
-contains only its `state` fence: put opaque prose inside that fence as an explicit `Rule:`
-line because prose after the fence is rejected. Write one declaration, alias, or rule per
-top-level line. Put a declaration's fields and attached rules on following indented
-lines.
+Simple State Form (SSF) is the State language for a concept specification: a small
+English-like notation for declaring the facts a concept owns. Write one declaration,
+alias, or rule per top-level line, and put a declaration's fields on the following
+indented lines. All of it lives inside the concept's `state` fence.
 
 ```state
 a set of Items with
@@ -27,8 +25,6 @@ Rule: at most one Item has each title
 
 ## Grammar
 
-The bounded document grammar is:
-
 ```text
 document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
@@ -48,68 +44,25 @@ primitive := Number | String | Flag | Date | DateTime
 ruleLine := Rule: TEXT
 ```
 
-`Rule:` is exact and case-sensitive. It must be the first whitespace-delimited token,
-and at least one further non-whitespace token must supply `TEXT`; `Rule:x` and a bare
-`Rule:` are not rule lines. The parser retains the complete marked line verbatim and does
-not parse, validate, interpret, or prove its text. A rule may be top-level or indented in
-the preceding declaration's `declarationBody`. A top-level `Rule:` ends that declaration
-body, so a later indented line has no enclosing declaration. Every other nonblank line
-must match the declaration, alias, or field grammar for its position.
+Every nonblank line either matches this grammar or begins with `Rule:`. Anything else
+gets a diagnostic that names its source location.
 
-A top-level declaration uses `a set of Items`, `a seq of Items`, or `an element Settings`.
-The `of` after a structural keyword is optional. A declaration with fields ends its first
-line with `with`, which requires at least one real field. Attached `Rule:` lines may occur
-alongside fields but do not satisfy that requirement.
+## Declarations
 
-A subset declaration, such as `a Completed set of Items`, classifies members of an
-existing parent. A subset may use `set` or `element`, but not `seq`. Every parent must
-resolve by exact spelling to a unique structural identity or subset in the same State.
-Forward references, exact explicit parent aliases, and chains are valid; external
-parameters, primitives, unresolved or invalid aliases, self-parenting, and cycles are not.
+A top-level declaration uses `a set of Items`, `a seq of Items`, or `an element
+Settings`. The `of` after a structural keyword is optional. A declaration with fields
+ends its first line with `with` and needs at least one field; an attached `Rule:` line
+does not count as one.
 
-## Automatic and explicit aliases
-
-SSF can recognize two exact authored spellings as one owned type. It gathers candidates
-from named State field types and from action/query parameter and result type expressions
-in the containing concept. It never generates a candidate. For each candidate, SSF uses
-the vendored `plur` 6.0.0 relation: pluralizing either authored spelling must exactly
-yield the other. The candidate must match one unique non-element structure or subset,
-and that owner must match only one automatic candidate. If either side is ambiguous, the
-whole automatic owner group remains unresolved and SSF emits non-fatal advice naming the
-rejected candidate spelling or spellings and the owner or owners involved. Explicit aliases do not count toward
-this limit. The field type `Item` establishes the additional owned spelling here:
-
-```state
-a set of Items with
-  a related Item
-```
-
-This also supports irregular pairs such as `Mouse`/`Mice` and `Person`/`People`. External
-parameters, primitives, and element declarations do not gain automatic aliases. An
-ambiguous candidate remains unresolved. Exact structural declarations take precedence,
-and automatic aliases are not fed back through pluralization, so no transitive or third
-spelling appears.
-
-Use an explicit alias when pluralization cannot uniquely express the intended relation:
-
-```state
-a set of People
-
-alias Human for People
-```
-
-The canonical syntax is exactly `alias Alias for Target`. The alias name and target
-begin with uppercase ASCII letters. The target may occur before or after the alias but
-must be a unique, valid structural identity or subset. An alias cannot target another
-alias, so alias chains and alias cycles are impossible. A valid explicit alias takes
-precedence over automatic evidence with the same name. A subset parent may use either
-kind of alias; graph validation normalizes that edge to the structural target. Explicit
-alias names share the type namespace with structural declarations, external parameters,
-primitives, and other explicit aliases and must be unique.
+A subset such as `a Completed set of Items` classifies members of an existing parent. It
+may use `set` or `element`, but not `seq`. The parent is a declaration, another subset,
+or an alias for either, and may appear before or after the subset. A parent naming an
+external parameter, a primitive, or nothing at all fails, as do self-parenting and
+parent cycles.
 
 ## Fields
 
-A field may have an explicit lowercase name before its value form:
+A field may carry an explicit lowercase name before its value:
 
 ```state
 a set of Items with
@@ -121,12 +74,12 @@ a set of Items with
   a flags set of VISIBLE or HIDDEN
 ```
 
-An indented field may omit its article. `optional` precedes the field name and, when
-an article is present, immediately follows it: `an optional owner Person`. Collections
+An indented field may omit its article. `optional` comes before the field name, and
+directly after the article when there is one: `an optional owner Person`. Collections
 are never optional; an empty collection represents absence.
 
-A field name may be omitted only when a scalar or collection supplies one named type.
-SSF lowercases only the first character of that exact type spelling:
+Omit the field name when a scalar or collection supplies a single named type. SSF
+lowercases the first character of that spelling:
 
 ```state
 an element Example with
@@ -134,87 +87,99 @@ an element Example with
   a set of Options
 ```
 
-These fields are named `profile` and `options`. Enumerations require an explicit field
-name and do not supply inferred field names. Effective field names, including inferred
-names, must be unique within one declaration. The same field name may occur in a different declaration.
+These fields are named `profile` and `options`. An enumeration always needs a written
+name. Field names, written or inferred, are unique within their declaration.
 
-A collection uses `set` or `seq`, with optional `of`, and cannot contain another
-collection. Named and primitive elements use forms such as `watchers set of Person`;
-enum elements use the natural `flags set of VISIBLE or HIDDEN`. Omitting the collection
-`of` is also accepted, but a second `of` is malformed. Named-type unions are not part of
-SSF. `or` occurs only between at least two enumeration values. Each value must be unique
-within that one enumeration; the same value may occur in another field or enum.
+A collection uses `set` or `seq` with an optional `of`, and holds scalars rather than
+further collections. Named-type unions are not part of SSF: `or` separates enumeration
+values, which are unique within their enumeration.
 
-## Names and namespaces
+## Aliases
 
-Type, parameter, declaration, subset, alias, target, and parent names begin with an
-uppercase ASCII letter. Field names begin with a lowercase ASCII letter. Remaining
-characters may be ASCII letters, digits, or `_`. Enumeration values begin with an
-uppercase ASCII letter and otherwise use uppercase ASCII letters, digits, or `_`.
+A concept often spells one owned type two ways — `Items` in the declaration and `Item`
+in a field or an operation signature. SSF joins the two when they are a singular/plural
+pair, so both names denote the same owned type:
 
-Structural declaration names are unique across the whole State. External parameter names
-supplied to SSF must use the same uppercase `Type` form; invalid names are diagnosed and
-omitted from the external inventory. An external parameter must not equal one of the five
-SSF primitives: a collision is diagnosed and the primitive remains the sole inventory
-entry and reference classification. Structural and explicit alias names also must not
-collide with an external or primitive. Field names are local to one declaration.
-Enumeration values are local to one enumeration.
+```state
+a set of Items with
+  a related Item
+```
 
-All joins retain exact authored spelling. Automatic alias resolution only compares two
-authored names through the documented plural relation; it never corrects or inserts a
-spelling.
+Both spellings have to be authored: SSF compares candidate names from State fields and
+from action and query signatures against declaration names using the vendored `plur`
+implementation, and never introduces a spelling of its own. Irregular pairs such as
+`Mouse`/`Mice` and `Person`/`People` join the same way. The join needs one candidate and
+one non-element declaration or subset on either side; where several match, SSF leaves
+them unjoined and reports the skipped names as advice. Element declarations, external
+parameters, and primitives never join.
 
-## Reference boundary
+Where the plural relation cannot express the intended synonym, declare it:
 
-SSF classifies every parsed named reference as owned, external, primitive, or
-unresolved. Contexts that require ownership are closed: subset parents must resolve to
-valid structural declarations or their automatic or explicit aliases; explicit alias
-targets must resolve directly to valid structures or subsets. Application qualified
-binding targets must resolve to an owned structural or alias spelling of the selected
-instance.
+```state
+a set of People
 
-State field value names remain an intentionally open authored namespace. A field may
-refer to an owned identity, external parameter, primitive, conventional value type, or
-concept-local refinement. An unresolved value is retained and classified as unresolved
-but is not itself an SSF error. It becomes owned only when the bounded automatic-alias
-rule establishes one unique non-element structure or subset owner and that owner has no
-second automatic candidate. Action and query types likewise need not occur in State;
-their exact spellings contribute alias candidates but do not otherwise close the
-namespace.
+alias Human for People
+```
 
-## State meaning
+The syntax is `alias Alias for Target`. The target is a declaration or subset — never
+another alias, so chains cannot form — and may appear before or after the alias. An
+explicit alias wins over a plural join of the same name.
 
-A top-level set or sequence introduces identities. An element declaration has one
-member. Fields declare relations on those identities; do not add ID fields for them. A
-scalar field relates a member to a scalar value or another identity. A collection field
+## Names
+
+Type, parameter, subset, alias, and parent names begin with an uppercase ASCII letter,
+and field names with a lowercase one. The rest of a name may use ASCII letters, digits,
+or `_`. Enumeration values begin with an uppercase letter and otherwise use uppercase
+letters, digits, and `_`.
+
+Declaration and alias names are unique across a concept's State and share that namespace
+with the concept's external parameters and the SSF primitives. Field names are local to
+their declaration, and enumeration values to their enumeration.
+
+## What a field value may name
+
+A field value may name an identity the concept owns, an external parameter, a primitive,
+or a conventional or refined type that nothing declares. SSF records which of those it
+is and leaves an unrecognized name as written: State is a design notation, not a closed
+type universe. Action and query types are open in the same way.
+
+Ownership matters where something is proved against it. Subset parents and alias targets
+resolve within the same State, and an application's qualified binding target names an
+owned spelling of the instance it targets.
+
+## What the declarations mean
+
+A top-level set or sequence introduces identities, and an element declaration has one
+member. Fields declare relations on those identities, so there is no need for ID fields.
+A scalar field relates a member to a value or another identity; a collection field
 relates it to a set or sequence of values.
 
-A subset introduces no identity. Subsets may overlap, and subset fields add relations
-for classified members. Which side declares a relation implies nothing about storage,
-navigation, or ownership.
+A subset introduces no identities of its own. Subsets may overlap, and their fields add
+relations for the members they classify. Which side of a relation declares it implies
+nothing about storage, navigation, or ownership.
 
-## Rule lines and canonical form
+## Rules
 
-Rule prose must use the explicit marker:
+Prose the notation cannot express goes on a `Rule:` line, either at the top level or
+indented under a declaration:
 
 ```state
 Rule: at most one Item has each title
 ```
 
-On a well-formed rule line, the marker determines that its required text is prose. SSF
-retains the line but does not interpret or prove its text, even when the text resembles a
-declaration or field. An unmarked top-level line must parse as a declaration or alias.
-An unmarked indented line must parse as a field. Failure receives a source-located
-diagnostic rather than an
-intent guess. The closed near-miss set `rule:`, `RULE:`, `Invariant:`, `invariant:`,
-`Note:`, and `note:` is diagnosed with a suggestion only when the near miss is likewise
-an exact first token followed by text.
+SSF keeps the line as written and makes no claim about it, even when the text resembles
+a declaration. A top-level rule closes the preceding declaration's body. `Rule:` is
+case-sensitive and comes first on the line, followed by the rule itself. `rule:`, `RULE:`, `Invariant:`, `invariant:`, `Note:`, and `note:` are
+reported as near misses.
 
-Canonical top-level declarations use `a set`, `a seq`, or `an element`. A subset puts
-`a` or `an` before its subtype. Fields require `with` on their declaration. Structural
-keywords are exactly `set`, `seq`, and `element`; `array`, `list`, `sequence`, and
-`sequences` are diagnosed near misses for `seq`, and `singleton` for `element`.
+## Canonical form
 
-SSF proves bounded structural declarations, their graph integrity, and their exact
-owned type inventory. It does not prove marked rule text, field-value refinement meaning,
-behavior, storage layout, or implementation semantics.
+Top-level declarations read `a set`, `a seq`, or `an element`, and a subset puts its
+article before the subtype: `a Completed set`. Fields need `with` on the declaration
+line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
+`sequence`, and `sequences` are reported as near misses for `seq`, and `singleton` for
+`element`.
+
+SSF proves the structural declarations, their graph, and the owned type names they
+establish. It does not prove rule text or refinement meaning, and says nothing about
+behavior, storage layout, or implementation.
