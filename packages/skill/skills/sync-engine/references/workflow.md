@@ -100,8 +100,8 @@ names or contracts. A missing catalog executable must fail release check; never 
 alias, or replace it.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
-the output file through the selected harness guide. Never concatenate prompts with
-Python, heredocs, or shell strings. Put stable role content before dynamic inputs. A
+the output file through the selected harness guide. Put stable role content before
+dynamic inputs. A
 budget failure lists source contributions; tighten context first and set explicit
 `--max-bytes` only for legitimate application material.
 
@@ -188,11 +188,10 @@ complete authorization, and capture a new digest.
 
 ## Implement in bounded phases
 
-Use filesystem APIs, never shell interpolation, to write each small temporary Markdown
-assignment listing exact allowed application read and write paths, commands,
-and return contract. Never include framework checkout source, installed
-package contents, build output, source maps, or paths reached by following framework
-imports. Supply framework information only through exact public API references and selected
+Write each small temporary Markdown assignment listing exact allowed application read
+and write paths, commands, and return contract. Never include framework checkout
+source, installed package contents, build output, source maps, or paths reached by
+following framework imports. Supply framework information only through exact public API references and selected
 application examples: at most one useful implementation example per concept and one
 useful example per mechanism; if insufficient,
 the worker returns a context blocker instead of searching internals. Put brief storage

@@ -1,10 +1,8 @@
 # Run roles with Paseo
 
 Paseo `--cwd` and assignment prose are not enforcement. Use provider or harness read and
-write denial outside assigned application paths when available. Regardless, launch
-implementation and evidence roles with narrow assignments and explicit instructions not
-to read, write, inspect, search, or traverse outside them, including framework source,
-installed package internals, source maps, and traced imports.
+write denial outside assigned application paths when available. The contract's path
+discipline still binds every assignment.
 
 Inspect the coordinator exactly once through `$PASEO_AGENT_ID`:
 
@@ -57,5 +55,4 @@ paseo wait "$agent_id" --timeout <seconds>
 
 Delivery and synchronization are separate: every send uses `--no-wait`, followed by one
 bounded wait for that assignment. On timeout, collect one inspect/log snapshot and stop;
-do not enter an inspect, log, permission, or wait polling loop. Never put generated
-prompt contents in a `paseo run` or `paseo send` shell argument.
+do not enter an inspect, log, permission, or wait polling loop.

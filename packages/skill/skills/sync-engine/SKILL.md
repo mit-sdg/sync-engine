@@ -35,7 +35,8 @@ brief → independent design → syntax → bounded independent criticism
   installed package internals. Supply exact public references.
 - Build every role prompt with the self-contained compiler `scripts/command.ts` and
   deliver it from a file. Bind downstream prompts and follow-ups to the reviewed design
-  digest. Never place generated Markdown in a shell argument.
+  digest. Write every generated prompt, assignment, and follow-up through filesystem
+  APIs and deliver it by path; never place generated Markdown in a shell argument.
 - Stop after required checks and objective evidence pass. Do not iterate for optional
   polish, informational findings, or an empty critic list.
 

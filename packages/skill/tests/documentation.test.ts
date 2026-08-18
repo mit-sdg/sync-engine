@@ -373,10 +373,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     const workflow = await text(new URL("references/workflow.md", skillRoot));
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
     expect(entry.replace(/\s+/g, " ")).toContain("never inspect framework implementation source");
-    expect(workflow).toContain("Never include framework checkout source");
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "Never include framework checkout source, installed package contents, build output, source maps, or paths reached by following framework imports",
+    );
     expect(workflow).toContain("instead of searching internals");
-    expect(contract).toContain("framework source and installed package internals");
     expect(contract).toContain("role prompts must require agents");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Write every generated prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never place generated Markdown in a shell argument",
+    );
   });
 
   test("keeps filesystem confinement best effort for downstream roles", async () => {
@@ -387,7 +391,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const normalizedContract = contract.replace(/\s+/g, " ");
 
     expect(normalizedContract).toContain(
-      "give implementation and evidence roles narrow assigned application paths that exclude framework source and installed package internals and, when available, enforce read and write denial outside them",
+      "give implementation and evidence roles narrow assigned application paths and, when available, enforce read and write denial outside them",
     );
     expect(normalizedContract).toContain(
       "Filesystem confinement is best effort and is not a launch prerequisite",
@@ -632,7 +636,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo).toContain("Wait for a file-delivered assignment");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
     expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');
-    expect(paseo).toContain("Never put generated\nprompt contents");
+    expect(paseo.replace(/\s+/g, " ")).toContain(
+      "The contract's path discipline still binds every assignment",
+    );
   });
 
   test("keeps source inventory coverage explicit", async () => {
