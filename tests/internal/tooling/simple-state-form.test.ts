@@ -105,6 +105,50 @@ describe("limited Simple State Form validation", () => {
     expect(issues[0]).not.toHaveProperty("span");
   });
 
+  test("parse adapter maps State and external diagnostics to Markdown locations", () => {
+    const scanned = scanDesignMarkdown(
+      `# Example
+
+## Types
+
+\`\`\`types
+external person
+\`\`\`
+
+## State
+
+\`\`\`state
+a set of Sessions with
+  a revokedAt optional DateTime
+\`\`\`
+`,
+      "design/example.md",
+    );
+    const fence = scanned.fences.find(({ info }) => info === "state");
+    if (fence === undefined) throw new Error("test fixture has no state fence");
+
+    const parsed = parseSimpleStateForm(fence, {
+      externalTypes: [{ name: "person", explanation: "", location: { line: 6, column: 10 } }],
+    });
+
+    expect(parsed.issues).toMatchObject([
+      {
+        severity: "error",
+        code: "SSF_INVALID_EXTERNAL_NAME",
+        externalType: "person",
+        location: { source: "design/example.md", line: 6, column: 10 },
+      },
+      {
+        severity: "error",
+        code: "SSF_MISPLACED_OPTIONAL",
+        location: { source: "design/example.md", line: 13, column: 15 },
+        span: { start: { offset: 37, line: 2, column: 15 } },
+      },
+    ]);
+    expect(parsed.issues[0]).not.toHaveProperty("span");
+    expect(parsed.issues[1]).not.toHaveProperty("externalType");
+  });
+
   test("adapts structured ownership and package-local spans without coupling the package to Markdown", () => {
     const scanned = scanDesignMarkdown(
       "# Example\n\n```state\na set of Entries with\n  an owner Person\n\nan Open set of Entries\n```\n",

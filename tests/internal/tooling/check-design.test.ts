@@ -260,6 +260,28 @@ Comments.User is Posting.Author
     }
   });
 
+  test("formats invalid external SSF errors at the Types declaration for the manifest", () => {
+    const specification = parseSpec(concept.replace("external Person", "external person"));
+    const externalLocation = specification.externalTypes[0]!.location;
+    const stateLocation = specification.state.location;
+    let failure: unknown;
+
+    try {
+      specificationOwnedTypeNames(specification);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).toContain(
+      `- line ${String(externalLocation.line)}, column ${String(externalLocation.column)}: [SSF_INVALID_EXTERNAL_NAME] External type "person" is not a valid SSF type name.`,
+    );
+    expect(message).not.toContain(
+      `- line ${String(stateLocation.line)}, column ${String(stateLocation.column)}: [SSF_INVALID_EXTERNAL_NAME]`,
+    );
+  });
+
   test("reports automatic-alias advice without failing the design check", async () => {
     const ambiguous = concept.replace(
       "a set of Notes with\n  an author Person\n  a text String",
