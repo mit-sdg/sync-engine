@@ -359,7 +359,14 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
   const registryPath = join(directory, "registry.ts");
   let spec: ConceptSpec;
   try {
-    spec = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
+    const parsed = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
+    if (parsed.specification === undefined) {
+      return parsed.diagnostics.map(
+        ({ message, location }) =>
+          `${label}: spec: line ${location.line}, column ${location.column}: ${message}`,
+      );
+    }
+    spec = parsed.specification;
   } catch (error) {
     return [`${label}: ${error instanceof Error ? error.message : String(error)}.`];
   }

@@ -1291,7 +1291,7 @@ perform(value: String) : return (result: String)
 \`\`\`queries
 _get(value: String) : optional (result: String)
 \`\`\`
-`);
+`).specification!;
     const base = applicationManifest(application());
     const seed = reseal({
       ...base,

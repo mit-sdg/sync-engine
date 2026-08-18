@@ -15,6 +15,7 @@ import {
   conceptProtocolOf,
 } from "@engine/reactions/concepts/concept-metadata";
 import {
+  formatConceptSpecDiagnostic,
   parseSpec,
   specificationsAreCompatible,
   type ConceptSpec,
@@ -249,7 +250,13 @@ export function registerConcept<
   if (typeof registration.class !== "function" || registration.class.prototype === undefined) {
     throw new Error("registerConcept: class must be a constructable concept class.");
   }
-  const specification = parseSpec(registration.spec);
+  const parsed = parseSpec(registration.spec);
+  if (parsed.specification === undefined) {
+    throw new Error(
+      `registerConcept(${registration.class.name}): invalid specification:\n${parsed.diagnostics.map(formatConceptSpecDiagnostic).join("\n")}`,
+    );
+  }
+  const specification = parsed.specification;
   checkAgainstClass(registration.class, specification);
   checkRefusals(
     registration.class,

@@ -1444,12 +1444,32 @@ export type SpecQuery = SpecificationQueryIR;
 export type SpecExternalType = SpecificationExternalTypeIR;
 export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
+export type ConceptSpecDiagnosticCode = "CONCEPT_SPEC_INVALID_INPUT" | "CONCEPT_SPEC_APPLICATION_CONSTRUCT" | "CONCEPT_SPEC_DOCUMENT_STRUCTURE" | "CONCEPT_SPEC_PROSE_SECTION" | "CONCEPT_SPEC_FENCE" | "CONCEPT_SPEC_DECLARATION" | "CONCEPT_SPEC_SIGNATURE" | "CONCEPT_SPEC_DUPLICATE_DECLARATION" | "CONCEPT_SPEC_ACTION_BRANCH";
+interface ConceptSpecDiagnosticDetail {
+    readonly code: ConceptSpecDiagnosticCode;
+    readonly message: string;
+}
+/** A parser diagnostic anchored at the one source position the parser can establish exactly. */
+export type ConceptSpecDiagnostic = ConceptSpecDiagnosticDetail & {
+    readonly location: SpecLocation;
+};
+/** Render one parser diagnostic in the list form used by registration errors. */
+export declare function formatConceptSpecDiagnostic({ code, message, location, }: ConceptSpecDiagnostic): string;
+/** A complete specification is available only when parsing reported no diagnostics. */
+export type ConceptSpecParseResult = {
+    readonly specification: ConceptSpec;
+    readonly diagnostics: readonly [];
+} | {
+    readonly specification: undefined;
+    readonly diagnostics: readonly ConceptSpecDiagnostic[];
+};
 /** The normalized full-source digest retained for a specification parsed in this process. */
 export declare function specificationSourceDigest(specification: ConceptSpec): string | undefined;
 /** Parse imported Markdown as the strict version-1 concept-specification format. */
-export declare function parseSpec(markdown: string): ConceptSpec;
+export declare function parseSpec(markdown: string): ConceptSpecParseResult;
 /** Canonical compatibility ignores source positions but retains every authored contract value. */
 export declare function specificationsAreCompatible(left: ConceptSpec, right: ConceptSpec): boolean;
+export {};
 
 === dist/engine/reactions/concepts/introspect.d.ts ===
 /**
@@ -5795,6 +5815,7 @@ export { applicationManifest, renderApplicationManifest } from "../engine/toolin
 export { applicationManifestDigest, parseApplicationManifest, validateApplicationManifest, } from "../engine/tooling/application-manifest-format.ts";
 export type { ApplicationManifestV1, ManifestEndpointV1 } from "../engine/tooling/manifest.ts";
 export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
+export type { ConceptSpecDiagnostic, ConceptSpecDiagnosticCode, ConceptSpecParseResult, } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";
