@@ -346,7 +346,7 @@ Touching a note updates the feed.[touch]
 
 [touch]: reaction:Forum.notes.Touch
 `;
-  const specification = parseConceptSpecification(specificationText);
+  const specification = parseConceptSpecification(specificationText).specification!;
   const concepts = ["PrimaryNotes", "ArchiveNotes"].map((name) => ({
     name,
     purpose: specification.purpose,
@@ -688,7 +688,7 @@ function projectManifest(): ApplicationManifestV1 {
     },
   ];
   const selecting = manifest.concepts.find(({ name }) => name === "Selecting")!;
-  const specification = parseConceptSpecification(selectingSpec);
+  const specification = parseConceptSpecification(selectingSpec).specification!;
   selecting.purpose = specification.purpose;
   selecting.principle = specification.principle;
   selecting.specification = specification;
@@ -1267,7 +1267,7 @@ describe("application impact analysis", () => {
 
   test("compares specifications independent of object key insertion order", () => {
     const manifest = fixture();
-    const parsed = parseConceptSpecification(selectingSpec);
+    const parsed = parseConceptSpecification(selectingSpec).specification!;
     const reordered = {
       queries: parsed.queries,
       actions: parsed.actions,

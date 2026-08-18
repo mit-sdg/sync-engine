@@ -51,21 +51,48 @@ export { createLocalClient } from "../engine/boundary/client/local-client.ts";
 export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientResponseValidator, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
 
 === dist/command/artifacts.d.ts ===
-export declare function artifactsCommand(args: readonly string[]): Promise<void>;
+import { type ApplicationManifestDiffReport } from "../engine/tooling/application-manifest-diff.ts";
+import { type DiagnosticReport } from "./diagnostic-report.ts";
+export declare function artifactsCommand(args: readonly string[], render?: "text" | "silent"): Promise<ApplicationManifestDiffReport | DiagnosticReport | undefined>;
 
 === dist/command/check-design.d.ts ===
+import { type DiagnosticReport } from "./diagnostic-report.ts";
 export interface CheckedDesignDocument {
     readonly path: string;
     readonly kind: "concept" | "application";
 }
 /** Check explicit authored-design files without consulting an assembly or project state. */
 export declare function checkDesignFiles(paths: readonly string[], root?: string): Promise<readonly CheckedDesignDocument[]>;
-export declare function checkDesignCommand(args: readonly string[]): Promise<void>;
+export declare function checkDesignCommand(args: readonly string[], render?: "text" | "silent"): Promise<DiagnosticReport>;
 
 === dist/command/check.d.ts ===
+import { type DiagnosticReport } from "./diagnostic-report.ts";
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
-export declare function checkCommand(args: readonly string[]): Promise<void>;
+export declare function checkCommand(args: readonly string[], render?: "text" | "silent"): Promise<DiagnosticReport>;
+
+=== dist/command/command-options.d.ts ===
+export type OutputFormat = "text" | "json";
+type OperandRequirement = "none" | "required";
+/** The deliberately small option vocabulary shared by validation commands. */
+export interface CommandOptionSyntax {
+    readonly config?: true;
+    readonly failOnWarnings?: true;
+    readonly format?: true;
+    readonly operands: OperandRequirement;
+}
+export interface ParsedCommandOptions {
+    readonly configPath?: string;
+    readonly failOnWarnings: boolean;
+    readonly format: OutputFormat;
+    readonly operands: readonly string[];
+}
+/**
+ * Parse only the validation commands' three shared flags and their path operands.
+ * This is intentionally not a general command-line framework.
+ */
+export declare function parseCommandOptions(args: readonly string[], usage: string, syntax: CommandOptionSyntax): ParsedCommandOptions;
+export {};
 
 === dist/command/concept-discovery.d.ts ===
 import type { ConceptSpec } from "../engine/reactions/concepts/concept-spec.ts";
@@ -83,6 +110,37 @@ export declare function registeredConcepts(conceptSet: unknown): RegisteredSourc
 export declare function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[];
 /** Import an explicitly selected concept-set module. */
 export declare function loadRegisteredConcepts(modulePath: string, exportName?: string): Promise<RegisteredSourceConcept[]>;
+
+=== dist/command/diagnostic-report.d.ts ===
+/** The complete severity vocabulary emitted by the validation commands. */
+export type DiagnosticSeverity = "advice" | "error" | "info" | "warning";
+/**
+ * One machine-readable validation finding. Unknown source coordinates and
+ * suggestions are omitted rather than represented with invented values.
+ */
+export interface DiagnosticRecord {
+    readonly code: string;
+    readonly path?: string;
+    readonly line?: number;
+    readonly column?: number;
+    readonly severity: DiagnosticSeverity;
+    readonly message: string;
+    readonly suggestion?: string;
+}
+export type DiagnosticReportCommand = "artifacts check" | "check" | "check-design";
+/** Versioned JSON contract shared by the diagnostic-producing validation commands. */
+export interface DiagnosticReport {
+    readonly format: "sync-engine.diagnostic-report";
+    readonly version: 1;
+    readonly command: DiagnosticReportCommand;
+    readonly status: "passed" | "failed";
+    readonly diagnostics: readonly DiagnosticRecord[];
+}
+export declare function failedDiagnostic(code: string, error: unknown): DiagnosticRecord;
+export declare function diagnosticReport(command: DiagnosticReportCommand, status: DiagnosticReport["status"], diagnostics: readonly DiagnosticRecord[]): DiagnosticReport;
+/** Render exactly one newline-terminated JSON document for stdout. */
+export declare function renderJsonDocument(document: object): string;
+export declare function writeJsonDocument(document: object): void;
 
 === dist/command/files-below.d.ts ===
 /** List regular files depth-first without following symlinks. */
@@ -111,6 +169,31 @@ export interface SetupResult {
 }
 /** Initialize a supported concept-free application without replacing application-owned files. */
 export declare function setupProject(directory?: string, options?: SetupOptions): Promise<SetupResult>;
+
+=== dist/command/verify.d.ts ===
+export type VerificationStatus = "passed" | "failed" | "skipped";
+export type VerificationStepName = "check-design" | "check" | "artifacts check";
+export interface VerificationStepResult {
+    readonly name: VerificationStepName;
+    readonly status: VerificationStatus;
+    readonly detail?: string;
+}
+export interface VerificationConfiguration {
+    readonly status: "loaded" | "failed";
+    readonly documents: readonly string[];
+    readonly detail?: string;
+}
+/** The versioned plain-data result emitted directly by `verify --format json`. */
+export interface VerificationReport {
+    readonly format: "sync-engine.verification-report";
+    readonly version: 1;
+    readonly status: "passed" | "failed";
+    readonly config: string;
+    readonly configuration: VerificationConfiguration;
+    readonly steps: readonly VerificationStepResult[];
+}
+/** Run the existing configured validation commands and retain every independent result. */
+export declare function verifyCommand(args: readonly string[]): Promise<VerificationReport>;
 
 === dist/engine/boundary/assembly/assemble.d.ts ===
 /**
@@ -1444,12 +1527,32 @@ export type SpecQuery = SpecificationQueryIR;
 export type SpecExternalType = SpecificationExternalTypeIR;
 export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
+export type ConceptSpecDiagnosticCode = "CONCEPT_SPEC_INVALID_INPUT" | "CONCEPT_SPEC_APPLICATION_CONSTRUCT" | "CONCEPT_SPEC_DOCUMENT_STRUCTURE" | "CONCEPT_SPEC_PROSE_SECTION" | "CONCEPT_SPEC_FENCE" | "CONCEPT_SPEC_DECLARATION" | "CONCEPT_SPEC_SIGNATURE" | "CONCEPT_SPEC_DUPLICATE_DECLARATION" | "CONCEPT_SPEC_ACTION_BRANCH";
+interface ConceptSpecDiagnosticDetail {
+    readonly code: ConceptSpecDiagnosticCode;
+    readonly message: string;
+}
+/** A parser diagnostic anchored at the one source position the parser can establish exactly. */
+export type ConceptSpecDiagnostic = ConceptSpecDiagnosticDetail & {
+    readonly location: SpecLocation;
+};
+/** Render one parser diagnostic in the list form used by registration errors. */
+export declare function formatConceptSpecDiagnostic({ code, message, location, }: ConceptSpecDiagnostic): string;
+/** A complete specification is available only when parsing reported no diagnostics. */
+export type ConceptSpecParseResult = {
+    readonly specification: ConceptSpec;
+    readonly diagnostics: readonly [];
+} | {
+    readonly specification: undefined;
+    readonly diagnostics: readonly ConceptSpecDiagnostic[];
+};
 /** The normalized full-source digest retained for a specification parsed in this process. */
 export declare function specificationSourceDigest(specification: ConceptSpec): string | undefined;
 /** Parse imported Markdown as the strict version-1 concept-specification format. */
-export declare function parseSpec(markdown: string): ConceptSpec;
+export declare function parseSpec(markdown: string): ConceptSpecParseResult;
 /** Canonical compatibility ignores source positions but retains every authored contract value. */
 export declare function specificationsAreCompatible(left: ConceptSpec, right: ConceptSpec): boolean;
+export {};
 
 === dist/engine/reactions/concepts/introspect.d.ts ===
 /**
@@ -4565,6 +4668,87 @@ export declare function compute<Fn extends ComputationFn, const Input extends In
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 export {};
 
+=== dist/engine/tooling/application-manifest-diff.d.ts ===
+import type { ApplicationManifestV1 } from "./manifest.ts";
+/** An endpoint's stable manifest identity for compatibility reporting. */
+export interface ManifestEndpointReference {
+    readonly name: string;
+    readonly path: string;
+}
+/** One refusal code declared by a named action in the manifest inventory. */
+export interface ManifestRefusalCodeReference {
+    readonly concept: string;
+    readonly action: string;
+    readonly code: string;
+}
+/** One SSF-owned type declared by a named concept definition. */
+export interface ManifestOwnedTypeReference {
+    readonly definition: string;
+    readonly type: string;
+}
+/** One compatibility-relevant change directly represented in an application manifest. */
+export type ApplicationManifestChange = {
+    readonly kind: "endpoint-added";
+    readonly endpoint: ManifestEndpointReference;
+} | {
+    readonly kind: "endpoint-removed";
+    readonly endpoint: ManifestEndpointReference;
+} | {
+    readonly kind: "input-required-added";
+    readonly path: string;
+    readonly key: string;
+} | {
+    readonly kind: "input-required-removed";
+    readonly path: string;
+    readonly key: string;
+} | {
+    readonly kind: "input-default-added";
+    readonly path: string;
+    readonly key: string;
+    readonly value: unknown;
+} | {
+    readonly kind: "input-default-removed";
+    readonly path: string;
+    readonly key: string;
+    readonly value: unknown;
+} | {
+    readonly kind: "input-default-changed";
+    readonly path: string;
+    readonly key: string;
+    readonly before: unknown;
+    readonly after: unknown;
+} | {
+    readonly kind: "refusal-code-added";
+    readonly refusal: ManifestRefusalCodeReference;
+} | {
+    readonly kind: "refusal-code-removed";
+    readonly refusal: ManifestRefusalCodeReference;
+} | {
+    readonly kind: "owned-type-added";
+    readonly ownedType: ManifestOwnedTypeReference;
+} | {
+    readonly kind: "owned-type-removed";
+    readonly ownedType: ManifestOwnedTypeReference;
+};
+/** A plain-data compatibility report suitable for a later machine-readable command format. */
+export interface ApplicationManifestDiffReport {
+    /** Whether the complete canonical manifests have matching digests. */
+    readonly status: "identical" | "changed";
+    readonly old: {
+        readonly digest: string;
+    };
+    readonly current: {
+        readonly digest: string;
+    };
+    readonly breaking: readonly ApplicationManifestChange[];
+    readonly nonBreaking: readonly ApplicationManifestChange[];
+}
+/**
+ * Compare two already-decoded version-1 manifests over the compatibility surface.
+ * Callers that receive untrusted JSON must parse it with `parseApplicationManifest` first.
+ */
+export declare function diffApplicationManifests(oldManifest: ApplicationManifestV1, currentManifest: ApplicationManifestV1): ApplicationManifestDiffReport;
+
 === dist/engine/tooling/application-manifest-format.d.ts ===
 import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
@@ -5795,6 +5979,7 @@ export { applicationManifest, renderApplicationManifest } from "../engine/toolin
 export { applicationManifestDigest, parseApplicationManifest, validateApplicationManifest, } from "../engine/tooling/application-manifest-format.ts";
 export type { ApplicationManifestV1, ManifestEndpointV1 } from "../engine/tooling/manifest.ts";
 export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
+export type { ConceptSpecDiagnostic, ConceptSpecDiagnosticCode, ConceptSpecParseResult, } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";

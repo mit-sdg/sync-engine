@@ -222,9 +222,86 @@ Comments.User is Posting.Author
     const root = await fixture({ "broken.md": concept.replace("## Queries", "## Reads") });
     try {
       await expect(checkDesignFiles(["broken.md"], root)).rejects.toThrow(
-        /Design document broken\.md is invalid: spec:.*unknown "## Reads"/s,
+        /Design document broken\.md is invalid: broken\.md:.*\[CONCEPT_SPEC_DOCUMENT_STRUCTURE\].*unknown "## Reads"/s,
       );
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reports every invalid file in one run", async () => {
+    const root = await fixture({
+      "first.md": concept.replace("## Queries", "## Reads"),
+      "second.md": concept.replace("Keep a note for later retrieval.", ""),
+      "third.md": concept.replace("## Actions", "## Operations"),
+    });
+    try {
+      await expect(checkDesignFiles(["first.md", "second.md", "third.md"], root)).rejects.toThrow(
+        /Design document first\.md is invalid:.*Design document second\.md is invalid:.*Design document third\.md is invalid:/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reports multiple parser faults from one concept document", async () => {
+    const root = await fixture({
+      "broken.md": concept
+        .replace("Keep a note for later retrieval.", "")
+        .replace("A person writes a note and reads it back by its identity.", ""),
+    });
+    try {
+      await expect(checkDesignFiles(["broken.md"], root)).rejects.toThrow(
+        /\[CONCEPT_SPEC_PROSE_SECTION\].*"## Purpose" section is empty.*\[CONCEPT_SPEC_PROSE_SECTION\].*"## Principle" section is empty/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reports every application-form issue", async () => {
+    const document = (title: string) => `# ${title}
+
+\`\`\`computations
+same() : String
+  Produces a stable value.
+\`\`\`
+
+\`\`\`types
+concrete Person
+  A stable application identity.
+\`\`\`
+
+\`\`\`instances
+instantiate Commenting as Comments
+\`\`\`
+
+\`\`\`bindings
+Comments.User is Person
+\`\`\`
+`;
+    const root = await fixture({ "first.md": document("First"), "second.md": document("Second") });
+    try {
+      await expect(checkDesignFiles(["first.md", "second.md"], root)).rejects.toThrow(
+        /\[DUPLICATE_COMPUTATION\].*\[DUPLICATE_CONCRETE_TYPE\].*\[DUPLICATE_INSTANCE\].*\[DUPLICATE_EXTERNAL_BINDING\]/s,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps the success summary for a valid corpus", async () => {
+    const root = await fixture({ "one.md": concept, "two.md": composition, "three.md": types });
+    const output = vi.spyOn(console, "log").mockImplementation(() => {});
+    const previous = process.cwd();
+    try {
+      process.chdir(root);
+      await checkDesignCommand(["one.md", "two.md", "three.md"]);
+      expect(output).toHaveBeenCalledTimes(1);
+      expect(output).toHaveBeenCalledWith("Design form check passed for 3 files.");
+    } finally {
+      process.chdir(previous);
+      output.mockRestore();
       await rm(root, { recursive: true, force: true });
     }
   });
@@ -261,7 +338,9 @@ Comments.User is Posting.Author
   });
 
   test("formats invalid external SSF errors at the Types declaration for the manifest", () => {
-    const specification = parseSpec(concept.replace("external Person", "external person"));
+    const specification = parseSpec(
+      concept.replace("external Person", "external person"),
+    ).specification!;
     const externalLocation = specification.externalTypes[0]!.location;
     const stateLocation = specification.state.location;
     let failure: unknown;
@@ -287,7 +366,7 @@ Comments.User is Posting.Author
       "a set of Notes with\n  an author Person\n  a text String",
       "a set of Axes with\n  a short Ax\n  an anatomical Axis",
     );
-    expect(specificationOwnedTypeNames(parseSpec(ambiguous))).toEqual(["Axes"]);
+    expect(specificationOwnedTypeNames(parseSpec(ambiguous).specification!)).toEqual(["Axes"]);
     const root = await fixture({ "advice.md": ambiguous });
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {

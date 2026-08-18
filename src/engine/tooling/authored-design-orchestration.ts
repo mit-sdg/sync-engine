@@ -6,6 +6,7 @@ import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { AuthoredDeclarationIdentity } from "@engine/reads/declaration-identity";
 import {
+  formatConceptSpecDiagnostic,
   parseSpec,
   specificationsAreCompatible,
   specificationSourceDigest,
@@ -411,7 +412,12 @@ export async function checkAuthoredDesign(options: {
       }
       const path = localPath(source.url, `conceptSources[${JSON.stringify(instance)}].url`);
       const scanned = scanDesignMarkdown(source.content, path);
-      parseSpec(scanned.content);
+      const parsed = parseSpec(scanned.content);
+      if (parsed.specification === undefined) {
+        throw new Error(
+          `authored design: traced concept source for ${JSON.stringify(instance)} is invalid:\n${parsed.diagnostics.map(formatConceptSpecDiagnostic).join("\n")}`,
+        );
+      }
       if (scanned.digest !== specificationSourceDigest(specification)) {
         throw new Error(
           `authored design: traced concept source for ${JSON.stringify(instance)} does not exactly match its registered spec text.`,

@@ -14,16 +14,50 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                        | Result                                                                        | Writes files                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                            | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
-| `check-design <paths...>`                      | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
-| `check [--config path]`                        | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
-| `artifacts check [--config path]`              | Compares configured artifacts with the complete selected design               | No                                             |
-| `artifacts pin [--config path]`                | Regenerates both configured artifacts                                         | Yes                                            |
-| `artifacts pin-spec [--config path]`           | Regenerates generated Markdown only                                           | Yes                                            |
-| `artifacts pin-wire [--config path]`           | Regenerates generated TypeScript only                                         | Yes                                            |
-| `artifacts manifest/spec/wire [--config path]` | Prints one derived representation                                             | No                                             |
+| Command                                                       | Result                                                                        | Writes files                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `setup [directory]`                                           | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
+| `check-design <paths...> [--format json]`                     | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
+| `verify [--config path] [--fail-on-warnings] [--format json]` | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
+| `check [--config path] [--fail-on-warnings] [--format json]`  | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
+| `artifacts check [--config path] [--format json]`             | Compares configured artifacts with the complete selected design               | No                                             |
+| `artifacts pin [--config path]`                               | Regenerates both configured artifacts                                         | Yes                                            |
+| `artifacts pin-spec [--config path]`                          | Regenerates generated Markdown only                                           | Yes                                            |
+| `artifacts pin-wire [--config path]`                          | Regenerates generated TypeScript only                                         | Yes                                            |
+| `artifacts manifest/spec/wire [--config path]`                | Prints one derived representation                                             | No                                             |
+| `artifacts diff <old-manifest> [--config path]`               | Compares a saved manifest with the configured application                     | No                                             |
+
+## JSON validation output
+
+`check-design`, `check`, `artifacts check`, and `verify` accept `--format json`.
+Without that option, each command retains its human-readable output. In JSON mode, a
+command writes exactly one JSON document to stdout and suppresses its human text. A
+failed validation still exits with status 1 after writing its document.
+
+`check-design`, `check`, and `artifacts check` emit this supported version-1 report:
+
+```json
+{
+  "format": "sync-engine.diagnostic-report",
+  "version": 1,
+  "command": "check",
+  "status": "passed",
+  "diagnostics": []
+}
+```
+
+`command` is `check-design`, `check`, or `artifacts check`; `status` is `passed` or
+`failed`. Each `diagnostics` entry has `code`, `severity`, and `message`, and may have
+`path`, `line`, `column`, and `suggestion`. Unavailable source facts are omitted, not
+encoded as `null` or synthetic coordinates. Severity is one of `advice`, `error`,
+`info`, or `warning`. A producer that exposes only an error message (such as an
+artifact comparison failure) uses a command-level code and omits unavailable location
+and suggestion fields.
+
+`verify` serializes its existing report directly with
+`format: "sync-engine.verification-report"` and `version: 1`. Its `configuration`
+and `steps` fields retain their normal status and optional failure `detail`; it does
+not reshape those step details into diagnostic records.
 
 ## `sync-engine setup`
 
@@ -87,11 +121,11 @@ setup can complete the missing files.
 ## `sync-engine check-design`
 
 ```text
-sync-engine check-design <paths...>
+sync-engine check-design <paths...> [--format json]
 ```
 
-Each operand is an explicit Markdown file. At least one path is required and options
-are not accepted. Operands can mix concept specifications, composition documents, and
+Each operand is an explicit Markdown file. At least one path is required; the only
+accepted option is `--format json`. Operands can mix concept specifications, composition documents, and
 application-types documents in any order or location. The command classifies valid
 files by their contents rather than their names or paths, checks them in operand order,
 and stops at the first missing, non-regular, unreadable, or invalid file. An ambiguous
@@ -150,10 +184,41 @@ rejecting them would make partial-corpus checks produce false positives.
 `check-design` reads no generated config, assembly, TypeScript project, or Git state and
 writes no files.
 
+## `sync-engine verify`
+
+```text
+sync-engine verify [--config path] [--fail-on-warnings] [--format json]
+```
+
+`verify` is a runner, not another validator. It does not invoke Bun scripts, `tsc`, or a test
+suite. It reads the generated descriptor selected by `--config` (default
+`generated.config.ts`) to obtain its required, ordered `design.documents` local file URLs, then
+uses those exact files as the explicit operands of `check-design`. It does not scan directories
+or infer design paths. The same descriptor is then passed to the configured commands in this
+order:
+
+1. `sync-engine check-design <configured design documents>`;
+2. `sync-engine check [--config path]`; and
+3. `sync-engine artifacts check [--config path]`.
+
+When the configuration registers no design documents, `check-design` is reported as skipped:
+the standalone command requires at least one explicit operand, while an empty registration is
+valid for a concept-free application. `--fail-on-warnings` is passed only to `check`.
+
+After the configuration has loaded, a failed step does not prevent later steps from running.
+The checks each have independent useful results: source or diagnostic failures do not make an
+artifact mismatch irrelevant. If the configuration itself cannot load, `verify` cannot obtain
+safe operands or run either configured command, so it reports all three steps as skipped.
+
+The final report records configuration discovery and marks each step as `passed`, `failed`, or
+`skipped`; failure details are retained with their step. It exits successfully only when the
+configuration loads and every applicable step passes. `--format json` serializes this same
+versioned report directly.
+
 ## `sync-engine check`
 
 ```text
-sync-engine check [--config path] [--fail-on-warnings]
+sync-engine check [--config path] [--fail-on-warnings] [--format json]
 ```
 
 A generated application config is required. Its path defaults to
@@ -254,7 +319,7 @@ errors occur before artifact comparison or writing.
 ## `sync-engine artifacts`
 
 ```text
-sync-engine artifacts <command> [--config path]
+sync-engine artifacts <command> [arguments]
 ```
 
 All artifact commands enforce the complete configured design contract. Runtime
@@ -262,9 +327,14 @@ All artifact commands enforce the complete configured design contract. Runtime
 
 ### `check`
 
+```text
+sync-engine artifacts check [--config path] [--format json]
+```
+
 Renders the complete plan and compares generated Markdown and TypeScript with
 their configured paths. Success is silent. A mismatch names affected files and
-exits with status 1. No files are rewritten.
+exits with status 1. No files are rewritten. `--format json` writes the versioned
+diagnostic report described above instead of human text.
 
 ### `pin`
 
@@ -293,6 +363,49 @@ application declaration identities, computation signatures, source locations, an
 digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and
 other runtime-only values.
+
+### `diff`
+
+```text
+sync-engine artifacts diff <old-manifest> [--config path]
+```
+
+`diff` reads `<old-manifest>` as UTF-8 and decodes it as one complete canonical
+`sync-engine.application-manifest`, version `1`, before it imports the selected
+configuration. Invalid JSON, a stale digest, an unsupported version, and the
+replaced pre-1.0 version-1 shape all fail closed with an error naming the old
+manifest. The command does not infer a schema or partially compare an undecodable
+file.
+
+The current side is assembled and checked using the selected configuration, just
+as `manifest` does. The report keeps the old and current digests, reports
+`identical` only when those digests match, and separates the following direct
+manifest-inventory changes into breaking and non-breaking lists:
+
+| Change                                                | Classification                                                       |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Removed endpoint                                      | Breaking                                                             |
+| Added endpoint at a path absent from the old manifest | Non-breaking                                                         |
+| Added endpoint at an existing path                    | Breaking, because it can add a competing answer branch               |
+| Added required input key                              | Breaking                                                             |
+| Removed required input key                            | Non-breaking                                                         |
+| Added, removed, or changed input default              | Breaking, because an omitted key reaches the application differently |
+| Added or removed refusal code                         | Breaking; either changes a caller-facing error union                 |
+| Added owned type                                      | Non-breaking                                                         |
+| Removed owned type                                    | Breaking                                                             |
+
+Endpoints are identified by their manifest name and path. For input contracts at
+paths present on both sides, the report names each required key and each default
+key; a changed object or array default is one whole-value change rather than a
+deep value diff. Refusal codes are identified by concept, action, and code; owned
+types by definition and exact SSF spelling. Endpoint additions and removals carry
+their input contracts with them and do not produce a redundant contract entry.
+
+The comparison intentionally does not interpret `application` IR, reaction
+behavior, diagnostics, or prose. If the complete manifest digest changes without
+a listed inventory change, the report says so without guessing why. A zero exit
+status means no listed breaking change; a non-empty breaking list exits with
+status `1`, so `diff` can serve as a compatibility gate.
 
 ### `spec`
 

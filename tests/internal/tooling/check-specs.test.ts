@@ -507,9 +507,12 @@ describe("membership, checked without constructing anything", () => {
       "end (session: Session) : answer (ok: Flag)",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
     );
-    expect(conceptFailures(where)).toEqual([
-      expect.stringContaining("an action's signature resolves with `: return"),
-    ]);
+    expect(conceptFailures(where)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("an action's signature resolves with `: return"),
+        expect.stringContaining("end's successful branch must return exactly ok"),
+      ]),
+    );
   });
 
   test("a registry that registers no class says so", async () => {

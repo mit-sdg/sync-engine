@@ -15,6 +15,11 @@ export {
 } from "@engine/tooling/application-manifest-format";
 export type { ApplicationManifestV1, ManifestEndpointV1 } from "@engine/tooling/manifest";
 export { parseSpec as parseConceptSpecification } from "@engine/reactions/concepts/concept-spec";
+export type {
+  ConceptSpecDiagnostic,
+  ConceptSpecDiagnosticCode,
+  ConceptSpecParseResult,
+} from "@engine/reactions/concepts/concept-spec";
 export { renderApp, renderReaction } from "@engine/reads/render";
 export { wireContracts } from "@engine/boundary/wire/wire-contracts";
 export { renderWireTypes } from "@engine/boundary/wire/wire-renderer";

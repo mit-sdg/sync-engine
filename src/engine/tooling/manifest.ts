@@ -250,13 +250,16 @@ export function applicationAssemblyFacts(
       },
     }))
     .sort((left, right) => ordinal(`${left.path}\0${left.name}`, `${right.path}\0${right.name}`));
+  const inputContracts = Object.fromEntries(
+    endpoints.map(({ path, input }) => [path, input]),
+  ) as Record<string, InputContractDecl>;
   return {
     application,
     concepts,
     computations,
     conceptImplementations,
     endpoints,
-    inputContracts: assembled.contracts,
+    inputContracts,
     wire,
     diagnostics: applicationDiagnostics(application, assembled.endpoints, wire),
   };

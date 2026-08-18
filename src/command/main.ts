@@ -4,6 +4,7 @@ import { artifactsCommand } from "./artifacts.ts";
 import { setupProject } from "./setup.ts";
 import { checkCommand } from "./check.ts";
 import { checkDesignCommand } from "./check-design.ts";
+import { verifyCommand } from "./verify.ts";
 import { describeError } from "@engine/utils/redaction";
 
 const usage = `Usage: sync-engine <command> [arguments]
@@ -11,20 +12,27 @@ const usage = `Usage: sync-engine <command> [arguments]
   sync-engine setup [directory]
     Complete a Bun package manifest and initialize missing concept-free application files.
 
-  sync-engine check-design <paths...>
+  sync-engine check-design <paths...> [--format json]
     Check explicit authored-design Markdown without loading application code or configuration.
 
-  sync-engine artifacts <command> [--config path]
-    check      Verify the assembled read-back and wire contract against the assembly.
+  sync-engine artifacts <command> [arguments]
+    check [--config path] [--format json]
+               Verify the assembled read-back and wire contract against the assembly.
     pin        Regenerate the assembled read-back and wire contract.
     pin-spec   Regenerate only the assembled read-back.
     pin-wire   Regenerate only the wire contract.
     manifest   Print the canonical application manifest as JSON.
+    diff <old-manifest> [--config path]
+               Compare a saved application manifest with the configured application.
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--config path] [--fail-on-warnings]
+  sync-engine check [--config path] [--fail-on-warnings] [--format json]
     Check the configured application, including concept TypeScript source agreement and application diagnostics.
+    The configuration path defaults to generated.config.ts.
+
+  sync-engine verify [--config path] [--fail-on-warnings] [--format json]
+    Run the configured design, application, and artifact checks and report every result.
     The configuration path defaults to generated.config.ts.`;
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
@@ -71,17 +79,31 @@ async function main(): Promise<void> {
   }
 
   if (topic === "check-design") {
-    await checkDesignCommand(rest);
+    const report = await checkDesignCommand(rest);
+    if (report.status === "failed") process.exitCode = 1;
     return;
   }
 
   if (topic === "artifacts") {
-    await artifactsCommand(rest);
+    const report = await artifactsCommand(rest);
+    if (report !== undefined && "breaking" in report && report.breaking.length !== 0) {
+      process.exitCode = 1;
+    }
+    if (report !== undefined && "format" in report && report.status === "failed") {
+      process.exitCode = 1;
+    }
     return;
   }
 
   if (topic === "check") {
-    await checkCommand(rest);
+    const report = await checkCommand(rest);
+    if (report.status === "failed") process.exitCode = 1;
+    return;
+  }
+
+  if (topic === "verify") {
+    const report = await verifyCommand(rest);
+    if (report.status === "failed") process.exitCode = 1;
     return;
   }
 
