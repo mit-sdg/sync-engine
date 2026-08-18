@@ -4,9 +4,10 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   type LaunchRecord,
-  reserveWorkspacePath,
-  writeLaunchRecord,
   requireInsideWorkspace,
+  reserveWorkspacePath,
+  settledStatus,
+  writeLaunchRecord,
 } from "./workspace.ts";
 
 /** The single harness this skill drives today; other harnesses get their own module. */
@@ -83,6 +84,29 @@ function normalThinking(provider: string, model: string): string | undefined {
     return undefined;
   }
   return normal;
+}
+
+function pause(milliseconds: number): Promise<void> {
+  return new Promise((resume) => setTimeout(resume, milliseconds));
+}
+
+/**
+ * `paseo wait` returns on any transition to not-running, including an agent that merely
+ * stopped to ask permission, so one wait is not proof the role finished. Wait again until
+ * the agent is genuinely settled or the caller's deadline passes.
+ */
+async function waitUntilSettled(agentId: string, timeoutSeconds: number): Promise<InspectedAgent> {
+  const deadline = Date.now() + timeoutSeconds * 1000;
+  let agent = inspectAgent(agentId);
+  while (agent.Status !== settledStatus) {
+    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    if (remaining <= 0) return agent;
+    paseo(["wait", agentId, "--timeout", String(remaining)], remaining + 30);
+    agent = inspectAgent(agentId);
+    if (agent.Status === settledStatus) break;
+    await pause(2000);
+  }
+  return agent;
 }
 
 export interface LaunchOptions {
@@ -174,11 +198,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   }
 
   paseo(["send", started.agentId, "--prompt-file", promptPath, "--no-wait"]);
-  paseo(
-    ["wait", started.agentId, "--timeout", String(options.timeoutSeconds)],
-    options.timeoutSeconds + 30,
-  );
-  const settled = inspectAgent(started.agentId);
+  const settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
 
   const record: LaunchRecord = {
     format: "sync-engine.skill.launch-record",

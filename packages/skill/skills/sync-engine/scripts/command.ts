@@ -13,6 +13,7 @@ import {
   requireInsideWorkspace,
   requiredRoles,
   reserveWorkspacePath,
+  settledStatus,
   verifiedRecords,
   workspaceDirectory,
 } from "./workspace.ts";
@@ -423,6 +424,7 @@ async function run(args: readonly string[]): Promise<void> {
     await requireDesignDigest(args[3]!, args[5]!);
     const missing: string[] = [];
     const unknown: string[] = [];
+    const unsettled: string[] = [];
     const lines: string[] = [];
     for (const role of requiredRoles) {
       const records = await verifiedRecords(role);
@@ -433,6 +435,9 @@ async function run(args: readonly string[]): Promise<void> {
       for (const entry of records) {
         const known = agentExists(entry.record.agentId);
         if (!known) unknown.push(`${role} ${entry.record.agentId}`);
+        if (entry.record.status !== settledStatus) {
+          unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
+        }
         lines.push(
           `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${harness}; ${entry.record.provider} ${entry.record.model}; settled ${entry.record.status}`,
         );
@@ -442,6 +447,7 @@ async function run(args: readonly string[]): Promise<void> {
     const failures = [
       ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
       ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
+      ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
     process.stdout.write(`Every required role ran independently.\n`);

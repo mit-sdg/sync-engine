@@ -329,7 +329,7 @@ describe("sync-engine-skill command", () => {
   async function launchRecord(
     directory: string,
     role: string,
-    options: { agentId?: string; promptBytes?: string } = {},
+    options: { agentId?: string; promptBytes?: string; status?: string } = {},
   ): Promise<string> {
     const workspace = resolve(directory, ".sync-engine");
     await mkdir(workspace, { recursive: true });
@@ -351,7 +351,7 @@ describe("sync-engine-skill command", () => {
       },
       startedAt: "2026-01-01T00:00:00.000Z",
       settledAt: "2026-01-01T00:05:00.000Z",
-      status: "idle",
+      status: options.status ?? "idle",
     };
     const recordPath = resolve(workspace, `2026-01-01T00-05-00Z-${role}.launch.json`);
     await writeFile(recordPath, `${JSON.stringify(record, undefined, 2)}\n`);
@@ -384,6 +384,32 @@ describe("sync-engine-skill command", () => {
     const gated = run(criticArguments, directory);
     expect(gated.status).toBe(0);
     expect(gated.stdout).toContain("Prompt built: role critic");
+  });
+
+  test("treats a role that never settled as not having run", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-unsettled-"));
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    await cp(taskBrief, resolve(design, "brief.md"));
+    await writeFile(resolve(design, "types.md"), "# Types\n");
+    await launchRecord(directory, "designer", { status: "running" });
+
+    const result = run(
+      [
+        "prompt",
+        "build",
+        "--role",
+        "critic",
+        "--input",
+        `brief=${resolve(design, "brief.md")}`,
+        "--input",
+        `candidate=${resolve(design, "types.md")}`,
+      ],
+      directory,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Role critic requires a settled designer launch");
   });
 
   test("refuses a launch record whose prompt no longer matches", async () => {

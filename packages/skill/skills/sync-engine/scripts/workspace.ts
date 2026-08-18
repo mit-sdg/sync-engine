@@ -3,6 +3,9 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
+/** The agent status that means a launched role finished; anything else is unsettled. */
+export const settledStatus = "idle";
+
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
 export const workspaceDirectory = ".sync-engine";
 
@@ -128,6 +131,7 @@ export async function verifiedRecords(
     } catch {
       continue;
     }
+    if (entry.record.status !== settledStatus) continue;
     if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
       found.push(entry);
     }
