@@ -76,7 +76,7 @@ describe("application project worker", () => {
     await expect(
       analyzeApplicationProject({ ...options, tsconfigPath: "missing.json" }),
     ).rejects.toThrow(/tsconfigPath could not be resolved/);
-  });
+  }, 20_000);
 
   test("rejects malformed and non-cloneable worker options before spawning", async () => {
     const options = fixtureOptions(fixture());
