@@ -447,6 +447,37 @@ describe("collection fields", () => {
     ]);
   });
 
+  test.each([
+    ["nested collections", "a tags set of set of String", 30],
+    ["single-value enums", "a status of OPEN", 19],
+    ["enums with a trailing `or`", "a status of OPEN or CLOSED or", 32],
+    ["named-type unions", "a owner Person or Group", 26],
+  ])("rejects %s as the only declaration field", (_, field, column) => {
+    const parsed = parseSimpleStateForm(`a set of Items with
+  ${field}`);
+    expect(parsed.diagnostics).toHaveLength(2);
+    expect(parsed.diagnostics).toMatchObject([
+      {
+        code: "SSF_MALFORMED_DECLARATION",
+        message: "A declaration ending in `with` must have at least one indented field.",
+        suggestion: "Remove `with` or add at least one indented field.",
+        span: {
+          start: { line: 1, column: 16 },
+          end: { line: 1, column: 20 },
+        },
+      },
+      {
+        code: "SSF_MALFORMED_FIELD",
+        message: "This indented line is not an SSF field or `Rule:` line.",
+        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
+        span: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column },
+        },
+      },
+    ]);
+  });
+
   test("diagnoses an unnamed scalar enum but retains an attached rule", () => {
     const parsed = parseSimpleStateForm(`a set of Items with
   a name String
