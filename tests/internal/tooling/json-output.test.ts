@@ -11,12 +11,19 @@ const readingCircle = "examples/reading-circle/generated.config.ts";
 const packaging = "tests/packaging/application/generated.config.ts";
 let temporary = "";
 let brokenVerificationConfig = "";
+let unloadableVerificationConfig = "";
 let invalidStatePath = "";
 
 interface JsonDocument {
   readonly format: string;
   readonly version: number;
   readonly status: string;
+  readonly config?: string;
+  readonly configuration?: {
+    readonly status: "loaded" | "failed";
+    readonly documents: readonly string[];
+    readonly detail?: string;
+  };
   readonly diagnostics?: readonly {
     readonly code: string;
     readonly severity: string;
@@ -101,7 +108,9 @@ beforeAll(async () => {
   temporary = await realpath(await mkdtemp(join(tmpdir(), "sync-engine-json-output-")));
   invalidStatePath = join(temporary, "invalid-state.md");
   brokenVerificationConfig = join(temporary, "generated.config.ts");
+  unloadableVerificationConfig = join(temporary, "unloadable.config.ts");
   await writeFile(invalidStatePath, invalidState);
+  await writeFile(unloadableVerificationConfig, 'throw new Error("fixture cannot load");\n');
   await writeFile(join(temporary, "design.md"), "# Broken\n\n[broken](reaction:ReadingCircle.*)\n");
   await writeFile(
     brokenVerificationConfig,
@@ -175,7 +184,7 @@ describe("versioned JSON validation output", () => {
       command: "check-design",
       status: "failed",
     });
-    expect(failing.json.diagnostics).toContainEqual(
+    expect(failing.json.diagnostics).toEqual([
       expect.objectContaining({
         code: "SSF_NEAR_MISS_KEYWORD",
         severity: "error",
@@ -184,7 +193,23 @@ describe("versioned JSON validation output", () => {
         column: 3,
         suggestion: "a seq of Notes with",
       }),
-    );
+      expect.objectContaining({
+        code: "SSF_MISSING_WITH",
+        severity: "error",
+        path: documentLabel(invalidStatePath, invalidStatePath),
+        line: 21,
+        column: 20,
+        suggestion: "a seq of Notes with",
+      }),
+      expect.objectContaining({
+        code: "SSF_MISPLACED_OPTIONAL",
+        severity: "error",
+        path: documentLabel(invalidStatePath, invalidStatePath),
+        line: 22,
+        column: 17,
+        suggestion: "  an optional discardedAt DateTime",
+      }),
+    ]);
   }, 30_000);
 
   test("artifacts check emits a JSON-only result and preserves pass/fail exit codes", () => {
@@ -224,8 +249,19 @@ describe("versioned JSON validation output", () => {
         { name: "artifacts check", status: "passed" },
       ],
     });
+    expect(passing.json.config).toBe(readingCircle);
+    expect(passing.json.configuration).toEqual(
+      expect.objectContaining({
+        status: "loaded",
+        documents: [
+          join(root, "examples/reading-circle/design/types.md"),
+          join(root, "examples/reading-circle/design/compositions/ReadingCircle.md"),
+        ],
+      }),
+    );
 
-    const failing = jsonModes(["verify", "--config", relative(root, brokenVerificationConfig)]);
+    const config = relative(root, brokenVerificationConfig);
+    const failing = jsonModes(["verify", "--config", config]);
     expect(failing.text.status).toBe(1);
     expect(failing.json).toMatchObject({
       format: "sync-engine.verification-report",
@@ -237,6 +273,37 @@ describe("versioned JSON validation output", () => {
         expect.objectContaining({ name: "artifacts check", status: "failed" }),
       ],
     });
+    expect(failing.json.config).toBe(config);
+    expect(failing.json.configuration).toEqual(
+      expect.objectContaining({
+        status: "loaded",
+        documents: [join(temporary, "design.md")],
+      }),
+    );
     expect(failing.json.steps?.[0]?.detail).toContain("exact non-wildcard");
   }, 120_000);
+
+  test("verify serializes a failed configuration report and skips every check", () => {
+    const config = relative(root, unloadableVerificationConfig);
+    const failedConfiguration = jsonModes(["verify", "--config", config]);
+    expect(failedConfiguration.text.status).toBe(1);
+    expect(failedConfiguration.json).toMatchObject({
+      format: "sync-engine.verification-report",
+      version: 1,
+      status: "failed",
+    });
+    expect(failedConfiguration.json.config).toBe(config);
+    expect(failedConfiguration.json.configuration).toEqual(
+      expect.objectContaining({
+        status: "failed",
+        documents: [],
+        detail: expect.stringMatching(/\S/),
+      }),
+    );
+    expect(failedConfiguration.json.steps).toEqual([
+      expect.objectContaining({ name: "check-design", status: "skipped" }),
+      expect.objectContaining({ name: "check", status: "skipped" }),
+      expect.objectContaining({ name: "artifacts check", status: "skipped" }),
+    ]);
+  }, 30_000);
 });

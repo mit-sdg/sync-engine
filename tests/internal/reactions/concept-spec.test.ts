@@ -139,26 +139,40 @@ describe("concept specification document structure", () => {
       principle: "",
       actions: "invite() : return ()",
     });
+    const lines = markdown.split("\n");
+    const lineOf = (text: string): number => {
+      const index = lines.indexOf(text);
+      if (index < 0) throw new Error(`Fixture does not contain ${JSON.stringify(text)}.`);
+      return index + 1;
+    };
     const diagnostics = diagnosticsFor(markdown);
-    expect(diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "CONCEPT_SPEC_PROSE_SECTION",
-          message: expect.stringContaining('"## Purpose" section is empty'),
-          location: expect.objectContaining({ line: expect.any(Number), column: 1 }),
-        }),
-        expect.objectContaining({
-          code: "CONCEPT_SPEC_PROSE_SECTION",
-          message: expect.stringContaining('"## Principle" section is empty'),
-          location: expect.objectContaining({ line: expect.any(Number), column: 1 }),
-        }),
-        expect.objectContaining({
-          code: "CONCEPT_SPEC_ACTION_BRANCH",
-          message: expect.stringContaining("explicit where/then branch"),
-          location: expect.objectContaining({ line: expect.any(Number), column: 1 }),
-        }),
-      ]),
-    );
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: "CONCEPT_SPEC_PROSE_SECTION",
+        message: expect.stringContaining('"## Purpose" section is empty'),
+        location: { line: lineOf("## Purpose"), column: 1 },
+      }),
+      expect.objectContaining({
+        code: "CONCEPT_SPEC_PROSE_SECTION",
+        message: expect.stringContaining('"## Principle" section is empty'),
+        location: { line: lineOf("## Principle"), column: 1 },
+      }),
+      expect.objectContaining({
+        code: "CONCEPT_SPEC_ACTION_BRANCH",
+        message: expect.stringContaining("explicit where/then branch"),
+        location: { line: lineOf("invite() : return ()"), column: 1 },
+      }),
+    ]);
+  });
+
+  test("rejects empty input with a located invalid-input diagnostic", () => {
+    expect(diagnosticsFor("")).toEqual([
+      expect.objectContaining({
+        code: "CONCEPT_SPEC_INVALID_INPUT",
+        message: expect.stringContaining("markdown text"),
+        location: { line: 1, column: 1 },
+      }),
+    ]);
   });
 
   test("recognizes CommonMark structural fences indented by at most three spaces", () => {
