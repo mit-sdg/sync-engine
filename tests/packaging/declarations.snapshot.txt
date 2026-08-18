@@ -52,21 +52,47 @@ export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientReque
 
 === dist/command/artifacts.d.ts ===
 import { type ApplicationManifestDiffReport } from "../engine/tooling/application-manifest-diff.ts";
-export declare function artifactsCommand(args: readonly string[]): Promise<ApplicationManifestDiffReport | undefined>;
+import { type DiagnosticReport } from "./diagnostic-report.ts";
+export declare function artifactsCommand(args: readonly string[], render?: "text" | "silent"): Promise<ApplicationManifestDiffReport | DiagnosticReport | undefined>;
 
 === dist/command/check-design.d.ts ===
+import { type DiagnosticReport } from "./diagnostic-report.ts";
 export interface CheckedDesignDocument {
     readonly path: string;
     readonly kind: "concept" | "application";
 }
 /** Check explicit authored-design files without consulting an assembly or project state. */
 export declare function checkDesignFiles(paths: readonly string[], root?: string): Promise<readonly CheckedDesignDocument[]>;
-export declare function checkDesignCommand(args: readonly string[]): Promise<void>;
+export declare function checkDesignCommand(args: readonly string[], render?: "text" | "silent"): Promise<DiagnosticReport>;
 
 === dist/command/check.d.ts ===
+import { type DiagnosticReport } from "./diagnostic-report.ts";
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
-export declare function checkCommand(args: readonly string[]): Promise<void>;
+export declare function checkCommand(args: readonly string[], render?: "text" | "silent"): Promise<DiagnosticReport>;
+
+=== dist/command/command-options.d.ts ===
+export type OutputFormat = "text" | "json";
+type OperandRequirement = "none" | "required";
+/** The deliberately small option vocabulary shared by validation commands. */
+export interface CommandOptionSyntax {
+    readonly config?: true;
+    readonly failOnWarnings?: true;
+    readonly format?: true;
+    readonly operands: OperandRequirement;
+}
+export interface ParsedCommandOptions {
+    readonly configPath?: string;
+    readonly failOnWarnings: boolean;
+    readonly format: OutputFormat;
+    readonly operands: readonly string[];
+}
+/**
+ * Parse only the validation commands' three shared flags and their path operands.
+ * This is intentionally not a general command-line framework.
+ */
+export declare function parseCommandOptions(args: readonly string[], usage: string, syntax: CommandOptionSyntax): ParsedCommandOptions;
+export {};
 
 === dist/command/concept-discovery.d.ts ===
 import type { ConceptSpec } from "../engine/reactions/concepts/concept-spec.ts";
@@ -84,6 +110,39 @@ export declare function registeredConcepts(conceptSet: unknown): RegisteredSourc
 export declare function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[];
 /** Import an explicitly selected concept-set module. */
 export declare function loadRegisteredConcepts(modulePath: string, exportName?: string): Promise<RegisteredSourceConcept[]>;
+
+=== dist/command/diagnostic-report.d.ts ===
+/** The complete severity vocabulary emitted by the validation commands. */
+export type DiagnosticSeverity = "advice" | "error" | "info" | "warning";
+/**
+ * One machine-readable validation finding. Unknown source coordinates and
+ * suggestions are omitted rather than represented with invented values.
+ */
+export interface DiagnosticRecord {
+    readonly code: string;
+    readonly path?: string;
+    readonly line?: number;
+    readonly column?: number;
+    readonly severity: DiagnosticSeverity;
+    readonly message: string;
+    readonly suggestion?: string;
+}
+export type DiagnosticReportCommand = "artifacts check" | "check" | "check-design";
+/** Versioned JSON contract shared by the diagnostic-producing validation commands. */
+export interface DiagnosticReport {
+    readonly format: "sync-engine.diagnostic-report";
+    readonly version: 1;
+    readonly command: DiagnosticReportCommand;
+    readonly status: "passed" | "failed";
+    readonly diagnostics: readonly DiagnosticRecord[];
+}
+/** Normalize optional fields so every producer omits unavailable facts consistently. */
+export declare function diagnosticRecord(record: DiagnosticRecord): DiagnosticRecord;
+export declare function failedDiagnostic(code: string, error: unknown): DiagnosticRecord;
+export declare function diagnosticReport(command: DiagnosticReportCommand, status: DiagnosticReport["status"], diagnostics: readonly DiagnosticRecord[]): DiagnosticReport;
+/** Render exactly one newline-terminated JSON document for stdout. */
+export declare function renderJsonDocument(document: object): string;
+export declare function writeJsonDocument(document: object): void;
 
 === dist/command/files-below.d.ts ===
 /** List regular files depth-first without following symlinks. */
@@ -126,8 +185,10 @@ export interface VerificationConfiguration {
     readonly documents: readonly string[];
     readonly detail?: string;
 }
-/** A plain-data result that can also be rendered by a future machine-readable CLI format. */
+/** The versioned plain-data result emitted directly by `verify --format json`. */
 export interface VerificationReport {
+    readonly format: "sync-engine.verification-report";
+    readonly version: 1;
     readonly status: "passed" | "failed";
     readonly config: string;
     readonly configuration: VerificationConfiguration;

@@ -3,6 +3,7 @@ import { relative, resolve, sep } from "node:path";
 import {
   parseApplicationDesignDocument,
   validateAuthoredApplicationDesignForm,
+  type ApplicationDesignFormIssue,
   type AuthoredApplicationDesignDocument,
 } from "@engine/tooling/authored-application-design";
 import { scanDesignMarkdown } from "@engine/tooling/markdown-design-source";
@@ -12,13 +13,29 @@ import {
 } from "@engine/tooling/simple-state-form";
 import { parseSpec, type ConceptSpecDiagnostic } from "@engine/reactions/concepts/concept-spec";
 import { specificationTypeNameEvidence } from "@engine/tooling/specification-type-evidence";
+import { parseCommandOptions, type OutputFormat } from "./command-options.ts";
+import {
+  diagnosticRecord,
+  diagnosticReport,
+  failedDiagnostic,
+  writeJsonDocument,
+  type DiagnosticRecord,
+  type DiagnosticReport,
+} from "./diagnostic-report.ts";
 
 export interface CheckedDesignDocument {
   readonly path: string;
   readonly kind: "concept" | "application";
 }
 
-const usage = `sync-engine check-design <paths...>
+interface DesignCheckOutcome {
+  readonly checked: readonly CheckedDesignDocument[];
+  readonly failures: readonly string[];
+  readonly diagnostics: readonly DiagnosticRecord[];
+  readonly advice: readonly (readonly SimpleStateFormIssue[])[];
+}
+
+const usage = `sync-engine check-design <paths...> [--format json]
   Check explicit concept, composition, and application-types Markdown without loading configuration or application source.`;
 
 function describe(error: unknown): string {
@@ -46,6 +63,56 @@ function describeSimpleStateFormIssues(issues: readonly SimpleStateFormIssue[]):
     .join("\n");
 }
 
+function conceptSpecDiagnostics(
+  source: string,
+  diagnostics: readonly ConceptSpecDiagnostic[],
+): DiagnosticRecord[] {
+  return diagnostics.map(({ code, message, location }) =>
+    diagnosticRecord({
+      code,
+      path: source,
+      line: location.line,
+      column: location.column,
+      severity: "error",
+      message,
+    }),
+  );
+}
+
+function simpleStateFormDiagnostics(issues: readonly SimpleStateFormIssue[]): DiagnosticRecord[] {
+  return issues.map(({ code, message, suggestion, severity, location }) =>
+    diagnosticRecord({
+      code,
+      path: location.source,
+      line: location.line,
+      column: location.column,
+      severity,
+      message,
+      suggestion,
+    }),
+  );
+}
+
+function applicationFormDiagnostic(issue: ApplicationDesignFormIssue): DiagnosticRecord {
+  return diagnosticRecord({
+    code: issue.code,
+    path: issue.location.source,
+    line: issue.location.line,
+    column: issue.location.column,
+    severity: "error",
+    message: issue.message,
+  });
+}
+
+function invalidDocumentDiagnostic(source: string, error: unknown): DiagnosticRecord {
+  return diagnosticRecord({
+    code: "DESIGN_DOCUMENT_INVALID",
+    path: source,
+    severity: "error",
+    message: describe(error),
+  });
+}
+
 function resemblesConcept(markdown: string, source: string): boolean {
   try {
     const scanned = scanDesignMarkdown(markdown, source);
@@ -59,14 +126,15 @@ function resemblesConcept(markdown: string, source: string): boolean {
   }
 }
 
-/** Check explicit authored-design files without consulting an assembly or project state. */
-export async function checkDesignFiles(
+async function inspectDesignFiles(
   paths: readonly string[],
-  root = process.cwd(),
-): Promise<readonly CheckedDesignDocument[]> {
+  root: string,
+): Promise<DesignCheckOutcome> {
   const checked: CheckedDesignDocument[] = [];
   const applicationDocuments: AuthoredApplicationDesignDocument[] = [];
   const failures: string[] = [];
+  const diagnostics: DiagnosticRecord[] = [];
+  const advice: Array<readonly SimpleStateFormIssue[]> = [];
 
   for (const supplied of paths) {
     const absolute = resolve(root, supplied);
@@ -91,10 +159,14 @@ export async function checkDesignFiles(
           failures.push(
             `Design document ${label} is invalid: ${describeSimpleStateFormIssues(stateErrors)}`,
           );
+          diagnostics.push(...simpleStateFormDiagnostics(stateErrors));
           continue;
         }
         const stateAdvice = stateIssues.filter(({ severity }) => severity === "advice");
-        if (stateAdvice.length > 0) console.warn(describeSimpleStateFormIssues(stateAdvice));
+        if (stateAdvice.length > 0) {
+          advice.push(stateAdvice);
+          diagnostics.push(...simpleStateFormDiagnostics(stateAdvice));
+        }
         checked.push({ path: label, kind: "concept" });
         continue;
       }
@@ -103,13 +175,20 @@ export async function checkDesignFiles(
         applicationDocuments.push(parseApplicationDesignDocument(markdown, label));
         checked.push({ path: label, kind: "application" });
       } catch (applicationError) {
-        const detail = resemblesConcept(markdown, label)
+        const conceptShaped = resemblesConcept(markdown, label);
+        const detail = conceptShaped
           ? describeConceptSpecDiagnostics(label, parsed.diagnostics)
           : describe(applicationError);
         failures.push(`Design document ${label} is invalid: ${detail}`);
+        diagnostics.push(
+          ...(conceptShaped
+            ? conceptSpecDiagnostics(label, parsed.diagnostics)
+            : [invalidDocumentDiagnostic(label, applicationError)]),
+        );
       }
     } catch (error) {
       failures.push(`Design document ${label} is invalid: ${describe(error)}`);
+      diagnostics.push(invalidDocumentDiagnostic(label, error));
     }
   }
 
@@ -117,17 +196,64 @@ export async function checkDesignFiles(
     failures.push(
       `Design document ${issue.location.source} is invalid: ${issue.location.source}:${issue.location.line}:${issue.location.column}: [${issue.code}] ${issue.message}`,
     );
+    diagnostics.push(applicationFormDiagnostic(issue));
   }
-  if (failures.length > 0) throw new Error(failures.join("\n"));
-  return checked;
+  return { checked, failures, diagnostics, advice };
 }
 
-export async function checkDesignCommand(args: readonly string[]): Promise<void> {
-  if (args.length === 0 || args.some((argument) => argument.startsWith("-"))) {
-    throw new Error(usage);
+function printStateAdvice(advice: readonly (readonly SimpleStateFormIssue[])[]): void {
+  for (const issues of advice) console.warn(describeSimpleStateFormIssues(issues));
+}
+
+function throwDesignFailures(failures: readonly string[]): void {
+  if (failures.length > 0) throw new Error(failures.join("\n"));
+}
+
+/** Check explicit authored-design files without consulting an assembly or project state. */
+export async function checkDesignFiles(
+  paths: readonly string[],
+  root = process.cwd(),
+): Promise<readonly CheckedDesignDocument[]> {
+  const outcome = await inspectDesignFiles(paths, root);
+  printStateAdvice(outcome.advice);
+  throwDesignFailures(outcome.failures);
+  return outcome.checked;
+}
+
+export async function checkDesignCommand(
+  args: readonly string[],
+  render: "text" | "silent" = "text",
+): Promise<DiagnosticReport> {
+  const options = parseCommandOptions(args, usage, { format: true, operands: "required" });
+  const output: OutputFormat | "silent" = render === "silent" ? "silent" : options.format;
+
+  let outcome: DesignCheckOutcome;
+  try {
+    outcome = await inspectDesignFiles(options.operands, process.cwd());
+  } catch (error) {
+    if (output !== "json") throw error;
+    const report = diagnosticReport("check-design", "failed", [
+      failedDiagnostic("CHECK_DESIGN_FAILURE", error),
+    ]);
+    writeJsonDocument(report);
+    return report;
   }
-  const checked = await checkDesignFiles(args);
-  console.log(
-    `Design form check passed for ${checked.length} file${checked.length === 1 ? "" : "s"}.`,
+
+  const report = diagnosticReport(
+    "check-design",
+    outcome.failures.length === 0 ? "passed" : "failed",
+    outcome.diagnostics,
   );
+  if (output === "json") {
+    writeJsonDocument(report);
+    return report;
+  }
+  if (output === "text") printStateAdvice(outcome.advice);
+  throwDesignFailures(outcome.failures);
+  if (output === "text") {
+    console.log(
+      `Design form check passed for ${outcome.checked.length} file${outcome.checked.length === 1 ? "" : "s"}.`,
+    );
+  }
+  return report;
 }

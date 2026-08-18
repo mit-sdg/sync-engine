@@ -14,6 +14,13 @@ import {
 import { applicationManifest, renderApplicationManifest } from "@engine/tooling/manifest";
 import { describeError } from "@engine/utils/redaction";
 import { loadGeneratedApplication } from "./generated-config.ts";
+import { parseCommandOptions, type OutputFormat } from "./command-options.ts";
+import {
+  diagnosticReport,
+  failedDiagnostic,
+  writeJsonDocument,
+  type DiagnosticReport,
+} from "./diagnostic-report.ts";
 
 const HELP = new Set([undefined, "help", "--help", "-h"]);
 const ACTIONS = new Set([
@@ -28,7 +35,8 @@ const ACTIONS = new Set([
 ]);
 
 const usage = `sync-engine artifacts <command> [arguments]
-  check      Verify the assembled read-back and wire contract against the assembly.
+  check [--config path] [--format json]
+             Verify the assembled read-back and wire contract against the assembly.
   pin        Regenerate the assembled read-back and wire contract.
   pin-spec   Regenerate only the assembled read-back.
   pin-wire   Regenerate only the wire contract.
@@ -41,28 +49,18 @@ const usage = `sync-engine artifacts <command> [arguments]
 The configuration path defaults to generated.config.ts.`;
 
 function configPathFor(options: readonly string[]): string {
-  if (
-    options.length !== 0 &&
-    (options.length !== 2 || options[0] !== "--config" || options[1].startsWith("-"))
-  ) {
-    throw new Error(usage);
-  }
-  return options.length === 0 ? "generated.config.ts" : options[1]!;
+  return (
+    parseCommandOptions(options, usage, { config: true, operands: "none" }).configPath ??
+    "generated.config.ts"
+  );
 }
 
 function diffOptions(options: readonly string[]): { oldManifestPath: string; configPath: string } {
   const [oldManifestPath, ...config] = options;
-  if (
-    oldManifestPath === undefined ||
-    oldManifestPath.startsWith("-") ||
-    (config.length !== 0 &&
-      (config.length !== 2 || config[0] !== "--config" || config[1]?.startsWith("-")))
-  ) {
-    throw new Error(usage);
-  }
+  if (oldManifestPath === undefined || oldManifestPath.startsWith("-")) throw new Error(usage);
   return {
     oldManifestPath,
-    configPath: config.length === 0 ? "generated.config.ts" : config[1]!,
+    configPath: configPathFor(config),
   };
 }
 
@@ -137,9 +135,39 @@ function printDiffReport(report: ApplicationManifestDiffReport): void {
   }
 }
 
+async function artifactsCheckCommand(
+  args: readonly string[],
+  render: "text" | "silent",
+): Promise<DiagnosticReport> {
+  const options = parseCommandOptions(args, usage, {
+    config: true,
+    format: true,
+    operands: "none",
+  });
+  const output: OutputFormat | "silent" = render === "silent" ? "silent" : options.format;
+  const configPath = options.configPath ?? "generated.config.ts";
+
+  try {
+    const application = await loadGeneratedApplication(configPath, process.cwd());
+    await checkGenerated(application);
+  } catch (error) {
+    if (output !== "json") throw error;
+    const report = diagnosticReport("artifacts check", "failed", [
+      failedDiagnostic("ARTIFACT_CHECK_FAILURE", error),
+    ]);
+    writeJsonDocument(report);
+    return report;
+  }
+
+  const report = diagnosticReport("artifacts check", "passed", []);
+  if (output === "json") writeJsonDocument(report);
+  return report;
+}
+
 export async function artifactsCommand(
   args: readonly string[],
-): Promise<ApplicationManifestDiffReport | undefined> {
+  render: "text" | "silent" = "text",
+): Promise<ApplicationManifestDiffReport | DiagnosticReport | undefined> {
   const [action, ...options] = args;
   if (HELP.has(action)) {
     if (options.length > 0) throw new Error(usage);
@@ -148,6 +176,7 @@ export async function artifactsCommand(
   }
 
   if (!ACTIONS.has(action)) throw new Error(usage);
+  if (action === "check") return artifactsCheckCommand(options, render);
   if (action === "diff") {
     const { oldManifestPath, configPath } = diffOptions(options);
     const previous = await oldManifest(oldManifestPath);
@@ -162,9 +191,6 @@ export async function artifactsCommand(
 
   const application = await loadGeneratedApplication(configPathFor(options), process.cwd());
   switch (action) {
-    case "check":
-      await checkGenerated(application);
-      return undefined;
     case "pin":
       await pinGenerated(application);
       return undefined;

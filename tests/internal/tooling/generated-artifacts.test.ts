@@ -306,11 +306,12 @@ export const vocabulary = declareVocabulary({
   sync-engine setup [directory]
     Complete a Bun package manifest and initialize missing concept-free application files.
 
-  sync-engine check-design <paths...>
+  sync-engine check-design <paths...> [--format json]
     Check explicit authored-design Markdown without loading application code or configuration.
 
   sync-engine artifacts <command> [arguments]
-    check      Verify the assembled read-back and wire contract against the assembly.
+    check [--config path] [--format json]
+               Verify the assembled read-back and wire contract against the assembly.
     pin        Regenerate the assembled read-back and wire contract.
     pin-spec   Regenerate only the assembled read-back.
     pin-wire   Regenerate only the wire contract.
@@ -320,8 +321,12 @@ export const vocabulary = declareVocabulary({
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--config path] [--fail-on-warnings]
+  sync-engine check [--config path] [--fail-on-warnings] [--format json]
     Check the configured application, including concept TypeScript source agreement and application diagnostics.
+    The configuration path defaults to generated.config.ts.
+
+  sync-engine verify [--config path] [--fail-on-warnings] [--format json]
+    Run the configured design, application, and artifact checks and report every result.
     The configuration path defaults to generated.config.ts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,

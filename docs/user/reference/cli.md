@@ -14,18 +14,50 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                         | Result                                                                        | Writes files                                   |
-| ----------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                             | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
-| `check-design <paths...>`                       | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
-| `verify [--config path] [--fail-on-warnings]`   | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
-| `check [--config path]`                         | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
-| `artifacts check [--config path]`               | Compares configured artifacts with the complete selected design               | No                                             |
-| `artifacts pin [--config path]`                 | Regenerates both configured artifacts                                         | Yes                                            |
-| `artifacts pin-spec [--config path]`            | Regenerates generated Markdown only                                           | Yes                                            |
-| `artifacts pin-wire [--config path]`            | Regenerates generated TypeScript only                                         | Yes                                            |
-| `artifacts manifest/spec/wire [--config path]`  | Prints one derived representation                                             | No                                             |
-| `artifacts diff <old-manifest> [--config path]` | Compares a saved manifest with the configured application                     | No                                             |
+| Command                                                       | Result                                                                        | Writes files                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
+| `setup [directory]`                                           | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
+| `check-design <paths...> [--format json]`                     | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
+| `verify [--config path] [--fail-on-warnings] [--format json]` | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
+| `check [--config path] [--fail-on-warnings] [--format json]`  | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
+| `artifacts check [--config path] [--format json]`             | Compares configured artifacts with the complete selected design               | No                                             |
+| `artifacts pin [--config path]`                               | Regenerates both configured artifacts                                         | Yes                                            |
+| `artifacts pin-spec [--config path]`                          | Regenerates generated Markdown only                                           | Yes                                            |
+| `artifacts pin-wire [--config path]`                          | Regenerates generated TypeScript only                                         | Yes                                            |
+| `artifacts manifest/spec/wire [--config path]`                | Prints one derived representation                                             | No                                             |
+| `artifacts diff <old-manifest> [--config path]`               | Compares a saved manifest with the configured application                     | No                                             |
+
+## JSON validation output
+
+`check-design`, `check`, `artifacts check`, and `verify` accept `--format json`.
+Without that option, each command retains its human-readable output. In JSON mode, a
+command writes exactly one JSON document to stdout and suppresses its human text. A
+failed validation still exits with status 1 after writing its document.
+
+`check-design`, `check`, and `artifacts check` emit this supported version-1 report:
+
+```json
+{
+  "format": "sync-engine.diagnostic-report",
+  "version": 1,
+  "command": "check",
+  "status": "passed",
+  "diagnostics": []
+}
+```
+
+`command` is `check-design`, `check`, or `artifacts check`; `status` is `passed` or
+`failed`. Each `diagnostics` entry has `code`, `severity`, and `message`, and may have
+`path`, `line`, `column`, and `suggestion`. Unavailable source facts are omitted, not
+encoded as `null` or synthetic coordinates. Severity is one of `advice`, `error`,
+`info`, or `warning`. A producer that exposes only an error message (such as an
+artifact comparison failure) uses a command-level code and omits unavailable location
+and suggestion fields.
+
+`verify` serializes its existing report directly with
+`format: "sync-engine.verification-report"` and `version: 1`. Its `configuration`
+and `steps` fields retain their normal status and optional failure `detail`; it does
+not reshape those step details into diagnostic records.
 
 ## `sync-engine setup`
 
@@ -89,11 +121,11 @@ setup can complete the missing files.
 ## `sync-engine check-design`
 
 ```text
-sync-engine check-design <paths...>
+sync-engine check-design <paths...> [--format json]
 ```
 
-Each operand is an explicit Markdown file. At least one path is required and options
-are not accepted. Operands can mix concept specifications, composition documents, and
+Each operand is an explicit Markdown file. At least one path is required; the only
+accepted option is `--format json`. Operands can mix concept specifications, composition documents, and
 application-types documents in any order or location. The command classifies valid
 files by their contents rather than their names or paths, checks them in operand order,
 and stops at the first missing, non-regular, unreadable, or invalid file. An ambiguous
@@ -155,7 +187,7 @@ writes no files.
 ## `sync-engine verify`
 
 ```text
-sync-engine verify [--config path] [--fail-on-warnings]
+sync-engine verify [--config path] [--fail-on-warnings] [--format json]
 ```
 
 `verify` is a runner, not another validator. It does not invoke Bun scripts, `tsc`, or a test
@@ -180,13 +212,13 @@ safe operands or run either configured command, so it reports all three steps as
 
 The final report records configuration discovery and marks each step as `passed`, `failed`, or
 `skipped`; failure details are retained with their step. It exits successfully only when the
-configuration loads and every applicable step passes. The report is human-readable now and is
-kept as plain structured data so a later output format can serialize the same result.
+configuration loads and every applicable step passes. `--format json` serializes this same
+versioned report directly.
 
 ## `sync-engine check`
 
 ```text
-sync-engine check [--config path] [--fail-on-warnings]
+sync-engine check [--config path] [--fail-on-warnings] [--format json]
 ```
 
 A generated application config is required. Its path defaults to
@@ -295,9 +327,14 @@ All artifact commands enforce the complete configured design contract. Runtime
 
 ### `check`
 
+```text
+sync-engine artifacts check [--config path] [--format json]
+```
+
 Renders the complete plan and compares generated Markdown and TypeScript with
 their configured paths. Success is silent. A mismatch names affected files and
-exits with status 1. No files are rewritten.
+exits with status 1. No files are rewritten. `--format json` writes the versioned
+diagnostic report described above instead of human text.
 
 ### `pin`
 

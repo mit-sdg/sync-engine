@@ -4,8 +4,10 @@ import { checkDesignCommand } from "./check-design.ts";
 import { checkCommand } from "./check.ts";
 import { loadGeneratedApplication } from "./generated-config.ts";
 import { describeError } from "@engine/utils/redaction";
+import { parseCommandOptions } from "./command-options.ts";
+import { writeJsonDocument } from "./diagnostic-report.ts";
 
-const usage = `sync-engine verify [--config path] [--fail-on-warnings]
+const usage = `sync-engine verify [--config path] [--fail-on-warnings] [--format json]
   Run the configured design, application, and artifact checks and report every result.
   The configuration path defaults to generated.config.ts.`;
 
@@ -24,47 +26,19 @@ export interface VerificationConfiguration {
   readonly detail?: string;
 }
 
-/** A plain-data result that can also be rendered by a future machine-readable CLI format. */
+/** The versioned plain-data result emitted directly by `verify --format json`. */
 export interface VerificationReport {
+  readonly format: "sync-engine.verification-report";
+  readonly version: 1;
   readonly status: "passed" | "failed";
   readonly config: string;
   readonly configuration: VerificationConfiguration;
   readonly steps: readonly VerificationStepResult[];
 }
 
-interface VerifyOptions {
-  configPath: string;
-  failOnWarnings: boolean;
-}
-
-function parseOptions(args: readonly string[]): VerifyOptions {
-  let configPath = "generated.config.ts";
-  let hasConfigArgument = false;
-  let failOnWarnings = false;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--config" && !hasConfigArgument) {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("-")) throw new Error(usage);
-      configPath = value;
-      hasConfigArgument = true;
-      index += 1;
-      continue;
-    }
-    if (argument === "--fail-on-warnings" && !failOnWarnings) {
-      failOnWarnings = true;
-      continue;
-    }
-    throw new Error(usage);
-  }
-
-  return { configPath, failOnWarnings };
-}
-
 async function runStep(
   name: VerificationStepName,
-  operation: () => Promise<void>,
+  operation: () => Promise<unknown>,
 ): Promise<VerificationStepResult> {
   try {
     await operation();
@@ -101,6 +75,8 @@ function printReport(report: VerificationReport): void {
 function failedConfigurationReport(config: string, error: unknown): VerificationReport {
   const detail = describeError(error);
   return {
+    format: "sync-engine.verification-report",
+    version: 1,
     status: "failed",
     config,
     configuration: { status: "failed", documents: [], detail },
@@ -114,37 +90,48 @@ function failedConfigurationReport(config: string, error: unknown): Verification
 
 /** Run the existing configured validation commands and retain every independent result. */
 export async function verifyCommand(args: readonly string[]): Promise<VerificationReport> {
-  const { configPath, failOnWarnings } = parseOptions(args);
+  const options = parseCommandOptions(args, usage, {
+    config: true,
+    failOnWarnings: true,
+    format: true,
+    operands: "none",
+  });
+  const configPath = options.configPath ?? "generated.config.ts";
+  const stepRender = options.format === "json" ? "silent" : "text";
   let documents: string[];
   try {
     const application = await loadGeneratedApplication(configPath, process.cwd());
     documents = application.design.documents.map((document) => fileURLToPath(document));
   } catch (error) {
     const report = failedConfigurationReport(configPath, error);
-    printReport(report);
+    if (options.format === "json") writeJsonDocument(report);
+    else printReport(report);
     return report;
   }
 
   const checkArguments = [
     "--config",
     configPath,
-    ...(failOnWarnings ? ["--fail-on-warnings"] : []),
+    ...(options.failOnWarnings ? ["--fail-on-warnings"] : []),
   ];
   const steps: VerificationStepResult[] = [
     documents.length === 0
       ? skippedStep("check-design", "no design documents are registered in the configuration")
-      : await runStep("check-design", () => checkDesignCommand(documents)),
-    await runStep("check", () => checkCommand(checkArguments)),
-    await runStep("artifacts check", async () => {
-      await artifactsCommand(["check", "--config", configPath]);
-    }),
+      : await runStep("check-design", () => checkDesignCommand(documents, stepRender)),
+    await runStep("check", () => checkCommand(checkArguments, stepRender)),
+    await runStep("artifacts check", () =>
+      artifactsCommand(["check", "--config", configPath], stepRender),
+    ),
   ];
   const report: VerificationReport = {
+    format: "sync-engine.verification-report",
+    version: 1,
     status: steps.some(({ status }) => status === "failed") ? "failed" : "passed",
     config: configPath,
     configuration: { status: "loaded", documents },
     steps,
   };
-  printReport(report);
+  if (options.format === "json") writeJsonDocument(report);
+  else printReport(report);
   return report;
 }
