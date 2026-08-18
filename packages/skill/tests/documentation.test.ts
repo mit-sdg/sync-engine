@@ -444,6 +444,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain(
       "autonomous delivery, agent-led work with approvals, or user-led collaboration",
     );
+    expect(workflow).toContain(
+      "the other two modes are interactive and require approval before implementation",
+    );
     expect(template).not.toContain("Decision:**");
   });
 
@@ -497,7 +500,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Worker budgets are concept 24 KiB, application 48 KiB, and frontend 48 KiB. Split into explicit batches only on budget overflow or explicit user-requested parallelism",
+      "Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB, frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget overflow or explicit user-requested parallelism",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "Return an ordinary implementation defect to the original worker, not a replacement",
@@ -599,6 +602,9 @@ describe("compact sync-engine Agent Skill documents", () => {
       "The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate draft concept files and rerun the installed design form check from application root",
     );
     expect(workflow).toContain("never aggregate candidate files into an intermediate file");
+    expect(normalizedWorkflow).toContain(
+      "Never split criticism; one critic sees every candidate, so on overflow raise `--max-bytes`",
+    );
     expect(workflow).toContain("--input candidate=design/types.md");
     expect(workflow).toContain("Every concept, application, frontend, and evidence prompt build");
     for (const slot of [

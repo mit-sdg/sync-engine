@@ -81,8 +81,8 @@ reasonable assumption permits a coherent, safe design or the answer materially c
 ownership, visible behavior, authorization, lifecycle, persistence, or failure. Interactively, ask one or two questions per turn; offer concise options and one
 recommendation; never seek exhaustive specification.
 
-Autonomous delivery is preauthorized; other modes require approval before
-implementation. An ordinary implementation request does not imply preauthorization.
+Autonomous delivery is preauthorized; the other two modes are interactive and
+require approval before implementation. An ordinary implementation request does not imply preauthorization.
 
 ## Select compact context
 
@@ -132,7 +132,8 @@ full designer prompt.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Pass
 `types.md` and every concept/composition file as repeated `--input candidate=<path>`
-arguments; never aggregate candidate files into an intermediate file:
+arguments; never aggregate candidate files into an intermediate file. Never split
+criticism; one critic sees every candidate, so on overflow raise `--max-bytes` instead:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role critic \
@@ -210,8 +211,9 @@ Compiler slots are:
 
 Use `--input <slot>=<path>`; repeat slots for multiple files.
 
-Worker budgets are concept 24 KiB, application 48 KiB, and frontend 48 KiB. Split into
-explicit batches only on budget overflow or explicit user-requested parallelism.
+Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB,
+frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget
+overflow or explicit user-requested parallelism.
 
 Start one normal-reasoning concept worker for all approved concepts, owning only assigned
 concept and focused test paths. Concepts remain independent.
