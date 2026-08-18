@@ -56,7 +56,7 @@ Return changed paths, check outcomes, and any blocker.
 
 ## Selected examples
 
-<!-- input?: examples -->
+<!-- input: examples -->
 
 ## Additional exact API reference
 

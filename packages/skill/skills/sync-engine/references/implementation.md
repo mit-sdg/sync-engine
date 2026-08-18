@@ -18,17 +18,19 @@ bun "<skill-root>/scripts/command.ts" assignment check <assignment-file>
 List every allowed path as a backticked bullet. Never include framework checkout source,
 installed package contents, build output, source maps, or paths reached by following
 framework imports. Supply framework information only through exact public API references
-and selected application examples: at most one implementation example per concept and one
-per mechanism; if insufficient, the worker returns a context blocker instead of searching
-internals. Carry the brief's durability decision into every concept assignment as a
+and selected application examples, which concept and application workers require: at most
+one implementation example per concept and one per mechanism, taken from the installed
+`node_modules/@mit-sdg/sync-engine/examples/`. A worker with no example for a mechanism
+returns a context blocker rather than discovering it. Carry the brief's durability decision into every concept assignment as a
 storage guarantee, never as a claim about concept State.
 
 Compiler slots are:
 
-- `concept-worker`: required `assignment`, `specifications`; optional `examples`, `reference`;
+- `concept-worker`: required `assignment`, `specifications`, `examples`; optional
+  `reference`;
 - `application-worker`: required `assignment`, `brief`, approved `design`, completed
-  public `concept-surfaces` rather than internals, existing `shared-wiring`; optional
-  `examples`, `reference`;
+  public `concept-surfaces` rather than internals, existing `shared-wiring`, `examples`;
+  optional `reference`;
 - `frontend-worker`: required `assignment`, `brief`, assembled `public-interface`;
   optional `examples`, `reference`; and
 - `evidence-worker`: required `assignment`, `brief`, scenario-relevant approved

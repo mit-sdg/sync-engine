@@ -368,6 +368,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       designer: ["brief", "existing-design", "catalog"],
       critic: ["brief", "candidate", "catalog"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
+      // examples is required for the two roles that must write framework-shaped code
       "application-worker": [
         "assignment",
         "brief",
@@ -413,7 +414,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Never include framework checkout source, installed package contents, build output, source maps, or paths reached by following framework imports",
     );
     expect(implementation.replace(/\s+/g, " ")).toContain(
-      "the worker returns a context blocker instead of searching internals",
+      "A worker with no example for a mechanism returns a context blocker rather than discovering it",
     );
     expect(contract).toContain("role prompts must require agents");
     expect(entry.replace(/\s+/g, " ")).toContain(

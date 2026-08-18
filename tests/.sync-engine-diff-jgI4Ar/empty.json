@@ -1,0 +1,195 @@
+{
+  "application": {
+    "formers": [],
+    "reactions": [
+      {
+        "name": "DeliverFaultToAsker",
+        "then": [
+          {
+            "action": "respondFramework",
+            "concept": "RequestBoundary",
+            "input": {
+              "error": "INTERNAL_ERROR",
+              "requestId": {
+                "$var": "requestId"
+              }
+            },
+            "kind": "request"
+          }
+        ],
+        "when": [
+          {
+            "channel": "faulted",
+            "except": [],
+            "exceptBy": [
+              "DeliverFaultToAsker"
+            ],
+            "kind": "channel",
+            "pattern": {}
+          }
+        ],
+        "where": [
+          {
+            "op": "earlier",
+            "when": {
+              "action": "request",
+              "concept": "RequestBoundary",
+              "input": {
+                "requestId": {
+                  "$var": "requestId"
+                }
+              },
+              "kind": "action",
+              "output": {}
+            }
+          }
+        ]
+      },
+      {
+        "name": "DeliverRefusalToAsker",
+        "then": [
+          {
+            "action": "respond",
+            "concept": "RequestBoundary",
+            "input": {
+              "error": {
+                "$var": "message"
+              },
+              "requestId": {
+                "$var": "requestId"
+              }
+            },
+            "kind": "request"
+          }
+        ],
+        "when": [
+          {
+            "channel": "refused",
+            "except": [
+              "RequestBoundary"
+            ],
+            "kind": "channel",
+            "pattern": {
+              "message": {
+                "$var": "message"
+              }
+            }
+          }
+        ],
+        "where": [
+          {
+            "op": "earlier",
+            "when": {
+              "action": "request",
+              "concept": "RequestBoundary",
+              "input": {
+                "requestId": {
+                  "$var": "requestId"
+                }
+              },
+              "kind": "action",
+              "output": {}
+            }
+          }
+        ]
+      }
+    ],
+    "unlowered": [],
+    "views": []
+  },
+  "computations": [
+    {
+      "inputs": [
+        "value",
+        "collection"
+      ],
+      "name": "among",
+      "source": "standard"
+    },
+    {
+      "inputs": [
+        "left",
+        "right"
+      ],
+      "name": "ge",
+      "source": "standard"
+    },
+    {
+      "inputs": [
+        "left",
+        "right"
+      ],
+      "name": "gt",
+      "source": "standard"
+    },
+    {
+      "inputs": [
+        "left",
+        "right"
+      ],
+      "name": "le",
+      "source": "standard"
+    },
+    {
+      "inputs": [
+        "left",
+        "right"
+      ],
+      "name": "lt",
+      "source": "standard"
+    }
+  ],
+  "conceptImplementations": [
+    {
+      "canonical": {
+        "constructorName": "Requesting",
+        "owner": "core"
+      },
+      "concept": "RequestBoundary",
+      "selected": {
+        "via": "core"
+      }
+    }
+  ],
+  "concepts": [
+    {
+      "actions": [
+        {
+          "name": "request"
+        },
+        {
+          "name": "respond",
+          "refusals": [
+            "NOT_PENDING"
+          ]
+        }
+      ],
+      "name": "RequestBoundary",
+      "principle": "A call arrives and becomes pending. An answer travels back once; timeout or abort ends only the wait, while a quiescent interpreter failure returns an opaque internal error.",
+      "purpose": "Let the outside world ask for things and receive answers, so each authored answer belongs to one pending call and failed waits settle without forging one.",
+      "queries": []
+    }
+  ],
+  "design": {
+    "checked": true,
+    "computations": [],
+    "concepts": [],
+    "declarations": [],
+    "sources": [],
+    "version": 1
+  },
+  "diagnostics": [],
+  "digest": "fnv1a64-cef4df5986897bb6",
+  "endpoints": [],
+  "format": "sync-engine.application-manifest",
+  "generator": {
+    "name": "@mit-sdg/sync-engine",
+    "version": "1.0.0-beta.12"
+  },
+  "inputContracts": {},
+  "version": 1,
+  "wire": {
+    "appWide": [],
+    "endpoints": []
+  }
+}
