@@ -200,7 +200,12 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
           "must occupy a subtree place between elements, not an element or attribute seat.",
       );
     }
-    parts.push(Object.freeze({ kind: "renderer" as const, invocation: statement }));
+    parts.push(
+      Object.freeze({
+        kind: "renderer" as const,
+        invocation: lowerRendererInvocation(statement, index + 1),
+      }),
+    );
   }
   return Object.freeze({ kind: "html", parts: Object.freeze(parts) });
 }
@@ -314,6 +319,24 @@ function portableReadValue(value: unknown, site: string): unknown {
     throw new TypeError(`${site} uses a value outside the renderer's input and read scopes.`);
   }
   return reference;
+}
+
+function lowerRendererInvocation(
+  invocation: RendererInvocation,
+  interpolation: number,
+): RendererInvocation {
+  const inputs = Object.fromEntries(
+    Object.entries(invocation)
+      .filter(([name]) => name !== "$renderer")
+      .map(([name, value]) => [
+        name,
+        portableReadValue(
+          value,
+          `renderer ${JSON.stringify(invocation.$renderer.identity)} input ${JSON.stringify(name)} at interpolation ${interpolation}`,
+        ),
+      ]),
+  );
+  return Object.freeze({ $renderer: invocation.$renderer, ...inputs });
 }
 
 function readPlacement(
@@ -627,6 +650,14 @@ function isPortableHtmlNode(node: HtmlNode, inputs: readonly string[], seen: Set
     } else if (part.kind === "read") {
       if (!isPortableReadPlacement(part, inputs, seen)) return false;
     } else if (part.kind === "renderer") {
+      for (const [name, value] of Object.entries(part.invocation)) {
+        if (name === "$renderer") continue;
+        if (typeof value === "symbol") return false;
+        if (isRendererValueRef(value)) {
+          if (value.scope === "field") return false;
+          if (value.scope === "input" && !inputs.includes(value.name)) return false;
+        }
+      }
       if (!isRendererInvocationValue(part.invocation, new Set(seen))) return false;
     } else {
       return false;

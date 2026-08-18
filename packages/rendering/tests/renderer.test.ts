@@ -107,6 +107,34 @@ describe("renderer", () => {
     });
   });
 
+  test("a named child receives a value from its caller input scope", async () => {
+    const Heading = renderer("Shows one supplied heading.", ({ title }) => html`<h1>${title}</h1>`);
+    const Page = renderer(
+      "Passes its heading into one named child.",
+      ({ heading }) => html`<main>${Heading({ title: heading })}</main>`,
+    );
+    const { Browser, system } = install({ Heading, Page });
+    const compiled = compileHtml(bindInterface({ system, interface: Browser }));
+
+    expect(Page({ heading: "A <legible> page" }).$renderer.body).toMatchObject({
+      parts: [
+        { kind: "literal", value: "<main>" },
+        {
+          kind: "renderer",
+          invocation: {
+            title: { scope: "input", name: "heading" },
+          },
+        },
+        { kind: "literal", value: "</main>" },
+      ],
+    });
+    expect((await compiled.form(Page({ heading: "A <legible> page" }))).content.value).toBe(
+      "<main><h1>" +
+        "<!--sync:start:root/1/renderer/1/show-->A &lt;legible&gt; page" +
+        "<!--sync:end:root/1/renderer/1/show--></h1></main>",
+    );
+  });
+
   test("fields and asks form checked element bindings", async () => {
     class PresentingConcept {
       create(_input: { name: string }): { profile: string } {
