@@ -486,7 +486,10 @@ export function realize(options: {
       }
       return new Response(documentFor(holder, formed), {
         status: 200,
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "cache-control": "no-store",
+          "content-type": "text/html; charset=utf-8",
+        },
       });
     },
   });
