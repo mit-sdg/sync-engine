@@ -1,34 +1,62 @@
 # Simple State Form (SSF)
 
 ```text
-schema := (setDecl | subsetDecl)*
-setDecl := (a|an) (element|set|seq) [of] Type [with field+]
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype) [with field+]
-field := [a|an] [optional] [name] (scalar|collection)
-scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
-collection := (set|seq) [of] scalar
-primitive := Number | String | Flag | Date | DateTime
+document := (setDecl|subsetDecl|aliasDecl|ruleLine)*
+setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
+declarationBody := (INDENT (field|ruleLine))+
+aliasDecl := alias Alias for (Type|Subtype)
+field := [a|an] (requiredField|optional optionalField)
+requiredField := inferredField|fieldName (scalar|collection)
+optionalField := named|fieldName scalar
+inferredField := named|(set|seq) [of] named
+scalar := named|enum
+named := Type|Parameter|primitive
+enum := of values
+collection := (set|seq) [of] (named|values)
+values := VALUE (or VALUE)+
+primitive := Number|String|Flag|Date|DateTime
+ruleLine := Rule: TEXT
 ```
 
-Use one declaration per line and indent fields. Types start uppercase, fields lowercase,
-enums uppercase; identifiers use letters/digits/`_`. Declaration and subset spellings
-are exact. A collection spelling is related to a singular/plural spelling only when the
-second exact name also appears in a State field type or action/query signature in this
-specification. `element` names remain exact. The parser never invents an owned name.
-It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
-remain opaque prose.
+Start Type, Subtype, Alias, and Parameter uppercase ASCII and fieldName lowercase;
+continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
+with uppercase ASCII letters, digits, or `_` only. Omit fieldName only for `named` or an
+inferred named collection, never an enum; SSF lowercases its first character.
 
-Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
-means absent). No nested collections or unions. Sets introduce identities—never add ID
-fields. Subsets classify existing parent members, may overlap, and add relations;
-`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
-invariant, not a proved behavior.
+Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
+indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
+rule ends the preceding declaration body. End a first line with `with` only when a real
+field follows; a `Rule:` line does not count.
+
+SSF owns structures, subsets, and accepted aliases. Named State fields and
+action/query signatures supply alias candidates; SSF invents none. Vendored
+`plur` must relate one candidate to one non-element owner, one-to-one, and yields no
+transitive/third spelling. Declarations win; externals, primitives, elements, and
+ambiguous candidates get no automatic alias.
+
+Declare an alias for a synonym or ambiguous pair; it overrides automatic evidence.
+Target a unique valid structure or subset, never an alias. Parent a subset on a structure,
+subset, or either alias; forward chains work. Unresolved, external, primitive, and
+invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
+rejected.
+
+Structures, aliases, externals, and primitives share one State namespace. Keep
+fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
+legal conventional/refinement reference, not an owned binding target.
+
+Collections are never `optional` (empty means absent) or nested; named-type unions are
+invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
+identity; they classify parent members, may overlap, and add relations. `element` has one
+member. Which side declares a relation implies no storage, navigation, or ownership.
 
 ```state
 a set of Items with
   a title String
-  an optional dueAt DateTime
-  a members set of Person
+  an Item
+  an optional owner Person
+  a watchers set of Person
+  a seq of Updates
   a status of OPEN or DONE
 
 a Completed set of Items with
@@ -37,5 +65,7 @@ a Completed set of Items with
 an element Settings with
   a retentionDays Number
 
-at most one Item has each title
+alias WorkItem for Items
+
+Rule: at most one Item has each owner and title pair
 ```

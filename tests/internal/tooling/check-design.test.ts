@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkDesignCommand, checkDesignFiles } from "@command/check-design";
+import { parseSpec } from "@engine/reactions/concepts/concept-spec";
+import { specificationOwnedTypeNames } from "@engine/tooling/application-manifest-format";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 const concept = `# Noting
@@ -235,9 +237,68 @@ Comments.User is Posting.Author
     const root = await fixture({ "broken.md": malformed });
     try {
       await expect(checkDesignFiles(["broken.md"], root)).rejects.toThrow(
-        /broken\.md:.*\[SSF_NEAR_MISS_KEYWORD\].*suggestion: a seq of Notes with.*\[SSF_MISSING_WITH\].*suggestion: a seq of Notes with.*\[SSF_MISPLACED_OPTIONAL\].*suggestion: an optional discardedAt DateTime/s,
+        /broken\.md:.*\[SSF_NEAR_MISS_KEYWORD\].*suggestion: a seq of Notes with.*\[SSF_MISSING_WITH\].*suggestion: a seq of Notes with.*\[SSF_MISPLACED_OPTIONAL\].*suggestion:   an optional discardedAt DateTime/s,
       );
     } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test.each([
+    ["person", "SSF_INVALID_EXTERNAL_NAME"],
+    ["String", "SSF_NAME_COLLISION"],
+  ])("reports external %s diagnostics at the Types declaration", async (name, code) => {
+    const markdown = concept.replace("external Person", `external ${name}`);
+    const line = markdown.split("\n").findIndex((text) => text === `external ${name}`) + 1;
+    const root = await fixture({ "external.md": markdown });
+    try {
+      await expect(checkDesignFiles(["external.md"], root)).rejects.toThrow(
+        new RegExp(`external\\.md:${String(line)}:10: \\[${code}\\]`),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("formats invalid external SSF errors at the Types declaration for the manifest", () => {
+    const specification = parseSpec(concept.replace("external Person", "external person"));
+    const externalLocation = specification.externalTypes[0]!.location;
+    const stateLocation = specification.state.location;
+    let failure: unknown;
+
+    try {
+      specificationOwnedTypeNames(specification);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).toContain(
+      `- line ${String(externalLocation.line)}, column ${String(externalLocation.column)}: [SSF_INVALID_EXTERNAL_NAME] External type "person" is not a valid SSF type name.`,
+    );
+    expect(message).not.toContain(
+      `- line ${String(stateLocation.line)}, column ${String(stateLocation.column)}: [SSF_INVALID_EXTERNAL_NAME]`,
+    );
+  });
+
+  test("reports automatic-alias advice without failing the design check", async () => {
+    const ambiguous = concept.replace(
+      "a set of Notes with\n  an author Person\n  a text String",
+      "a set of Axes with\n  a short Ax\n  an anatomical Axis",
+    );
+    expect(specificationOwnedTypeNames(parseSpec(ambiguous))).toEqual(["Axes"]);
+    const root = await fixture({ "advice.md": ambiguous });
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await expect(checkDesignFiles(["advice.md"], root)).resolves.toEqual([
+        { path: "advice.md", kind: "concept" },
+      ]);
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("[SSF_AMBIGUOUS_AUTOMATIC_ALIAS]"),
+      );
+    } finally {
+      warning.mockRestore();
       await rm(root, { recursive: true, force: true });
     }
   });

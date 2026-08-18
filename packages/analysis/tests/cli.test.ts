@@ -101,7 +101,8 @@ describe("analysis CLI", () => {
       "typescript/2322",
     );
     expect(await run(["summary"], fixture.root, fixture.manifest)).not.toContain("2322");
-  });
+    // Runs the TypeScript compiler over the project fixture; slower CI hosts exceed 5s.
+  }, 20_000);
 
   test("returns precise source locations and explicit source incompleteness", async () => {
     const fixture = applicationProjectFixture();
@@ -122,7 +123,8 @@ describe("analysis CLI", () => {
       fixture.manifest,
     );
     expect(unresolved).toContain("Attribution: unavailable");
-  });
+    // Same TypeScript compiler cost as the manifest-independence case above.
+  }, 20_000);
 
   test("emits bounded valid JSON with paging metadata", async () => {
     const fixture = applicationProjectFixture();

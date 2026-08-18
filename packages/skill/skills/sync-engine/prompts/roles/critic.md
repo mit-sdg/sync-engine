@@ -6,10 +6,10 @@
 
 ## Assignment
 
-Review every candidate concept, composition, and `types.md` against the brief.
-Authored form passed; typed links are not yet source-resolved. Be read-only and use only supplied
-prompt material. Do not inspect source, generated files, Git, package configuration,
-tests, framework internals, API docs, or analysis output.
+Review every candidate concept, composition, and `types.md` against the brief. Authored
+form passed; typed links are not yet source-resolved. Stay read-only and use only
+supplied prompt material. Do not inspect source, generated files, Git, package
+configuration, tests, framework internals, API docs, or analysis output.
 
 Check in this order; report only material findings tied to a candidate file and
 decision:
@@ -45,8 +45,8 @@ Otherwise return one bullet per finding:
 - `design/path.md` — Contract problem and consequence for the brief.
 ```
 
-Catalog entries are alternatives, used only to expose a materially better boundary or
-missing behavior. Return the report now; never wait for a request to emit it.
+Use catalog entries only to expose a materially better boundary or missing behavior.
+Return the report now; never wait for a request to emit it.
 
 ## Product brief
 

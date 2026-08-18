@@ -6,10 +6,7 @@ import {
 
 function specification(
   overrides: Partial<
-    Record<
-      "name" | "purpose" | "principle" | "types" | "state" | "stateProse" | "actions" | "queries",
-      string
-    >
+    Record<"name" | "purpose" | "principle" | "types" | "state" | "actions" | "queries", string>
   > = {},
 ): string {
   const value = {
@@ -18,8 +15,8 @@ function specification(
     principle: "Priya invites Sam; one pending invitation exists.",
     types:
       "external Person\n  A person who may receive an invitation.\n  Identity is supplied by the application.\n\nexternal Workspace",
-    state: "a set of Invitations\n  with a workspace and guest",
-    stateProse: "Invitation identities are never reused.",
+    state:
+      "a set of Invitations with\n  a workspace Workspace\n  a guest Person\n\nRule: Invitation identities are never reused.",
     actions: `invite(workspace: Workspace, guest: Person) : return (invitation: Invitation)
   where true
   then
@@ -60,7 +57,7 @@ ${value.types}
 \`\`\`state
 ${value.state}
 \`\`\`
-${value.stateProse === "" ? "" : `\n${value.stateProse}\n`}
+
 ## Actions
 
 \`\`\`actions
@@ -165,10 +162,24 @@ describe("Types and State", () => {
     );
   });
 
-  test("retains State without parsing SSF and separately retains following prose", () => {
-    const raw = "not SSF yet {]\n  spacing remains significant  ";
-    const parsed = parseSpec(specification({ state: raw, stateProse: "A cross-row invariant." }));
-    expect(parsed.state).toMatchObject({ body: raw, prose: "A cross-row invariant." });
+  test("retains exact marked State text without a separate prose field", () => {
+    const raw = "Rule: not structural State {]\nRule: spacing remains significant  ";
+    const parsed = parseSpec(specification({ state: raw }));
+    expect(parsed.state.body).toBe(raw);
+    expect(Object.hasOwn(parsed.state, "prose")).toBe(false);
+  });
+
+  test("rejects prose after the State fence with located Rule guidance", () => {
+    const prose = "A cross-row invariant.";
+    const markdown = specification().replace(
+      "\n```\n\n## Actions",
+      `\n\`\`\`\n\n${prose}\n\n## Actions`,
+    );
+    const line = markdown.split("\n").findIndex((source) => source === prose) + 1;
+
+    expect(() => parseSpec(markdown)).toThrow(
+      `spec: line ${line}, column 1: prose after the state fence is not allowed; move this text inside the fence as a \`Rule:\` line — read "${prose}".`,
+    );
   });
 
   test("records the exact normalized State body origin after leading blank fence lines", () => {
@@ -273,7 +284,9 @@ describe("Queries and canonical compatibility", () => {
   test("canonical compatibility ignores source locations but not authored contracts", () => {
     const compact = parseSpec(specification());
     const shifted = parseSpec(`\n\n${specification()}`);
-    const changed = parseSpec(specification({ state: "a changed, still unparsed state notation" }));
+    const changed = parseSpec(
+      specification({ state: "Rule: a changed, still unparsed state notation" }),
+    );
     expect(specificationsAreCompatible(compact, shifted)).toBe(true);
     expect(specificationsAreCompatible(compact, changed)).toBe(false);
   });

@@ -68,7 +68,7 @@ describe("concept definition identity in a selected concept set", () => {
     const first = registerConcept({ class: FirstCommenting, spec: commenting() });
     const incompatible = registerConcept({
       class: OtherCommenting,
-      spec: commenting("a map of Comments by Target"),
+      spec: commenting("Rule: a map of Comments by Target"),
     });
 
     expect(() => conceptSet({ PostComments: first, AnswerComments: incompatible })).toThrow(

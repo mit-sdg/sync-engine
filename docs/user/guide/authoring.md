@@ -66,10 +66,10 @@ Declare concept-external parameters in the sole `types` fence. The fence may be
 empty: concept-owned identities, conventional values, and refinements used in
 State or operation signatures are not additional Types declarations. Put one
 SSF `state` fence in State. `check-design` parses its bounded structural
-declarations, including exact owned identity/type names, evidence-based collection
-singular/plural joins, and subset structure. Review invariant sentences and other admitted prose
-manually because they remain opaque. Express enforced refinements in the owning
-action branches. Declare at least one
+declarations, including owned identities, subsets, aliases, the subset graph, and name
+uniqueness. Put invariant prose on a `Rule:` line and review it manually, since the
+parser makes no claim about it.
+Express enforced refinements in the owning action branches. Declare at least one
 structured action with explicit branches, and put
 the sole `queries` fence in Queries even when it is empty. Do not add subsection
 headings, fenced blocks in Purpose or Principle, application typed links, or
@@ -152,9 +152,10 @@ remain globally unique.
 
 Each right side directly names a declared concrete type or an owned type of
 another declared, selected instance. The bounded SSF parser proves owned target
-names, including a singular/plural collection spelling only when that exact spelling is
-evidenced elsewhere in the same specification. Never target another
-instance's external parameter or construct an alias chain. Direct qualified
+names, including a second spelling that the concept authors elsewhere as a singular or
+plural pair, provided that pair is unambiguous; where it is not, declare
+`alias Alias for Target`. Never target another instance's external parameter or a name
+the parser could not resolve, and never chain one binding onto another. Direct qualified
 owned-type dependencies may be cyclic because every target is checked
 independently; declaration order does not resolve or prioritize them. Do not
 leave a concrete type unused.

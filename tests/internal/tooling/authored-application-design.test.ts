@@ -670,6 +670,74 @@ instantiate Beta with
     expect(validateAuthoredApplicationDesign([typo], withoutSsf)).toEqual([]);
   });
 
+  test("resolves exact owned aliases independently across multiple instances of one definition", () => {
+    const document = parseApplicationDesignDocument(
+      `# Reused definition
+
+\`\`\`instances
+instantiate Linking as FirstLink with
+  Target is FirstTarget.Record
+instantiate Linking as SecondLink with
+  Target is SecondTarget.Records
+instantiate Targeting as FirstTarget
+instantiate Targeting as SecondTarget
+\`\`\`
+`,
+      "multiple.md",
+    );
+    const selected = {
+      reactions: [],
+      views: [],
+      formers: [],
+      computations: [],
+      concepts: [
+        {
+          instance: "FirstLink",
+          definition: "Linking",
+          externalTypes: ["Target"],
+          ownedTypes: ["Links"],
+        },
+        {
+          instance: "SecondLink",
+          definition: "Linking",
+          externalTypes: ["Target"],
+          ownedTypes: ["Links"],
+        },
+        {
+          instance: "FirstTarget",
+          definition: "Targeting",
+          externalTypes: [],
+          ownedTypes: ["Record", "Records"],
+        },
+        {
+          instance: "SecondTarget",
+          definition: "Targeting",
+          externalTypes: [],
+          ownedTypes: ["Record", "Records"],
+        },
+      ],
+    };
+    expect(validateAuthoredApplicationDesign([document], selected)).toEqual([]);
+
+    const wrongInstance = parseApplicationDesignDocument(
+      `# Wrong exact instance
+
+\`\`\`instances
+instantiate Linking as FirstLink with
+  Target is Targeting.Record
+instantiate Linking as SecondLink with
+  Target is SecondTarget.Records
+instantiate Targeting as FirstTarget
+instantiate Targeting as SecondTarget
+\`\`\`
+`,
+      "wrong-instance.md",
+    );
+    expect(validateAuthoredApplicationDesign([wrongInstance], selected)).toEqual([
+      expect.objectContaining({ code: "UNRESOLVED_BINDING_TARGET" }),
+    ]);
+  });
+
   test("reports duplicate and unselected computations and every invalid binding category", () => {
     const first = parseApplicationDesignDocument(
       `# First

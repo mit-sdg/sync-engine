@@ -246,10 +246,8 @@ function normalizedFenceBody(
 function fencedSection(
   section: DocumentSection,
   language: string,
-  allowFollowingProse = false,
 ): {
   contents: SourceLine[];
-  prose: string;
   location: SpecLocation;
 } {
   const significant = section.lines.findIndex(({ text }) => text.trim() !== "");
@@ -273,24 +271,20 @@ function fencedSection(
     contents.push({ ...line, text: line.text.slice(removable) });
   }
   if (closing < 0) fail(`the ${language} fence is never closed`, opening);
-  const following = section.lines.slice(closing + 1);
-  const prose = following
-    .map(({ text }) => text)
-    .join("\n")
-    .trim();
-  if (!allowFollowingProse && prose !== "") {
+  const outside = section.lines.slice(closing + 1).find(({ text }) => text.trim() !== "");
+  if (outside !== undefined) {
+    if (language === "state") {
+      fail(
+        "prose after the state fence is not allowed; move this text inside the fence as a `Rule:` line",
+        outside,
+      );
+    }
     fail(
       `the "## ${section.heading}" section allows no Markdown outside its ${language} fence`,
-      following.find(({ text }) => text.trim() !== ""),
+      outside,
     );
   }
-  if (allowFollowingProse && following.some(({ text }) => markerOf(text) !== undefined)) {
-    fail(
-      `the "## ${section.heading}" section has more than one fenced block`,
-      following.find(({ text }) => markerOf(text) !== undefined),
-    );
-  }
-  return { contents, prose, location: at(opening, open.indentation + 1) };
+  return { contents, location: at(opening, open.indentation + 1) };
 }
 
 function declarationsOf(fence: readonly SourceLine[]): DeclarationGroup[] {
@@ -601,7 +595,7 @@ export function parseSpec(markdown: string): ConceptSpec {
   const { definitionName, sections } = documentOf(lines);
   const [purpose, principle, types, state, actions, queries] = sections;
   const typesFence = fencedSection(types, "types");
-  const stateFence = fencedSection(state, "state", true);
+  const stateFence = fencedSection(state, "state");
   const actionFence = fencedSection(actions, "actions");
   const queryFence = fencedSection(queries, "queries");
   const stateBody = normalizedFenceBody(stateFence.contents, stateFence.location);
@@ -620,7 +614,6 @@ export function parseSpec(markdown: string): ConceptSpec {
     externalTypes: externalTypesOf(typesFence.contents),
     state: {
       body: stateBody.body,
-      prose: stateFence.prose,
       location: stateBody.location,
     },
     actions: parsedActions,

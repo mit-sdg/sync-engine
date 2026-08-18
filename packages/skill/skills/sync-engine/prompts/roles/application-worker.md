@@ -28,7 +28,7 @@ wiring. Import public subpaths only. Routine construction:
   explicit resources; authored instances allocate no storage.
 
 Follow supplied types and patterns; add no framework layer. Keep invariants out of
-composition and hosts thin; approved design owns observable policy.
+composition and keep hosts thin; approved design owns observable policy.
 
 Run only assigned focused source-agreement, artifact, type, integration, and bounded
 host checks for this wiring; the coordinator owns the final complete acceptance chain.

@@ -34,7 +34,7 @@ external User
 
 ## State
 \`\`\`state
-comments: set Comment
+Rule: comments: set Comment
 \`\`\`
 
 ## Actions

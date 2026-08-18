@@ -6,7 +6,6 @@ import type {
   ConceptImplementationProvenanceIR,
   ConceptSpecificationIR,
   FormerNodeIR,
-  SpecificationTypeIR,
   PatternIR,
   ReactionIR,
   TriggerIR,
@@ -22,6 +21,7 @@ import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
 import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
+import { specificationTypeNameEvidence } from "./specification-type-evidence.ts";
 
 type DataRecord = Record<string, unknown>;
 
@@ -39,34 +39,33 @@ const DIAGNOSTIC_CODES = [
   "ORDER_SENSITIVE_FORMER",
 ] as const;
 
-function specificationTypeNames(type: SpecificationTypeIR): string[] {
-  if (type.kind === "named") {
-    return [type.name, ...type.arguments.flatMap(specificationTypeNames)];
-  }
-  return type.kind === "union" ? type.members.flatMap(specificationTypeNames) : [];
-}
-
-/** Derive the exact SSF-owned names carried in the manifest through the SSF package. */
+/** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
 export function specificationOwnedTypeNames(
   specification: ConceptSpecificationIR,
 ): readonly string[] {
-  const evidenceTypeNames = [...specification.actions, ...specification.queries].flatMap(
-    (member) => [
-      ...member.parameters.flatMap(({ type }) => specificationTypeNames(type)),
-      ...member.result.fields.flatMap(({ type }) => specificationTypeNames(type)),
-    ],
-  );
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
-    evidenceTypeNames,
+    evidenceTypeNames: specificationTypeNameEvidence(specification),
   });
-  if (parsed.diagnostics.length > 0) {
+  const errors = parsed.diagnostics.filter(({ severity }) => severity === "error");
+  if (errors.length > 0) {
     throw new Error(
-      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
-        .map(
-          ({ code, message, span }) =>
-            `- line ${specification.state.location.line + span.start.line - 1}, column ${specification.state.location.column + span.start.column - 1}: [${code}] ${message}`,
-        )
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${errors
+        .map((diagnostic) => {
+          const location =
+            diagnostic.span === undefined
+              ? specification.externalTypes.find(({ name }) => name === diagnostic.externalType)
+                  ?.location
+              : {
+                  line: specification.state.location.line + diagnostic.span.start.line - 1,
+                  column: specification.state.location.column + diagnostic.span.start.column - 1,
+                };
+          if (location === undefined)
+            throw new Error(
+              `SSF diagnostic names unknown external type ${JSON.stringify(diagnostic.externalType)}.`,
+            );
+          return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}`;
+        })
         .join("\n")}`,
     );
   }
@@ -670,9 +669,8 @@ function assertSpecification(
     assertLocation(item.location, `${externalPath}.location`);
   }
   uniqueFieldIndexes(data.externalTypes, `${path}.externalTypes`, "name");
-  const state = shape(data.state, `${path}.state`, ["body", "prose", "location"]);
+  const state = shape(data.state, `${path}.state`, ["body", "location"]);
   string(state.body, `${path}.state.body`);
-  string(state.prose, `${path}.state.prose`);
   assertLocation(state.location, `${path}.state.location`);
   const parsedActions = array(data.actions, `${path}.actions`);
   if (parsedActions.length === 0) fail(`${path}.actions`, "expected at least one action");
@@ -1438,7 +1436,7 @@ function assertManifestCrossFields(data: DataRecord): void {
       if (!sameCanonicalValue(item.ownedTypes, authoritativeOwnedTypes)) {
         fail(
           `$.design.concepts[${index}].ownedTypes`,
-          "does not equal the inventory independently derived from specification State and member signatures",
+          "does not equal the inventory independently derived from specification State and operation type evidence",
         );
       }
       for (const [instanceIndex, instance] of array(

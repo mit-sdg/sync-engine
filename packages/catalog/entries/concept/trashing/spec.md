@@ -27,7 +27,7 @@ a set of Dispositions with
   an optional trashedAt DateTime
   an optional purgedAt DateTime
 
-at most one Disposition has each Item
+Rule: at most one Disposition has each Item
 ```
 
 ## Actions

@@ -33,7 +33,7 @@ a set of Reviews with
   an optional decidedAt DateTime
   an optional reason String
 
-at most one pending Review has each Subject
+Rule: at most one pending Review has each Subject
 ```
 
 ## Actions

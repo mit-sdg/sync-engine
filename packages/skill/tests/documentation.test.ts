@@ -39,7 +39,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
-    expect(bytes(ssf)).toBeLessThanOrEqual(1.75 * 1024);
+    expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
 
@@ -103,8 +103,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 11.625 * 1024,
-      critic: 9.125 * 1024,
+      designer: 13 * 1024,
+      critic: 10.5 * 1024,
       "concept-worker": 2.25 * 1024,
       "application-worker": 2.75 * 1024,
       "frontend-worker": 2.5 * 1024,
@@ -121,6 +121,119 @@ describe("compact sync-engine Agent Skill documents", () => {
           }),
         ),
       ).toBeLessThanOrEqual(limit);
+    }
+  });
+
+  test("keeps the compact SSF grammar closed and its example coherent", async () => {
+    const ssf = await text(new URL("common/ssf.md", promptRoot));
+    const grammar = ssf.match(/```text\n([\s\S]*?)```/)?.[1];
+    expect(grammar).toBeDefined();
+    const productions = new Map(
+      [...(grammar ?? "").matchAll(/^([A-Za-z][A-Za-z0-9_]*) := (.+)$/gm)].map(
+        ([, name, expression]) => [name!, expression!],
+      ),
+    );
+    expect(Object.fromEntries(productions)).toMatchObject({
+      document: "(setDecl|subsetDecl|aliasDecl|ruleLine)*",
+      setDecl: "(a|an) (element|set|seq) [of] Type [with] declarationBody?",
+      subsetDecl: "(a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?",
+      declarationBody: "(INDENT (field|ruleLine))+",
+      field: "[a|an] (requiredField|optional optionalField)",
+      inferredField: "named|(set|seq) [of] named",
+      enum: "of values",
+      collection: "(set|seq) [of] (named|values)",
+      values: "VALUE (or VALUE)+",
+      ruleLine: "Rule: TEXT",
+    });
+
+    const terminals = new Set([
+      "a",
+      "alias",
+      "an",
+      "element",
+      "for",
+      "of",
+      "optional",
+      "or",
+      "Rule",
+      "seq",
+      "set",
+      "with",
+    ]);
+    const lexical = new Set([
+      "Alias",
+      "Date",
+      "DateTime",
+      "Flag",
+      "INDENT",
+      "Number",
+      "Parameter",
+      "TEXT",
+      "String",
+      "Subtype",
+      "Type",
+      "VALUE",
+      "fieldName",
+    ]);
+    const unresolved = [...productions.values()]
+      .flatMap((expression) => expression.match(/[A-Za-z][A-Za-z0-9_]*/g) ?? [])
+      .filter(
+        (symbol) => !productions.has(symbol) && !terminals.has(symbol) && !lexical.has(symbol),
+      );
+    expect(unresolved).toEqual([]);
+
+    const normalized = ssf.replace(/\s+/g, " ");
+    expect(normalized).toMatch(
+      /fieldName lowercase; continue both with ASCII letters, digits, or `_`/,
+    );
+    expect(normalized).toMatch(
+      /Start VALUE uppercase and continue with uppercase ASCII letters, digits, or `_` only/,
+    );
+    expect(normalized).toMatch(
+      /Make every nonblank line parse or start with `Rule:`\. Put a `Rule:` line at top level or indented under a declaration; SSF keeps its TEXT verbatim and proves nothing/,
+    );
+
+    const example = ssf.match(/```state\n([\s\S]*?)```/)?.[1];
+    expect(example).toContain(
+      [
+        "a set of Items with",
+        "  a title String",
+        "  an Item",
+        "  an optional owner Person",
+        "  a watchers set of Person",
+        "  a seq of Updates",
+        "  a status of OPEN or DONE",
+      ].join("\n"),
+    );
+    for (const line of [
+      "a Completed set of Items with",
+      "  a completedAt DateTime",
+      "an element Settings with",
+      "  a retentionDays Number",
+      "alias WorkItem for Items",
+      "Rule: at most one Item has each owner and title pair",
+    ]) {
+      expect(example).toContain(line);
+    }
+
+    for (const commitment of [
+      "one candidate to one non-element owner, one-to-one",
+      "supply alias candidates; SSF invents none",
+      "yields no transitive/third spelling",
+      "externals, primitives, elements, and ambiguous candidates get no automatic alias",
+      "Target a unique valid structure or subset, never an alias",
+      "duplicate or ambiguous structures, self-parents, and cycles are rejected",
+      "An unresolved field value is a legal conventional/refinement reference, not an owned binding target",
+      "End a first line with `with` only when a real field follows; a `Rule:` line does not count",
+      "A top-level rule ends the preceding declaration body",
+      "Vendored `plur` must relate",
+      "Collections are never `optional`",
+      "Sets and sequences introduce identities—never add ID fields",
+      "Subsets add no identity",
+      "`element` has one member",
+      "Which side declares a relation implies no storage, navigation, or ownership",
+    ]) {
+      expect(normalized).toContain(commitment);
     }
   });
 
@@ -154,25 +267,13 @@ describe("compact sync-engine Agent Skill documents", () => {
       expect(normalizedDesign).toContain(rule.replace(/\s+/g, " "));
     }
 
-    const ssf = (await text(new URL("common/ssf.md", promptRoot))).replace(/\s+/g, " ");
-    for (const rule of [
-      "Sets introduce identities—never add ID fields",
-      "Subsets classify existing parent members",
-      "Collections are never `optional`",
-      "No nested collections or unions",
-      "Which side declares a relation implies no storage, navigation, or ownership",
-      "inventories structural identity/type names",
-      "never invents an owned name",
-      "remain opaque prose",
-    ]) {
-      expect(ssf).toContain(rule);
-    }
     const format = (await text(new URL("common/concept-format.md", promptRoot))).replace(
       /\s+/g,
       " ",
     );
     for (const rule of [
       "```types external Person",
+      "prefix every invariant prose line with exact `Rule:`",
       "create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
       "delete(item: Item) : return ()",
       "_items(owner: Person) : many (item: Item, title: String)",
@@ -182,7 +283,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Notes.Task is Tasking.Task",
       "Do not mix placement",
       "`# Tasking`, never `# Tasks` or `# Task Management`",
-      "codes are unique within an action",
+      "keep codes unique within an action",
       "never prose such as `return the session account`",
       "[refreshes content](reaction:Forum.posts.RefreshDerivedContent)",
       "[home feed](former:Forum.feed.HomeFeed)",

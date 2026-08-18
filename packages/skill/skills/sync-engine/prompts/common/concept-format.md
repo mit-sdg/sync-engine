@@ -1,4 +1,4 @@
-# Exact authored formats
+# Authored formats
 
 Each concept has one gerund identifier H1 naming its mechanism (`# Tasking`, never
 `# Tasks` or `# Task Management`) and these H2s, in order;
@@ -50,18 +50,18 @@ _items(owner: Person) : many (item: Item, title: String)
 ````
 
 Types contains only `external Name` declarations or is empty. State uses supplied SSF;
-the fence may end with invariant sentences.
-Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
-results, and one or more `where`/`then` branches. `where` and `then` have equal
-indentation; each branch body is deeper. Terminal success returns exactly declared
-names. Empty-result signatures declare `: return ()`; branch bodies use bare `return`, never
-`return ()` or standalone `()`. Refusal is `refuse CODE "Normative sentence."`; codes are unique
+keep every State line inside its fence and prefix every invariant prose line with exact
+`Rule:`. Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
+results, and one or more `where`/`then` branches. Indent `where` and `then` equally and
+each branch body deeper. Terminal success returns exactly the declared names. Declare an
+empty result `: return ()` and end its branches with bare `return`, never `return ()` or
+a standalone `()`. Refuse with `refuse CODE "Normative sentence."`; keep codes unique
 within an action and never shared across actions. Return declared names only:
 `return account`, never prose such as `return the session account`.
 
 Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
-before the named row. Mark optional State values `field?: Type`. A `one` body always
-promises one row; only `optional` may say no row.
+before the named row. Mark optional State values in the row `field?: Type`. A `one` body
+always promises one row; only `optional` may say no row.
 
 ```types
 concrete Person
@@ -88,12 +88,12 @@ Tasking.Owner is Person
 Notes.Task is Tasking.Task
 ```
 
-Do not mix placement. Targets are concrete or SSF-owned types; external
-aliases are invalid and direct owned-type cycles valid. Concept files contain no application links, instances, bindings, or computations.
+Do not mix placement. Target a concrete or SSF-owned type; external aliases are invalid
+and direct owned-type cycles valid. Concept files contain no application links,
+instances, bindings, or computations.
 
-Each composition document has nonempty H1 and decision prose. References are
-Markdown links to application declarations—not bare `view:` lines, routes, or
-concept actions:
+Give each composition document a nonempty H1 and decision prose. Reference application
+declarations with Markdown links, never bare `view:` lines, routes, or concept actions:
 
 ```md
 Editing [refreshes content](reaction:Forum.posts.RefreshDerivedContent).

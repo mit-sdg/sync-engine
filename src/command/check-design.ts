@@ -11,6 +11,7 @@ import {
   type SimpleStateFormIssue,
 } from "@engine/tooling/simple-state-form";
 import { parseSpec } from "@engine/reactions/concepts/concept-spec";
+import { specificationTypeNameEvidence } from "@engine/tooling/specification-type-evidence";
 
 export interface CheckedDesignDocument {
   readonly path: string;
@@ -61,19 +62,27 @@ export async function checkDesignFiles(
       if (!(await stat(absolute)).isFile()) throw new Error("path is not a regular file");
       const markdown = await readFile(absolute, "utf8");
       let conceptError: unknown;
-      let isConcept = false;
+      let concept: ReturnType<typeof parseSpec> | undefined;
       try {
-        parseSpec(markdown);
-        isConcept = true;
+        concept = parseSpec(markdown);
       } catch (error) {
         conceptError = error;
       }
-      if (isConcept) {
+      if (concept !== undefined) {
         const stateFence = scanDesignMarkdown(markdown, label).fences.find(
           ({ info }) => info === "state",
         );
-        const stateIssues = stateFence === undefined ? [] : validateSimpleStateForm(stateFence);
-        if (stateIssues.length > 0) throw new Error(describeSimpleStateFormIssues(stateIssues));
+        const stateIssues =
+          stateFence === undefined
+            ? []
+            : validateSimpleStateForm(stateFence, {
+                externalTypes: concept.externalTypes,
+                evidenceTypeNames: specificationTypeNameEvidence(concept),
+              });
+        const stateErrors = stateIssues.filter(({ severity }) => severity === "error");
+        if (stateErrors.length > 0) throw new Error(describeSimpleStateFormIssues(stateErrors));
+        const stateAdvice = stateIssues.filter(({ severity }) => severity === "advice");
+        if (stateAdvice.length > 0) console.warn(describeSimpleStateFormIssues(stateAdvice));
         checked.push({ path: label, kind: "concept" });
         continue;
       }

@@ -290,7 +290,7 @@ describe("external concept registration", () => {
 describe("parsed declarations and class methods", () => {
   test("raw state is retained in registration and manifests but omitted from read-back", () => {
     const marker = "STATE_ONLY_SENTINEL";
-    const state = `${marker}\nthere are no methods and the database has an incompatible field {]`;
+    const state = `Rule: ${marker}\nRule: there are no methods and the database has an incompatible field {]`;
     const registration = registerConcept({
       class: Cataloging,
       spec: specFor({

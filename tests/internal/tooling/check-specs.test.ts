@@ -440,15 +440,15 @@ describe("input and result shapes", () => {
   });
 });
 
-describe("uninterpreted state notation", () => {
-  test("arbitrary contradictions do not participate in source checking", async () => {
+describe("uninterpreted state rules", () => {
+  test("marked contradictions do not participate in source checking", async () => {
     const where = await concept(
       "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
       "",
       "```state\n" +
-        "there is no session field and end is a query\n" +
-        "the class must use a differently shaped database table {]\n" +
+        "Rule: there is no session field and end is a query\n" +
+        "Rule: the class must use a differently shaped database table {]\n" +
         "```",
     );
 

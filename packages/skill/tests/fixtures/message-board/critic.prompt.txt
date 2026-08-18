@@ -11,7 +11,7 @@ plausible design.
 
 Principle uses one or more short archetypal scenarios showing the mechanism's value,
 not a full specification. Include variants, errors, or refusals only when essential to
-the purpose. External context is allowed; peer behavior is not concept-owned.
+the purpose. External context is allowed; peer behavior is never concept-owned.
 
 Every element serves purpose and brief. Concepts never call, import, or require peers.
 Split a concept that mixes distinct purposes, lifecycles, authorities, state, failures,
@@ -21,13 +21,13 @@ owner, or reactions would reconstruct one operation.
 ## State and ownership
 
 State records observable identity, relations, lifecycle, order, multiplicity, and
-invariants—not storage. Each relation has one semantic owner. Runtime persistence
+invariants—not storage. Give each relation one semantic owner. Runtime persistence
 belongs to implementation and evidence, not State. Write State only in Simple State
 Form.
 
 External types are generic and identities opaque; relate but never inspect peer facts.
 For a necessary copy of a peer fact, state its authority, updates, staleness,
-divergence detection, and repair; mark historical snapshots. All behavior follows from
+divergence detection, and repair; mark historical snapshots. Derive all behavior from
 owned state, inputs, and explicit non-peer environment; otherwise change ownership,
 inputs, environment, or policy. Race-sensitive and security-critical rules
 stay in the action owning changed state.
@@ -36,14 +36,13 @@ stay in the action owning changed state.
 
 Actions name domain occurrences or transitions, not generic writes. Declare
 preconditions and effects; avoid case flags. Owner actions and transactions enforce
-local invariants and non-bypassable authorization, and resolve races. Getters are
-queries; loops are not actions.
+local invariants. Getters are queries; loops are not actions.
 
 Expected domain rejection is a declared refusal with a stable code; other failure is a
 fault. State the post-refusal state: a refusal never partially applies the requested
 transition, though it may atomically record a separate declared fact. Queries have no
-effects. Every query has an indented prose body stating rows, unknown/empty case, and
-stable `many` ordering.
+effects. Every query has an indented prose body stating rows, the unknown or empty
+case, and stable `many` ordering.
 
 Cover each applicable lifecycle stage—creation, completion, expiry, retention,
 reversal, compensation, deletion, or permanence—and add no CRUD symmetry the
@@ -54,8 +53,8 @@ only a trace token.
 ## Composition and failure
 
 Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; independent consequences get separate reactions; named sibling
-reaction cases are alternatives whose order carries no priority.
+decision. Stages express causality; give independent consequences separate reactions;
+named sibling reaction cases are alternatives whose order carries no priority.
 
 Composition owns cross-concept policy, workflow, context, adaptation, notification,
 compensation, and repair—not owner invariants, mutation, race decisions, or
@@ -63,10 +62,10 @@ reconstructed operations. Pass-through reactions reveal a bad split or missing a
 
 A reaction cannot make separate owners atomic. For each cross-concept relation, state
 its owners, violation, repair and whether it is automatic, permitted false interval,
-and failure outcome. If no
-false interval is safe, combine ownership or transact. Decide relevant cycle
-termination, bounded fan-out/partial effects, idempotency, causal order, and stale
-reads. Never assume rollback, cancellation, or exactly-once execution.
+and failure outcome. If no false interval is safe, combine ownership or transact.
+Decide relevant cycle termination, bounded fan-out and partial effects, idempotency,
+causal order, and stale reads. Never assume rollback, cancellation, or exactly-once
+execution.
 
 ## Authorization and external effects
 
@@ -81,19 +80,19 @@ failure or needs its own tests; otherwise adapt thinly.
 
 Inventory exact selected static instances except `RequestBoundary`. A definition may
 have zero or more instances; none need carry its name. Bind each external once to a
-concrete or SSF-owned type. Reject aliases, external targets, mixed placement of inline
-and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
-unused concretes. Direct qualified
-owned-type dependency cycles are valid: edges resolve independently. Bindings convey
-identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
+concrete or SSF-owned type. Reject chains between externals, alias syntax other than
+`alias Alias for Target`, external targets, inline and detached bindings mixed on one
+instance, missing, duplicate, or unresolved bindings, and unused concretes. Direct
+qualified owned-type dependency cycles are valid: edges resolve independently. Bindings
+convey identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
 storage isolation.
 
 The bounded SSF parser proves structural declarations and owned type names, not opaque
 invariants/prose, storage, or behavior.
 
-Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, no
-wildcards. Cover each authored endpoint/reaction tree, named view/former; declare
-each executable computation once.
+Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
+wildcards. Cover each authored endpoint and reaction tree and each named view and
+former; declare each executable computation once.
 
 `check-design` proves grammar and authored form only. Config checking proves shapes,
 bindings, links, computations, source agreement. Neither proves boundaries, prose
@@ -103,34 +102,62 @@ and test.
 # Simple State Form (SSF)
 
 ```text
-schema := (setDecl | subsetDecl)*
-setDecl := (a|an) (element|set|seq) [of] Type [with field+]
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype) [with field+]
-field := [a|an] [optional] [name] (scalar|collection)
-scalar := Type | Parameter | primitive | (of VALUE (or VALUE)+)
-collection := (set|seq) [of] scalar
-primitive := Number | String | Flag | Date | DateTime
+document := (setDecl|subsetDecl|aliasDecl|ruleLine)*
+setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
+declarationBody := (INDENT (field|ruleLine))+
+aliasDecl := alias Alias for (Type|Subtype)
+field := [a|an] (requiredField|optional optionalField)
+requiredField := inferredField|fieldName (scalar|collection)
+optionalField := named|fieldName scalar
+inferredField := named|(set|seq) [of] named
+scalar := named|enum
+named := Type|Parameter|primitive
+enum := of values
+collection := (set|seq) [of] (named|values)
+values := VALUE (or VALUE)+
+primitive := Number|String|Flag|Date|DateTime
+ruleLine := Rule: TEXT
 ```
 
-Use one declaration per line and indent fields. Types start uppercase, fields lowercase,
-enums uppercase; identifiers use letters/digits/`_`. Declaration and subset spellings
-are exact. A collection spelling is related to a singular/plural spelling only when the
-second exact name also appears in a State field type or action/query signature in this
-specification. `element` names remain exact. The parser never invents an owned name.
-It records subsets and inventories structural identity/type names. Malformed structural-looking lines fail; standalone invariants
-remain opaque prose.
+Start Type, Subtype, Alias, and Parameter uppercase ASCII and fieldName lowercase;
+continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
+with uppercase ASCII letters, digits, or `_` only. Omit fieldName only for `named` or an
+inferred named collection, never an enum; SSF lowercases its first character.
 
-Omit field names only for named types or external parameters; infer each from its type. Collections are never `optional` (empty
-means absent). No nested collections or unions. Sets introduce identities—never add ID
-fields. Subsets classify existing parent members, may overlap, and add relations;
-`element` has one member. Which side declares a relation implies no storage, navigation, or ownership. `at most one Membership has each gathering and member pair` is an opaque
-invariant, not a proved behavior.
+Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
+indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
+rule ends the preceding declaration body. End a first line with `with` only when a real
+field follows; a `Rule:` line does not count.
+
+SSF owns structures, subsets, and accepted aliases. Named State fields and
+action/query signatures supply alias candidates; SSF invents none. Vendored
+`plur` must relate one candidate to one non-element owner, one-to-one, and yields no
+transitive/third spelling. Declarations win; externals, primitives, elements, and
+ambiguous candidates get no automatic alias.
+
+Declare an alias for a synonym or ambiguous pair; it overrides automatic evidence.
+Target a unique valid structure or subset, never an alias. Parent a subset on a structure,
+subset, or either alias; forward chains work. Unresolved, external, primitive, and
+invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
+rejected.
+
+Structures, aliases, externals, and primitives share one State namespace. Keep
+fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
+legal conventional/refinement reference, not an owned binding target.
+
+Collections are never `optional` (empty means absent) or nested; named-type unions are
+invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
+identity; they classify parent members, may overlap, and add relations. `element` has one
+member. Which side declares a relation implies no storage, navigation, or ownership.
 
 ```state
 a set of Items with
   a title String
-  an optional dueAt DateTime
-  a members set of Person
+  an Item
+  an optional owner Person
+  a watchers set of Person
+  a seq of Updates
   a status of OPEN or DONE
 
 a Completed set of Items with
@@ -139,15 +166,17 @@ a Completed set of Items with
 an element Settings with
   a retentionDays Number
 
-at most one Item has each title
+alias WorkItem for Items
+
+Rule: at most one Item has each owner and title pair
 ```
 
 ## Assignment
 
-Review every candidate concept, composition, and `types.md` against the brief.
-Authored form passed; typed links are not yet source-resolved. Be read-only and use only supplied
-prompt material. Do not inspect source, generated files, Git, package configuration,
-tests, framework internals, API docs, or analysis output.
+Review every candidate concept, composition, and `types.md` against the brief. Authored
+form passed; typed links are not yet source-resolved. Stay read-only and use only
+supplied prompt material. Do not inspect source, generated files, Git, package
+configuration, tests, framework internals, API docs, or analysis output.
 
 Check in this order; report only material findings tied to a candidate file and
 decision:
@@ -183,8 +212,8 @@ Otherwise return one bullet per finding:
 - `design/path.md` — Contract problem and consequence for the brief.
 ```
 
-Catalog entries are alternatives, used only to expose a materially better boundary or
-missing behavior. Return the report now; never wait for a request to emit it.
+Use catalog entries only to expose a materially better boundary or missing behavior.
+Return the report now; never wait for a request to emit it.
 
 ## Product brief
 

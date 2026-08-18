@@ -30,7 +30,7 @@ a set of Reservations with
   a reservedAt DateTime
   an optional endedAt DateTime
 
-at most one active or fulfilled Reservation has each Resource
+Rule: at most one active or fulfilled Reservation has each Resource
 ```
 
 ## Actions

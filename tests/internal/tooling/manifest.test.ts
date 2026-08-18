@@ -1274,7 +1274,7 @@ One valid operation remains inspectable.
 ## State
 
 \`\`\`state
-opaque
+Rule: opaque
 \`\`\`
 
 ## Actions
@@ -1328,6 +1328,10 @@ _get(value: String) : optional (result: String)
     };
     const example = (manifest: ApplicationManifestV1) => manifest.concepts.at(-1)!;
 
+    rejects((manifest) => {
+      const state = example(manifest).specification!.state as unknown as Record<string, unknown>;
+      state.prose = "legacy following prose";
+    }, "$.concepts[1].specification.state.prose");
     rejects((manifest) => {
       example(manifest).specification!.actions = [];
     }, "$.concepts[1].specification.actions");

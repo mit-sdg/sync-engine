@@ -322,7 +322,7 @@ Touching records the note.
 ## State
 
 \`\`\`state
-notes
+Rule: notes
 \`\`\`
 
 ## Actions
@@ -486,7 +486,7 @@ external Item
 ## State
 
 \`\`\`state
-one current Item
+Rule: one current Item
 \`\`\`
 
 ## Actions

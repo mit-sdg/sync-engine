@@ -174,19 +174,19 @@ The required `State` fence uses Simple State Form (SSF): set, sequence, singleto
 and subset declarations with indented relation fields; implicit set identity rather
 than synthetic ID fields; capitalized types, lowercase field names, uppercase
 enumeration values, and SSF primitives. A bounded structural parser checks these
-declarations, relates only exact evidenced collection spellings, records subset structure,
-and inventories nonexternal type names introduced by declaration subjects, subset
-parents, and structural fields. That inventory
-lets config-based checking prove qualified external-binding targets. See
+declarations, checks the subset graph, and inventories the type names a concept owns,
+including aliases. That inventory lets config-based checking prove qualified
+external-binding targets. See
 [`State`](reference/concept-specification.md#state).
 
-The parser deliberately does not interpret standalone invariant sentences or other
-admitted prose, derive a storage schema, prove action conditions or effects, or
-compare persistence with State. Names introduced by State and conventional names used
+The parser does not interpret `Rule:` prose, derive a storage schema, prove action
+conditions or effects, or compare persistence with State; every other State line must
+parse. Names introduced by State and conventional names used
 in operation signatures do not require declarations in the external-only Types fence.
 Record owned facts in State and put each enforced invariant or value refinement in the
-action branch that checks it. Do not invent local aliases or a private notation
-dialect.
+action branch that checks it. Where a concept needs a synonym, declare it with
+`alias Alias for Target`, which qualified bindings may target; do not invent other alias
+syntax or chain one external onto another.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

@@ -166,7 +166,7 @@ function listed(names: readonly string[]): string {
 }
 
 /**
- * Compare parsed action and query declarations with class methods. State prose
+ * Compare parsed action and query declarations with class methods. State text
  * and implementation fields are outside this comparison.
  */
 function checkAgainstClass(cls: ConceptClass, spec: ConceptSpec): void {
