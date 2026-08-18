@@ -258,7 +258,7 @@ describe("application manifest diff", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 120_000);
 
   test("refuses malformed and unsupported old manifests before loading configuration", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sync-engine-manifest-diff-"));

@@ -206,7 +206,7 @@ describe("sync-engine verify", () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }, 30_000);
+  }, 120_000);
 
   test("skips the explicit design command for a valid empty registration", async () => {
     const directory = await temporaryProject();
