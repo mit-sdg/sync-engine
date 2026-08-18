@@ -1274,7 +1274,7 @@ One valid operation remains inspectable.
 ## State
 
 \`\`\`state
-opaque
+Rule: opaque
 \`\`\`
 
 ## Actions

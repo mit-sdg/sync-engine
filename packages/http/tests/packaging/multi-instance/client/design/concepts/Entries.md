@@ -23,7 +23,7 @@ a set of Entries with
   an operation Operation
   a name String
 
-at most one Entry has each name
+Rule: at most one Entry has each name
 ```
 
 ## Actions

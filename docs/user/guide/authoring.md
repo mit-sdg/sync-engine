@@ -67,9 +67,9 @@ empty: concept-owned identities, conventional values, and refinements used in
 State or operation signatures are not additional Types declarations. Put one
 SSF `state` fence in State. `check-design` parses its bounded structural
 declarations, including exact owned identities, subsets, safe evidenced aliases, and
-explicit aliases, plus subset graph integrity and scoped uniqueness. Review invariant sentences and other admitted prose
-manually because they remain opaque. Express enforced refinements in the owning
-action branches. Declare at least one
+explicit aliases, plus subset graph integrity and scoped uniqueness. Prefix invariant
+prose with exact `Rule:` and review that marked text manually because it remains opaque.
+Express enforced refinements in the owning action branches. Declare at least one
 structured action with explicit branches, and put
 the sole `queries` fence in Queries even when it is empty. Do not add subsection
 headings, fenced blocks in Purpose or Principle, application typed links, or
@@ -153,9 +153,10 @@ remain globally unique.
 Each right side directly names a declared concrete type or an owned type of
 another declared, selected instance. The bounded SSF parser proves owned target
 names. A State field or action/query type can evidence a regular or irregular plural
-pair only when it has one unique non-element structure or subset owner; use
-`alias Alias for Target` for synonyms or ambiguity. Never target another instance's
-external parameter or an unresolved or ambiguous type, and never construct an application
+pair only when it has one unique non-element structure or subset owner and that owner has
+no second automatic candidate; use `alias Alias for Target` for synonyms or ambiguity.
+Never target another instance's external parameter or an unresolved or ambiguous type,
+and never construct an application
 binding chain. Direct qualified owned-type dependencies may be cyclic because every target is checked
 independently; declaration order does not resolve or prioritize them. Do not
 leave a concrete type unused.

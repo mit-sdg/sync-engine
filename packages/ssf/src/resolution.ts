@@ -1,9 +1,7 @@
 import type { GrammarResult } from "./grammar.ts";
 import { validateTypeGraph, type ResolutionFacts } from "./graph-validation.ts";
-import { localIntegrityDiagnostics } from "./local-validation.ts";
-import { PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
+import { PRIMITIVES, PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
 import type {
-  ParsedDeclaration,
   ParsedFieldType,
   ParsedReference,
   SsfAlias,
@@ -11,7 +9,6 @@ import type {
   SsfDiagnostic,
   SsfDocument,
   SsfFieldType,
-  SsfOwnedType,
   SsfParseOptions,
   SsfStatement,
   SsfTypeReference,
@@ -58,45 +55,26 @@ function fieldType(
   };
 }
 
-function inventory(
-  declarations: readonly ParsedDeclaration[],
-  facts: ResolutionFacts,
-): { identities: readonly SsfOwnedType[]; types: readonly SsfOwnedType[] } {
-  const aliasesByTarget = new Map<string, string[]>();
-  for (const [name, target] of facts.validAliases) {
-    const aliases = aliasesByTarget.get(target) ?? [];
-    aliases.push(name);
-    aliasesByTarget.set(target, aliases);
-  }
-  const types = declarations
-    .filter(({ name }) => facts.validStructuralNames.has(name.text))
-    .map(
-      (declaration): SsfOwnedType => ({
-        name: declaration.name.text,
-        declaredNames: [
-          declaration.name.text,
-          ...(aliasesByTarget.get(declaration.name.text) ?? []),
-        ].sort(),
-        roles: [declaration.declarationKind === "subset" ? "subset" : "identity"],
-        declarationSpans: [declaration.name.span],
-      }),
-    )
-    .sort(({ name: left }, { name: right }) => (left < right ? -1 : left > right ? 1 : 0));
-  return {
-    identities: types.filter(({ roles }) => roles[0] === "identity"),
-    types,
-  };
-}
-
 export function resolveGrammar(
   grammar: GrammarResult,
   options: SsfParseOptions,
 ): { document: SsfDocument; diagnostics: readonly SsfDiagnostic[] } {
   const external = new Set(options.externalTypes ?? []);
-  const diagnostics = [
-    ...grammar.diagnostics,
-    ...localIntegrityDiagnostics(grammar.declarations, grammar.aliases, external),
-  ];
+  const diagnostics: SsfDiagnostic[] = [...grammar.diagnostics];
+  for (const name of external) {
+    const invalidName = !TYPE_NAME.test(name);
+    if (!invalidName && !PRIMITIVE_NAMES.has(name)) continue;
+    external.delete(name);
+    diagnostics.push({
+      severity: "error",
+      code: invalidName ? "SSF_INVALID_EXTERNAL_NAME" : "SSF_NAME_COLLISION",
+      message: `External type ${JSON.stringify(name)} ${invalidName ? "is not a valid SSF type name." : "collides with the SSF primitive of the same name."}`,
+      suggestion: invalidName
+        ? "Start with uppercase ASCII; continue only with ASCII letters, digits, or `_`."
+        : "Rename the external type; external and primitive names share one namespace.",
+      externalType: name,
+    });
+  }
   const facts = validateTypeGraph(
     grammar.declarations,
     grammar.aliases,
@@ -120,7 +98,7 @@ export function resolveGrammar(
       value: fieldType(field.value, facts, external),
       span: field.span,
     })),
-    opaqueBody: declaration.opaqueBody,
+    rules: declaration.rules,
     span: declaration.span,
     signatureSpan: declaration.signatureSpan,
   }));
@@ -130,35 +108,30 @@ export function resolveGrammar(
     target: typeReference(alias.target, facts, external),
     span: alias.span,
   }));
-  const statementsByOffset = new Map<number, SsfStatement>([
-    ...declarations.map(
-      (declaration) => [declaration.signatureSpan.start.offset, declaration] as const,
-    ),
-    ...aliases.map((alias) => [alias.span.start.offset, alias] as const),
-  ]);
-  const statements = grammar.statements.map((statement) =>
-    statement.kind === "opaque" ? statement : statementsByOffset.get(statement.span.start.offset)!,
+  const statements: SsfStatement[] = [...declarations, ...aliases, ...grammar.rules].sort(
+    (left, right) => left.span.start.offset - right.span.start.offset,
   );
-  const opaqueLines = statements.flatMap((statement) =>
-    statement.kind === "opaque"
-      ? [statement]
-      : statement.kind === "declaration"
-        ? statement.opaqueBody
-        : [],
-  );
-  const owned = inventory(grammar.declarations, facts);
-  diagnostics.sort(
-    (left, right) =>
-      left.span.start.offset - right.span.start.offset ||
-      (left.code < right.code ? -1 : left.code > right.code ? 1 : 0),
-  );
+  const ownedTypeNames = [...facts.validStructuralNames, ...facts.validAliases.keys()].sort();
+  diagnostics.sort((left, right) => {
+    const byOffset = (left.span?.start.offset ?? -1) - (right.span?.start.offset ?? -1);
+    if (byOffset !== 0) return byOffset;
+    const byCode = left.code < right.code ? -1 : left.code > right.code ? 1 : 0;
+    if (byCode !== 0) return byCode;
+    const leftExternal = left.externalType ?? "";
+    const rightExternal = right.externalType ?? "";
+    return leftExternal < rightExternal ? -1 : leftExternal > rightExternal ? 1 : 0;
+  });
   return {
     document: {
       statements,
       declarations,
       aliases,
-      opaqueLines,
-      inventory: { ...owned, external: [...external].sort(), primitives: [...PRIMITIVES] },
+      rules: grammar.rules,
+      inventory: {
+        ownedTypeNames,
+        external: [...external].sort(),
+        primitives: [...PRIMITIVES],
+      },
     },
     diagnostics,
   };

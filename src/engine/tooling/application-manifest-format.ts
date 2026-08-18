@@ -47,13 +47,25 @@ export function specificationOwnedTypeNames(
     externalTypes: specification.externalTypes.map(({ name }) => name),
     evidenceTypeNames: specificationTypeNameEvidence(specification),
   });
-  if (parsed.diagnostics.length > 0) {
+  const errors = parsed.diagnostics.filter(({ severity }) => severity === "error");
+  if (errors.length > 0) {
     throw new Error(
-      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
-        .map(
-          ({ code, message, span }) =>
-            `- line ${specification.state.location.line + span.start.line - 1}, column ${specification.state.location.column + span.start.column - 1}: [${code}] ${message}`,
-        )
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${errors
+        .map((diagnostic) => {
+          const location =
+            diagnostic.span === undefined
+              ? specification.externalTypes.find(({ name }) => name === diagnostic.externalType)
+                  ?.location
+              : {
+                  line: specification.state.location.line + diagnostic.span.start.line - 1,
+                  column: specification.state.location.column + diagnostic.span.start.column - 1,
+                };
+          if (location === undefined)
+            throw new Error(
+              `SSF diagnostic names unknown external type ${JSON.stringify(diagnostic.externalType)}.`,
+            );
+          return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}`;
+        })
         .join("\n")}`,
     );
   }

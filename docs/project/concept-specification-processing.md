@@ -68,12 +68,15 @@ There is no legacy parser or format auto-detection.
 The workspace-private, unpublished `packages/ssf` package owns SSF tokenization,
 grammar, exact-name resolution, graph and namespace validation, diagnostics, and
 structured State IR. Its former monolith is split into source, grammar, name/model,
-local validation, automatic-alias, graph, resolution, and facade modules. A vendored,
+automatic-alias, graph, resolution, and facade modules. Graph validation builds the
+namespace groups once and uses them for both local integrity and edge resolution. A vendored,
 attributed `plur` implementation isolates the canonical plural relation. It remains `private: true`, has no release-owned
 publication entry, and has no dependency on sync-engine Markdown or source-location
-types. It returns exact text spans and line/column offsets; the tooling adapter maps
-those spans from the normalized State-body origin retained by the concept parser to
-`DesignSourceLocation`, so leading blank fence lines do not shift diagnostics. Keep
+types. State-origin diagnostics return exact text spans and line/column offsets; external-option
+diagnostics instead name the external type, and the tooling adapter maps them through its
+`SpecificationExternalTypeIR.location`. State spans map from the normalized State-body
+origin retained by the concept parser to `DesignSourceLocation`, so leading blank fence
+lines do not shift diagnostics. Keep
 this parser as the one implementation used for repair diagnostics and checked-model
 owned-name extraction; do not recreate a parser under `src/engine/tooling`.
 
@@ -81,10 +84,12 @@ The parser authoritatively handles structural set, sequence, element, subset, al
 and field declarations. Structural and alias spellings remain exact. Named State field
 references and parsed action/query type expressions supply exact authored candidates.
 An automatic alias is accepted only when pluralizing either candidate or one unique
-non-element structure or subset name with vendored `plur` exactly yields the other. No
-generated plural is inserted, no transitive closure runs, and external, primitive, element, exact
-declaration, ambiguous, and explicitly aliased candidates are excluded. A valid
-`alias Alias for Target` takes precedence and remains the escape hatch. Alias targets
+non-element structure or subset name with vendored `plur` exactly yields the other and
+that owner has no second automatic candidate. No generated plural is inserted, no
+transitive closure runs, and external, primitive, element, exact
+declaration, ambiguous, and explicitly aliased candidates are excluded. Candidate-side
+and owner-side ambiguity emits non-fatal advice naming the rejected spellings and owners.
+A valid `alias Alias for Target` takes precedence and remains the escape hatch. Alias targets
 must be unique valid structures or subsets, and alias chains are rejected.
 
 Subset parents resolve after structures and aliases are parsed, so forward references,
@@ -97,11 +102,11 @@ values have separately enforced uniqueness scopes.
 State field value names are deliberately open: the parser classifies owned, external,
 primitive, and unresolved references, but unresolved conventional or refinement names
 remain legal. Only the bounded unique plural relation can promote one of those exact
-references to an automatic owned alias. Structural-looking malformed
-statements produce diagnostics; standalone invariant sentences remain opaque. The
-concept IR preserves the complete normalized State text. The parser does not prove
-those sentences, field refinements, conditions, effects, query meaning, storage layout,
-State/storage agreement, or implementation semantics.
+references to an automatic owned alias. Every nonblank line must parse structurally or
+begin with exact `Rule:`; malformed lines produce diagnostics, while marked rule text
+remains opaque. The concept IR preserves the complete normalized State text. The parser
+does not prove that text, field refinements, conditions, effects, query meaning, storage
+layout, State/storage agreement, or implementation semantics.
 
 Config-based binding validation uses only the derived exact owned-name inventory. A
 qualified target must name a structural declaration, safe evidenced alias, or explicit
@@ -279,7 +284,7 @@ and generated artifacts must move together before downstream applications.
 
 ## Deferred design questions
 
-1. **Broader SSF semantics.** Decide whether later parser increments should typecheck all operation vocabulary or formalize invariant sentences without making prose claims the structure cannot prove.
+1. **Broader SSF semantics.** Decide whether later parser increments should typecheck all operation vocabulary or formalize marked rule text without making prose claims the structure cannot prove.
 2. **Concrete-type taxonomy.** Reconsider whether provisional `concrete` should distinguish application-owned, platform-owned, and externally supplied types.
 3. **Reaction-tree granularity.** Reconsider whether authored reaction and endpoint trees should require branch- or consequence-level design coverage.
 4. **Low-level concept checker.** Design a supported concept-only checker to replace the removed `--vocabulary-module` mode without weakening config-based application guarantees.

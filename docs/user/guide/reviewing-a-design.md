@@ -205,9 +205,9 @@ For every concept, also verify manually that:
 - Types contains one `types` fence with only explicit `external` declarations;
   concept-owned and conventional names do not need local declarations;
 - State contains one `state` fence and follows SSF declaration, identity, type,
-  multiplicity, naming, and indentation rules; `check-design` parses the bounded
-  structural declarations and inventories owned names, while invariant sentences
-  and other admitted prose remain a manual semantic review;
+  multiplicity, naming, and indentation rules; every invariant prose line begins with
+  exact `Rule:`; `check-design` parses the bounded structural declarations and inventories
+  owned names, while marked rule text remains a manual semantic review;
 - every action has explicit `where`/`then` branches and one terminal return or refusal
   per branch;
 - action results and query rows use parenthesized named fields;

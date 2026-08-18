@@ -179,13 +179,14 @@ nonexternal structural names plus safe aliases evidenced by State and operation 
 targets. See
 [`State`](reference/concept-specification.md#state).
 
-The parser deliberately does not interpret standalone invariant sentences or other
-admitted prose, derive a storage schema, prove action conditions or effects, or
-compare persistence with State. Names introduced by State and conventional names used
+The parser deliberately does not interpret invariant prose after an exact `Rule:` marker,
+derive a storage schema, prove action conditions or effects, or compare persistence with
+State. Unmarked nonblank State lines must parse structurally. Names introduced by State and conventional names used
 in operation signatures do not require declarations in the external-only Types fence.
 Record owned facts in State and put each enforced invariant or value refinement in the
-action branch that checks it. Do not invent local aliases or a private notation
-dialect.
+action branch that checks it. Use canonical `alias Alias for Target` declarations when
+needed; qualified bindings may target an owned alias spelling. Do not invent undocumented
+alias syntax or external-to-external alias chains.
 
 External identities are opaque. Gathering may store a `Person` as a member, and
 Alerting may store the same value as a recipient, without either concept owning

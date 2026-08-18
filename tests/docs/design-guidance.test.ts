@@ -98,7 +98,9 @@ describe("generic design guidance", () => {
     expect(reference).toContain("sync-engine check-design design/concepts/*.md");
     expect(reference).toContain("loads no application configuration or TypeScript source");
     expect(reference).toContain("writes nothing");
-    expect(reference).toContain("reports only authored-design form failures");
+    expect(reference).toContain(
+      "reports authored-design form failures plus non-fatal automatic-alias advice",
+    );
   });
 
   test("states complete instance, binding-cycle, SSF, and persistence boundaries", async () => {
@@ -117,7 +119,7 @@ describe("generic design guidance", () => {
     expect(review).toContain("Do not reject a cycle merely because instance A");
     expect(review).toContain("core-owned\n`RequestBoundary`");
     expect(reference.replace(/\s+/g, " ")).toContain(
-      "Standalone non-structural invariant sentences",
+      "Opaque invariant prose must begin with the exact, case-sensitive `Rule:` marker",
     );
     expect(reference).toContain("qualified external-binding target");
   });

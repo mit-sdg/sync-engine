@@ -76,10 +76,13 @@ export async function checkDesignFiles(
           stateFence === undefined
             ? []
             : validateSimpleStateForm(stateFence, {
-                externalTypes: concept.externalTypes.map(({ name }) => name),
+                externalTypes: concept.externalTypes,
                 evidenceTypeNames: specificationTypeNameEvidence(concept),
               });
-        if (stateIssues.length > 0) throw new Error(describeSimpleStateFormIssues(stateIssues));
+        const stateErrors = stateIssues.filter(({ severity }) => severity === "error");
+        if (stateErrors.length > 0) throw new Error(describeSimpleStateFormIssues(stateErrors));
+        const stateAdvice = stateIssues.filter(({ severity }) => severity === "advice");
+        if (stateAdvice.length > 0) console.warn(describeSimpleStateFormIssues(stateAdvice));
         checked.push({ path: label, kind: "concept" });
         continue;
       }

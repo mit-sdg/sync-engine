@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ownedTypeNameSpellings, parseSimpleStateForm } from "../src/index.ts";
+import { ownedTypeNameSpellings, parseSimpleStateForm } from "../src/simple-state-form.ts";
 import { pluralize } from "../src/vendor/plur.ts";
 import { describe, expect, test } from "vite-plus/test";
 
@@ -93,24 +93,36 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
     ...lines.map(stateFieldType).filter((name): name is string => name !== undefined),
     ...(options.evidenceTypeNames ?? []),
   ]);
-  for (const candidate of [...evidence].sort()) {
+  const relation = [...evidence]
+    .sort()
+    .filter(
+      (candidate) =>
+        !declarations.has(candidate) &&
+        !explicitNames.has(candidate) &&
+        !external.has(candidate) &&
+        !PRIMITIVES.has(candidate) &&
+        TYPE_NAME.test(candidate),
+    )
+    .flatMap((candidate) =>
+      [...declarations]
+        .filter(
+          ([owner, ownerMultiplicity]) =>
+            ownerMultiplicity !== "element" &&
+            (pluralize(owner) === candidate || pluralize(candidate) === owner),
+        )
+        .map(([owner]) => [candidate, owner] as const),
+    );
+  // The documented one-to-one rule keeps only isolated edges in the complete relation.
+  for (const [candidate, owner] of relation) {
     if (
-      declarations.has(candidate) ||
-      explicitNames.has(candidate) ||
-      external.has(candidate) ||
-      PRIMITIVES.has(candidate) ||
-      !TYPE_NAME.test(candidate)
-    ) {
-      continue;
-    }
-    const matches = [...declarations]
-      .filter(
-        ([owner, ownerMultiplicity]) =>
-          ownerMultiplicity !== "element" &&
-          (pluralize(owner) === candidate || pluralize(candidate) === owner),
+      relation.every(
+        ([otherCandidate, otherOwner]) =>
+          (otherCandidate === candidate && otherOwner === owner) ||
+          (otherCandidate !== candidate && otherOwner !== owner),
       )
-      .map(([owner]) => owner);
-    if (matches.length === 1) owned.add(candidate);
+    ) {
+      owned.add(candidate);
+    }
   }
   return [...owned].sort();
 }
@@ -140,7 +152,10 @@ function memberTypeEvidence(markdown: string): string[] {
 
 function expectAgreement(label: string, source: string, options: OracleOptions = {}): void {
   const parsed = parseSimpleStateForm(source, options);
-  expect(parsed.diagnostics, label).toEqual([]);
+  expect(
+    parsed.diagnostics.filter(({ severity }) => severity === "error"),
+    label,
+  ).toEqual([]);
   expect(ownedTypeNameSpellings(parsed.document.inventory), label).toEqual(
     oracleOwnedTypeNames(source, options),
   );
@@ -164,6 +179,16 @@ an element Settings`,
     expect(
       ownedTypeNameSpellings(parseSimpleStateForm("a set of Mice").document.inventory),
     ).toEqual(["Mice"]);
+  });
+
+  test("applies one-to-one globally across mixed candidate and owner ambiguity", () => {
+    const source = `a set of These with
+  a singular This
+  a shared Theses
+
+a set of Thesis`;
+    expect(oracleOwnedTypeNames(source)).toEqual(["These", "Thesis"]);
+    expectAgreement("mixed ambiguity", source);
   });
 
   test("agrees for every catalog concept State and operation evidence", async () => {

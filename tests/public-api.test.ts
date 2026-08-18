@@ -75,7 +75,7 @@ A title appears once.
 ## State
 
 \`\`\`state
-a set of titles
+a set of Titles
 \`\`\`
 
 ## Actions

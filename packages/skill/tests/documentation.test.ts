@@ -134,13 +134,16 @@ describe("compact sync-engine Agent Skill documents", () => {
       ),
     );
     expect(Object.fromEntries(productions)).toMatchObject({
-      document: "(setDecl|subsetDecl|aliasDecl|opaque)*",
+      document: "(setDecl|subsetDecl|aliasDecl|ruleLine)*",
+      setDecl: "(a|an) (element|set|seq) [of] Type [with] declarationBody?",
+      subsetDecl: "(a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?",
+      declarationBody: "(INDENT (field|ruleLine))+",
       field: "[a|an] (requiredField|optional optionalField)",
       inferredField: "named|(set|seq) [of] named",
       enum: "of values",
       collection: "(set|seq) [of] (named|values)",
       values: "VALUE (or VALUE)+",
-      opaque: "OPAQUE_LINE",
+      ruleLine: "Rule: TEXT",
     });
 
     const terminals = new Set([
@@ -152,6 +155,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "of",
       "optional",
       "or",
+      "Rule",
       "seq",
       "set",
       "with",
@@ -161,9 +165,10 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Date",
       "DateTime",
       "Flag",
+      "INDENT",
       "Number",
-      "OPAQUE_LINE",
       "Parameter",
+      "TEXT",
       "String",
       "Subtype",
       "Type",
@@ -182,7 +187,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toMatch(
       /VALUE starts uppercase; its tail uses only uppercase ASCII letters, digits, or `_`/,
     );
-    expect(normalized).toMatch(/OPAQUE_LINE means standalone non-structural invariant prose/);
+    expect(normalized).toMatch(
+      /A `Rule:` line may be top-level or declaration-indented; its TEXT is retained verbatim, not proved\. Every other nonblank line must parse/,
+    );
 
     const example = ssf.match(/```state\n([\s\S]*?)```/)?.[1];
     expect(example).toContain(
@@ -202,20 +209,21 @@ describe("compact sync-engine Agent Skill documents", () => {
       "an element Settings with",
       "  a retentionDays Number",
       "alias WorkItem for Items",
-      "at most one Item has each owner and title pair",
+      "Rule: at most one Item has each owner and title pair",
     ]) {
       expect(example).toContain(line);
     }
 
     for (const commitment of [
-      "one unique non-element structure or subset",
+      "one candidate to one non-element owner, one-to-one",
       "SSF generates no candidate or transitive/third spelling",
       "externals, primitives, elements, and ambiguous candidates get no automatic alias",
       "Targets are unique valid structures/subsets, never aliases",
       "duplicate/ambiguous structures, self-parents, and cycles",
       "Unresolved field values are legal conventional/refinement references, not owned binding targets",
-      "Malformed structural-looking lines fail; standalone non-structural invariants stay opaque",
-      "vendored `plur` pluralizes",
+      "A declaration ending in `with` needs a real field; a `Rule:` line does not count",
+      "A top-level rule ends the preceding declaration body",
+      "Vendored `plur` must relate",
       "Collections are never `optional`",
       "Sets/sequences introduce identities—never add ID fields",
       "Subsets add no identity",
@@ -262,6 +270,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     for (const rule of [
       "```types external Person",
+      "prefix every invariant prose line with exact `Rule:`",
       "create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
       "delete(item: Item) : return ()",
       "_items(owner: Person) : many (item: Item, title: String)",

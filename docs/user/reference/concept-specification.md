@@ -21,7 +21,7 @@ sync-engine check-design design/concepts/*.md
 ```
 
 This command loads no application configuration or TypeScript source, writes nothing,
-and reports only authored-design form failures; it also accepts composition and
+and reports authored-design form failures plus non-fatal automatic-alias advice; it also accepts composition and
 application-types documents in the same invocation. Config-based `sync-engine check` adds
 registration provenance and TypeScript agreement after implementation.
 
@@ -134,7 +134,11 @@ external Name
 An external type is an opaque parameter supplied by each application that uses
 the concept. The explanation is retained as documentation. The `external`
 keyword is required; concrete types and bindings are application design,
-not concept-local declarations.
+not concept-local declarations. Concept parsing accepts `Name` as a design
+identifier, but SSF namespace validation requires the uppercase type-name form.
+It diagnoses and omits lowercase or underscore-prefixed external names. An
+external name equal to an SSF primitive is also diagnosed and omitted, leaving
+the primitive as the sole inventory entry and reference classification.
 
 Other names in State, action signatures, and query signatures are descriptive
 vocabulary, not declarations that must be repeated in Types. A name may identify
@@ -157,9 +161,11 @@ declarations, including multiplicity, identifier, article, and graph constraints
 Structural names remain exact. Named State field types and action/query parameter and
 result types supply exact alias candidates. SSF accepts a candidate automatically only
 when vendored `plur` pluralizes either it or one unique non-element structure or subset
-to the other exact authored spelling. It does not insert the pluralizer's output. This
-supports regular and irregular pairs such as `Note`/`Notes`, `Mouse`/`Mice`, and
-`Person`/`People` while leaving ambiguous candidates unresolved.
+to the other exact authored spelling and that owner has no second automatic candidate.
+It does not insert the pluralizer's output. This supports regular and irregular pairs
+such as `Note`/`Notes`, `Mouse`/`Mice`, and `Person`/`People` while leaving ambiguity on
+either side unresolved. Candidate-side and owner-side ambiguity produces non-fatal advice
+that names the rejected spellings and owners.
 
 `alias Alias for Target` explicitly handles domain synonyms and ambiguity. Explicit
 aliases take precedence, must target unique valid structures or subsets, and cannot
@@ -176,9 +182,11 @@ and enum values are unique within one enum. Collection enums use `flags set of R
 same field name in distinct declarations and the same enum value in distinct enums remain
 valid.
 
-A line that begins like a declaration, alias, or indented field but misses the grammar
-fails with a source-located diagnostic. Standalone non-structural invariant sentences
-remain opaque; the parser retains but does not prove them.
+Opaque invariant prose must begin with the exact, case-sensitive `Rule:` marker. A rule
+may be a top-level statement or an indented line attached to a declaration; the parser
+retains the complete line but does not interpret or prove its text. Every other nonblank
+top-level line must parse as a declaration or alias, and every other nonblank indented
+line must parse as a field, or checking fails with a source-located diagnostic.
 State field value names are intentionally open because they may denote conventional or
 concept-local refinement types: an unresolved value reference is retained and
 classified as unresolved, but is not an SSF error. It becomes owned only through the

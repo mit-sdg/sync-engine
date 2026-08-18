@@ -178,7 +178,7 @@ external Source
 
 ## State
 \`\`\`state
-catalogs: set Catalog
+Rule: catalogs: set Catalog
 \`\`\`
 
 ## Actions
@@ -200,7 +200,7 @@ _items(catalog: Catalog) : many (item: String)
       assemble({ conceptSet: set, instances: set.implementations(), composition: {} }),
     );
     const authored = manifest.concepts.find(({ name }) => name === "Cataloging")?.specification;
-    expect(authored?.state.body).toBe("catalogs: set Catalog");
+    expect(authored?.state.body).toBe("Rule: catalogs: set Catalog");
     expect(authored?.externalTypes.map(({ name }) => name)).toEqual(["Source"]);
     expect(manifest.design.checked).toBe(false);
     const content = planGenerated(manifest, { title: "Catalog" }).entries.find(

@@ -28,7 +28,7 @@ a set of Votes with
   a voter Voter
   a direction Direction
 
-at most one Vote has each item and voter pair
+Rule: at most one Vote has each item and voter pair
 ```
 
 ## Actions

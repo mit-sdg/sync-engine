@@ -413,9 +413,9 @@ export interface SpecificationExternalTypeIR {
   location: SpecificationLocationIR;
 }
 
-/** Unparsed Simple State Form and the optional prose that follows its fence. */
+/** Simple State Form source and the optional prose that follows its fence. */
 export interface SpecificationStateIR {
-  /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
+  /** Normalized fence contents, privately validated against the version-1 SSF grammar. */
   body: string;
   prose: string;
   /** Origin of `body` after surrounding blank fence lines are removed. */

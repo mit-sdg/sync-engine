@@ -1,4 +1,4 @@
-import type { SourceLine, SsfOpaqueLine, SsfPosition, SsfSpan, SsfToken } from "./model.ts";
+import type { SourceLine, SsfPosition, SsfRuleLine, SsfSpan, SsfToken } from "./model.ts";
 
 export function position(offset: number, line: number, column: number): SsfPosition {
   return { offset, line, column };
@@ -7,6 +7,9 @@ export function position(offset: number, line: number, column: number): SsfPosit
 export function span(start: SsfPosition, end: SsfPosition): SsfSpan {
   return { start, end };
 }
+
+const isInlineWhitespace = (character: string): boolean =>
+  character !== "\r" && character !== "\n" && /\s/u.test(character);
 
 /** Tokenize all State text without discarding whitespace or source ranges. */
 export function tokenizeSimpleStateForm(source: string): readonly SsfToken[] {
@@ -29,12 +32,12 @@ export function tokenizeSimpleStateForm(source: string): readonly SsfToken[] {
       column = 1;
       continue;
     }
-    const whitespace = character === " " || character === "\t";
+    const whitespace = isInlineWhitespace(character);
     let end = offset + 1;
     while (end < source.length) {
       const candidate = source[end] ?? "";
       if (candidate === "\r" || candidate === "\n") break;
-      if ((candidate === " " || candidate === "\t") !== whitespace) break;
+      if (isInlineWhitespace(candidate) !== whitespace) break;
       end += 1;
     }
     tokens.push({
@@ -52,35 +55,20 @@ export function sourceLines(source: string, tokens: readonly SsfToken[]): readon
   const lines: SourceLine[] = [];
   let start = 0;
   let number = 1;
+  let lineTokens: SsfToken[] = [];
+  const push = (end: number): void => {
+    lines.push({ text: source.slice(start, end), line: number, start, end, tokens: lineTokens });
+    lineTokens = [];
+  };
   for (const token of tokens) {
-    if (token.kind !== "newline") continue;
-    const end = token.span.start.offset;
-    lines.push({
-      text: source.slice(start, end),
-      line: number,
-      start,
-      end,
-      tokens: tokens.filter(
-        (candidate) =>
-          candidate.kind === "word" &&
-          candidate.span.start.offset >= start &&
-          candidate.span.end.offset <= end,
-      ),
-    });
-    start = token.span.end.offset;
-    number += 1;
+    if (token.kind === "word") lineTokens.push(token);
+    else if (token.kind === "newline") {
+      push(token.span.start.offset);
+      start = token.span.end.offset;
+      number += 1;
+    }
   }
-  if (start < source.length || source.length === 0 || tokens.at(-1)?.kind !== "newline") {
-    lines.push({
-      text: source.slice(start),
-      line: number,
-      start,
-      end: source.length,
-      tokens: tokens.filter(
-        (candidate) => candidate.kind === "word" && candidate.span.start.offset >= start,
-      ),
-    });
-  }
+  if (source === "" || !/[\r\n]$/u.test(source)) push(source.length);
   return lines;
 }
 
@@ -91,8 +79,8 @@ export function lineSpan(line: SourceLine): SsfSpan {
   );
 }
 
-export function opaqueLine(line: SourceLine): SsfOpaqueLine {
-  return { kind: "opaque", text: line.text, span: lineSpan(line) };
+export function ruleLine(line: SourceLine): SsfRuleLine {
+  return { kind: "rule", text: line.text, span: lineSpan(line) };
 }
 
 export function words(line: SourceLine): readonly string[] {

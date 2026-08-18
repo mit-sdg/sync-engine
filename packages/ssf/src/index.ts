@@ -1,33 +1,6 @@
 export {
-  isOwnedTypeName,
   ownedTypeNameSpellings,
   parseSimpleStateForm,
   validateSimpleStateForm,
 } from "./simple-state-form.ts";
-export { tokenizeSimpleStateForm } from "./source.ts";
-export type {
-  SsfAlias,
-  SsfCollectionFieldType,
-  SsfDeclaration,
-  SsfDiagnostic,
-  SsfDiagnosticCode,
-  SsfDocument,
-  SsfEnumerationFieldType,
-  SsfField,
-  SsfFieldType,
-  SsfMultiplicity,
-  SsfNamedFieldType,
-  SsfOpaqueLine,
-  SsfOwnedType,
-  SsfParseOptions,
-  SsfParseResult,
-  SsfPosition,
-  SsfReferenceKind,
-  SsfSpan,
-  SsfStatement,
-  SsfToken,
-  SsfTokenKind,
-  SsfTypeInventory,
-  SsfTypeName,
-  SsfTypeReference,
-} from "./model.ts";
+export type { SsfDiagnostic, SsfDocument, SsfParseOptions, SsfPosition, SsfSpan } from "./model.ts";

@@ -50,7 +50,7 @@ _items(owner: Person) : many (item: Item, title: String)
 ````
 
 Types contains only `external Name` declarations or is empty. State uses supplied SSF;
-the fence may end with invariant sentences.
+prefix every invariant prose line with exact `Rule:`.
 Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. `where` and `then` have equal
 indentation; each branch body is deeper. Terminal success returns exactly declared
@@ -60,7 +60,8 @@ within an action and never shared across actions. Return declared names only:
 `return account`, never prose such as `return the session account`.
 
 Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
-before the named row. Mark optional State values `field?: Type`. A `one` body always
+before the named row. Mark optional State values in the row `field?: Type`. A `one` body
+always
 promises one row; only `optional` may say no row.
 
 ```types

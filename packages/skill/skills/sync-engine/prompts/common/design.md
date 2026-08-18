@@ -78,7 +78,8 @@ failure or needs its own tests; otherwise adapt thinly.
 
 Inventory exact selected static instances except `RequestBoundary`. A definition may
 have zero or more instances; none need carry its name. Bind each external once to a
-concrete or SSF-owned type. Reject aliases, external targets, mixed placement of inline
+concrete or SSF-owned type. Reject external-to-external alias chains, undocumented
+alias syntax, external targets, mixed placement of inline
 and detached bindings on one instance, missing, duplicate, or unresolved bindings, and
 unused concretes. Direct qualified
 owned-type dependency cycles are valid: edges resolve independently. Bindings convey

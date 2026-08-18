@@ -42,8 +42,8 @@ a set of Entries with
   a target Target
   a recordedAt DateTime
 
-within one Trail at most one Entry has each event
-within one Trail the positions are 1 through the number of Entries
+Rule: within one Trail at most one Entry has each event
+Rule: within one Trail the positions are 1 through the number of Entries
 ```
 
 ## Actions

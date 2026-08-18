@@ -22,7 +22,7 @@ describe("limited Simple State Form validation", () => {
     issue(
       "a set of Sessions with\n  a revokedAt optional DateTime",
       "SSF_MISPLACED_OPTIONAL",
-      "an optional revokedAt DateTime",
+      "  an optional revokedAt DateTime",
     );
     for (const collection of ["set of Person", "seq Person"]) {
       issue(
@@ -34,7 +34,7 @@ describe("limited Simple State Form validation", () => {
     issue(
       "a set of Sessions with\n  revokedAt optional DateTime",
       "SSF_MISPLACED_OPTIONAL",
-      "optional revokedAt DateTime",
+      "  optional revokedAt DateTime",
     );
     issue(
       "a set of Groups with\n  optional members set of Person",
@@ -44,7 +44,7 @@ describe("limited Simple State Form validation", () => {
     issue(
       "a set of Sessions with\n  a optional revokedAt DateTime",
       "SSF_ARTICLE",
-      "an optional revokedAt DateTime",
+      "  an optional revokedAt DateTime",
     );
     issue(
       "a sequence of Observations with\n  an operation Operation",
@@ -83,15 +83,38 @@ describe("limited Simple State Form validation", () => {
     ]);
   });
 
+  test.each([
+    ["person", "SSF_INVALID_EXTERNAL_NAME"],
+    ["String", "SSF_NAME_COLLISION"],
+  ] as const)("maps the external diagnostic for %s through its Types location", (name, code) => {
+    const scanned = scanDesignMarkdown(
+      "# Example\n\n```state\na set of Entries\n```\n",
+      "design/example.md",
+    );
+    const issues = validateSimpleStateForm(scanned.fences[0]!, {
+      externalTypes: [{ name, explanation: "", location: { line: 19, column: 10 } }],
+    });
+    expect(issues).toMatchObject([
+      {
+        severity: "error",
+        code,
+        externalType: name,
+        location: { source: "design/example.md", line: 19, column: 10 },
+      },
+    ]);
+    expect(issues[0]).not.toHaveProperty("span");
+  });
+
   test("adapts structured ownership and package-local spans without coupling the package to Markdown", () => {
     const scanned = scanDesignMarkdown(
       "# Example\n\n```state\na set of Entries with\n  an owner Person\n\nan Open set of Entries\n```\n",
       "design/example.md",
     );
-    const parsed = parseSimpleStateForm(scanned.fences[0]!, { externalTypes: ["Person"] });
+    const parsed = parseSimpleStateForm(scanned.fences[0]!, {
+      externalTypes: [{ name: "Person", explanation: "", location: { line: 1, column: 1 } }],
+    });
     expect(parsed.document.inventory).toMatchObject({
-      identities: [{ name: "Entries" }],
-      types: [{ name: "Entries" }, { name: "Open" }],
+      ownedTypeNames: ["Entries", "Open"],
       external: ["Person"],
     });
     expect(parsed.document.declarations[0]).toMatchObject({
@@ -106,19 +129,35 @@ describe("limited Simple State Form validation", () => {
     ["canonical sequence", "a seq of Items with\n  a members set of Person"],
     ["canonical subset", "a set of Items\n\nan Open set of Items"],
     ["either subset article", "a set of Items\n\na Hour set of Items\nan Honest set of Items"],
-    ["invariant prose", "a set of Items with\n  a title String\n\nat most one Item has each title"],
-    ["opaque no-state prose", "no durable state"],
-    ["opaque function state", "a read function\n  read () -> DateTime"],
-    ["unrecognized colon dialect", "comments: set Comment\n  author: Person"],
-  ])("ignores or accepts %s", (_name, body) => {
+    [
+      "marked invariant prose",
+      "a set of Items with\n  a title String\n\nRule: at most one Item has each title",
+    ],
+    ["marked no-state prose", "Rule: no durable state"],
+    ["marked function state", "Rule: a read function\nRule: read () -> DateTime"],
+  ])("accepts %s", (_name, body) => {
     expect(validate(body)).toEqual([]);
+  });
+
+  test("rejects an unmarked colon dialect", () => {
+    expect(validate("comments: set Comment\n  author: Person")).toMatchObject([
+      {
+        code: "SSF_MALFORMED_DECLARATION",
+        suggestion:
+          "Use a complete declaration or alias, or prefix prose with the exact `Rule:` marker.",
+      },
+      {
+        code: "SSF_MALFORMED_FIELD",
+        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
+      },
+    ]);
   });
 
   test("reports malformed article-less fields that start with structural keywords", () => {
     expect(
-      validate("a set of Groups with\n  optional owner\n  optional optional owner Person").map(
-        ({ code }) => code,
-      ),
+      validate(
+        "a set of Groups with\n  a name String\n  optional owner\n  optional optional owner Person",
+      ).map(({ code }) => code),
     ).toEqual(["SSF_MALFORMED_FIELD", "SSF_MALFORMED_FIELD"]);
   });
 
@@ -130,22 +169,22 @@ describe("limited Simple State Form validation", () => {
     );
   });
 
-  test("reports malformed structural declarations and fields without rejecting invariant prose", () => {
+  test("reports malformed structural declarations and fields while accepting a rule", () => {
     expect(
       validate(
-        "set Items\n\na set of Items with garbage\n\na set of Accounts with\n  a owner\n\nat most one Item has each owner",
+        "set Items\n\na set of Items with garbage\n\na set of Accounts with\n  an account String\n  a owner\n\nRule: at most one Item has each owner",
       ).map(({ code }) => code),
     ).toEqual(["SSF_ARTICLE", "SSF_MALFORMED_DECLARATION", "SSF_MALFORMED_FIELD"]);
   });
 
-  test("diagnoses orphan structural-looking fields while preserving indented prose", () => {
+  test("distinguishes orphan fields from malformed body lines", () => {
     expect(
       validate(
-        "  a owner\n  owner String\n  a user may own many Items\n\na set of Records with garbage\n  an optional owner",
+        "  a owner\n  owner String\nRule: a user may own many Items\n\na set of Records with garbage\n  an optional owner",
       ).map(({ code }) => code),
     ).toEqual([
       "SSF_MALFORMED_FIELD",
-      "SSF_MALFORMED_FIELD",
+      "SSF_ORPHANED_LINE",
       "SSF_MALFORMED_DECLARATION",
       "SSF_MALFORMED_FIELD",
     ]);

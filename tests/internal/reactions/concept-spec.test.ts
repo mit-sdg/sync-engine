@@ -18,7 +18,7 @@ function specification(
     principle: "Priya invites Sam; one pending invitation exists.",
     types:
       "external Person\n  A person who may receive an invitation.\n  Identity is supplied by the application.\n\nexternal Workspace",
-    state: "a set of Invitations\n  with a workspace and guest",
+    state: "a set of Invitations with\n  a workspace Workspace\n  a guest Person",
     stateProse: "Invitation identities are never reused.",
     actions: `invite(workspace: Workspace, guest: Person) : return (invitation: Invitation)
   where true
@@ -165,8 +165,8 @@ describe("Types and State", () => {
     );
   });
 
-  test("retains State without parsing SSF and separately retains following prose", () => {
-    const raw = "not SSF yet {]\n  spacing remains significant  ";
+  test("retains exact marked State text and separately retains following prose", () => {
+    const raw = "Rule: not structural State {]\nRule: spacing remains significant  ";
     const parsed = parseSpec(specification({ state: raw, stateProse: "A cross-row invariant." }));
     expect(parsed.state).toMatchObject({ body: raw, prose: "A cross-row invariant." });
   });
@@ -273,7 +273,9 @@ describe("Queries and canonical compatibility", () => {
   test("canonical compatibility ignores source locations but not authored contracts", () => {
     const compact = parseSpec(specification());
     const shifted = parseSpec(`\n\n${specification()}`);
-    const changed = parseSpec(specification({ state: "a changed, still unparsed state notation" }));
+    const changed = parseSpec(
+      specification({ state: "Rule: a changed, still unparsed state notation" }),
+    );
     expect(specificationsAreCompatible(compact, shifted)).toBe(true);
     expect(specificationsAreCompatible(compact, changed)).toBe(false);
   });

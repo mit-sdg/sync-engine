@@ -37,7 +37,7 @@ a seq of Responses with
   a text String
   an addedAt DateTime
 
-at most one open Discussion has each Subject
+Rule: at most one open Discussion has each Subject
 ```
 
 ## Actions

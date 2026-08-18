@@ -22,11 +22,13 @@ export interface SsfToken {
 
 export type SsfDiagnosticCode =
   | "SSF_ALIAS_NAME_COLLISION"
+  | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS"
   | "SSF_ARTICLE"
   | "SSF_DUPLICATE_DECLARATION"
   | "SSF_DUPLICATE_ENUM_VALUE"
   | "SSF_DUPLICATE_FIELD"
   | "SSF_INVALID_ALIAS_TARGET"
+  | "SSF_INVALID_EXTERNAL_NAME"
   | "SSF_INVALID_SUBSET_PARENT"
   | "SSF_MALFORMED_ALIAS"
   | "SSF_MALFORMED_DECLARATION"
@@ -36,15 +38,23 @@ export type SsfDiagnosticCode =
   | "SSF_NAME_COLLISION"
   | "SSF_NEAR_MISS_KEYWORD"
   | "SSF_OPTIONAL_COLLECTION"
+  | "SSF_ORPHANED_LINE"
   | "SSF_SUBSET_CYCLE"
   | "SSF_SUBSET_SELF_PARENT";
 
-export interface SsfDiagnostic {
+interface SsfDiagnosticDetail {
+  readonly severity: "error" | "advice";
   readonly code: SsfDiagnosticCode;
   readonly message: string;
   readonly suggestion: string;
-  readonly span: SsfSpan;
 }
+
+/** State diagnostics have a span; option diagnostics name their external type instead. */
+export type SsfDiagnostic = SsfDiagnosticDetail &
+  (
+    | { readonly span: SsfSpan; readonly externalType?: never }
+    | { readonly externalType: string; readonly span?: never }
+  );
 
 export interface SsfTypeName {
   /** Spelling retained from the State text. */
@@ -91,8 +101,8 @@ export interface SsfField {
 
 export type SsfMultiplicity = "element" | "sequence" | "set";
 
-export interface SsfOpaqueLine {
-  readonly kind: "opaque";
+export interface SsfRuleLine {
+  readonly kind: "rule";
   readonly text: string;
   readonly span: SsfSpan;
 }
@@ -104,7 +114,7 @@ export interface SsfDeclaration {
   readonly multiplicity: SsfMultiplicity;
   readonly parent?: SsfTypeReference;
   readonly fields: readonly SsfField[];
-  readonly opaqueBody: readonly SsfOpaqueLine[];
+  readonly rules: readonly SsfRuleLine[];
   readonly span: SsfSpan;
   readonly signatureSpan: SsfSpan;
 }
@@ -117,20 +127,10 @@ export interface SsfAlias {
   readonly span: SsfSpan;
 }
 
-export type SsfStatement = SsfDeclaration | SsfAlias | SsfOpaqueLine;
-
-export interface SsfOwnedType {
-  /** Exact spelling of the structural State declaration. */
-  readonly name: string;
-  /** The declaration spelling and its exact explicit or evidenced aliases. */
-  readonly declaredNames: readonly string[];
-  readonly roles: readonly ("identity" | "subset")[];
-  readonly declarationSpans: readonly SsfSpan[];
-}
+export type SsfStatement = SsfDeclaration | SsfAlias | SsfRuleLine;
 
 export interface SsfTypeInventory {
-  readonly identities: readonly SsfOwnedType[];
-  readonly types: readonly SsfOwnedType[];
+  readonly ownedTypeNames: readonly string[];
   readonly external: readonly string[];
   readonly primitives: readonly string[];
 }
@@ -139,12 +139,13 @@ export interface SsfDocument {
   readonly statements: readonly SsfStatement[];
   readonly declarations: readonly SsfDeclaration[];
   readonly aliases: readonly SsfAlias[];
-  readonly opaqueLines: readonly SsfOpaqueLine[];
+  /** Top-level rules; declaration-attached rules remain on their declaration. */
+  readonly rules: readonly SsfRuleLine[];
   readonly inventory: SsfTypeInventory;
 }
 
 export interface SsfParseOptions {
-  /** Opaque parameter names declared by the containing concept specification. */
+  /** External parameter names in SSF `TYPE_NAME` form. */
   readonly externalTypes?: readonly string[];
   /** Exact type spellings authored in action/query parameter and result expressions. */
   readonly evidenceTypeNames?: readonly string[];
@@ -180,14 +181,15 @@ export interface ParsedNamed {
   readonly reference: ParsedReference;
 }
 
-export interface ParsedCollection {
-  readonly kind: "collection";
-  readonly multiplicity: "set" | "sequence";
-  readonly element: ParsedNamed | ParsedEnumeration;
-  readonly span: SsfSpan;
-}
-
-export type ParsedFieldType = ParsedNamed | ParsedEnumeration | ParsedCollection;
+export type ParsedFieldType =
+  | ParsedNamed
+  | ParsedEnumeration
+  | {
+      readonly kind: "collection";
+      readonly multiplicity: "set" | "sequence";
+      readonly element: ParsedNamed | ParsedEnumeration;
+      readonly span: SsfSpan;
+    };
 
 export interface ParsedField {
   readonly name: string;
@@ -199,13 +201,12 @@ export interface ParsedField {
 }
 
 export interface ParsedDeclaration {
-  readonly kind: "declaration";
   readonly name: ParsedReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
   readonly parent?: ParsedReference;
   readonly fields: ParsedField[];
-  readonly opaqueBody: SsfOpaqueLine[];
+  readonly rules: SsfRuleLine[];
   span: SsfSpan;
   readonly signatureSpan: SsfSpan;
   readonly signature: SourceLine;
@@ -215,10 +216,7 @@ export interface ParsedDeclaration {
 }
 
 export interface ParsedAlias {
-  readonly kind: "alias";
   readonly name: ParsedReference;
   readonly target: ParsedReference;
   readonly span: SsfSpan;
 }
-
-export type ParsedStatement = ParsedDeclaration | ParsedAlias | SsfOpaqueLine;

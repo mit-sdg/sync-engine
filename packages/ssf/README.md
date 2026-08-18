@@ -2,8 +2,8 @@
 
 Simple State Form (SSF) is the State language for a concept specification. It is a
 small English-like notation for structural State declarations. Write one declaration,
-alias, or standalone invariant per top-level line. Put a declaration's fields on
-following indented lines.
+alias, or explicit `Rule:` statement per top-level line. Put a declaration's fields and
+attached rules on following indented lines.
 
 ```state
 a set of Items with
@@ -20,7 +20,7 @@ an element Settings with
 
 alias WorkItem for Items
 
-at most one Item has each title
+Rule: at most one Item has each title
 ```
 
 ## Grammar
@@ -28,9 +28,10 @@ at most one Item has each title
 The bounded document grammar is:
 
 ```text
-document := (setDecl | subsetDecl | aliasDecl | opaque)*
-setDecl := (a|an) (element|set|seq) [of] Type [with field+]
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with field+]
+document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
+setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
+declarationBody := (INDENT (field | ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
 field := [a|an] (requiredField | optional optionalField)
 requiredField := inferredField | fieldName (scalar|collection)
@@ -42,13 +43,21 @@ enum := of values
 collection := (set|seq) [of] (named|values)
 values := VALUE (or VALUE)+
 primitive := Number | String | Flag | Date | DateTime
-opaque := OPAQUE_LINE
+ruleLine := Rule: TEXT
 ```
 
-`OPAQUE_LINE` means standalone non-structural invariant prose; it is not an escape for a
-malformed structural-looking line. A top-level declaration uses `a set of Items`,
-`a seq of Items`, or `an element Settings`. The `of` after a structural keyword is
-optional. A declaration with fields ends its first line with `with`.
+`Rule:` is exact and case-sensitive. It must be the first whitespace-delimited token,
+and at least one further non-whitespace token must supply `TEXT`; `Rule:x` and a bare
+`Rule:` are not rule lines. The parser retains the complete marked line verbatim and does
+not parse, validate, interpret, or prove its text. A rule may be top-level or indented in
+the preceding declaration's `declarationBody`. A top-level `Rule:` ends that declaration
+body, so a later indented line has no enclosing declaration. Every other nonblank line
+must match the declaration, alias, or field grammar for its position.
+
+A top-level declaration uses `a set of Items`, `a seq of Items`, or `an element Settings`.
+The `of` after a structural keyword is optional. A declaration with fields ends its first
+line with `with`, which requires at least one real field. Attached `Rule:` lines may occur
+alongside fields but do not satisfy that requirement.
 
 A subset declaration, such as `a Completed set of Items`, classifies members of an
 existing parent. A subset may use `set` or `element`, but not `seq`. Every parent must
@@ -62,8 +71,11 @@ SSF can recognize two exact authored spellings as one owned type. It gathers can
 from named State field types and from action/query parameter and result type expressions
 in the containing concept. It never generates a candidate. For each candidate, SSF uses
 the vendored `plur` 6.0.0 relation: pluralizing either authored spelling must exactly
-yield the other. The candidate must match one unique non-element structure or subset.
-For example, the field type `Item` establishes the additional owned spelling here:
+yield the other. The candidate must match one unique non-element structure or subset,
+and that owner must match only one automatic candidate. If either side is ambiguous, the
+whole automatic owner group remains unresolved and SSF emits non-fatal advice naming the
+rejected candidate spelling or spellings and the owner or owners involved. Explicit aliases do not count toward
+this limit. The field type `Item` establishes the additional owned spelling here:
 
 ```state
 a set of Items with
@@ -98,6 +110,7 @@ primitives, and other explicit aliases and must be unique.
 A field may have an explicit lowercase name before its value form:
 
 ```state
+a set of Items with
   a title String
   an optional owner Person
   a members set of Person
@@ -114,6 +127,7 @@ A field name may be omitted only when a scalar or collection supplies one named 
 SSF lowercases only the first character of that exact type spelling:
 
 ```state
+an element Example with
   a Profile
   a set of Options
 ```
@@ -136,10 +150,13 @@ uppercase ASCII letter. Field names begin with a lowercase ASCII letter. Remaini
 characters may be ASCII letters, digits, or `_`. Enumeration values begin with an
 uppercase ASCII letter and otherwise use uppercase ASCII letters, digits, or `_`.
 
-Structural declaration names are unique across the whole State. They must not exactly
-collide with an external parameter or one of the five SSF primitives. Explicit alias
-names use the same whole-State namespace. Field names are local to one declaration. Enumeration
-values are local to one enumeration.
+Structural declaration names are unique across the whole State. External parameter names
+supplied to SSF must use the same uppercase `Type` form; invalid names are diagnosed and
+omitted from the external inventory. An external parameter must not equal one of the five
+SSF primitives: a collision is diagnosed and the primitive remains the sole inventory
+entry and reference classification. Structural and explicit alias names also must not
+collide with an external or primitive. Field names are local to one declaration.
+Enumeration values are local to one enumeration.
 
 All joins retain exact authored spelling. Automatic alias resolution only compares two
 authored names through the documented plural relation; it never corrects or inserts a
@@ -158,9 +175,10 @@ State field value names remain an intentionally open authored namespace. A field
 refer to an owned identity, external parameter, primitive, conventional value type, or
 concept-local refinement. An unresolved value is retained and classified as unresolved
 but is not itself an SSF error. It becomes owned only when the bounded automatic-alias
-rule establishes one unique non-element structure or subset owner. Action and query types
-likewise need not occur in State; their exact spellings contribute alias candidates but do not otherwise
-close the namespace.
+rule establishes one unique non-element structure or subset owner and that owner has no
+second automatic candidate. Action and query types likewise need not occur in State;
+their exact spellings contribute alias candidates but do not otherwise close the
+namespace.
 
 ## State meaning
 
@@ -173,12 +191,22 @@ A subset introduces no identity. Subsets may overlap, and subset fields add rela
 for classified members. Which side declares a relation implies nothing about storage,
 navigation, or ownership.
 
-## Opaque prose and canonical form
+## Rule lines and canonical form
 
-A prose line such as `at most one Item has each title` remains opaque text. SSF does
-not interpret or prove it. A line beginning like a declaration, alias, or indented
-field must complete that structural form; malformed structural-looking lines receive
-source-located diagnostics rather than becoming prose.
+Rule prose must use the explicit marker:
+
+```state
+Rule: at most one Item has each title
+```
+
+On a well-formed rule line, the marker determines that its required text is prose. SSF
+retains the line but does not interpret or prove its text, even when the text resembles a
+declaration or field. An unmarked top-level line must parse as a declaration or alias.
+An unmarked indented line must parse as a field. Failure receives a source-located
+diagnostic rather than an
+intent guess. The closed near-miss set `rule:`, `RULE:`, `Invariant:`, `invariant:`,
+`Note:`, and `note:` is diagnosed with a suggestion only when the near miss is likewise
+an exact first token followed by text.
 
 Canonical top-level declarations use `a set`, `a seq`, or `an element`. A subset puts
 `a` or `an` before its subtype. Fields require `with` on their declaration. Structural
@@ -186,5 +214,5 @@ keywords are exactly `set`, `seq`, and `element`; `array`, `list`, `sequence`, a
 `sequences` are diagnosed near misses for `seq`, and `singleton` for `element`.
 
 SSF proves bounded structural declarations, their graph integrity, and their exact
-owned type inventory. It does not prove opaque invariants, field-value refinement
-meaning, behavior, storage layout, or implementation semantics.
+owned type inventory. It does not prove marked rule text, field-value refinement meaning,
+behavior, storage layout, or implementation semantics.

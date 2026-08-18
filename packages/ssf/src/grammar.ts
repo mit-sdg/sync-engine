@@ -1,22 +1,20 @@
 import { ENUM_VALUE, FIELD_NAME, inferredFieldName, TYPE_NAME } from "./names.ts";
 import type {
   ParsedAlias,
-  ParsedCollection,
   ParsedDeclaration,
   ParsedEnumeration,
   ParsedField,
   ParsedFieldType,
   ParsedNamed,
   ParsedReference,
-  ParsedStatement,
   SourceLine,
   SsfDiagnostic,
   SsfMultiplicity,
+  SsfRuleLine,
   SsfToken,
 } from "./model.ts";
-import { lineSpan, opaqueLine, span, words } from "./source.ts";
+import { lineSpan, ruleLine, span, words } from "./source.ts";
 
-const CANONICAL_STRUCTURAL = new Set(["element", "seq", "set"]);
 const NEAR_MISS_STRUCTURAL = new Map<string, SsfMultiplicity>([
   ["array", "sequence"],
   ["list", "sequence"],
@@ -24,55 +22,58 @@ const NEAR_MISS_STRUCTURAL = new Map<string, SsfMultiplicity>([
   ["sequences", "sequence"],
   ["singleton", "element"],
 ]);
+const RULE_MARKER = "Rule:";
+const NEAR_MISS_RULE_MARKERS = [
+  "rule:",
+  "RULE:",
+  "Invariant:",
+  "invariant:",
+  "Note:",
+  "note:",
+] as const;
 
 export interface GrammarResult {
   readonly declarations: readonly ParsedDeclaration[];
   readonly aliases: readonly ParsedAlias[];
-  readonly statements: readonly ParsedStatement[];
+  readonly rules: readonly SsfRuleLine[];
   readonly diagnostics: readonly SsfDiagnostic[];
 }
 
-function multiplicityOf(structural: string): SsfMultiplicity | undefined {
+function multiplicityOf(structural: string | undefined): SsfMultiplicity | undefined {
   if (structural === "seq") return "sequence";
   if (structural === "set" || structural === "element") return structural;
-  return NEAR_MISS_STRUCTURAL.get(structural);
+  return structural === undefined ? undefined : NEAR_MISS_STRUCTURAL.get(structural);
 }
 
 function parseDeclaration(line: SourceLine): ParsedDeclaration | undefined {
-  if (/^[ \t]/.test(line.text)) return undefined;
   const authored = words(line);
   let first = 0;
   if (authored[first] === "a" || authored[first] === "an") first += 1;
-  const topStructural = authored[first];
-  const subsetStructural = authored[first + 1];
+  const topMultiplicity = multiplicityOf(authored[first]);
+  const subsetMultiplicity = multiplicityOf(authored[first + 1]);
   let declarationKind: "collection" | "subset";
+  let multiplicity: SsfMultiplicity;
   let structuralIndex: number;
   let nameIndex: number;
   let parentIndex: number | undefined;
 
-  if (
-    topStructural !== undefined &&
-    (CANONICAL_STRUCTURAL.has(topStructural) || NEAR_MISS_STRUCTURAL.has(topStructural))
-  ) {
+  if (topMultiplicity !== undefined) {
     declarationKind = "collection";
+    multiplicity = topMultiplicity;
     structuralIndex = first;
     nameIndex = first + 1 + (authored[first + 1] === "of" ? 1 : 0);
   } else if (
     TYPE_NAME.test(authored[first] ?? "") &&
-    subsetStructural !== undefined &&
-    (CANONICAL_STRUCTURAL.has(subsetStructural) || NEAR_MISS_STRUCTURAL.has(subsetStructural))
+    subsetMultiplicity !== undefined &&
+    subsetMultiplicity !== "sequence"
   ) {
     declarationKind = "subset";
+    multiplicity = subsetMultiplicity;
     structuralIndex = first + 1;
     nameIndex = first;
     parentIndex = structuralIndex + 1 + (authored[structuralIndex + 1] === "of" ? 1 : 0);
   } else return undefined;
 
-  const structural = authored[structuralIndex] ?? "";
-  const multiplicity = multiplicityOf(structural);
-  if (multiplicity === undefined || (declarationKind === "subset" && multiplicity === "sequence")) {
-    return undefined;
-  }
   const nameToken = line.tokens[nameIndex];
   const parentToken = parentIndex === undefined ? undefined : line.tokens[parentIndex];
   if (
@@ -88,7 +89,6 @@ function parseDeclaration(line: SourceLine): ParsedDeclaration | undefined {
   if (trailing.length > 1 || (trailing.length > 0 && !hasWith)) return undefined;
 
   return {
-    kind: "declaration",
     name: { text: nameToken.text, span: nameToken.span },
     declarationKind,
     multiplicity,
@@ -96,18 +96,17 @@ function parseDeclaration(line: SourceLine): ParsedDeclaration | undefined {
       ? {}
       : { parent: { text: parentToken.text, span: parentToken.span } }),
     fields: [],
-    opaqueBody: [],
+    rules: [],
     span: lineSpan(line),
     signatureSpan: lineSpan(line),
     signature: line,
     structuralIndex,
-    authoredStructural: structural,
+    authoredStructural: authored[structuralIndex]!,
     hasWith,
   };
 }
 
 function parseAlias(line: SourceLine): ParsedAlias | undefined {
-  if (/^[ \t]/.test(line.text)) return undefined;
   const tokens = line.tokens;
   if (
     tokens.length !== 4 ||
@@ -118,7 +117,6 @@ function parseAlias(line: SourceLine): ParsedAlias | undefined {
   )
     return undefined;
   return {
-    kind: "alias",
     name: { text: tokens[1].text, span: tokens[1].span },
     target: { text: tokens[3].text, span: tokens[3].span },
     span: lineSpan(line),
@@ -168,28 +166,17 @@ function namedType(token: SsfToken | undefined): ParsedNamed | undefined {
 }
 
 function parseField(line: SourceLine): ParsedField | undefined {
-  if (!/^[ \t]/.test(line.text)) return undefined;
-  const original = [...line.tokens];
-  let first = 0;
-  if (original[first]?.text === "a" || original[first]?.text === "an") first += 1;
-  const optionalIndex = original.findIndex(
+  const authored = line.tokens;
+  const first = authored[0]?.text === "a" || authored[0]?.text === "an" ? 1 : 0;
+  const optionalIndex = authored.findIndex(
     (token, index) => index >= first && token.text === "optional",
   );
-  const tokens = original.filter((_, index) => index >= first && index !== optionalIndex);
-  if (tokens.length === 0) return undefined;
-
-  let name: string | undefined;
-  let nameSpan = tokens[0]?.span;
-  let inferredName = false;
-  let valueStart = 0;
-  if (
+  const tokens = authored.filter((_, index) => index >= first && index !== optionalIndex);
+  const explicitName =
     tokens[0]?.text !== "set" &&
     tokens[0]?.text !== "seq" &&
-    FIELD_NAME.test(tokens[0]?.text ?? "")
-  ) {
-    name = tokens[0]?.text;
-    valueStart = 1;
-  }
+    FIELD_NAME.test(tokens[0]?.text ?? "");
+  const valueStart = explicitName ? 1 : 0;
 
   let value: ParsedFieldType | undefined;
   const structural = tokens[valueStart]?.text;
@@ -200,98 +187,91 @@ function parseField(line: SourceLine): ParsedField | undefined {
     if (
       element !== undefined &&
       (element.kind === "enumeration" || elementStart + 1 === tokens.length)
-    ) {
+    )
       value = {
         kind: "collection",
         multiplicity: structural === "set" ? "set" : "sequence",
         element,
-        span: span(
-          tokens[valueStart]!.span.start,
-          tokens.at(-1)?.span.end ?? tokens[valueStart]!.span.end,
-        ),
-      } satisfies ParsedCollection;
-      if (name === undefined && element.kind === "named") {
-        name = inferredFieldName(element.reference.text);
-        nameSpan = element.reference.span;
-        inferredName = true;
-      }
-    }
+        span: span(tokens[valueStart]!.span.start, tokens.at(-1)!.span.end),
+      };
   } else {
     value = scalarEnumeration(tokens, valueStart) ?? namedType(tokens[valueStart]);
-    const consumed =
-      value?.kind === "named" ? valueStart + 1 : value?.kind === "enumeration" ? tokens.length : -1;
-    if (consumed !== tokens.length) value = undefined;
-    if (name === undefined && value?.kind === "named") {
-      name = inferredFieldName(value.reference.text);
-      nameSpan = value.reference.span;
-      inferredName = true;
-    }
+    if (value?.kind === "named" && valueStart + 1 !== tokens.length) value = undefined;
   }
-  if (name === undefined || nameSpan === undefined || value === undefined) return undefined;
+  const inferred =
+    value?.kind === "named"
+      ? value.reference
+      : value?.kind === "collection" && value.element.kind === "named"
+        ? value.element.reference
+        : undefined;
+  const name = explicitName ? tokens[0]?.text : inferredFieldName(inferred?.text ?? "");
+  const nameSpan = explicitName ? tokens[0]?.span : inferred?.span;
+  if (name === "" || nameSpan === undefined || value === undefined) return undefined;
   return {
     name,
     nameSpan,
-    inferredName,
+    inferredName: !explicitName,
     optional: optionalIndex >= 0,
     value,
     span: lineSpan(line),
   };
 }
 
-function structurallyLooksLikeDeclaration(line: SourceLine): boolean {
-  if (/^[ \t]/.test(line.text)) return false;
-  const authored = words(line);
-  const first = authored[0] === "a" || authored[0] === "an" ? 1 : 0;
-  const structural = authored[first];
-  return (
-    (structural !== undefined &&
-      (CANONICAL_STRUCTURAL.has(structural) || NEAR_MISS_STRUCTURAL.has(structural))) ||
-    (TYPE_NAME.test(structural ?? "") &&
-      authored[first + 1] !== undefined &&
-      (CANONICAL_STRUCTURAL.has(authored[first + 1]!) ||
-        NEAR_MISS_STRUCTURAL.has(authored[first + 1]!)))
-  );
+function ruleMarker(line: SourceLine): string | undefined {
+  if (line.tokens.length < 2) return undefined;
+  const first = line.tokens[0]?.text;
+  if (first === RULE_MARKER) return RULE_MARKER;
+  return NEAR_MISS_RULE_MARKERS.find((marker) => marker === first);
 }
 
-function structurallyLooksLikeField(line: SourceLine): boolean {
-  if (!/^[ \t]/.test(line.text)) return false;
-  const authored = words(line);
-  const hasArticle = authored[0] === "a" || authored[0] === "an";
-  const field = authored.slice(hasArticle ? 1 : 0);
-  if (hasArticle && (field.length === 0 || field.length === 1)) return true;
-  if (field[0] === "of" || field[0] === "optional" || field[0] === "set" || field[0] === "seq")
-    return true;
-  return (
-    (hasArticle && TYPE_NAME.test(field[1] ?? "")) ||
-    field[1] === "optional" ||
-    field[1] === "set" ||
-    field[1] === "seq" ||
-    field[1] === "of"
-  );
+function nearMissRuleDiagnostic(line: SourceLine, marker: string): SsfDiagnostic {
+  const markerToken = line.tokens[0];
+  const markerStart = (markerToken?.span.start.offset ?? line.start) - line.start;
+  const markerEnd = (markerToken?.span.end.offset ?? line.start) - line.start;
+  return {
+    severity: "error",
+    code: "SSF_NEAR_MISS_KEYWORD",
+    message: `Use the exact SSF prose marker \`${RULE_MARKER}\` instead of \`${marker}\`.`,
+    suggestion: `${line.text.slice(0, markerStart)}${RULE_MARKER}${line.text.slice(markerEnd)}`,
+    span: markerToken?.span ?? lineSpan(line),
+  };
 }
 
-function malformedStructuralDiagnostic(
+function orphanedLineDiagnostic(line: SourceLine, marker?: string): SsfDiagnostic {
+  const nearMiss = marker !== undefined && marker !== RULE_MARKER;
+  const subject = marker === undefined ? "valid SSF field" : `indented \`${marker}\` line`;
+  return {
+    severity: "error",
+    code: "SSF_ORPHANED_LINE",
+    message: `This ${subject} has no enclosing SSF declaration${nearMiss ? ` and does not use the exact \`${RULE_MARKER}\` marker` : ""}.`,
+    suggestion:
+      marker === undefined
+        ? "Add an enclosing declaration ending in `with` before this field."
+        : nearMiss
+          ? `Add an enclosing declaration and use \`${RULE_MARKER}\`; or unindent the corrected line to make it a top-level rule.`
+          : "Add an enclosing declaration before this line, or remove its indentation to make it a top-level rule.",
+    span: lineSpan(line),
+  };
+}
+
+function malformedLineDiagnostic(
   line: SourceLine,
   kind: "alias" | "declaration" | "field",
 ): SsfDiagnostic {
   if (kind === "alias")
     return {
+      severity: "error",
       code: "SSF_MALFORMED_ALIAS",
-      message:
-        "This line begins like an SSF alias but does not have the complete `alias Name for Target` form.",
+      message: "This top-level line is not a complete SSF alias.",
       suggestion: "Use exactly `alias Name for Target` with uppercase SSF type names.",
       span: lineSpan(line),
     };
+  const field = kind === "field";
   return {
-    code: kind === "declaration" ? "SSF_MALFORMED_DECLARATION" : "SSF_MALFORMED_FIELD",
-    message:
-      kind === "declaration"
-        ? "This line begins like an SSF declaration but does not have one complete structural form."
-        : "This indented line begins like an SSF field but does not have one complete field form.",
-    suggestion:
-      kind === "declaration"
-        ? "Use one canonical `a set of Name`, `a seq of Name`, `an element Name`, or subset declaration; put fields on following indented lines after `with`."
-        : "Use `fieldName Type`, `optional fieldName Type`, or a canonical set/sequence field, optionally prefixed by an article.",
+    severity: "error",
+    code: field ? "SSF_MALFORMED_FIELD" : "SSF_MALFORMED_DECLARATION",
+    message: `This ${field ? "indented" : "top-level"} line is not ${field ? "an SSF field or" : "an SSF declaration, alias, or"} \`${RULE_MARKER}\` line.`,
+    suggestion: `Use a complete ${field ? "field" : "declaration or alias"}, or prefix prose with the exact \`${RULE_MARKER}\` marker.`,
     span: lineSpan(line),
   };
 }
@@ -311,11 +291,9 @@ function canonicalStructural(structural: SsfMultiplicity): "element" | "seq" | "
   return structural === "sequence" ? "seq" : structural;
 }
 
-function declarationDiagnostics(
-  declaration: ParsedDeclaration,
-  hasFieldLikeBody: boolean,
-): SsfDiagnostic[] {
+function declarationDiagnostics(declaration: ParsedDeclaration): SsfDiagnostic[] {
   const diagnostics: SsfDiagnostic[] = [];
+  const hasFields = declaration.fields.length > 0;
   const tokens = declaration.signature.tokens;
   const authored = words(declaration.signature);
   const canonical = canonicalStructural(declaration.multiplicity);
@@ -327,12 +305,13 @@ function declarationDiagnostics(
   const subsetMissingArticle =
     declaration.declarationKind === "subset" && declaration.structuralIndex === 1;
   if (collectionHasArticle) replacements.set(0, articleFor(declaration.multiplicity));
-  const canonicalLine = `${correctedTokens(tokens, replacements)}${hasFieldLikeBody && !declaration.hasWith ? " with" : ""}`;
+  const canonicalLine = `${correctedTokens(tokens, replacements)}${hasFields && !declaration.hasWith ? " with" : ""}`;
   const subsetArticleSuggestion = `Use \`a ${canonicalLine}\` or \`an ${canonicalLine}\`.`;
   const structuralToken = tokens[declaration.structuralIndex];
 
   if (declaration.declarationKind === "collection" && declaration.structuralIndex === 0) {
     diagnostics.push({
+      severity: "error",
       code: "SSF_ARTICLE",
       message: `Use \`${articleFor(declaration.multiplicity)}\` before \`${canonical}\`.`,
       suggestion: `${articleFor(declaration.multiplicity)} ${canonicalLine}`,
@@ -340,6 +319,7 @@ function declarationDiagnostics(
     });
   } else if (subsetMissingArticle) {
     diagnostics.push({
+      severity: "error",
       code: "SSF_ARTICLE",
       message: `Add \`a\` or \`an\` before subset \`${declaration.name.text}\`.`,
       suggestion: subsetArticleSuggestion,
@@ -347,6 +327,7 @@ function declarationDiagnostics(
     });
   } else if (declaration.authoredStructural !== canonical && structuralToken !== undefined) {
     diagnostics.push({
+      severity: "error",
       code: "SSF_NEAR_MISS_KEYWORD",
       message: `Use the SSF keyword \`${canonical}\` instead of \`${declaration.authoredStructural}\`.`,
       suggestion: canonicalLine,
@@ -357,6 +338,7 @@ function declarationDiagnostics(
     const article = authored[0];
     if ((article === "a" || article === "an") && article !== expected && tokens[0] !== undefined) {
       diagnostics.push({
+        severity: "error",
         code: "SSF_ARTICLE",
         message: `Use \`${expected}\` before \`${canonical}\`.`,
         suggestion: canonicalLine,
@@ -364,21 +346,19 @@ function declarationDiagnostics(
       });
     }
   }
-  if (
-    declaration.hasWith &&
-    declaration.fields.length === 0 &&
-    declaration.opaqueBody.length === 0
-  ) {
+  if (declaration.hasWith && declaration.fields.length === 0) {
     diagnostics.push({
+      severity: "error",
       code: "SSF_MALFORMED_DECLARATION",
-      message: "A declaration ending in `with` must have an indented body.",
+      message: "A declaration ending in `with` must have at least one indented field.",
       suggestion: "Remove `with` or add at least one indented field.",
       span: tokens.at(-1)?.span ?? declaration.signatureSpan,
     });
   }
-  if (hasFieldLikeBody && !declaration.hasWith) {
+  if (hasFields && !declaration.hasWith) {
     const end = declaration.signatureSpan.end;
     diagnostics.push({
+      severity: "error",
       code: "SSF_MISSING_WITH",
       message: "A declaration with indented fields must include `with`.",
       suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
@@ -388,24 +368,21 @@ function declarationDiagnostics(
   return diagnostics;
 }
 
-function fieldDiagnostics(line: SourceLine): readonly SsfDiagnostic[] {
-  if (!/^[ \t]/.test(line.text)) return [];
+function fieldDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
   const tokens = line.tokens;
+  const indentation = line.text.slice(0, (tokens[0]?.span.start.offset ?? line.start) - line.start);
   const hasArticle = tokens[0]?.text === "a" || tokens[0]?.text === "an";
   const optionalIndex = tokens.findIndex(({ text }) => text === "optional");
-  if (optionalIndex < 0) return [];
-  const collectionIndex = tokens.findIndex(({ text }) => text === "set" || text === "seq");
-  const optionalToken = tokens[optionalIndex];
-  if (optionalToken === undefined) return [];
-  if (collectionIndex >= 0)
-    return [
-      {
-        code: "SSF_OPTIONAL_COLLECTION",
-        message: "SSF collections are never optional; an empty collection represents absence.",
-        suggestion: "Remove `optional` from this field.",
-        span: optionalToken.span,
-      },
-    ];
+  if (optionalIndex < 0) return undefined;
+  const optionalToken = tokens[optionalIndex]!;
+  if (tokens.some(({ text }) => text === "set" || text === "seq"))
+    return {
+      severity: "error",
+      code: "SSF_OPTIONAL_COLLECTION",
+      message: "SSF collections are never optional; an empty collection represents absence.",
+      suggestion: "Remove `optional` from this field.",
+      span: optionalToken.span,
+    };
   const expectedOptionalIndex = hasArticle ? 1 : 0;
   if (optionalIndex !== expectedOptionalIndex) {
     const withoutOptional = tokens
@@ -413,84 +390,82 @@ function fieldDiagnostics(line: SourceLine): readonly SsfDiagnostic[] {
       .map(({ text }) => text);
     if (hasArticle) withoutOptional[0] = "an";
     withoutOptional.splice(expectedOptionalIndex, 0, "optional");
-    return [
-      {
-        code: "SSF_MISPLACED_OPTIONAL",
-        message:
-          "The `optional` modifier must precede the field name and follow the article when present.",
-        suggestion: withoutOptional.join(" "),
-        span: optionalToken.span,
-      },
-    ];
+    return {
+      severity: "error",
+      code: "SSF_MISPLACED_OPTIONAL",
+      message:
+        "The `optional` modifier must precede the field name and follow the article when present.",
+      suggestion: `${indentation}${withoutOptional.join(" ")}`,
+      span: optionalToken.span,
+    };
   }
   if (tokens[0]?.text === "a")
-    return [
-      {
-        code: "SSF_ARTICLE",
-        message: "Use `an` before `optional`.",
-        suggestion: correctedTokens(tokens, new Map([[0, "an"]])),
-        span: tokens[0].span,
-      },
-    ];
-  return [];
+    return {
+      severity: "error",
+      code: "SSF_ARTICLE",
+      message: "Use `an` before `optional`.",
+      suggestion: `${indentation}${correctedTokens(tokens, new Map([[0, "an"]]))}`,
+      span: tokens[0].span,
+    };
+  return undefined;
 }
 
 export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
   const declarations: ParsedDeclaration[] = [];
   const aliases: ParsedAlias[] = [];
-  const statements: ParsedStatement[] = [];
+  const rules: SsfRuleLine[] = [];
   const diagnostics: SsfDiagnostic[] = [];
   let current: ParsedDeclaration | undefined;
 
   for (const line of lines) {
     if (line.text.trim() === "") continue;
-    if (/^[ \t]/.test(line.text)) {
-      const field = parseField(line);
-      if (current === undefined) {
-        statements.push(opaqueLine(line));
-        if (field !== undefined || structurallyLooksLikeField(line))
-          diagnostics.push(malformedStructuralDiagnostic(line, "field"));
-        continue;
+    const indented = (line.tokens[0]?.span.start.offset ?? line.end) > line.start;
+    const marker = ruleMarker(line);
+    if (marker !== undefined) {
+      if (indented) {
+        if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line, marker));
+        else {
+          if (marker === RULE_MARKER) current.rules.push(ruleLine(line));
+          else diagnostics.push(nearMissRuleDiagnostic(line, marker));
+          current.span = span(current.span.start, lineSpan(line).end);
+        }
+      } else {
+        current = undefined;
+        if (marker === RULE_MARKER) rules.push(ruleLine(line));
+        else diagnostics.push(nearMissRuleDiagnostic(line, marker));
       }
-      if (field === undefined) {
-        current.opaqueBody.push(opaqueLine(line));
-        if (structurallyLooksLikeField(line))
-          diagnostics.push(malformedStructuralDiagnostic(line, "field"));
-      } else current.fields.push(field);
-      diagnostics.push(...fieldDiagnostics(line));
-      current.span = span(current.span.start, lineSpan(line).end);
       continue;
     }
+    if (indented) {
+      const field = parseField(line);
+      if (field === undefined) diagnostics.push(malformedLineDiagnostic(line, "field"));
+      else if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
+      else {
+        current.fields.push(field);
+        const diagnostic = fieldDiagnostic(line);
+        if (diagnostic !== undefined) diagnostics.push(diagnostic);
+      }
+      if (current !== undefined) current.span = span(current.span.start, lineSpan(line).end);
+      continue;
+    }
+
+    current = undefined;
     const alias = parseAlias(line);
     if (alias !== undefined) {
       aliases.push(alias);
-      statements.push(alias);
-      current = undefined;
       continue;
     }
     const declaration = parseDeclaration(line);
     if (declaration === undefined) {
-      statements.push(opaqueLine(line));
-      if (line.tokens[0]?.text === "alias")
-        diagnostics.push(malformedStructuralDiagnostic(line, "alias"));
-      else if (structurallyLooksLikeDeclaration(line))
-        diagnostics.push(malformedStructuralDiagnostic(line, "declaration"));
-      current = undefined;
+      diagnostics.push(
+        malformedLineDiagnostic(line, line.tokens[0]?.text === "alias" ? "alias" : "declaration"),
+      );
       continue;
     }
     declarations.push(declaration);
-    statements.push(declaration);
     current = declaration;
   }
 
-  for (const declaration of declarations) {
-    const hasFieldLikeBody =
-      declaration.fields.length > 0 ||
-      declaration.opaqueBody.some(({ text }) => {
-        const first = text.trimStart().split(/\s+/, 1)[0];
-        return first === "a" || first === "an";
-      });
-    diagnostics.push(...declarationDiagnostics(declaration, hasFieldLikeBody));
-  }
-  return { declarations, aliases, statements, diagnostics };
+  for (const declaration of declarations) diagnostics.push(...declarationDiagnostics(declaration));
+  return { declarations, aliases, rules, diagnostics };
 }
