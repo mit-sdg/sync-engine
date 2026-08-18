@@ -34,7 +34,9 @@ Run only assigned focused source-agreement, artifact, type, integration, and bou
 host checks for this wiring; the coordinator owns the final complete acceptance chain.
 Repair wiring defects. Stop with a material contract blocker if implementation needs a new
 owner, action, refusal, lifecycle, application policy, external binding, cross-concept
-failure rule, or visible behavior. Never change approved design or concept contracts.
+failure rule, or visible behavior. Assignment prose is not an API reference: return a
+context blocker rather than guess an undocumented call. Never change approved design or
+concept contracts.
 
 Return changed paths, check outcomes, and any blocker.
 

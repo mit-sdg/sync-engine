@@ -550,6 +550,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain(
       "On failure, return that focused diagnostic to the original worker, rerun the affected focused command, then every check invalidated by the changed paths regardless of chain position",
     );
+    expect(normalized).toContain(
+      "It refuses one role's paths going to another, a concept worker with application-wide commands or no focused type check, and a missing storage guarantee",
+    );
+    expect(workflow).toContain("assignment new --role <role>");
 
     const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));
     expect(evidence).toMatch(/existing\s+evidence is sufficient/);
@@ -586,6 +590,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       },
     });
     expect(await filesBelow(new URL("scripts/", skillRoot))).toEqual([
+      "assignment.ts",
       "brief.ts",
       "command.ts",
       "design.ts",

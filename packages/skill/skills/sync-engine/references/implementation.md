@@ -5,8 +5,16 @@ captured.
 
 ## Implement in bounded phases
 
-Write each small Markdown assignment under `.sync-engine/`, listing exact allowed
-application read and write paths, commands, and return contract. Never include framework checkout
+Start each assignment with the compiler, fill it, and check it before building the
+prompt. It refuses one role's paths going to another, a concept worker with
+application-wide commands or no focused type check, and a missing storage guarantee.
+List every allowed path as a backticked bullet:
+
+````sh
+bun "<skill-root>/scripts/command.ts" assignment new --role <role> \
+  --design-digest <sha256>
+bun "<skill-root>/scripts/command.ts" assignment check <assignment-file>
+``` Never include framework checkout
 source, installed package contents, build output, source maps, or paths reached by
 following framework imports. Supply framework information only through exact public API references and selected
 application examples: at most one useful implementation example per concept and one
@@ -58,10 +66,9 @@ resend its full prompt. Before delivery require:
 ```sh
 bun "<skill-root>/scripts/command.ts" follow-up check <file> \
   --design-root design --design-digest <sha256>
-```
+````
 
-Concept workers run only assigned concept tests and a necessary focused type check;
-application workers run focused source-agreement, artifact, integration, and bounded
+Application workers run focused source-agreement, artifact, integration, and bounded
 host checks for assigned wiring; evidence workers run assigned scenarios or tests, not a
 production-wide build chain. A mismatch is material when implementation requires a new
 owner, action, refusal, lifecycle, application policy, external type binding,
@@ -93,9 +100,6 @@ Confirm every required role ran independently before reporting anything:
 bun "<skill-root>/scripts/command.ts" handback check \
   --design-root design --design-digest <sha256>
 ```
-
-It fails when a required role has no settled launch record, when a record's prompt no
-longer hashes to the record, or when the harness does not know a recorded agent.
 
 Inspect complete status and relevant diffs, including untracked files and `.sync-engine/`
 itself; verify the brief and approved design unchanged and returned changes inside

@@ -485,6 +485,66 @@ describe("sync-engine-skill command", () => {
     expect(invented.stderr).toContain("paseo does not know: designer invented-agent-id");
   });
 
+  test("refuses an assignment that crosses role ownership", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-assignment-"));
+    temporary.push(directory);
+    const started = run(
+      ["assignment", "new", "--role", "concept-worker", "--design-digest", "a".repeat(64)],
+      directory,
+    );
+    expect(started.status).toBe(0);
+    const path = started.stdout.match(/Assignment started: (\S+)/)?.[1];
+    expect(path).toMatch(/\.sync-engine\/\d{4}-.*-concept-worker\.assignment\.md$/);
+
+    const complete = `# concept-worker assignment
+
+## Storage guarantee
+
+In-memory only; nothing survives restart, per the brief's demo decision.
+
+## Allowed write paths
+
+- \`src/concepts/Shortening.ts\`
+- \`tests/concepts/Shortening.test.ts\`
+
+## Commands
+
+- \`bun test tests/concepts/\`
+- \`tsc --noEmit\`
+`;
+    await writeFile(path!, complete);
+    expect(run(["assignment", "check", path!], directory).status).toBe(0);
+
+    await writeFile(
+      path!,
+      complete.replace(
+        "- `tests/concepts/Shortening.test.ts`",
+        "- `tests/concepts/Shortening.test.ts`\n- `src/concepts/Shortening.registry.ts`",
+      ),
+    );
+    const crossed = run(["assignment", "check", path!], directory);
+    expect(crossed.status).toBe(1);
+    expect(crossed.stderr).toContain(
+      "Assignment gives concept-worker a path owned by the application worker: src/concepts/Shortening.registry.ts",
+    );
+
+    await writeFile(
+      path!,
+      complete.replace("- `tsc --noEmit`", "- `bunx --no-install sync-engine check`"),
+    );
+    const wide = run(["assignment", "check", path!], directory);
+    expect(wide.status).toBe(1);
+    expect(wide.stderr).toContain("application-wide command `sync-engine check`");
+
+    await writeFile(
+      path!,
+      complete.replace(/## Storage guarantee[\s\S]*?## Allowed/, "## Allowed"),
+    );
+    const unstated = run(["assignment", "check", path!], directory);
+    expect(unstated.status).toBe(1);
+    expect(unstated.stderr).toContain("Assignment states no storage guarantee");
+  });
+
   test("launches only through the harness and only from the workspace", async () => {
     const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-launch-"));
     temporary.push(directory);

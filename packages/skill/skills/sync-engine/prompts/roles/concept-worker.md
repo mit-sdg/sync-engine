@@ -27,7 +27,9 @@ storage guarantees—not layout.
 
 Run assigned focused checks and repair ordinary defects. Stop with a material contract
 blocker if implementation needs a new owner, action, refusal, lifecycle, application
-policy, external binding, cross-concept failure rule, or visible behavior. Do not change
+policy, external binding, cross-concept failure rule, or visible behavior; an undeclared
+case is that blocker, never an undeclared throw. Assignment prose is not an API
+reference: return a context blocker rather than guess an undocumented call. Do not change
 the design.
 
 Return changed paths, check outcomes, and any blocker.

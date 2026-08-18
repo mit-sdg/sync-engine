@@ -5,6 +5,7 @@ import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
 import { digestDesign, requireDesignDigest } from "./design.ts";
 import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
@@ -197,6 +198,8 @@ function usage(): string {
   sync-engine-skill design digest <design-directory>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
+  sync-engine-skill assignment new --role <role> --design-digest <sha256>
+  sync-engine-skill assignment check <file>
   sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
     [--brief <path>]
@@ -348,6 +351,9 @@ async function run(args: readonly string[]): Promise<void> {
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
     await requireCompletedRole(options.role);
+    for (const input of options.inputs) {
+      if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
+    }
     const result = await buildPrompt({
       role: options.role,
       inputs: options.inputs,
@@ -397,6 +403,30 @@ async function run(args: readonly string[]): Promise<void> {
             `${compiler} follow-up check <file> --design-root ${options.designRoot} --design-digest ${options.designDigest}`,
           ]),
     ]);
+    return;
+  }
+
+  if (args[0] === "assignment" && args[1] === "new" && args.length === 6) {
+    if (args[2] !== "--role" || args[4] !== "--design-digest") {
+      throw new Error(`assignment new requires --role then --design-digest`);
+    }
+    const role = args[3]!;
+    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    const path = await reserveWorkspacePath("assignment", role);
+    await writeFile(path, assignmentTemplate(role, args[5]!), "utf8");
+    process.stdout.write(`Assignment started: ${path}\n`);
+    next(process.stdout, [
+      `fill it, then ${compiler} assignment check ${path}`,
+      `${compiler} prompt build --role ${role} --input assignment=${path} ...`,
+    ]);
+    return;
+  }
+
+  if (args[0] === "assignment" && args[1] === "check" && args.length === 3) {
+    const checked = await checkAssignmentFile(resolve(args[2]!));
+    process.stdout.write(
+      `Assignment valid: role ${checked.role}; ${checked.bytes} bytes; ${checked.writePaths.length} listed paths.\n`,
+    );
     return;
   }
 

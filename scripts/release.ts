@@ -81,6 +81,7 @@ export const releaseSourcePaths = [
   "packages/skill/README.md",
   "packages/skill/skills/sync-engine/SKILL.md",
   skillRuntimeReleasePath,
+  "packages/skill/skills/sync-engine/scripts/assignment.ts",
   "packages/skill/skills/sync-engine/scripts/brief.ts",
   "packages/skill/skills/sync-engine/scripts/command.ts",
   "packages/skill/skills/sync-engine/scripts/design.ts",
