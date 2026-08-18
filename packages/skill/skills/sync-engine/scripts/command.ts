@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { checkBriefFile } from "./brief.ts";
 import { digestDesign, requireDesignDigest } from "./design.ts";
 import { buildPrompt, type PromptInput } from "./prompt.ts";
+import { requireInsideWorkspace, reserveWorkspacePath, workspaceDirectory } from "./workspace.ts";
 
 interface PackageManifest {
   readonly name?: string;
@@ -184,13 +185,16 @@ function usage(): string {
   sync-engine-skill brief check <brief.md>
   sync-engine-skill design digest <design-directory>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
-  sync-engine-skill prompt build --role <role> --input <slot>=<path>... --output <path>
-  sync-engine-skill prompt build --role <role> --input <slot>=<path>... --stdout
+  sync-engine-skill prompt build --role <role> --input <slot>=<path>...
 
 Prompt options:
   --design-root <directory>       Required for implementation and evidence roles
   --design-digest <sha256>        Closed reviewed design digest for that directory
   --max-bytes <positive integer>  Override the role's default byte budget
+  --stdout                        Print prompt bytes instead of writing the prompt file
+
+Generated prompts, follow-ups, assignments, and launch records belong in
+${workspaceDirectory}/ under the application root; the compiler owns those paths.
 `;
 }
 
@@ -203,7 +207,6 @@ function takeValue(args: readonly string[], index: number, option: string): stri
 interface PromptArguments {
   readonly role: string;
   readonly inputs: readonly PromptInput[];
-  readonly output?: string;
   readonly stdout: boolean;
   readonly maxBytes?: number;
   readonly designRoot?: string;
@@ -212,7 +215,6 @@ interface PromptArguments {
 
 function parsePromptArguments(args: readonly string[]): PromptArguments {
   let role: string | undefined;
-  let output: string | undefined;
   let stdout = false;
   let maxBytes: number | undefined;
   let designRoot: string | undefined;
@@ -232,9 +234,6 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
         throw new Error(`--input must have the form <slot>=<path>`);
       }
       inputs.push({ slot: value.slice(0, separator), path: value.slice(separator + 1) });
-    } else if (argument === "--output") {
-      output = takeValue(args, index, argument);
-      index += 1;
     } else if (argument === "--stdout") {
       stdout = true;
     } else if (argument === "--design-root") {
@@ -256,10 +255,10 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   }
 
   if (role === undefined) throw new Error(`prompt build requires --role`);
-  if ((output === undefined) === !stdout) {
-    throw new Error(`prompt build requires exactly one of --output or --stdout`);
+  for (const input of inputs) {
+    if (input.slot === "assignment") requireInsideWorkspace(input.path);
   }
-  return { role, inputs, output, stdout, maxBytes, designRoot, designDigest };
+  return { role, inputs, stdout, maxBytes, designRoot, designDigest };
 }
 
 async function run(args: readonly string[]): Promise<void> {
@@ -322,7 +321,8 @@ async function run(args: readonly string[]): Promise<void> {
     if (args[3] !== "--design-root" || args[5] !== "--design-digest") {
       throw new Error(`follow-up check requires --design-root then --design-digest`);
     }
-    const content = await readFile(args[2]!, "utf8");
+    const followUpPath = requireInsideWorkspace(args[2]!);
+    const content = await readFile(followUpPath, "utf8");
     const bytes = Buffer.byteLength(content, "utf8");
     if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
     await requireDesignDigest(args[4]!, args[6]!);
@@ -341,8 +341,11 @@ async function run(args: readonly string[]): Promise<void> {
       designRoot: options.designRoot,
       expectedDesignDigest: options.designDigest,
     });
-    if (options.stdout) process.stdout.write(result.content);
-    else await writeFile(resolve(options.output!), result.content, "utf8");
+    const promptPath = options.stdout
+      ? undefined
+      : await reserveWorkspacePath("prompt", result.role);
+    if (promptPath === undefined) process.stdout.write(result.content);
+    else await writeFile(promptPath, result.content, "utf8");
 
     const report = [
       `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
@@ -353,7 +356,7 @@ async function run(args: readonly string[]): Promise<void> {
     ].join("\n");
     const stream = options.stdout ? process.stderr : process.stdout;
     stream.write(`${report}\n`);
-    const delivered = options.stdout ? "the built prompt" : options.output!;
+    const delivered = promptPath ?? "the built prompt";
     next(stream, [
       `deliver ${delivered} to a fresh ${result.role} as a file`,
       ...(options.designRoot === undefined

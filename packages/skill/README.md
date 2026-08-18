@@ -87,14 +87,19 @@ identity:
 bun "<skill-root>/scripts/command.ts" design digest design
 ```
 
-Build a role prompt directly to a file:
+Build a role prompt:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build \
   --role designer \
-  --input brief=design/brief.md \
-  --output /tmp/designer.prompt.md
+  --input brief=design/brief.md
 ```
+
+The compiler names and writes the prompt under `.sync-engine/` in the application root
+and reports the path. Generated prompts, follow-ups, assignments, and launch records all
+live there; the compiler refuses to read a generated follow-up or assignment from
+anywhere else, so nothing generated lands in `design/`, whose Markdown carries the design
+identity. Nothing writes `.gitignore`: track the directory or ignore it as you prefer.
 
 Concept, application, and evidence prompt builds also require `--design-root design`
 and `--design-digest <sha256>`. Diagnostic follow-up files must pass `follow-up check`

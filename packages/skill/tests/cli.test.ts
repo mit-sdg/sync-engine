@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -120,43 +120,73 @@ describe("sync-engine-skill command", () => {
     expect(result.stderr).toBe("");
   });
 
-  test("writes prompt bytes to a file and reports sources and digest separately", async () => {
+  test("writes prompt bytes into the workspace and reports sources separately", async () => {
     const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-cli-"));
     temporary.push(directory);
-    const output = resolve(directory, "designer.md");
-    const first = run([
-      "prompt",
-      "build",
-      "--role",
-      "designer",
-      "--input",
-      `brief=${taskBrief}`,
-      "--output",
-      output,
-    ]);
+    const build = ["prompt", "build", "--role", "designer", "--input", `brief=${taskBrief}`];
+    const first = run(build, directory);
     expect(first.status).toBe(0);
     expect(first.stderr).toBe("");
     expect(first.stdout).toMatch(
       /Prompt built: role designer; \d+ bytes; budget 32768; sha256 [a-f0-9]{64}/,
     );
+
+    const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
+    expect(written).toHaveLength(1);
+    expect(written[0]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-designer\.prompt\.md$/);
+    const output = resolve(directory, ".sync-engine", written[0]!);
+    expect(first.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
     const prompt = await readFile(output, "utf8");
     expect(prompt).toContain("<!-- source: brief.md -->");
     expect(prompt).not.toContain(first.stdout);
 
-    const second = run([
-      "prompt",
-      "build",
-      "--role",
-      "designer",
-      "--input",
-      `brief=${taskBrief}`,
-      "--output",
-      output,
-    ]);
+    const second = run(build, directory);
     expect(second.status).toBe(0);
     expect(second.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1]).toBe(
       first.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1],
     );
+    expect((await readdir(resolve(directory, ".sync-engine"))).length).toBe(2);
+  });
+
+  test("keeps generated workflow files out of the design root", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-placement-"));
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    const strayAssignment = resolve(design, "assignment.md");
+    await writeFile(strayAssignment, "Assignment.\n");
+
+    const digested = run(["design", "digest", design], directory);
+    const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
+    const rejected = run(
+      [
+        "prompt",
+        "build",
+        "--role",
+        "concept-worker",
+        "--input",
+        `assignment=${strayAssignment}`,
+        "--input",
+        `specifications=${resolve(design, "brief.md")}`,
+        "--design-root",
+        design,
+        "--design-digest",
+        digest!,
+      ],
+      directory,
+    );
+    expect(rejected.status).toBe(1);
+    expect(rejected.stderr).toContain(".sync-engine/");
+
+    const strayFollowUp = resolve(design, "follow-up.md");
+    await writeFile(strayFollowUp, "Rerun the check.\n");
+    const refused = run(
+      ["follow-up", "check", strayFollowUp, "--design-root", design, "--design-digest", digest!],
+      directory,
+    );
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain("Generated workflow files belong in .sync-engine/");
   });
 
   test("keeps stdout prompt bytes separate from the stderr report", () => {
@@ -174,6 +204,7 @@ describe("sync-engine-skill command", () => {
     expect(result.stdout).toContain("# Shared task manager");
     expect(result.stdout).not.toContain("Prompt built:");
     expect(result.stdout).not.toContain("Next:");
+    expect(result.stdout).not.toContain(".sync-engine");
     expect(result.stderr).toContain("Prompt built: role designer");
     expect(result.stderr).toContain("Next: deliver the built prompt to a fresh designer as a file");
   });
@@ -193,7 +224,8 @@ describe("sync-engine-skill command", () => {
       `Next: every downstream build and follow-up adds --design-root ${design} --design-digest ${digest}`,
     );
 
-    const followUp = resolve(directory, "follow-up.md");
+    const followUp = resolve(directory, ".sync-engine", "repair.followup.md");
+    await mkdir(resolve(directory, ".sync-engine"), { recursive: true });
     await writeFile(followUp, "Run `bun run test`.\n");
     const checked = run(
       ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
@@ -280,22 +312,14 @@ describe("sync-engine-skill command", () => {
     const copiedSkill = resolve(directory, "sync-engine");
     await cp(resolve("packages/skill/skills/sync-engine"), copiedSkill, { recursive: true });
     const copiedCommand = resolve(copiedSkill, "scripts/command.ts");
-    const output = resolve(directory, "designer.md");
     const result = run(
-      [
-        "prompt",
-        "build",
-        "--role",
-        "designer",
-        "--input",
-        `brief=${taskBrief}`,
-        "--output",
-        output,
-      ],
+      ["prompt", "build", "--role", "designer", "--input", `brief=${taskBrief}`],
       directory,
       copiedCommand,
     );
     expect(result.status).toBe(0);
+    const written = await readdir(resolve(directory, ".sync-engine"));
+    const output = resolve(directory, ".sync-engine", written[0]!);
     expect(await readFile(output, "utf8")).toContain("# Independent designer");
     expect(result.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
     expect(result.stdout).toContain(copiedSkill);
@@ -303,8 +327,8 @@ describe("sync-engine-skill command", () => {
 
   test("reports concise usage and argument failures", () => {
     expect(run(["--help"]).stdout).toContain("sync-engine-skill prompt build");
-    const missing = run(["prompt", "build", "--role", "designer"]);
+    const missing = run(["prompt", "build"]);
     expect(missing.status).toBe(1);
-    expect(missing.stderr).toContain("exactly one of --output or --stdout");
+    expect(missing.stderr).toContain("prompt build requires --role");
   });
 });

@@ -5,8 +5,8 @@ captured.
 
 ## Implement in bounded phases
 
-Write each small temporary Markdown assignment listing exact allowed application read
-and write paths, commands, and return contract. Never include framework checkout
+Write each small Markdown assignment under `.sync-engine/`, listing exact allowed
+application read and write paths, commands, and return contract. Never include framework checkout
 source, installed package contents, build output, source maps, or paths reached by
 following framework imports. Supply framework information only through exact public API references and selected
 application examples: at most one useful implementation example per concept and one

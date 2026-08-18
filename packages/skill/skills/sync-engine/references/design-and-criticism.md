@@ -18,10 +18,11 @@ names or contracts. A missing catalog executable must fail release check; never 
 alias, or replace it.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
-the output file through the selected harness guide. Put stable role content before
-dynamic inputs. A
-budget failure lists source contributions; tighten context first and set explicit
-`--max-bytes` only for legitimate application material.
+the reported file through the selected harness guide. The compiler names and writes it
+under `.sync-engine/`; every generated prompt, follow-up, and assignment belongs there
+and never under `design/`, which carries design identity. Put stable role content before
+dynamic inputs. A budget failure lists source contributions; tighten context first and
+set explicit `--max-bytes` only for legitimate application material.
 
 ## Design and criticism
 
@@ -29,7 +30,7 @@ Build the prompt and launch one fresh normal-reasoning designer:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role designer \
-  --input brief=design/brief.md --output <prompt-file>
+  --input brief=design/brief.md
 ```
 
 The prompt limits designer writes to its listed `design/` paths; `design/brief.md` is
@@ -44,8 +45,8 @@ bunx --no-install sync-engine check-design design/concepts/*.md \
   design/compositions/*.md design/types.md
 ```
 
-Send the same designer one file of at most 4 KiB containing only check output, affected
-paths, and repair request. Deliver it through the harness; do not rebuild or resend the
+Send the same designer one `.sync-engine/` file of at most 4 KiB containing only check
+output, affected paths, and repair request. Deliver it through the harness; do not rebuild or resend the
 full designer prompt.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Pass
@@ -57,7 +58,7 @@ criticism; one critic sees every candidate, so on overflow raise `--max-bytes` i
 bun "<skill-root>/scripts/command.ts" prompt build --role critic \
   --input brief=design/brief.md --input candidate=design/types.md \
   --input candidate=design/concepts/<name>.md \
-  --input candidate=design/compositions/<name>.md --output <prompt-file>
+  --input candidate=design/compositions/<name>.md
 ```
 
 Launch a fresh read-only normal-reasoning critic. Two passes are the normal automatic

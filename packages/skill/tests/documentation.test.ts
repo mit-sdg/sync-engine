@@ -587,6 +587,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "command.ts",
       "design.ts",
       "prompt.ts",
+      "workspace.ts",
     ]);
 
     const catalog = JSON.parse(await text(new URL("../catalog/package.json", packageRoot))) as {
@@ -671,9 +672,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo.replace(/\s+/g, " ")).toContain(
       "Delegation is the default and every role is launched. Only an explicit repository instruction forbidding subagents overrides it, and then stop and report; never take a role yourself because launching looked unavailable",
     );
-    expect(paseo.replace(/\s+/g, " ")).toContain(
-      "Launch every role without probing command help",
-    );
+    expect(paseo.replace(/\s+/g, " ")).toContain("Launch every role without probing command help");
     expect(paseo).toContain('paseo workspace create --isolation local --path "$application_root"');
     expect(paseo).toContain("An agent-scoped `--cwd` alone does not override the caller workspace");
     expect(paseo).toContain("do not ask the user to restart");
