@@ -6,34 +6,70 @@ import { fileURLToPath } from "node:url";
 import { assemble } from "@mit-sdg/sync-engine/assembly";
 import { vocabulary } from "@mit-sdg/sync-engine/advanced";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { applicationManifest } from "@mit-sdg/sync-engine/tooling";
+import { applicationManifest, renderApplicationManifest } from "@mit-sdg/sync-engine/tooling";
 import type { ApplicationManifestV1 } from "@mit-sdg/sync-engine/tooling";
 import { diffApplicationManifests } from "@engine/tooling/application-manifest-diff";
 import { applicationManifestDigest } from "@engine/tooling/application-manifest-format";
-import { inspectGenerated, resolveApplication } from "@engine/tooling/generated-artifacts";
+import { inspectGenerated } from "@engine/tooling/generated-artifacts";
+import { loadGeneratedApplication } from "@command/generated-config";
 import { ordinal } from "@engine/utils/ordinal";
 import { describe, expect, test } from "vite-plus/test";
-import packagingApplication from "../../packaging/application/generated.config.ts";
-
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const main = join(root, "src/command/main.ts");
-const packagingConfig = new URL("../../packaging/application/generated.config.ts", import.meta.url);
+const packagingConfigPath = "tests/packaging/application/generated.config.ts";
 const words = vocabulary({ concepts: {}, computations: {} });
+
+const equivalentDefault = {
+  first: { alpha: 1, beta: 2 },
+  second: ["one", "two"],
+};
+const reorderedEquivalentDefault = {
+  second: ["one", "two"],
+  first: { beta: 2, alpha: 1 },
+};
+const oldCompoundDefault = {
+  nested: { phase: "old", retained: true },
+  values: [1, { selected: "old" }],
+};
+const currentCompoundDefault = {
+  nested: { phase: "new", retained: true },
+  values: [1, { selected: "old" }],
+};
 
 const Stable = endpoint("/stable", () => receive().then(respond({ ok: true })), {
   input: {
     required: ["id", "obsolete"],
-    defaults: { changed: 1, removed: "old" },
+    defaults: {
+      changed: 1,
+      compound: oldCompoundDefault,
+      removed: "old",
+      reordered: equivalentDefault,
+    },
   },
 });
-const Removed = endpoint("/removed", () => receive().then(respond({ ok: true })));
+const Removed = endpoint("/removed", () => receive().then(respond({ ok: true })), {
+  input: {
+    required: ["legacy"],
+    defaults: { legacy: { state: "removed" } },
+  },
+});
 const CurrentStable = endpoint("/stable", () => receive().then(respond({ ok: true })), {
   input: {
     required: ["id", "required"],
-    defaults: { added: true, changed: 2 },
+    defaults: {
+      added: true,
+      changed: 2,
+      compound: currentCompoundDefault,
+      reordered: reorderedEquivalentDefault,
+    },
   },
 });
-const Added = endpoint("/added", () => receive().then(respond({ ok: true })));
+const Added = endpoint("/added", () => receive().then(respond({ ok: true })), {
+  input: {
+    required: ["introduced"],
+    defaults: { introduced: { state: "added" } },
+  },
+});
 const Shared = endpoint("/stable", () => receive().then(respond({ ok: true })));
 
 function fixtureManifest(): ApplicationManifestV1 {
@@ -67,16 +103,34 @@ function reseal(manifest: ApplicationManifestV1): ApplicationManifestV1 {
   return manifest;
 }
 
+function withInputDefault(
+  manifest: ApplicationManifestV1,
+  path: string,
+  key: string,
+  value: unknown,
+): ApplicationManifestV1 {
+  const input = {
+    ...manifest.inputContracts[path]!,
+    defaults: { ...manifest.inputContracts[path]!.defaults, [key]: value },
+  };
+  manifest.inputContracts = { ...manifest.inputContracts, [path]: input };
+  manifest.endpoints = manifest.endpoints.map((endpoint) =>
+    endpoint.path === path ? { ...endpoint, input } : endpoint,
+  );
+  return reseal(manifest);
+}
+
 function run(...args: string[]) {
   return spawnSync("bun", [main, ...args], { cwd: root, encoding: "utf8" });
 }
 
-async function checkedManifest(): Promise<ApplicationManifestV1> {
-  const application = resolveApplication(
-    { ...packagingApplication, design: { ...packagingApplication.design, version: 1 as const } },
-    packagingConfig,
-  );
+async function manifestFor(config: string): Promise<ApplicationManifestV1> {
+  const application = await loadGeneratedApplication(config, root);
   return inspectGenerated(application, (assembled) => applicationManifest(assembled));
+}
+
+async function checkedManifest(): Promise<ApplicationManifestV1> {
+  return manifestFor(packagingConfigPath);
 }
 
 async function writeConceptFreeConfigs(directory: string): Promise<{
@@ -147,8 +201,21 @@ describe("application manifest diff", () => {
   });
 
   test("separates endpoint and granular input-contract changes by compatibility", () => {
-    const oldManifest = fixtureManifest();
-    const report = diffApplicationManifests(oldManifest, changedFixtureManifest());
+    const oldManifest = withInputDefault(
+      fixtureManifest(),
+      "/stable",
+      "reordered",
+      equivalentDefault,
+    );
+    const report = diffApplicationManifests(
+      oldManifest,
+      withInputDefault(
+        changedFixtureManifest(),
+        "/stable",
+        "reordered",
+        reorderedEquivalentDefault,
+      ),
+    );
 
     expect(report.status).toBe("changed");
     expect(report.breaking).toEqual([
@@ -168,6 +235,13 @@ describe("application manifest diff", () => {
         key: "changed",
         before: 1,
         after: 2,
+      },
+      {
+        kind: "input-default-changed",
+        path: "/stable",
+        key: "compound",
+        before: oldCompoundDefault,
+        after: currentCompoundDefault,
       },
       { kind: "input-default-removed", path: "/stable", key: "removed", value: "old" },
     ]);
@@ -225,14 +299,10 @@ describe("application manifest diff", () => {
     const directory = await mkdtemp(join(root, "tests/.sync-engine-diff-"));
     try {
       const configs = await writeConceptFreeConfigs(directory);
-      const empty = run("artifacts", "manifest", "--config", configs.empty);
-      const added = run("artifacts", "manifest", "--config", configs.added);
-      expect({ status: empty.status, stderr: empty.stderr }).toEqual({ status: 0, stderr: "" });
-      expect({ status: added.status, stderr: added.stderr }).toEqual({ status: 0, stderr: "" });
       const emptyManifest = join(directory, "empty.json");
       const addedManifest = join(directory, "added.json");
-      await writeFile(emptyManifest, empty.stdout);
-      await writeFile(addedManifest, added.stdout);
+      await writeFile(emptyManifest, renderApplicationManifest(await manifestFor(configs.empty)));
+      await writeFile(addedManifest, renderApplicationManifest(await manifestFor(configs.added)));
 
       const identical = run("artifacts", "diff", emptyManifest, "--config", configs.empty);
       expect({ status: identical.status, stderr: identical.stderr }).toEqual({
@@ -259,6 +329,32 @@ describe("application manifest diff", () => {
       await rm(directory, { recursive: true, force: true });
     }
   }, 120_000);
+
+  test("notes digest changes outside the compatibility inventories", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "sync-engine-manifest-diff-"));
+    try {
+      const oldManifest = structuredClone(await checkedManifest());
+      const diagnostic = oldManifest.diagnostics[0]!;
+      oldManifest.diagnostics[0] = {
+        ...diagnostic,
+        message: `${diagnostic.message} (previous report)`,
+      };
+      reseal(oldManifest);
+      const old = join(directory, "untracked.json");
+      await writeFile(old, renderApplicationManifest(oldManifest));
+
+      const diff = run("artifacts", "diff", old, "--config", packagingConfigPath);
+      expect({ status: diff.status, stderr: diff.stderr }).toEqual({ status: 0, stderr: "" });
+      expect(diff.stdout).toContain("Application manifest diff: changed");
+      expect(diff.stdout).toContain("breaking changes:\n    none");
+      expect(diff.stdout).toContain("non-breaking changes:\n    none");
+      expect(diff.stdout).toContain(
+        "  note: the manifest digest changed outside the tracked compatibility inventories.",
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
 
   test("refuses malformed and unsupported old manifests before loading configuration", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sync-engine-manifest-diff-"));

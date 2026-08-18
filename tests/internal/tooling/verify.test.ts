@@ -3,7 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadGeneratedApplication } from "@command/generated-config";
 import { verifyCommand } from "@command/verify";
+import { pinGenerated } from "@engine/tooling/generated-artifacts";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -11,6 +13,10 @@ const main = join(root, "src/command/main.ts");
 
 function run(...args: string[]) {
   return spawnSync("bun", [main, ...args], { cwd: root, encoding: "utf8" });
+}
+
+async function pinArtifacts(config: string): Promise<void> {
+  await pinGenerated(await loadGeneratedApplication(config, root));
 }
 
 async function temporaryProject(): Promise<string> {
@@ -153,6 +159,40 @@ describe("sync-engine verify", () => {
     });
   }, 30_000);
 
+  test("forwards --fail-on-warnings to the application check", async () => {
+    const report = await withoutOutput(() =>
+      inDirectory(root, () =>
+        verifyCommand([
+          "--config",
+          "examples/reading-circle/generated.config.ts",
+          "--fail-on-warnings",
+        ]),
+      ),
+    );
+
+    expect(report.status).toBe("failed");
+    expect(report.steps.map(({ status }) => status)).toEqual(["passed", "failed", "passed"]);
+    expect(report.steps[1]).toMatchObject({
+      name: "check",
+      detail: 'Application diagnostic check failed with policy "warnings".',
+    });
+  }, 30_000);
+
+  test("reports an artifact-only failure after passed design and application checks", async () => {
+    const config = "tests/packaging/application/generated.config.ts";
+    const verified = run("verify", "--config", config);
+
+    expect({ status: verified.status, stderr: verified.stderr }).toEqual({ status: 1, stderr: "" });
+    expect(verified.stdout).toMatch(
+      /check-design: passed\n  check: passed\n  artifacts check: failed\n    operations-room\.md and wire\.ts differ from generated output; inspect the changes and run the matching pin command\nVerification failed\./,
+    );
+
+    const report = await withoutOutput(() =>
+      inDirectory(root, () => verifyCommand(["--config", config])),
+    );
+    expect(report.steps.map(({ status }) => status)).toEqual(["passed", "passed", "failed"]);
+  }, 30_000);
+
   test("reports a first-step design failure", async () => {
     const directory = await temporaryProject();
     try {
@@ -183,8 +223,7 @@ describe("sync-engine verify", () => {
     const directory = await temporaryProject();
     try {
       const config = await writeSourceFailureProject(directory);
-      const pinned = run("artifacts", "pin", "--config", config);
-      expect({ status: pinned.status, stderr: pinned.stderr }).toEqual({ status: 0, stderr: "" });
+      await expect(pinArtifacts(config)).resolves.toBeUndefined();
 
       const verified = run("verify", "--config", config);
       expect({ status: verified.status, stderr: verified.stderr }).toEqual({
@@ -212,8 +251,7 @@ describe("sync-engine verify", () => {
     const directory = await temporaryProject();
     try {
       const config = await writeConceptFreeProject(directory);
-      const pinned = run("artifacts", "pin", "--config", config);
-      expect({ status: pinned.status, stderr: pinned.stderr }).toEqual({ status: 0, stderr: "" });
+      await expect(pinArtifacts(config)).resolves.toBeUndefined();
 
       const report = await withoutOutput(() =>
         inDirectory(root, () => verifyCommand(["--config", config])),
