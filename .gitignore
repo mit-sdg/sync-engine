@@ -2,6 +2,3 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
-
-# Local working notes (see followups.md); the architecture check forbids stray root files
-followups.md
