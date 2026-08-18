@@ -615,6 +615,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
     expect(entry).toContain("do not\n   read or recreate the packaged template directly");
     expect(entry).toContain("coordinator's exact provider and model");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "a reported `Next:` line is syntax, not permission",
+    );
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
     expect(workflow.replace(/\s+/g, " ")).toContain(

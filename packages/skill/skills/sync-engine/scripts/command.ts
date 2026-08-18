@@ -35,6 +35,16 @@ const packageExecutables = {
 } as const;
 const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
 const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
+const compiler = `bun ${JSON.stringify(resolve(skillRoot, "scripts/command.ts"))}`;
+
+function reference(name: string): string {
+  return resolve(skillRoot, "references", name);
+}
+
+/** Report the exact syntax of the commands this one leads to, choosing no stage. */
+function next(stream: NodeJS.WritableStream, steps: readonly string[]): void {
+  for (const step of steps) stream.write(`Next: ${step}\n`);
+}
 
 function parent(path: string): string | undefined {
   const next = parse(path).dir;
@@ -263,6 +273,11 @@ async function run(args: readonly string[]): Promise<void> {
     const applicationRoot = resolve(args[2] ?? process.cwd());
     const version = await validateReleaseSet(release, applicationRoot);
     process.stdout.write(`Installed sync-engine release matches skill ${version}.\n`);
+    next(process.stdout, [
+      setupFiles.every((file) => existsSync(resolve(applicationRoot, file)))
+        ? `${compiler} brief init design/brief.md`
+        : `bunx --no-install sync-engine setup`,
+    ]);
     return;
   }
 
@@ -276,9 +291,8 @@ async function run(args: readonly string[]): Promise<void> {
       "utf8",
     );
     await writeFile(path, template, { encoding: "utf8", flag: "wx" });
-    process.stdout.write(
-      "Brief template initialized. Fill placeholders before running brief check.\n",
-    );
+    process.stdout.write("Brief template initialized. Fill placeholders.\n");
+    next(process.stdout, [`${compiler} brief check ${args[2]}`]);
     return;
   }
 
@@ -287,12 +301,20 @@ async function run(args: readonly string[]): Promise<void> {
     process.stdout.write(
       `Brief valid: ${result.bytes} bytes, ${result.decisions} decisions, open decisions ${result.openDecisions ? "present" : "none"}; release ${release.skill}.\n`,
     );
+    next(process.stdout, [
+      `read ${reference("design-and-criticism.md")}`,
+      `${compiler} prompt build --role designer --input brief=${args[2]} --output <prompt-file>`,
+    ]);
     return;
   }
 
   if (args[0] === "design" && args[1] === "digest" && args.length === 3) {
     const result = await digestDesign(args[2]!);
     process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
+    next(process.stdout, [
+      `read ${reference("implementation.md")}`,
+      `every downstream build and follow-up adds --design-root ${args[2]} --design-digest ${result.digest}`,
+    ]);
     return;
   }
 
@@ -305,6 +327,7 @@ async function run(args: readonly string[]): Promise<void> {
     if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
     await requireDesignDigest(args[4]!, args[6]!);
     process.stdout.write(`Follow-up valid: ${bytes} bytes; design ${args[6]}.\n`);
+    next(process.stdout, [`deliver ${args[2]} to the original role as a file`]);
     return;
   }
 
@@ -328,7 +351,17 @@ async function run(args: readonly string[]): Promise<void> {
           `  ${source.kind} ${source.displayName}: ${source.bytes} bytes (${source.path})`,
       ),
     ].join("\n");
-    (options.stdout ? process.stderr : process.stdout).write(`${report}\n`);
+    const stream = options.stdout ? process.stderr : process.stdout;
+    stream.write(`${report}\n`);
+    const delivered = options.stdout ? "the built prompt" : options.output!;
+    next(stream, [
+      `deliver ${delivered} to a fresh ${result.role} as a file`,
+      ...(options.designRoot === undefined
+        ? []
+        : [
+            `${compiler} follow-up check <file> --design-root ${options.designRoot} --design-digest ${options.designDigest}`,
+          ]),
+    ]);
     return;
   }
 

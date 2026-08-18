@@ -77,9 +77,9 @@ describe("sync-engine-skill command", () => {
     await writeConfiguredApplication(directory);
     const initialized = run(["brief", "init", path], directory);
     expect(initialized.status).toBe(0);
-    expect(initialized.stdout).toBe(
-      "Brief template initialized. Fill placeholders before running brief check.\n",
-    );
+    expect(initialized.stdout).toContain("Brief template initialized. Fill placeholders.\n");
+    expect(initialized.stdout).toContain(`Next: bun "`);
+    expect(initialized.stdout).toContain(`command.ts" brief check ${path}\n`);
     const template = await readFile(
       resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
       "utf8",
@@ -104,6 +104,9 @@ describe("sync-engine-skill command", () => {
     const checked = run(["brief", "check", path], directory);
     expect(checked.status).toBe(0);
     expect(checked.stdout).toContain("1 decisions, open decisions none");
+    expect(checked.stdout).toContain("Next: read ");
+    expect(checked.stdout).toContain("references/design-and-criticism.md\n");
+    expect(checked.stdout).toContain(`prompt build --role designer --input brief=${path}`);
   });
 
   test("validates a brief before an application release set is installed", async () => {
@@ -112,7 +115,7 @@ describe("sync-engine-skill command", () => {
     const result = run(["brief", "check", taskBrief], directory);
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(
-      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.12\.\n$/,
+      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.12\.\n/,
     );
     expect(result.stderr).toBe("");
   });
@@ -170,7 +173,9 @@ describe("sync-engine-skill command", () => {
     expect(result.stdout).toContain("# Independent designer");
     expect(result.stdout).toContain("# Shared task manager");
     expect(result.stdout).not.toContain("Prompt built:");
+    expect(result.stdout).not.toContain("Next:");
     expect(result.stderr).toContain("Prompt built: role designer");
+    expect(result.stderr).toContain("Next: deliver the built prompt to a fresh designer as a file");
   });
 
   test("digests closed design and bounds diagnostic follow-ups", async () => {
@@ -183,6 +188,10 @@ describe("sync-engine-skill command", () => {
     expect(digested.status).toBe(0);
     const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
     expect(digest).toBeDefined();
+    expect(digested.stdout).toContain("references/implementation.md\n");
+    expect(digested.stdout).toContain(
+      `Next: every downstream build and follow-up adds --design-root ${design} --design-digest ${digest}`,
+    );
 
     const followUp = resolve(directory, "follow-up.md");
     await writeFile(followUp, "Run `bun run test`.\n");
@@ -192,6 +201,7 @@ describe("sync-engine-skill command", () => {
     );
     expect(checked.status).toBe(0);
     expect(checked.stdout).toContain("Follow-up valid");
+    expect(checked.stdout).toContain(`Next: deliver ${followUp} to the original role as a file`);
 
     await writeFile(followUp, "x".repeat(4097));
     expect(
@@ -214,7 +224,8 @@ describe("sync-engine-skill command", () => {
     }
     const valid = run(["release", "check", directory], directory);
     expect(valid.status).toBe(0);
-    expect(valid.stdout).toBe("Installed sync-engine release matches skill 1.0.0-beta.12.\n");
+    expect(valid.stdout).toContain("Installed sync-engine release matches skill 1.0.0-beta.12.\n");
+    expect(valid.stdout).toContain("Next: bunx --no-install sync-engine setup\n");
 
     await rm(resolve(directory, "node_modules/@mit-sdg/sync-engine-catalog/dist/command.js"));
     const missingTarget = run(["release", "check", directory], directory);
@@ -286,6 +297,8 @@ describe("sync-engine-skill command", () => {
     );
     expect(result.status).toBe(0);
     expect(await readFile(output, "utf8")).toContain("# Independent designer");
+    expect(result.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
+    expect(result.stdout).toContain(copiedSkill);
   });
 
   test("reports concise usage and argument failures", () => {

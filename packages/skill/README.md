@@ -108,8 +108,10 @@ Templates support only static `include`, required `input`, and optional `input?`
 Markdown directives. The compiler normalizes line endings and final newlines, orders
 input files deterministically, enforces role budgets, binds downstream work to the
 reviewed design digest, and reports sources, byte count, and SHA-256 outside prompt
-bytes. It does not choose product decisions, workflow stages, approval, criticism,
-repair, or acceptance.
+bytes. Every command ends with `Next:` lines carrying the exact syntax of the commands
+it leads to and the stage reference to read, with the design digest already interpolated.
+It does not choose product decisions, workflow stages, approval, criticism, repair, or
+acceptance; a `Next:` line is syntax, not permission.
 
 Use file-based delivery in the agent harness. Generated Markdown must not be embedded
 in a shell argument.

@@ -56,5 +56,6 @@ brief → independent design → syntax → bounded independent criticism
    database.
 
 The compiler validates bytes, inputs, release executables, follow-up size, and reviewed
-design identity. It does not choose product decisions, workflow stages, approval,
-criticism, repairs, or acceptance.
+design identity, then reports the exact syntax of the commands each one leads to and the
+stage reference to read. It does not choose product decisions, workflow stages, approval,
+criticism, repairs, or acceptance; a reported `Next:` line is syntax, not permission.
