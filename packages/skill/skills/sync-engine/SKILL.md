@@ -1,14 +1,11 @@
 ---
 name: sync-engine
-description: Design and build applications using concept design and @mit-sdg/sync-engine through compact independent review, bounded implementation roles, and objective evidence.
+description: Design and build an application with @mit-sdg/sync-engine and concept design, through compact independent review, bounded implementation roles, and objective evidence. Use for building an application on the framework, never for changing the framework itself.
 license: Apache-2.0
 compatibility: Requires filesystem and shell access, Bun, and native agents with file-based prompts; downstream roles use best-effort assigned-path discipline.
 ---
 
 # Sync-engine application workflow
-
-Use this skill to design and build an application with sync-engine, not to change the
-framework itself.
 
 ```text
 brief → independent design → syntax → bounded independent criticism

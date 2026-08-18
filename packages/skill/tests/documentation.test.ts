@@ -573,6 +573,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     const normalizedWorkflow = workflow.replace(/\s+/g, " ");
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
+    expect(entry).toContain(
+      "Use for building an application on the framework, never for changing the framework itself.",
+    );
     expect(entry).toContain("Paseo guide");
     expect(entry).toContain("self-contained compiler");
     expect(entry.replace(/\s+/g, " ")).toContain(
