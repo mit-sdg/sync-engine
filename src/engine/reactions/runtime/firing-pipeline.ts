@@ -375,7 +375,17 @@ export class FiringPipeline {
             }
             return fuseFormer(ref, resolve(payload.in) as Mapping);
           }
-          if (hasMarkerKey(node, "$lit")) return (node as { $lit: unknown }).$lit;
+          if (hasMarkerKey(node, "$lit")) {
+            const payload = (node as { $lit: Record<string, unknown> }).$lit;
+            const literal: Record<string, unknown> = {};
+            // `$lit` protects this object's own dollar-prefixed keys from marker
+            // interpretation. Its values were still encoded recursively, so
+            // resolve variables and nested literal escapes beneath that root.
+            for (const [key, value] of Object.entries(payload)) {
+              setOwn(literal, key, resolve(value));
+            }
+            return literal;
+          }
         }
         return DESCEND;
       });

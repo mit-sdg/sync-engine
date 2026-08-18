@@ -281,6 +281,23 @@ describe("then-input strictness", () => {
     });
     expect(reacting.exportReactions().reactions.length).toBe(1);
   });
+
+  test("a dollar-prefixed literal retains its shape while resolving nested variables", async () => {
+    const { reacting, Button, Recorder } = setup();
+    reacting.register({
+      PreserveLiteral: reaction(({ kind }: Vars) =>
+        when(refs.Button.clicked({ kind }).responds()).then(
+          refs.Recorder.record({
+            tag: { $renderer: { identity: kind } } as never,
+          }),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "ThreadPlace" });
+
+    expect(Recorder.order as unknown[]).toEqual([{ $renderer: { identity: "ThreadPlace" } }]);
+  });
 });
 
 describe("round trip: export → JSON → registerReactions", () => {
