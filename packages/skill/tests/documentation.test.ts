@@ -504,8 +504,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(workflow).toContain("design digest design");
     expect(workflow).toContain("follow-up check <file>");
+    expect(workflow).toContain("bunx --no-install sync-engine verify --format json");
     expect(normalized).toContain(
-      "On final-command failure, return its focused diagnostic to the original worker, rerun the affected focused command, then every final check invalidated by the changed paths regardless of chain position",
+      "`verify` reports `check-design`, `check`, and `artifacts check` independently",
+    );
+    expect(normalized).toContain(
+      "On failure, return that focused diagnostic to the original worker, rerun the affected focused command, then every check invalidated by the changed paths regardless of chain position",
     );
 
     const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));

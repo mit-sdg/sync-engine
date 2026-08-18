@@ -251,12 +251,22 @@ change approved Markdown.
 
 ## Validate once and stop
 
-After evidence, the coordinator runs the complete application-owned source-agreement,
-artifact, typecheck, check, test, build, generation, scenario, and bounded host chain
-once; never hand-edit generated output. On final-command failure, return its focused
-diagnostic to the original worker, rerun the affected focused command, then every final
-check invalidated by the changed paths regardless of chain position. Do not repeat
-unaffected final commands.
+After evidence, run the complete application-owned acceptance chain once from
+application root; never hand-edit generated output:
+
+```sh
+bun run generate                                    # must leave generated output unchanged
+bunx --no-install sync-engine verify --format json  # design form, source agreement, artifacts
+bun run check                                       # application check chain and typecheck
+bun test                                            # unless the application defines another
+bun run start                                       # bounded host readiness and clean exit
+```
+
+`verify` reports `check-design`, `check`, and `artifacts check` independently, so a
+failed step names its own diagnostic. Add the scenario commands the brief requires. On
+failure, return that focused diagnostic to the original worker, rerun the affected
+focused command, then every check invalidated by the changed paths regardless of chain
+position. Do not repeat unaffected checks.
 
 Inspect complete status and relevant diffs, including untracked files; verify the brief
 and approved design unchanged and returned changes inside assigned boundaries.
