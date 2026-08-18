@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -94,7 +94,7 @@ _note (note: Note) : optional (author: Person, text: String)
 `;
 
 beforeAll(async () => {
-  temporary = await mkdtemp(join(tmpdir(), "sync-engine-json-output-"));
+  temporary = await realpath(await mkdtemp(join(tmpdir(), "sync-engine-json-output-")));
   invalidStatePath = join(temporary, "invalid-state.md");
   brokenVerificationConfig = join(temporary, "generated.config.ts");
   await writeFile(invalidStatePath, invalidState);
