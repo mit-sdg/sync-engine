@@ -84,6 +84,7 @@ export const releaseSourcePaths = [
   "packages/skill/skills/sync-engine/scripts/brief.ts",
   "packages/skill/skills/sync-engine/scripts/command.ts",
   "packages/skill/skills/sync-engine/scripts/design.ts",
+  "packages/skill/skills/sync-engine/scripts/launch.ts",
   "packages/skill/skills/sync-engine/scripts/prompt.ts",
   "packages/skill/skills/sync-engine/scripts/workspace.ts",
   "packages/skill/skills/sync-engine/references/workflow.md",

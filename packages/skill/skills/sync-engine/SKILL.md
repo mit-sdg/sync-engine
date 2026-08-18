@@ -19,8 +19,9 @@ brief → independent design → syntax → bounded independent criticism
 - Authored Markdown under `design/` is product and design authority. Generated output,
   implementation, analysis, and coordinator notes are not.
 - Use fresh native agents for design, criticism, and evidence, and separate bounded
-  roles for concept, application, and requested frontend implementation. The
-  coordinator writes only the
+  roles for concept, application, and requested frontend implementation. Launch every one
+  with the compiler's `launch`, which records what the harness attests; a role with no
+  launch record did not run. The coordinator writes only the
   brief and temporary assignments/context, never role-owned design, production source,
   or tests. If a required role cannot launch, stop.
 - Use the coordinator's exact provider and model for every role, at that provider's
@@ -55,7 +56,9 @@ brief → independent design → syntax → bounded independent criticism
    issues in active coordinator context. Do not create workflow metadata or a workflow
    database.
 
-The compiler validates bytes, inputs, release executables, follow-up size, and reviewed
-design identity, then reports the exact syntax of the commands each one leads to and the
-stage reference to read. It does not choose product decisions, workflow stages, approval,
-criticism, repairs, or acceptance; a reported `Next:` line is syntax, not permission.
+The compiler validates bytes, inputs, release executables, follow-up size, reviewed
+design identity, and that the role before this one ran, then reports the exact syntax of
+the commands each one leads to and the stage reference to read. It owns generated file
+placement under `.sync-engine/`, role launches, and the handback check. It does not
+choose product decisions, workflow stages, approval, criticism, repairs, or acceptance;
+a reported `Next:` line is syntax, not permission.

@@ -105,6 +105,20 @@ Concept, application, and evidence prompt builds also require `--design-root des
 and `--design-digest <sha256>`. Diagnostic follow-up files must pass `follow-up check`
 with the same design identity and the 4 KiB limit.
 
+Launch each role through the compiler rather than the harness CLI:
+
+```sh
+bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-file>
+```
+
+`launch` drives Paseo today: it inspects the coordinator through `$PASEO_AGENT_ID`,
+reuses that provider and model at the model's advertised normal reasoning, places the
+child in the application root, delivers the prompt file, waits, and writes a launch
+record. Building a role's prompt requires a settled record for the role before it, and
+`handback check` requires one for every required role, still hashing to its prompt and
+still known to the harness. A coordinator that quietly does a role itself therefore
+cannot reach handback. Other harnesses need their own launch module.
+
 The npm package also exposes `sync-engine-skill` as a convenience command, but the
 workflow uses the bundled source path so copied skills and new applications bootstrap
 without a package-local binary.

@@ -6,8 +6,16 @@ import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkBriefFile } from "./brief.ts";
 import { digestDesign, requireDesignDigest } from "./design.ts";
-import { buildPrompt, type PromptInput } from "./prompt.ts";
-import { requireInsideWorkspace, reserveWorkspacePath, workspaceDirectory } from "./workspace.ts";
+import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
+import { agentExists, harness, launchRole } from "./launch.ts";
+import {
+  requireCompletedRole,
+  requireInsideWorkspace,
+  requiredRoles,
+  reserveWorkspacePath,
+  verifiedRecords,
+  workspaceDirectory,
+} from "./workspace.ts";
 
 interface PackageManifest {
   readonly name?: string;
@@ -186,6 +194,8 @@ function usage(): string {
   sync-engine-skill design digest <design-directory>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
+  sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
+  sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
 
 Prompt options:
   --design-root <directory>       Required for implementation and evidence roles
@@ -333,6 +343,7 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
+    await requireCompletedRole(options.role);
     const result = await buildPrompt({
       role: options.role,
       inputs: options.inputs,
@@ -365,6 +376,75 @@ async function run(args: readonly string[]): Promise<void> {
             `${compiler} follow-up check <file> --design-root ${options.designRoot} --design-digest ${options.designDigest}`,
           ]),
     ]);
+    return;
+  }
+
+  if (args[0] === "launch") {
+    let role: string | undefined;
+    let prompt: string | undefined;
+    let timeoutSeconds = 1800;
+    for (let index = 1; index < args.length; index += 1) {
+      const argument = args[index]!;
+      if (argument === "--role") role = takeValue(args, index, argument);
+      else if (argument === "--prompt") prompt = takeValue(args, index, argument);
+      else if (argument === "--timeout") {
+        timeoutSeconds = Number(takeValue(args, index, argument));
+        if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
+          throw new Error(`--timeout must be a positive whole number of seconds`);
+        }
+      } else {
+        throw new Error(`Unknown launch option: ${argument}`);
+      }
+      index += 1;
+    }
+    if (role === undefined || prompt === undefined) {
+      throw new Error(`launch requires --role and --prompt`);
+    }
+    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    await requireCompletedRole(role);
+    const launched = await launchRole({
+      role,
+      promptPath: prompt,
+      applicationRoot: process.cwd(),
+      timeoutSeconds,
+    });
+    const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
+    process.stdout.write(
+      `Launched ${role} through ${harness}: agent ${launched.record.agentId}; ${attested}; settled ${launched.record.status}; record ${launched.recordPath}.\n`,
+    );
+    next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
+    return;
+  }
+
+  if (args[0] === "handback" && args[1] === "check" && args.length === 6) {
+    if (args[2] !== "--design-root" || args[4] !== "--design-digest") {
+      throw new Error(`handback check requires --design-root then --design-digest`);
+    }
+    await requireDesignDigest(args[3]!, args[5]!);
+    const missing: string[] = [];
+    const unknown: string[] = [];
+    const lines: string[] = [];
+    for (const role of requiredRoles) {
+      const records = await verifiedRecords(role);
+      if (records.length === 0) {
+        missing.push(role);
+        continue;
+      }
+      for (const entry of records) {
+        const known = agentExists(entry.record.agentId);
+        if (!known) unknown.push(`${role} ${entry.record.agentId}`);
+        lines.push(
+          `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${harness}; ${entry.record.provider} ${entry.record.model}; settled ${entry.record.status}`,
+        );
+      }
+    }
+    process.stdout.write(`Handback check for design ${args[5]}:\n${lines.join("\n")}\n`);
+    const failures = [
+      ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
+      ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
+    ];
+    if (failures.length > 0) throw new Error(failures.join("; "));
+    process.stdout.write(`Every required role ran independently.\n`);
     return;
   }
 

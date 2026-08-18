@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
@@ -94,6 +95,53 @@ export function isLaunchRecord(value: unknown): value is LaunchRecord {
 
 export async function writeLaunchRecord(path: string, record: LaunchRecord): Promise<void> {
   await writeFile(path, `${JSON.stringify(record, undefined, 2)}\n`, "utf8");
+}
+
+/** The role that must already have run and settled before each later role is built. */
+export const roleAfter: Readonly<Record<string, string>> = {
+  critic: "designer",
+  "concept-worker": "critic",
+  "application-worker": "concept-worker",
+  "frontend-worker": "application-worker",
+  "evidence-worker": "application-worker",
+};
+
+export const requiredRoles = [
+  "designer",
+  "critic",
+  "concept-worker",
+  "application-worker",
+  "evidence-worker",
+] as const;
+
+/** A record counts only when its prompt file still exists and still hashes to the record. */
+export async function verifiedRecords(
+  role: string,
+  applicationRoot?: string,
+): Promise<Array<{ path: string; record: LaunchRecord }>> {
+  const found: Array<{ path: string; record: LaunchRecord }> = [];
+  for (const entry of await readLaunchRecords(applicationRoot)) {
+    if (entry.record.role !== role) continue;
+    let content: string;
+    try {
+      content = await readFile(entry.record.prompt.path, "utf8");
+    } catch {
+      continue;
+    }
+    if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
+      found.push(entry);
+    }
+  }
+  return found;
+}
+
+export async function requireCompletedRole(role: string, applicationRoot?: string): Promise<void> {
+  const predecessor = roleAfter[role];
+  if (predecessor === undefined) return;
+  if ((await verifiedRecords(predecessor, applicationRoot)).length > 0) return;
+  throw new WorkspaceError(
+    `Role ${role} requires a settled ${predecessor} launch in ${workspaceDirectory}/; launch that role first`,
+  );
 }
 
 /** Every readable launch record in the workspace, oldest file name first. */

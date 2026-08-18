@@ -2,6 +2,7 @@ import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
 const command = resolve("packages/skill/skills/sync-engine/scripts/command.ts");
@@ -323,6 +324,152 @@ describe("sync-engine-skill command", () => {
     expect(await readFile(output, "utf8")).toContain("# Independent designer");
     expect(result.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
     expect(result.stdout).toContain(copiedSkill);
+  });
+
+  async function launchRecord(
+    directory: string,
+    role: string,
+    options: { agentId?: string; promptBytes?: string } = {},
+  ): Promise<string> {
+    const workspace = resolve(directory, ".sync-engine");
+    await mkdir(workspace, { recursive: true });
+    const promptPath = resolve(workspace, `2026-01-01T00-00-00Z-${role}.prompt.md`);
+    const content = options.promptBytes ?? `# ${role}\n`;
+    await writeFile(promptPath, content);
+    const record = {
+      format: "sync-engine.skill.launch-record",
+      version: 1,
+      role,
+      agentId: options.agentId ?? `agent-${role}`,
+      provider: "paseo-test",
+      model: "test-model",
+      cwd: directory,
+      prompt: {
+        path: promptPath,
+        sha256: createHash("sha256").update(content).digest("hex"),
+        bytes: Buffer.byteLength(content, "utf8"),
+      },
+      startedAt: "2026-01-01T00:00:00.000Z",
+      settledAt: "2026-01-01T00:05:00.000Z",
+      status: "idle",
+    };
+    const recordPath = resolve(workspace, `2026-01-01T00-05-00Z-${role}.launch.json`);
+    await writeFile(recordPath, `${JSON.stringify(record, undefined, 2)}\n`);
+    return recordPath;
+  }
+
+  test("builds a later role only after its predecessor actually ran", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-chain-"));
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    await cp(taskBrief, resolve(design, "brief.md"));
+    await writeFile(resolve(design, "types.md"), "# Types\n");
+
+    const criticArguments = [
+      "prompt",
+      "build",
+      "--role",
+      "critic",
+      "--input",
+      `brief=${resolve(design, "brief.md")}`,
+      "--input",
+      `candidate=${resolve(design, "types.md")}`,
+    ];
+    const ungated = run(criticArguments, directory);
+    expect(ungated.status).toBe(1);
+    expect(ungated.stderr).toContain("Role critic requires a settled designer launch");
+
+    await launchRecord(directory, "designer");
+    const gated = run(criticArguments, directory);
+    expect(gated.status).toBe(0);
+    expect(gated.stdout).toContain("Prompt built: role critic");
+  });
+
+  test("refuses a launch record whose prompt no longer matches", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-tamper-"));
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    await cp(taskBrief, resolve(design, "brief.md"));
+    await writeFile(resolve(design, "types.md"), "# Types\n");
+    await launchRecord(directory, "designer");
+    await writeFile(
+      resolve(directory, ".sync-engine", "2026-01-01T00-00-00Z-designer.prompt.md"),
+      "# replaced after the fact\n",
+    );
+
+    const result = run(
+      [
+        "prompt",
+        "build",
+        "--role",
+        "critic",
+        "--input",
+        `brief=${resolve(design, "brief.md")}`,
+        "--input",
+        `candidate=${resolve(design, "types.md")}`,
+      ],
+      directory,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Role critic requires a settled designer launch");
+  });
+
+  test("handback names every role that has no independent evidence", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-handback-"));
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    const digest = run(["design", "digest", design], directory).stdout.match(/[a-f0-9]{64}/)?.[0];
+
+    const empty = run(
+      ["handback", "check", "--design-root", design, "--design-digest", digest!],
+      directory,
+    );
+    expect(empty.status).toBe(1);
+    expect(empty.stderr).toContain(
+      "no settled launch for: designer, critic, concept-worker, application-worker, evidence-worker",
+    );
+
+    await launchRecord(directory, "designer", { agentId: "invented-agent-id" });
+    const invented = run(
+      ["handback", "check", "--design-root", design, "--design-digest", digest!],
+      directory,
+    );
+    expect(invented.status).toBe(1);
+    expect(invented.stdout).toContain("agent invented-agent-id UNKNOWN to paseo");
+    expect(invented.stderr).toContain("paseo does not know: designer invented-agent-id");
+  });
+
+  test("launches only through the harness and only from the workspace", async () => {
+    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-launch-"));
+    temporary.push(directory);
+    const stray = resolve(directory, "designer.prompt.md");
+    await writeFile(stray, "# designer\n");
+    const outside = run(["launch", "--role", "designer", "--prompt", stray], directory);
+    expect(outside.status).toBe(1);
+    expect(outside.stderr).toContain("Generated workflow files belong in .sync-engine/");
+
+    await mkdir(resolve(directory, ".sync-engine"), { recursive: true });
+    const inside = resolve(directory, ".sync-engine", "designer.prompt.md");
+    await writeFile(inside, "# designer\n");
+    const unparented = spawnSync(
+      "bun",
+      [command, "launch", "--role", "designer", "--prompt", inside],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        env: { ...process.env, PASEO_AGENT_ID: "" },
+      },
+    );
+    expect(unparented.status).toBe(1);
+    expect(unparented.stderr).toContain("PASEO_AGENT_ID is unset");
+
+    const unknownRole = run(["launch", "--role", "reviewer", "--prompt", inside], directory);
+    expect(unknownRole.status).toBe(1);
+    expect(unknownRole.stderr).toContain("Unknown role: reviewer");
   });
 
   test("reports concise usage and argument failures", () => {

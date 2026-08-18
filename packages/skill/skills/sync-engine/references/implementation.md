@@ -31,7 +31,8 @@ Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 4
 frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget
 overflow or explicit user-requested parallelism.
 
-Start one normal-reasoning concept worker for all approved concepts, owning only assigned
+Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand.
+Start one concept worker for all approved concepts, owning only assigned
 concept and focused test paths. Concepts remain independent.
 
 After concept validation passes, start one normal-reasoning application worker owning assigned
@@ -86,8 +87,19 @@ failure, return that focused diagnostic to the original worker, rerun the affect
 focused command, then every check invalidated by the changed paths regardless of chain
 position. Do not repeat unaffected checks.
 
-Inspect complete status and relevant diffs, including untracked files; verify the brief
-and approved design unchanged and returned changes inside assigned boundaries.
+Confirm every required role ran independently before reporting anything:
+
+```sh
+bun "<skill-root>/scripts/command.ts" handback check \
+  --design-root design --design-digest <sha256>
+```
+
+It fails when a required role has no settled launch record, when a record's prompt no
+longer hashes to the record, or when the harness does not know a recorded agent.
+
+Inspect complete status and relevant diffs, including untracked files and `.sync-engine/`
+itself; verify the brief and approved design unchanged and returned changes inside
+assigned boundaries.
 
 Required-command failure, missing objective evidence, or material design mismatch blocks
 handback. Once required checks pass, hand back immediately. Record formatting, naming

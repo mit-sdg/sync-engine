@@ -26,12 +26,17 @@ set explicit `--max-bytes` only for legitimate application material.
 
 ## Design and criticism
 
-Build the prompt and launch one fresh normal-reasoning designer:
+Build the prompt, then launch one fresh designer with the reported prompt path:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role designer \
   --input brief=design/brief.md
+bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-file>
 ```
+
+`launch` reuses the coordinator's provider and model at that model's advertised normal
+reasoning, waits, and writes the launch record. Later prompt builds require the record
+for the role before them, so a stage cannot be skipped by doing its work yourself.
 
 The prompt limits designer writes to its listed `design/` paths; `design/brief.md` is
 read-only. If it returns at most two material questions, settle them, update the brief, and send the
@@ -61,7 +66,7 @@ bun "<skill-root>/scripts/command.ts" prompt build --role critic \
   --input candidate=design/compositions/<name>.md
 ```
 
-Launch a fresh read-only normal-reasoning critic. Two passes are the normal automatic
+Launch a fresh read-only critic the same way. Two passes are the normal automatic
 budget:
 
 1. Critic pass 1 reviews the candidate.

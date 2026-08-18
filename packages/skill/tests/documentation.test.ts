@@ -487,7 +487,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const handback = await stage("implementation");
     const normalized = criticism.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "Launch a fresh read-only normal-reasoning critic. Two passes are the normal automatic budget",
+      "Launch a fresh read-only critic the same way. Two passes are the normal automatic budget",
     );
     expect(normalized).toContain("No material findings ends criticism immediately");
     expect(normalized).toContain(
@@ -518,7 +518,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain(
       "Put brief storage guarantees in implementation assignments, not concept State",
     );
-    expect(workflow).toContain("one normal-reasoning concept worker");
+    expect(normalized).toContain(
+      "Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand",
+    );
+    expect(workflow).toContain("Start one concept worker");
     expect(workflow).toContain("one normal-reasoning application worker");
     expect(workflow).toContain("start one frontend worker");
     expect(workflow).toContain("as a client of the assembled");
@@ -586,6 +589,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "brief.ts",
       "command.ts",
       "design.ts",
+      "launch.ts",
       "prompt.ts",
       "workspace.ts",
     ]);
@@ -618,6 +622,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("coordinator's exact provider and model");
     expect(entry.replace(/\s+/g, " ")).toContain(
       "a reported `Next:` line is syntax, not permission",
+    );
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Launch every one with the compiler's `launch`, which records what the harness attests; a role with no launch record did not run",
     );
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
@@ -664,21 +671,20 @@ describe("compact sync-engine Agent Skill documents", () => {
     }
     expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
-    expect(paseo).toContain("Pi `openai-codex/...` models still use `pi`, not `codex`");
-    expect(paseo).toContain("use those values without\nprovider discovery");
-    expect(paseo).toContain("Otherwise use provider\nmodel discovery once");
-    expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
-    expect(paseo).toContain("displayed `Mode` is not a valid child option");
-    expect(paseo.replace(/\s+/g, " ")).toContain(
+    const normalizedPaseo = paseo.replace(/\s+/g, " ");
+    expect(paseo).toContain("launch --role <role> --prompt <prompt-file>");
+    expect(normalizedPaseo).toContain(
       "Delegation is the default and every role is launched. Only an explicit repository instruction forbidding subagents overrides it, and then stop and report; never take a role yourself because launching looked unavailable",
     );
-    expect(paseo.replace(/\s+/g, " ")).toContain("Launch every role without probing command help");
-    expect(paseo).toContain('paseo workspace create --isolation local --path "$application_root"');
-    expect(paseo).toContain("An agent-scoped `--cwd` alone does not override the caller workspace");
-    expect(paseo).toContain("do not ask the user to restart");
-    expect(paseo).toContain("Wait for a file-delivered assignment");
-    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
-    expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');
+    expect(normalizedPaseo).toContain(
+      "Never hand-roll `paseo run`: a role with no launch record did not run",
+    );
+    expect(normalizedPaseo).toContain("reuses that exact provider and model");
+    expect(normalizedPaseo).toContain("resolves the model's own advertised normal reasoning");
+    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$follow_up_file" --no-wait');
+    expect(normalizedPaseo).toContain(
+      "do not enter an inspect, log, permission, or wait polling loop",
+    );
     expect(paseo.replace(/\s+/g, " ")).toContain(
       "The contract's path discipline still binds every assignment",
     );
