@@ -4,25 +4,25 @@ Read this on a validated brief. Prompt-building rules here hold for every later 
 
 ## Select compact context
 
-Default to no catalog context; zero entries is valid. For relevant alternatives, use only the release-checked `sync-engine-catalog`
-executable without package download:
+Default to no catalog context; zero entries is valid. For alternatives, use only the
+release-checked `sync-engine-catalog` executable without package download:
 
 ```sh
 bunx --no-install sync-engine-catalog list
 bunx --no-install sync-engine-catalog show <entry> --raw
 ```
 
-Add one entry only for a named design uncertainty unresolved by the brief and compact
-rules; never browse for examples. At most three concept designs and one recipe; more requires explicit user request. Catalog designs are alternatives, never mandatory
-names or contracts. A missing catalog executable must fail release check; never repair,
-alias, or replace it.
+Add one entry only for a named design uncertainty the brief and compact rules leave open;
+never browse for examples. At most three concept designs and one recipe; more needs an
+explicit user request. Catalog designs are alternatives, never mandatory names or
+contracts. A missing catalog executable must fail release check; never repair, alias, or
+replace it.
 
-Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build` and deliver
-the reported file through the selected harness guide. The compiler names and writes it
-under `.sync-engine/`; every generated prompt, follow-up, and assignment belongs there
-and never under `design/`, which carries design identity. Put stable role content before
-dynamic inputs. A budget failure lists source contributions; tighten context first and
-set explicit `--max-bytes` only for legitimate application material.
+Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build`. It names and
+writes each one under `.sync-engine/`, where every generated prompt, follow-up and
+assignment belongs — never under `design/`, which carries design identity. Put stable role
+content before dynamic inputs. A budget failure lists source contributions; tighten
+context first and set explicit `--max-bytes` only for legitimate application material.
 
 ## Design and criticism
 
@@ -38,21 +38,21 @@ bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-fi
 launch record. Later prompt builds require the record for the role before them, so a
 stage cannot be skipped by doing its work yourself.
 
-The prompt limits designer writes to its listed `design/` paths; the brief is read-only
-and lives outside them, so `design digest` covers only role-owned design. If it returns at most two material questions, settle them, update the brief, and send the
-same designer a small answer-only file.
+The prompt limits designer writes to its listed `design/` paths; the read-only brief lives
+outside them, so `design digest` covers only role-owned design. On at most two material
+questions, settle them, update the brief, and send that designer a small answer-only file.
 
-The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate
-draft concept files and rerun the installed design form check from application root:
+The designer runs its permitted syntax command and repairs syntax before returning.
+Independently enumerate draft concept files and rerun the form check from application
+root:
 
 ```sh
 bunx --no-install sync-engine check-design design/concepts/*.md \
   design/compositions/*.md design/types.md
 ```
 
-Send the same designer one `.sync-engine/` file of at most 4 KiB containing only check
-output, affected paths, and repair request. Deliver it through the harness; do not rebuild or resend the
-full designer prompt.
+Send the same designer one `.sync-engine/` file of at most 4 KiB carrying only check
+output, affected paths and repair request; never rebuild or resend the full prompt.
 
 After syntax passes, supply the brief only through its dedicated prompt slot. Pass
 `types.md` and every concept/composition file as repeated `--input candidate=<path>`

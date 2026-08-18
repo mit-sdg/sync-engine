@@ -405,7 +405,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(implementation.replace(/\s+/g, " ")).toContain(
       "Never include framework checkout source, installed package contents, build output, source maps, or paths reached by following framework imports",
     );
-    expect(implementation).toContain("instead of searching internals");
+    expect(implementation.replace(/\s+/g, " ")).toContain(
+      "the worker returns a context blocker instead of searching internals",
+    );
     expect(contract).toContain("role prompts must require agents");
     expect(entry.replace(/\s+/g, " ")).toContain(
       "Write every generated prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never place generated Markdown in a shell argument",
@@ -516,7 +518,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const workflow = await stage("implementation");
     const normalized = workflow.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "Put the brief's durability decision in every concept assignment as a storage guarantee, never as a claim about concept State",
+      "Carry the brief's durability decision into every concept assignment as a storage guarantee, never as a claim about concept State",
     );
     expect(normalized).toContain(
       "Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand",
@@ -640,7 +642,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "The brief is product authority the coordinator keeps editing, so it lives outside the design root; `design digest` refuses a brief inside it",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Durability is product-visible: record whether stored facts survive restart, as a decision, never by calling concept State a storage tier. When the request does not say and the application is not plainly a demo, ask; an explicit demo or throwaway may record in-memory storage as a `User` decision",
+      "Durability is product-visible: record whether stored facts survive restart, as a decision, never by calling concept State a storage tier. Ask when the request does not say, unless the application is plainly a demo, where in-memory storage is a `User` decision",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "coordinator writes only the brief, temporary assignment/context files, and setup's documented concept-free scaffold",
@@ -659,10 +661,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain("Run it alone—do not chain a premature check");
     expect(criticism).toContain("Default to no catalog context");
     expect(normalizedCriticism).toContain(
-      "Deliver it through the harness; do not rebuild or resend the full designer prompt",
+      "carrying only check output, affected paths and repair request; never rebuild or resend the full prompt",
     );
     expect(normalizedCriticism).toContain(
-      "The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate draft concept files and rerun the installed design form check from application root",
+      "The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate draft concept files and rerun the form check from application root",
     );
     expect(criticism).toContain("never aggregate candidate files into an intermediate file");
     expect(normalizedCriticism).toContain(

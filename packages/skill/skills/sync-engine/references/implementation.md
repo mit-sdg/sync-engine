@@ -7,20 +7,21 @@ captured.
 
 Start each assignment with the compiler, fill it, and check it before building the
 prompt. It refuses one role's paths going to another, a concept worker with
-application-wide commands or no focused type check, and a missing storage guarantee.
-List every allowed path as a backticked bullet:
+application-wide commands or no focused type check, and a missing storage guarantee:
 
-````sh
+```sh
 bun "<skill-root>/scripts/command.ts" assignment new --role <role> \
   --design-digest <sha256>
 bun "<skill-root>/scripts/command.ts" assignment check <assignment-file>
-``` Never include framework checkout
-source, installed package contents, build output, source maps, or paths reached by
-following framework imports. Supply framework information only through exact public API references and selected
-application examples: at most one useful implementation example per concept and one
-useful example per mechanism; if insufficient,
-the worker returns a context blocker instead of searching internals. Put the brief's durability decision in every concept
-assignment as a storage guarantee, never as a claim about concept State.
+```
+
+List every allowed path as a backticked bullet. Never include framework checkout source,
+installed package contents, build output, source maps, or paths reached by following
+framework imports. Supply framework information only through exact public API references
+and selected application examples: at most one implementation example per concept and one
+per mechanism; if insufficient, the worker returns a context blocker instead of searching
+internals. Carry the brief's durability decision into every concept assignment as a
+storage guarantee, never as a claim about concept State.
 
 Compiler slots are:
 
@@ -66,7 +67,7 @@ resend its full prompt. Before delivery require:
 ```sh
 bun "<skill-root>/scripts/command.ts" follow-up check <file> \
   --design-root design --design-digest <sha256>
-````
+```
 
 Application workers run focused source-agreement, artifact, integration, and bounded
 host checks for assigned wiring; evidence workers run assigned scenarios or tests, not a

@@ -26,9 +26,8 @@ compiler command, shell-quote that path in `bun "<skill-root>/scripts/command.ts
 In an empty application directory, create before Bun only a minimal `package.json`:
 name, `private: true`, `type: "module"`, and `packageManager` with `release.json`'s exact
 Bun version. Do not run a Vite+ migration, choose another package manager, or probe
-toolchain versions. Install exact-release `@mit-sdg/sync-engine` and matching
-`@mit-sdg/sync-engine-analysis` and `@mit-sdg/sync-engine-catalog` as development
-dependencies; never install the skill package. Before setup or catalog use, verify exact
+toolchain versions. Install `@mit-sdg/sync-engine` with matching `-analysis` and `-catalog` at the exact
+release as development dependencies; never install the skill package. Before setup or catalog use, verify exact
 versions and executable targets:
 
 ```sh
@@ -73,20 +72,21 @@ The brief is product authority the coordinator keeps editing, so it lives outsid
 design root; `design digest` refuses a brief inside it.
 
 Replace placeholders from the user's request and decisions. Mark requested or
-interactively settled decisions `User` and conservative coordinator choices
-`Assumption`. Durability is product-visible: record whether stored facts survive restart,
-as a decision, never by calling concept State a storage tier. When the request does not
-say and the application is not plainly a demo, ask; an explicit demo or throwaway may
-record in-memory storage as a `User` decision. Validate once:
+interactively settled decisions `User` and conservative coordinator choices `Assumption`.
+Durability is product-visible: record whether stored facts survive restart, as a decision,
+never by calling concept State a storage tier. Ask when the request does not say, unless
+the application is plainly a demo, where in-memory storage is a `User` decision. Validate
+once:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" brief check product/brief.md
 ```
 
 Open implementation choices and out-of-scope behavior may remain. Ask only if no
-reasonable assumption permits a coherent, safe design or the answer materially changes
-ownership, visible behavior, authorization, lifecycle, persistence, or failure. Interactively, ask one or two questions per turn; offer concise options and one
+reasonable assumption permits a coherent, safe design, or the answer materially changes
+ownership, visible behavior, authorization, lifecycle, persistence, or failure.
+Interactively, ask one or two questions per turn with concise options and one
 recommendation; never seek exhaustive specification.
 
-Autonomous delivery is preauthorized; the other two modes are interactive and
-require approval before implementation. An ordinary implementation request does not imply preauthorization.
+Autonomous delivery is preauthorized; the other two modes are interactive and require
+approval before implementation. An ordinary implementation request does not imply it.
