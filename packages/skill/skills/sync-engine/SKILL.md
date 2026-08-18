@@ -39,8 +39,10 @@ brief → independent design → syntax → bounded independent criticism
 
 ## Run the workflow
 
-1. Read repository instructions and
-   [follow the coordinator workflow](references/workflow.md).
+1. Read repository instructions and [start the coordinator
+   workflow](references/workflow.md). Read
+   [design and criticism](references/design-and-criticism.md) and
+   [implementation](references/implementation.md) on reaching those stages, not before.
 2. Confirm the harness satisfies the
    [contract](references/harnesses/contract.md) for the current role. When Paseo is
    available, read the short [Paseo guide](references/harnesses/paseo.md); do not search

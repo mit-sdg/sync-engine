@@ -192,6 +192,8 @@ export const workspaceCatalog = [
       "skills/sync-engine/scripts/design.ts",
       "skills/sync-engine/scripts/prompt.ts",
       "skills/sync-engine/references/workflow.md",
+      "skills/sync-engine/references/design-and-criticism.md",
+      "skills/sync-engine/references/implementation.md",
       "skills/sync-engine/references/harnesses/contract.md",
       "skills/sync-engine/references/harnesses/paseo.md",
       "skills/sync-engine/prompts/SOURCES.md",
