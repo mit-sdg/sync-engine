@@ -15,7 +15,6 @@ import { parseSpec, type ConceptSpecDiagnostic } from "@engine/reactions/concept
 import { specificationTypeNameEvidence } from "@engine/tooling/specification-type-evidence";
 import { parseCommandOptions, type OutputFormat } from "./command-options.ts";
 import {
-  diagnosticRecord,
   diagnosticReport,
   failedDiagnostic,
   writeJsonDocument,
@@ -67,8 +66,8 @@ function conceptSpecDiagnostics(
   source: string,
   diagnostics: readonly ConceptSpecDiagnostic[],
 ): DiagnosticRecord[] {
-  return diagnostics.map(({ code, message, location }) =>
-    diagnosticRecord({
+  return diagnostics.map(
+    ({ code, message, location }): DiagnosticRecord => ({
       code,
       path: source,
       line: location.line,
@@ -80,8 +79,8 @@ function conceptSpecDiagnostics(
 }
 
 function simpleStateFormDiagnostics(issues: readonly SimpleStateFormIssue[]): DiagnosticRecord[] {
-  return issues.map(({ code, message, suggestion, severity, location }) =>
-    diagnosticRecord({
+  return issues.map(
+    ({ code, message, suggestion, severity, location }): DiagnosticRecord => ({
       code,
       path: location.source,
       line: location.line,
@@ -94,23 +93,23 @@ function simpleStateFormDiagnostics(issues: readonly SimpleStateFormIssue[]): Di
 }
 
 function applicationFormDiagnostic(issue: ApplicationDesignFormIssue): DiagnosticRecord {
-  return diagnosticRecord({
+  return {
     code: issue.code,
     path: issue.location.source,
     line: issue.location.line,
     column: issue.location.column,
     severity: "error",
     message: issue.message,
-  });
+  };
 }
 
 function invalidDocumentDiagnostic(source: string, error: unknown): DiagnosticRecord {
-  return diagnosticRecord({
+  return {
     code: "DESIGN_DOCUMENT_INVALID",
     path: source,
     severity: "error",
     message: describe(error),
-  });
+  };
 }
 
 function resemblesConcept(markdown: string, source: string): boolean {

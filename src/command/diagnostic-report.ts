@@ -28,25 +28,12 @@ export interface DiagnosticReport {
   readonly diagnostics: readonly DiagnosticRecord[];
 }
 
-/** Normalize optional fields so every producer omits unavailable facts consistently. */
-export function diagnosticRecord(record: DiagnosticRecord): DiagnosticRecord {
-  return {
-    code: record.code,
-    ...(record.path === undefined ? {} : { path: record.path }),
-    ...(record.line === undefined ? {} : { line: record.line }),
-    ...(record.column === undefined ? {} : { column: record.column }),
-    severity: record.severity,
-    message: record.message,
-    ...(record.suggestion === undefined ? {} : { suggestion: record.suggestion }),
-  };
-}
-
 export function failedDiagnostic(code: string, error: unknown): DiagnosticRecord {
-  return diagnosticRecord({
+  return {
     code,
     severity: "error",
     message: describeError(error),
-  });
+  };
 }
 
 export function diagnosticReport(

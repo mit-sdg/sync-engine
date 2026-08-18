@@ -15,7 +15,6 @@ import { filesBelow } from "./files-below.ts";
 import { loadGeneratedApplication } from "./generated-config.ts";
 import { parseCommandOptions, type OutputFormat } from "./command-options.ts";
 import {
-  diagnosticRecord,
   diagnosticReport,
   failedDiagnostic,
   writeJsonDocument,
@@ -488,8 +487,8 @@ async function checkConfiguredApplication(
 }
 
 function sourceFailureDiagnostics(failures: readonly string[]): DiagnosticRecord[] {
-  return failures.map((message) =>
-    diagnosticRecord({
+  return failures.map(
+    (message): DiagnosticRecord => ({
       code: "CONCEPT_SOURCE_CHECK_FAILURE",
       severity: "error",
       message,
@@ -498,8 +497,8 @@ function sourceFailureDiagnostics(failures: readonly string[]): DiagnosticRecord
 }
 
 function applicationDiagnostics(diagnostics: readonly ApplicationDiagnostic[]): DiagnosticRecord[] {
-  return diagnostics.map(({ code, severity, message }) =>
-    diagnosticRecord({ code, severity, message }),
+  return diagnostics.map(
+    ({ code, severity, message }): DiagnosticRecord => ({ code, severity, message }),
   );
 }
 
@@ -517,7 +516,6 @@ function printApplicationDiagnostics(diagnostics: readonly ApplicationDiagnostic
   for (const diagnostic of diagnostics) {
     console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
   }
-  console.log(`Application diagnostic check passed with ${diagnostics.length} advisories.`);
 }
 
 export async function checkCommand(
@@ -571,18 +569,13 @@ export async function checkCommand(
     writeJsonDocument(report);
     return report;
   }
-  if (failure !== undefined) {
-    if (output === "text") {
-      console.log(`Concept action/query source check passed for ${checked.conceptCount} concepts.`);
-      for (const diagnostic of checked.diagnostics) {
-        console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
-      }
-    }
-    throw failure;
+  if (output === "silent") {
+    if (failure !== undefined) throw failure;
+    return report;
   }
-  if (output === "text") {
-    console.log(`Concept action/query source check passed for ${checked.conceptCount} concepts.`);
-    printApplicationDiagnostics(checked.diagnostics);
-  }
+  console.log(`Concept action/query source check passed for ${checked.conceptCount} concepts.`);
+  printApplicationDiagnostics(checked.diagnostics);
+  if (failure !== undefined) throw failure;
+  console.log(`Application diagnostic check passed with ${checked.diagnostics.length} advisories.`);
   return report;
 }

@@ -136,8 +136,6 @@ export interface DiagnosticReport {
     readonly status: "passed" | "failed";
     readonly diagnostics: readonly DiagnosticRecord[];
 }
-/** Normalize optional fields so every producer omits unavailable facts consistently. */
-export declare function diagnosticRecord(record: DiagnosticRecord): DiagnosticRecord;
 export declare function failedDiagnostic(code: string, error: unknown): DiagnosticRecord;
 export declare function diagnosticReport(command: DiagnosticReportCommand, status: DiagnosticReport["status"], diagnostics: readonly DiagnosticRecord[]): DiagnosticReport;
 /** Render exactly one newline-terminated JSON document for stdout. */
