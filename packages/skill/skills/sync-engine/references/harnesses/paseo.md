@@ -29,9 +29,10 @@ The coordinator's displayed `Mode` is not a valid child option. Otherwise use pr
 model discovery once to select that exact model's advertised normal reasoning option;
 do not inherit coordinator elevation or guess an option ID.
 
-Before creating a child, confirm delegation is allowed by repository instructions.
-Launch every role without probing command help, using explicit cached values and this
-exact shape (omit `--mode`):
+Delegation is the default and every role is launched. Only an explicit repository
+instruction forbidding subagents overrides it, and then stop and report; never take a
+role yourself because launching looked unavailable. Launch every role without probing
+command help, using explicit cached values and this exact shape (omit `--mode`):
 
 ```sh
 paseo run --provider <provider> --model <model> --thinking <normal> --cwd "$PWD" \

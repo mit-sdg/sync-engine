@@ -668,7 +668,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo).toContain("Otherwise use provider\nmodel discovery once");
     expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
     expect(paseo).toContain("displayed `Mode` is not a valid child option");
-    expect(paseo).toContain("Launch every role without probing command help");
+    expect(paseo.replace(/\s+/g, " ")).toContain(
+      "Delegation is the default and every role is launched. Only an explicit repository instruction forbidding subagents overrides it, and then stop and report; never take a role yourself because launching looked unavailable",
+    );
+    expect(paseo.replace(/\s+/g, " ")).toContain(
+      "Launch every role without probing command help",
+    );
     expect(paseo).toContain('paseo workspace create --isolation local --path "$application_root"');
     expect(paseo).toContain("An agent-scoped `--cwd` alone does not override the caller workspace");
     expect(paseo).toContain("do not ask the user to restart");
