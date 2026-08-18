@@ -7,12 +7,7 @@ supplied prompt material and assignment paths. Do not read, write, inspect, sear
 traverse other repository paths. Edit only assigned scenarios or tests.
 Do not edit production source, generated output, design, or unrelated tests.
 
-Never inspect or search sync-engine framework implementation files, whether in a
-checkout or installed package (`src/engine/`, `packages/*/src/`,
-`node_modules/@mit-sdg/*/dist/`, source maps, or files reached by following imports).
-Use only approved contracts and the assembled public interface. A diagnostic may name a
-framework file; do not open it.
-If the supplied public context is insufficient, return a context blocker.
+<!-- include: ../common/internals.md -->
 
 Use existing evidence when it already proves every required outcome; return that
 existing evidence is sufficient and change nothing. Otherwise add the smallest

@@ -43,7 +43,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const internals = await text(new URL("common/internals.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
+    expect(bytes(internals)).toBeLessThanOrEqual(0.625 * 1024);
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     // Raised for the RequestBoundary clarification: the old "except `RequestBoundary`"
@@ -80,7 +82,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
-      expect(await text(new URL(`roles/${role}`, promptRoot))).not.toContain("<!-- include:");
+      const worker = await text(new URL(`roles/${role}`, promptRoot));
+      expect(worker.match(/<!-- include: [^>]+ -->/g)).toEqual([
+        "<!-- include: ../common/internals.md -->",
+      ]);
     }
   });
 
@@ -94,10 +99,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     const compact = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const internals = await text(new URL("common/internals.md", promptRoot));
     const includes = {
       "../common/design.md": compact,
       "../common/ssf.md": ssf,
       "../common/concept-format.md": format,
+      "../common/internals.md": internals,
     };
     const designer = staticPrompt(await text(new URL("roles/designer.md", promptRoot)), includes);
     const critic = staticPrompt(await text(new URL("roles/critic.md", promptRoot)), includes);
@@ -133,13 +140,16 @@ describe("compact sync-engine Agent Skill documents", () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const internals = await text(new URL("common/internals.md", promptRoot));
     const limits: Record<string, number> = {
       designer: 13 * 1024,
       critic: 10.5 * 1024,
       "concept-worker": 2.25 * 1024,
-      "application-worker": 2.75 * 1024,
+      // Raised for the no-reverse-engineering rule: a trial worker with no composition
+      // reference probed framework brands at runtime for ~200 tool calls instead.
+      "application-worker": 3 * 1024,
       "frontend-worker": 2.5 * 1024,
-      "evidence-worker": 2 * 1024,
+      "evidence-worker": 2.125 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
@@ -149,6 +159,7 @@ describe("compact sync-engine Agent Skill documents", () => {
             "../common/design.md": design,
             "../common/ssf.md": ssf,
             "../common/concept-format.md": format,
+            "../common/internals.md": internals,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -388,13 +399,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "evidence-worker",
     ]) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
-      expect(source).toContain(
-        "Never inspect or search sync-engine framework implementation files",
-      );
-      expect(source).toContain("node_modules/@mit-sdg/*/dist/");
-      expect(source).toContain("files reached by following imports");
-      expect(source).toContain("do not open it");
-      expect(source).toContain("return a context blocker");
+      expect(source).toContain("<!-- include: ../common/internals.md -->");
       expect(source.replace(/\s+/g, " ")).toContain(
         "Do not read, write, inspect, search, or traverse other repository paths",
       );
