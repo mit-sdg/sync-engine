@@ -128,6 +128,16 @@ describe("application manifest", () => {
     expect(diagnosticsFail(manifest.diagnostics, "warnings")).toBe(true);
   });
 
+  test("gives every endpoint path an input contract, including an implicit empty contract", () => {
+    const Bare = endpoint("/bare", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(assemble({ vocabulary: words, composition: { Bare } }));
+
+    expect(manifest.inputContracts).toEqual({ "/bare": {} });
+    expect(manifest.endpoints).toMatchObject([{ name: "Bare", path: "/bare", input: {} }]);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    expect(parseApplicationManifest(renderApplicationManifest(manifest))).toEqual(manifest);
+  });
+
   test("inventories every standard and unused vocabulary computation in name order", () => {
     const complete = vocabulary({
       concepts: {},
