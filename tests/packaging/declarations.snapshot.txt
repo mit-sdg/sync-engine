@@ -5261,7 +5261,7 @@ export declare function automaticAliasCandidates(declarations: readonly ParsedDe
 };
 
 === dist/engine/tooling/ssf-package/grammar.d.ts ===
-import type { ParsedAlias, ParsedDeclaration, SourceLine, SsfDiagnostic, SsfRuleLine } from "./model.ts";
+import { type ParsedAlias, type ParsedDeclaration, type SourceLine, type SsfDiagnostic, type SsfRuleLine } from "./model.ts";
 export interface GrammarResult {
     readonly declarations: readonly ParsedDeclaration[];
     readonly aliases: readonly ParsedAlias[];
@@ -5271,7 +5271,7 @@ export interface GrammarResult {
 export declare function parseGrammar(lines: readonly SourceLine[]): GrammarResult;
 
 === dist/engine/tooling/ssf-package/graph-validation.d.ts ===
-import type { ParsedAlias, ParsedDeclaration, SsfDiagnostic } from "./model.ts";
+import { type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic } from "./model.ts";
 export interface ResolutionFacts {
     readonly validStructuralNames: ReadonlySet<string>;
     readonly validAliases: ReadonlyMap<string, string>;
@@ -5317,6 +5317,8 @@ export type SsfDiagnostic = SsfDiagnosticDetail & ({
     readonly externalType: string;
     readonly span?: never;
 });
+type DiagnosticDetail<T> = T extends unknown ? Omit<T, "severity"> : never;
+export declare function error(detail: DiagnosticDetail<SsfDiagnostic>): SsfDiagnostic;
 export interface SsfTypeName {
     /** Spelling retained from the State text. */
     readonly text: string;
@@ -5466,7 +5468,7 @@ export declare function inferredFieldName(type: string): string;
 
 === dist/engine/tooling/ssf-package/resolution.d.ts ===
 import type { GrammarResult } from "./grammar.ts";
-import type { SsfDiagnostic, SsfDocument, SsfParseOptions } from "./model.ts";
+import { type SsfDiagnostic, type SsfDocument, type SsfParseOptions } from "./model.ts";
 export declare function resolveGrammar(grammar: GrammarResult, options: SsfParseOptions): {
     document: SsfDocument;
     diagnostics: readonly SsfDiagnostic[];

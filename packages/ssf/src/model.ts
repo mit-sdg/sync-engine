@@ -56,6 +56,12 @@ export type SsfDiagnostic = SsfDiagnosticDetail &
     | { readonly externalType: string; readonly span?: never }
   );
 
+type DiagnosticDetail<T> = T extends unknown ? Omit<T, "severity"> : never;
+
+export function error(detail: DiagnosticDetail<SsfDiagnostic>): SsfDiagnostic {
+  return { severity: "error", ...detail };
+}
+
 export interface SsfTypeName {
   /** Spelling retained from the State text. */
   readonly text: string;
