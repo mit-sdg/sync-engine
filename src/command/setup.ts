@@ -358,6 +358,7 @@ export async function setupProject(
 
   const order = [
     "tsconfig.json",
+    "src/text.d.ts",
     "src/concepts.ts",
     "src/assembly.ts",
     "generated.config.ts",

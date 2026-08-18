@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["bun", "node"]
   },
-  "include": ["src", "generated.config.ts", "generated", "src/catalog/text.generated.d.ts"]
+  "include": ["src", "generated.config.ts", "generated"]
 }
