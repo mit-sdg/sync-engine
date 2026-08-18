@@ -10,11 +10,12 @@ The compiler owns every role launch:
 bun "<skill-root>/scripts/command.ts" launch --role <role> --prompt <prompt-file>
 ```
 
-It inspects the coordinator through `$PASEO_AGENT_ID`, reuses that exact provider and
-model, resolves the model's own advertised normal reasoning, places the child in the
-application root, delivers the prompt as a file, waits, attests what Paseo reports, and
-writes the launch record that later prompt builds and the handback check require. Never
-hand-roll `paseo run`: a role with no launch record did not run.
+It inspects the coordinator through `$PASEO_AGENT_ID`, reuses that exact provider, model
+and reasoning setting, places the child in the application root, delivers the prompt as a
+file, waits until the agent settles, attests what Paseo reports, and writes the launch
+record that later prompt builds and the handback check require. Pass `--thinking` only
+when the user names a setting. Never hand-roll `paseo run`: a role with no launch record
+did not run.
 
 Delegation is the default and every role is launched. Only an explicit repository
 instruction forbidding subagents overrides it, and then stop and report; never take a

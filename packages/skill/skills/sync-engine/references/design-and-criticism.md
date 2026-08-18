@@ -34,9 +34,9 @@ bun "<skill-root>/scripts/command.ts" prompt build --role designer \
 bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-file>
 ```
 
-`launch` reuses the coordinator's provider and model at that model's advertised normal
-reasoning, waits, and writes the launch record. Later prompt builds require the record
-for the role before them, so a stage cannot be skipped by doing its work yourself.
+`launch` reuses the coordinator's provider, model and reasoning, waits, and writes the
+launch record. Later prompt builds require the record for the role before them, so a
+stage cannot be skipped by doing its work yourself.
 
 The prompt limits designer writes to its listed `design/` paths; the brief is read-only
 and lives outside them, so `design digest` covers only role-owned design. If it returns at most two material questions, settle them, update the brief, and send the

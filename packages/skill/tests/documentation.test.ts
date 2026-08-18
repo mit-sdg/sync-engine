@@ -522,10 +522,10 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand",
     );
     expect(workflow).toContain("Start one concept worker");
-    expect(workflow).toContain("one normal-reasoning application worker");
+    expect(workflow).toContain("start one application worker");
     expect(workflow).toContain("start one frontend worker");
     expect(workflow).toContain("as a client of the assembled");
-    expect(workflow).toContain("one fresh normal-reasoning evidence worker");
+    expect(workflow).toContain("one fresh evidence worker");
 
     const frontend = await text(new URL("roles/frontend-worker.md", promptRoot));
     expect(frontend).toContain("client of the application's endpoints");
@@ -620,16 +620,19 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain("Paseo guide");
     expect(entry).toContain("self-contained compiler");
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "writes only the brief and temporary assignments/context, never role-owned design, production source, or tests",
+      "writes only the brief and assignments, never role-owned design, production source, or tests",
+    );
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Every role inherits the coordinator's exact provider, model, and reasoning setting unless the user names another",
     );
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
     expect(entry).toContain("do not\n   read or recreate the packaged template directly");
-    expect(entry).toContain("coordinator's exact provider and model");
+    expect(entry).toContain("coordinator's exact provider, model, and reasoning setting");
     expect(entry.replace(/\s+/g, " ")).toContain(
       "a reported `Next:` line is syntax, not permission",
     );
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "Launch every one with the compiler's `launch`, which records what the harness attests; a role with no launch record did not run",
+      "Launch every one with the compiler's `launch`; a role with no launch record did not run, and if a required role cannot launch, stop",
     );
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init product/brief.md');
@@ -683,7 +686,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(contract.replace(/\s+/g, " ")).toContain(
       "The compiler launches roles through Paseo, the only harness it drives today; running under another harness needs a launch module beside it",
     );
-    expect(contract).toContain("normal reasoning setting");
+    expect(contract.replace(/\s+/g, " ")).toContain(
+      "expose the coordinator's exact provider, model, and reasoning setting, and attest those values on every role launch",
+    );
     expect(contract).toContain("deliver initial and follow-up prompts from files");
     const normalizedPaseo = paseo.replace(/\s+/g, " ");
     expect(paseo).toContain("launch --role <role> --prompt <prompt-file>");
@@ -693,8 +698,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalizedPaseo).toContain(
       "Never hand-roll `paseo run`: a role with no launch record did not run",
     );
-    expect(normalizedPaseo).toContain("reuses that exact provider and model");
-    expect(normalizedPaseo).toContain("resolves the model's own advertised normal reasoning");
+    expect(normalizedPaseo).toContain("reuses that exact provider, model and reasoning setting");
+    expect(normalizedPaseo).toContain("Pass `--thinking` only when the user names a setting");
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$follow_up_file" --no-wait');
     expect(normalizedPaseo).toContain(
       "do not enter an inspect, log, permission, or wait polling loop",

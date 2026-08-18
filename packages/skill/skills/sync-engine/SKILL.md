@@ -18,23 +18,22 @@ brief → independent design → syntax → bounded independent criticism
 
 - Authored Markdown under `design/` is product and design authority. Generated output,
   implementation, analysis, and coordinator notes are not.
-- Use fresh native agents for design, criticism, and evidence, and separate bounded
-  roles for concept, application, and requested frontend implementation. Launch every one
-  with the compiler's `launch`, which records what the harness attests; a role with no
-  launch record did not run. The coordinator writes only the
-  brief and temporary assignments/context, never role-owned design, production source,
-  or tests. If a required role cannot launch, stop.
-- Use the coordinator's exact provider and model for every role, at that provider's
-  normal reasoning setting; do not repeat reasoning instructions in prompts.
+- Use fresh native agents for design, criticism, and evidence, and separate bounded roles
+  for concept, application, and requested frontend implementation. Launch every one with
+  the compiler's `launch`; a role with no launch record did not run, and if a required
+  role cannot launch, stop. The coordinator writes only the brief and assignments, never
+  role-owned design, production source, or tests.
+- Every role inherits the coordinator's exact provider, model, and reasoning setting
+  unless the user names another; never repeat reasoning instructions in prompts.
 - Preserve unrelated work. Only the coordinator may change Git's index, refs, or history
   on a direct, explicit human-user request; see the workflow for scope.
 - Downstream implementation and evidence roles receive narrow assigned paths and explicit
-  path-discipline instructions; they never inspect framework implementation source or
-  installed package internals. Supply exact public references.
-- Build every role prompt with the self-contained compiler `scripts/command.ts` and
-  deliver it from a file. Bind downstream prompts and follow-ups to the reviewed design
-  digest. Write every generated prompt, assignment, and follow-up through filesystem
-  APIs and deliver it by path; never place generated Markdown in a shell argument.
+  path discipline; they never inspect framework implementation source or installed
+  package internals. Supply exact public references.
+- Build every role prompt with the self-contained compiler `scripts/command.ts` and bind
+  downstream prompts and follow-ups to the reviewed design digest. Write every generated
+  prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never
+  place generated Markdown in a shell argument.
 - Stop after required checks and objective evidence pass. Do not iterate for optional
   polish, informational findings, or an empty critic list.
 

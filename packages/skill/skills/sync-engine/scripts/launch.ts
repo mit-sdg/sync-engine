@@ -70,8 +70,17 @@ function inspectAgent(id: string): InspectedAgent {
   return agent;
 }
 
-/** The model's own advertised normal reasoning, never the coordinator's elevation. */
-function normalThinking(provider: string, model: string): string | undefined {
+/**
+ * A role reasons like its coordinator: the user chose that setting for this work, and a
+ * role reasoning less well than the agent delegating to it is the wrong default. An
+ * explicit request wins, and a model advertising no options gets none.
+ */
+function childThinking(
+  provider: string,
+  model: string,
+  coordinatorThinking: string | undefined,
+  requested: string | undefined,
+): string | undefined {
   const models = parse<readonly ModelOption[]>(
     paseo(["provider", "models", provider, "--json"]),
     `models for ${provider}`,
@@ -80,11 +89,25 @@ function normalThinking(provider: string, model: string): string | undefined {
   if (found === undefined) {
     throw new LaunchError(`Provider ${provider} does not advertise model ${model}`);
   }
-  const normal = found.defaultThinkingOptionId ?? undefined;
-  if (normal === null || normal === undefined || (found.thinkingOptionIds ?? []).length === 0) {
+  const advertised = found.thinkingOptionIds ?? [];
+  if (advertised.length === 0) {
+    if (requested !== undefined) {
+      throw new LaunchError(`Model ${model} advertises no reasoning options`);
+    }
     return undefined;
   }
-  return normal;
+  if (requested !== undefined) {
+    if (!advertised.includes(requested)) {
+      throw new LaunchError(
+        `Model ${model} does not advertise reasoning ${requested}; it offers ${advertised.join(", ")}`,
+      );
+    }
+    return requested;
+  }
+  if (coordinatorThinking !== undefined && advertised.includes(coordinatorThinking)) {
+    return coordinatorThinking;
+  }
+  return found.defaultThinkingOptionId ?? undefined;
 }
 
 function pause(milliseconds: number): Promise<void> {
@@ -115,6 +138,7 @@ export interface LaunchOptions {
   readonly promptPath: string;
   readonly applicationRoot: string;
   readonly timeoutSeconds: number;
+  readonly thinking?: string;
   readonly coordinatorId?: string;
 }
 
@@ -141,7 +165,12 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   }
   const coordinator = inspectAgent(coordinatorId);
   const applicationRoot = resolve(options.applicationRoot);
-  const thinking = normalThinking(coordinator.Provider, coordinator.Model);
+  const thinking = childThinking(
+    coordinator.Provider,
+    coordinator.Model,
+    coordinator.Thinking,
+    options.thinking,
+  );
 
   const placement =
     resolve(coordinator.Cwd) === applicationRoot

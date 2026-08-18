@@ -201,6 +201,7 @@ function usage(): string {
   sync-engine-skill assignment new --role <role> --design-digest <sha256>
   sync-engine-skill assignment check <file>
   sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
+    [--thinking <id>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
     [--brief <path>]
 
@@ -434,10 +435,12 @@ async function run(args: readonly string[]): Promise<void> {
     let role: string | undefined;
     let prompt: string | undefined;
     let timeoutSeconds = 1800;
+    let thinking: string | undefined;
     for (let index = 1; index < args.length; index += 1) {
       const argument = args[index]!;
       if (argument === "--role") role = takeValue(args, index, argument);
       else if (argument === "--prompt") prompt = takeValue(args, index, argument);
+      else if (argument === "--thinking") thinking = takeValue(args, index, argument);
       else if (argument === "--timeout") {
         timeoutSeconds = Number(takeValue(args, index, argument));
         if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
@@ -458,6 +461,7 @@ async function run(args: readonly string[]): Promise<void> {
       promptPath: prompt,
       applicationRoot: process.cwd(),
       timeoutSeconds,
+      ...(thinking === undefined ? {} : { thinking }),
     });
     const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
     process.stdout.write(

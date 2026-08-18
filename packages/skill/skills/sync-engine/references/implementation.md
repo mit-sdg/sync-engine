@@ -43,7 +43,7 @@ Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by 
 Start one concept worker for all approved concepts, owning only assigned
 concept and focused test paths. Concepts remain independent.
 
-After concept validation passes, start one normal-reasoning application worker owning assigned
+After concept validation passes, start one application worker owning assigned
 compositions, types, registrations, concept set, assembly, configuration, host wiring,
 and generated integration paths.
 
@@ -55,7 +55,7 @@ names the projected HTTP wire and base path; the frontend owns its
 `<skill-root>/prompts/inputs/http.md` to application and frontend workers as `reference`;
 do not read it yourself.
 
-Finally start one fresh normal-reasoning evidence worker. Supply focused commands, not
+Finally start one fresh evidence worker. Supply focused commands, not
 the complete application. It may report existing evidence sufficient and edit only
 assigned scenario/test paths.
 
