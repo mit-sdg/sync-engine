@@ -233,77 +233,55 @@ function documentOf(
     }
   }
 
+  const reportStructure = (message: string, line?: SourceLine): void => {
+    report("CONCEPT_SPEC_DOCUMENT_STRUCTURE", message, line === undefined ? undefined : at(line));
+  };
+
   for (const subsection of headings.filter(({ level }) => level > 2)) {
-    report(
-      "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
+    reportStructure(
       "subsection headings are not allowed in a concept specification",
-      at(subsection.line),
+      subsection.line,
     );
   }
 
   const h1s = headings.filter(({ level }) => level === 1);
   if (h1s.length === 0) {
-    report("CONCEPT_SPEC_DOCUMENT_STRUCTURE", "the document has no concept-definition H1");
+    reportStructure("the document has no concept-definition H1");
   }
   for (const duplicate of h1s.slice(1)) {
-    report(
-      "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-      "the document has more than one H1",
-      at(duplicate.line),
-    );
+    reportStructure("the document has more than one H1", duplicate.line);
   }
   const h1 = h1s[0];
   const definitionName = h1 !== undefined && isDesignIdentifier(h1.name) ? h1.name : undefined;
   if (h1 !== undefined && definitionName === undefined) {
-    report(
-      "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-      `the definition name "${h1.name}" must be an identifier`,
-      at(h1.line),
-    );
+    reportStructure(`the definition name "${h1.name}" must be an identifier`, h1.line);
   }
 
   const h2s = headings.filter(({ level }) => level === 2);
   const known = new Set<string>(SECTION_NAMES);
   for (const unknown of h2s.filter(({ name }) => !known.has(name))) {
-    report(
-      "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-      `unknown "## ${unknown.name}" section`,
-      at(unknown.line),
-    );
+    reportStructure(`unknown "## ${unknown.name}" section`, unknown.line);
   }
   for (const name of SECTION_NAMES) {
     const matching = h2s.filter((heading) => heading.name === name);
     if (matching.length === 0) {
-      report(
-        "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-        `the document has no "## ${name}" section`,
-        h1 === undefined ? undefined : at(h1.line),
-      );
+      reportStructure(`the document has no "## ${name}" section`, h1?.line);
     }
     for (const duplicate of matching.slice(1)) {
-      report(
-        "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-        `the document has more than one "## ${name}" section`,
-        at(duplicate.line),
-      );
+      reportStructure(`the document has more than one "## ${name}" section`, duplicate.line);
     }
   }
 
   const outOfOrder = h2s.find((heading, index) => heading.name !== SECTION_NAMES[index]);
   if (outOfOrder !== undefined) {
-    report(
-      "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
+    reportStructure(
       `the H2 sections must be ordered ${SECTION_NAMES.map((name) => `"## ${name}"`).join(", ")}`,
-      at(outOfOrder.line),
+      outOfOrder.line,
     );
   }
   const firstH2 = h2s[0];
   if (h1 !== undefined && firstH2 !== undefined && h1.line.number > firstH2.line.number) {
-    report(
-      "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-      "the concept-definition H1 must precede the H2 sections",
-      at(h1.line),
-    );
+    reportStructure("the concept-definition H1 must precede the H2 sections", h1.line);
   }
 
   if (h1 !== undefined && firstH2 !== undefined) {
@@ -313,11 +291,7 @@ function documentOf(
         (number < h1.line.number || (number > h1.line.number && number < firstH2.line.number)),
     );
     if (preamble !== undefined) {
-      report(
-        "CONCEPT_SPEC_DOCUMENT_STRUCTURE",
-        "no Markdown is allowed outside the required headings",
-        at(preamble),
-      );
+      reportStructure("no Markdown is allowed outside the required headings", preamble);
     }
   }
 
@@ -702,16 +676,15 @@ function branchesOf(
   const refusals: SpecRefusal[] = [];
   const codes = new Set<string>();
   let valid = true;
+  const branchProblem = (message: string, line: SourceLine): void => {
+    report("CONCEPT_SPEC_ACTION_BRANCH", message, at(line));
+    valid = false;
+  };
   let index = 0;
   while (index < lines.length) {
     const where = lines[index]!;
     if (!/^where\s+\S/.test(where.text.trim())) {
-      report(
-        "CONCEPT_SPEC_ACTION_BRANCH",
-        `${action}'s branch must begin with \`where CONDITION\``,
-        at(where),
-      );
-      valid = false;
+      branchProblem(`${action}'s branch must begin with \`where CONDITION\``, where);
       index += 1;
       while (index < lines.length && !beginsWhere(lines[index]!)) index += 1;
       continue;
@@ -719,55 +692,33 @@ function branchesOf(
 
     const then = lines[index + 1];
     if (then === undefined || then.text.trim() !== "then") {
-      report(
-        "CONCEPT_SPEC_ACTION_BRANCH",
-        `${action}'s where branch must be followed by \`then\``,
-        at(then ?? where),
-      );
-      valid = false;
+      branchProblem(`${action}'s where branch must be followed by \`then\``, then ?? where);
       index += 1;
       while (index < lines.length && !beginsWhere(lines[index]!)) index += 1;
       continue;
     }
     if (indentationOf(then) !== indentationOf(where)) {
-      report(
-        "CONCEPT_SPEC_ACTION_BRANCH",
+      branchProblem(
         `${action}'s \`where\` and \`then\` lines must have the same indentation`,
-        at(then),
+        then,
       );
-      valid = false;
     }
 
     index += 2;
     const branch: SourceLine[] = [];
     while (index < lines.length && !beginsWhere(lines[index]!)) branch.push(lines[index++]!);
     if (branch.length === 0) {
-      report(
-        "CONCEPT_SPEC_ACTION_BRANCH",
-        `${action}'s then block needs a terminal return or refusal`,
-        at(then),
-      );
-      valid = false;
+      branchProblem(`${action}'s then block needs a terminal return or refusal`, then);
       continue;
     }
 
     for (const shallow of branch.filter((line) => indentationOf(line) <= indentationOf(then))) {
-      report(
-        "CONCEPT_SPEC_ACTION_BRANCH",
-        `${action}'s then-block lines must be indented`,
-        at(shallow),
-      );
-      valid = false;
+      branchProblem(`${action}'s then-block lines must be indented`, shallow);
     }
     const terminal = branch[branch.length - 1]!;
     for (const line of branch.slice(0, -1)) {
       if (/^(?:return|refuse)(?:\s|$)/.test(line.text.trim())) {
-        report(
-          "CONCEPT_SPEC_ACTION_BRANCH",
-          `${action}'s return or refusal must terminate its then block`,
-          at(line),
-        );
-        valid = false;
+        branchProblem(`${action}'s return or refusal must terminate its then block`, line);
       }
     }
 
@@ -782,12 +733,10 @@ function branchesOf(
         names.length !== expected.length ||
         names.some((name) => !expected.includes(name))
       ) {
-        report(
-          "CONCEPT_SPEC_ACTION_BRANCH",
+        branchProblem(
           `${action}'s successful branch must return exactly ${expected.length === 0 ? "()" : expected.join(", ")}`,
-          at(terminal),
+          terminal,
         );
-        valid = false;
       }
     } else if (refusal.matched) {
       if (refusal.refusal === undefined) {
@@ -804,12 +753,10 @@ function branchesOf(
         refusals.push(refusal.refusal);
       }
     } else {
-      report(
-        "CONCEPT_SPEC_ACTION_BRANCH",
+      branchProblem(
         `${action}'s then block must end with \`return ...\` or \`refuse CODE "Normative sentence."\``,
-        at(terminal),
+        terminal,
       );
-      valid = false;
     }
   }
   return { refusals, valid };
