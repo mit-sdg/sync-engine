@@ -1,6 +1,8 @@
 # Native-agent harness contract
 
-The workflow requires a harness that can:
+The compiler launches roles through Paseo, the only harness it drives today; running
+under another harness needs a launch module beside it, so treat this contract as what a
+future one must provide. The workflow requires a harness that can:
 
 - create fresh native agents for independent roles;
 - expose the coordinator's exact provider and model, resolve that model's advertised

@@ -2,7 +2,7 @@
 name: sync-engine
 description: Design and build an application with @mit-sdg/sync-engine and concept design, through compact independent review, bounded implementation roles, and objective evidence. Use for building an application on the framework, never for changing the framework itself.
 license: Apache-2.0
-compatibility: Requires filesystem and shell access, Bun, and native agents with file-based prompts; downstream roles use best-effort assigned-path discipline.
+compatibility: Requires filesystem and shell access, Bun, and Paseo, which is the only harness the compiler launches roles through today; downstream roles use best-effort assigned-path discipline.
 ---
 
 # Sync-engine application workflow

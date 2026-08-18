@@ -36,6 +36,6 @@ describe("representative prompt bytes", () => {
     expect(built.content).toBe(
       await file("packages/skill/tests/fixtures/message-board/critic.prompt.txt"),
     );
-    expect(built.sha256).toBe("7fe424d4176cf8878a1c0335b7595def9478d2bdb0dc39842e224075962e5d3b");
+    expect(built.sha256).toBe("54ac9a8117cc20b33168aaf3d0f7149b3f2c7fbb7e1f04388b7bfff39be5f4ec");
   });
 });

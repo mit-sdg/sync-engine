@@ -5,6 +5,12 @@ workflow for designing and building sync-engine applications. It keeps authored
 Markdown as design authority, separates concept and application implementation, and
 requires independent objective evidence.
 
+Roles are launched through [Paseo](https://paseo.dev), which is the only harness the
+compiler drives today. Support for other harnesses is planned: each needs its own launch
+module, and `references/harnesses/contract.md` states what one must provide. Everything
+else — the prompt compiler, the brief and assignment checks, the design digest — is
+harness-independent.
+
 Install an exact published release into Pi, replacing `VERSION` with the desired beta:
 
 ```sh

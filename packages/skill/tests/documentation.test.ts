@@ -71,8 +71,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(designer).toContain("bunx --no-install sync-engine check-design design/concepts/*.md");
     expect(designer).toContain("coordinator will rerun the same gate independently");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
-    expect(critic).toContain(
-      "verify each query's body agrees with its `one`, `optional`, or\n   `many` cardinality and its row marks optional State values optional",
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "compensation, repair, and a declared branch for an absent input identity; verify each query's body agrees with its `one`, `optional`, or `many` cardinality and its row marks optional State values optional",
     );
     expect(critic).toContain("Reject bare typed-link text");
     expect(critic).toContain("do not demand an artificial API/adapter concept");
@@ -680,6 +680,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     for (const reference of [workflow, criticism, implementation]) {
       expect(reference).not.toContain("bunx --no-install sync-engine-skill");
     }
+    expect(contract.replace(/\s+/g, " ")).toContain(
+      "The compiler launches roles through Paseo, the only harness it drives today; running under another harness needs a launch module beside it",
+    );
     expect(contract).toContain("normal reasoning setting");
     expect(contract).toContain("deliver initial and follow-up prompts from files");
     const normalizedPaseo = paseo.replace(/\s+/g, " ");
