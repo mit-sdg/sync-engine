@@ -409,7 +409,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
     const implementation = await stage("implementation");
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
-    expect(entry.replace(/\s+/g, " ")).toContain("never inspect framework implementation source");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Nobody reverse-engineers the framework, the coordinator included. Inside the installed package read only `examples/` and `docs/user/`, never `dist/` or a checkout's source",
+    );
     expect(implementation.replace(/\s+/g, " ")).toContain(
       "Never include framework checkout source, installed package contents, build output, source maps, or paths reached by following framework imports",
     );

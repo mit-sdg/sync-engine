@@ -27,9 +27,10 @@ brief → independent design → syntax → bounded independent criticism
   unless the user names another; never repeat reasoning instructions in prompts.
 - Preserve unrelated work. Only the coordinator may change Git's index, refs, or history
   on a direct, explicit human-user request; see the workflow for scope.
-- Downstream implementation and evidence roles receive narrow assigned paths and explicit
-  path discipline; they never inspect framework implementation source or installed
-  package internals. Supply exact public references.
+- Nobody reverse-engineers the framework, the coordinator included. Inside the installed
+  package read only `examples/` and `docs/user/`, never `dist/` or a checkout's source.
+  Downstream implementation and evidence roles additionally receive narrow assigned paths
+  and explicit path discipline; supply them exact public references.
 - Build every role prompt with the self-contained compiler `scripts/command.ts` and bind
   downstream prompts and follow-ups to the reviewed design digest. Write every generated
   prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never

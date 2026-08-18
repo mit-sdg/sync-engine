@@ -21,9 +21,7 @@
           {
             "channel": "faulted",
             "except": [],
-            "exceptBy": [
-              "DeliverFaultToAsker"
-            ],
+            "exceptBy": ["DeliverFaultToAsker"],
             "kind": "channel",
             "pattern": {}
           }
@@ -65,9 +63,7 @@
         "when": [
           {
             "channel": "refused",
-            "except": [
-              "RequestBoundary"
-            ],
+            "except": ["RequestBoundary"],
             "kind": "channel",
             "pattern": {
               "message": {
@@ -99,42 +95,27 @@
   },
   "computations": [
     {
-      "inputs": [
-        "value",
-        "collection"
-      ],
+      "inputs": ["value", "collection"],
       "name": "among",
       "source": "standard"
     },
     {
-      "inputs": [
-        "left",
-        "right"
-      ],
+      "inputs": ["left", "right"],
       "name": "ge",
       "source": "standard"
     },
     {
-      "inputs": [
-        "left",
-        "right"
-      ],
+      "inputs": ["left", "right"],
       "name": "gt",
       "source": "standard"
     },
     {
-      "inputs": [
-        "left",
-        "right"
-      ],
+      "inputs": ["left", "right"],
       "name": "le",
       "source": "standard"
     },
     {
-      "inputs": [
-        "left",
-        "right"
-      ],
+      "inputs": ["left", "right"],
       "name": "lt",
       "source": "standard"
     }
@@ -159,9 +140,7 @@
         },
         {
           "name": "respond",
-          "refusals": [
-            "NOT_PENDING"
-          ]
+          "refusals": ["NOT_PENDING"]
         }
       ],
       "name": "RequestBoundary",

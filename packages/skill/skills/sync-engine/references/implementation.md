@@ -19,8 +19,8 @@ List every allowed path as a backticked bullet. Never include framework checkout
 installed package contents, build output, source maps, or paths reached by following
 framework imports. Supply framework information only through exact public API references
 and selected application examples, which concept and application workers require: at most
-one implementation example per concept and one per mechanism, taken from the installed
-`node_modules/@mit-sdg/sync-engine/examples/`. A worker with no example for a mechanism
+one implementation example per concept and one per mechanism, from the installed
+`node_modules/@mit-sdg/sync-engine/examples/` and never its `dist/`. A worker with no example for a mechanism
 returns a context blocker rather than discovering it. Carry the brief's durability decision into every concept assignment as a
 storage guarantee, never as a claim about concept State.
 
