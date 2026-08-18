@@ -39,13 +39,17 @@ export interface GrammarResult {
   readonly diagnostics: readonly SsfDiagnostic[];
 }
 
+interface ParsingDeclaration extends ParsedDeclaration {
+  hasMalformedField: boolean;
+}
+
 function multiplicityOf(structural: string | undefined): SsfMultiplicity | undefined {
   if (structural === "seq") return "sequence";
   if (structural === "set" || structural === "element") return structural;
   return structural === undefined ? undefined : NEAR_MISS_STRUCTURAL.get(structural);
 }
 
-function parseDeclaration(line: SourceLine): ParsedDeclaration | undefined {
+function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
   const authored = words(line);
   let first = 0;
   if (authored[first] === "a" || authored[first] === "an") first += 1;
@@ -103,6 +107,7 @@ function parseDeclaration(line: SourceLine): ParsedDeclaration | undefined {
     structuralIndex,
     authoredStructural: authored[structuralIndex]!,
     hasWith,
+    hasMalformedField: false,
   };
 }
 
@@ -291,7 +296,7 @@ function canonicalStructural(structural: SsfMultiplicity): "element" | "seq" | "
   return structural === "sequence" ? "seq" : structural;
 }
 
-function declarationDiagnostics(declaration: ParsedDeclaration): SsfDiagnostic[] {
+function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[] {
   const diagnostics: SsfDiagnostic[] = [];
   const hasFields = declaration.fields.length > 0;
   const tokens = declaration.signature.tokens;
@@ -346,7 +351,7 @@ function declarationDiagnostics(declaration: ParsedDeclaration): SsfDiagnostic[]
       });
     }
   }
-  if (declaration.hasWith && declaration.fields.length === 0) {
+  if (declaration.hasWith && declaration.fields.length === 0 && !declaration.hasMalformedField) {
     diagnostics.push({
       severity: "error",
       code: "SSF_MALFORMED_DECLARATION",
@@ -411,11 +416,11 @@ function fieldDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
 }
 
 export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
-  const declarations: ParsedDeclaration[] = [];
+  const declarations: ParsingDeclaration[] = [];
   const aliases: ParsedAlias[] = [];
   const rules: SsfRuleLine[] = [];
   const diagnostics: SsfDiagnostic[] = [];
-  let current: ParsedDeclaration | undefined;
+  let current: ParsingDeclaration | undefined;
 
   for (const line of lines) {
     if (line.text.trim() === "") continue;
@@ -438,8 +443,10 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
     }
     if (indented) {
       const field = parseField(line);
-      if (field === undefined) diagnostics.push(malformedLineDiagnostic(line, "field"));
-      else if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
+      if (field === undefined) {
+        diagnostics.push(malformedLineDiagnostic(line, "field"));
+        if (current !== undefined) current.hasMalformedField = true;
+      } else if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
       else {
         current.fields.push(field);
         const diagnostic = fieldDiagnostic(line);

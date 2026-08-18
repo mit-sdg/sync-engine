@@ -455,7 +455,23 @@ describe("collection fields", () => {
   ])("rejects %s as the only declaration field", (_, field, column) => {
     const parsed = parseSimpleStateForm(`a set of Items with
   ${field}`);
-    expect(parsed.diagnostics).toHaveLength(2);
+    expect(parsed.diagnostics).toHaveLength(1);
+    expect(parsed.diagnostics).toMatchObject([
+      {
+        code: "SSF_MALFORMED_FIELD",
+        message: "This indented line is not an SSF field or `Rule:` line.",
+        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
+        span: {
+          start: { line: 2, column: 1 },
+          end: { line: 2, column },
+        },
+      },
+    ]);
+  });
+
+  test("rejects a declaration ending in `with` without indented fields", () => {
+    const parsed = parseSimpleStateForm("a set of Items with");
+    expect(parsed.diagnostics).toHaveLength(1);
     expect(parsed.diagnostics).toMatchObject([
       {
         code: "SSF_MALFORMED_DECLARATION",
@@ -464,15 +480,6 @@ describe("collection fields", () => {
         span: {
           start: { line: 1, column: 16 },
           end: { line: 1, column: 20 },
-        },
-      },
-      {
-        code: "SSF_MALFORMED_FIELD",
-        message: "This indented line is not an SSF field or `Rule:` line.",
-        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
-        span: {
-          start: { line: 2, column: 1 },
-          end: { line: 2, column },
         },
       },
     ]);
