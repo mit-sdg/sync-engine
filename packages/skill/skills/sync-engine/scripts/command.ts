@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
@@ -16,6 +17,7 @@ import {
   settledStatus,
   verifiedRecords,
   workspaceDirectory,
+  writePromptContext,
 } from "./workspace.ts";
 
 interface PackageManifest {
@@ -197,6 +199,7 @@ function usage(): string {
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
   sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
+    [--brief <path>]
 
 Prompt options:
   --design-root <directory>       Required for implementation and evidence roles
@@ -357,7 +360,24 @@ async function run(args: readonly string[]): Promise<void> {
       ? undefined
       : await reserveWorkspacePath("prompt", result.role);
     if (promptPath === undefined) process.stdout.write(result.content);
-    else await writeFile(promptPath, result.content, "utf8");
+    else {
+      await writeFile(promptPath, result.content, "utf8");
+      const brief = options.inputs.find((input) => input.slot === "brief");
+      await writePromptContext(promptPath, {
+        format: "sync-engine.skill.prompt-context",
+        version: 1,
+        role: result.role,
+        sha256: result.sha256,
+        ...(brief === undefined
+          ? {}
+          : {
+              briefSha256: createHash("sha256")
+                .update(await readFile(resolve(brief.path), "utf8"))
+                .digest("hex"),
+            }),
+        ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
+      });
+    }
 
     const report = [
       `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
@@ -417,11 +437,21 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
-  if (args[0] === "handback" && args[1] === "check" && args.length === 6) {
+  if (args[0] === "handback" && args[1] === "check" && (args.length === 6 || args.length === 8)) {
     if (args[2] !== "--design-root" || args[4] !== "--design-digest") {
       throw new Error(`handback check requires --design-root then --design-digest`);
     }
+    if (args.length === 8 && args[6] !== "--brief") {
+      throw new Error(`handback check accepts only --brief after the design digest`);
+    }
     await requireDesignDigest(args[3]!, args[5]!);
+    const briefSha256 =
+      args.length === 8
+        ? createHash("sha256")
+            .update(await readFile(resolve(args[7]!), "utf8"))
+            .digest("hex")
+        : undefined;
+    const drifted: string[] = [];
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
@@ -438,6 +468,16 @@ async function run(args: readonly string[]): Promise<void> {
         if (entry.record.status !== settledStatus) {
           unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
         }
+        if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
+          drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
+        }
+        if (
+          briefSha256 !== undefined &&
+          entry.record.briefSha256 !== undefined &&
+          entry.record.briefSha256 !== briefSha256
+        ) {
+          drifted.push(`${role} ran against an earlier brief`);
+        }
         lines.push(
           `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${harness}; ${entry.record.provider} ${entry.record.model}; settled ${entry.record.status}`,
         );
@@ -448,6 +488,7 @@ async function run(args: readonly string[]): Promise<void> {
       ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
       ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
       ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
+      ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
     process.stdout.write(`Every required role ran independently.\n`);

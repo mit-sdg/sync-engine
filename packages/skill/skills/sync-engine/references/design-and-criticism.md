@@ -30,7 +30,7 @@ Build the prompt, then launch one fresh designer with the reported prompt path:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role designer \
-  --input brief=design/brief.md
+  --input brief=product/brief.md
 bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-file>
 ```
 
@@ -38,8 +38,8 @@ bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-fi
 reasoning, waits, and writes the launch record. Later prompt builds require the record
 for the role before them, so a stage cannot be skipped by doing its work yourself.
 
-The prompt limits designer writes to its listed `design/` paths; `design/brief.md` is
-read-only. If it returns at most two material questions, settle them, update the brief, and send the
+The prompt limits designer writes to its listed `design/` paths; the brief is read-only
+and lives outside them, so `design digest` covers only role-owned design. If it returns at most two material questions, settle them, update the brief, and send the
 same designer a small answer-only file.
 
 The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate
@@ -61,7 +61,7 @@ criticism; one critic sees every candidate, so on overflow raise `--max-bytes` i
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role critic \
-  --input brief=design/brief.md --input candidate=design/types.md \
+  --input brief=product/brief.md --input candidate=design/types.md \
   --input candidate=design/concepts/<name>.md \
   --input candidate=design/compositions/<name>.md
 ```

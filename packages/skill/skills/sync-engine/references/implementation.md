@@ -11,8 +11,8 @@ source, installed package contents, build output, source maps, or paths reached 
 following framework imports. Supply framework information only through exact public API references and selected
 application examples: at most one useful implementation example per concept and one
 useful example per mechanism; if insufficient,
-the worker returns a context blocker instead of searching internals. Put brief storage
-guarantees in implementation assignments, not concept State.
+the worker returns a context blocker instead of searching internals. Put the brief's durability decision in every concept
+assignment as a storage guarantee, never as a claim about concept State.
 
 Compiler slots are:
 

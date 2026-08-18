@@ -235,7 +235,7 @@ describe("deterministic prompt construction", () => {
     const assignment = await setup.file("assignment.md", "Implement the approved design.");
     const design = resolve(setup.root, "design");
     await mkdir(design);
-    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    await writeFile(resolve(design, "types.md"), "# Types\n");
     const reviewed = await digestDesign(design);
 
     await expect(
@@ -257,7 +257,7 @@ describe("deterministic prompt construction", () => {
       expect(built.content).toContain("Implement the approved design.");
     }
 
-    await writeFile(resolve(design, "brief.md"), "# Changed brief\n");
+    await writeFile(resolve(design, "types.md"), "# Changed types\n");
     await expect(
       buildPrompt({
         role: "application-worker",

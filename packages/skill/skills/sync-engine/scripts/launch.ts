@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import {
   type LaunchRecord,
   requireInsideWorkspace,
+  readPromptContext,
   reserveWorkspacePath,
   settledStatus,
   writeLaunchRecord,
@@ -200,6 +201,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   paseo(["send", started.agentId, "--prompt-file", promptPath, "--no-wait"]);
   const settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
 
+  const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
     format: "sync-engine.skill.launch-record",
     version: 1,
@@ -211,6 +213,8 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     ...(thinking === undefined ? {} : { thinking }),
     cwd: applicationRoot,
     prompt: { path: promptPath, sha256, bytes: Buffer.byteLength(content, "utf8") },
+    ...(context?.briefSha256 === undefined ? {} : { briefSha256: context.briefSha256 }),
+    ...(context?.designDigest === undefined ? {} : { designDigest: context.designDigest }),
     startedAt,
     settledAt: new Date().toISOString(),
     status: settled.Status,

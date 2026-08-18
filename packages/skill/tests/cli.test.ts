@@ -59,7 +59,7 @@ describe("sync-engine-skill command", () => {
   test("requires setup before initializing the exact brief template", async () => {
     const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-brief-init-"));
     temporary.push(directory);
-    const path = resolve(directory, "design/brief.md");
+    const path = resolve(directory, "product/brief.md");
     const premature = run(["brief", "init", path], directory);
     expect(premature.status).toBe(1);
     expect(premature.stderr).toContain("Brief init requires completed sync-engine setup");
@@ -133,9 +133,17 @@ describe("sync-engine-skill command", () => {
     );
 
     const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
-    expect(written).toHaveLength(1);
-    expect(written[0]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-designer\.prompt\.md$/);
-    const output = resolve(directory, ".sync-engine", written[0]!);
+    expect(written).toHaveLength(2);
+    const [contextName, promptName] = written as [string, string];
+    expect(promptName).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-designer\.prompt\.md$/);
+    expect(contextName).toBe(promptName.replace(/\.md$/, ".json"));
+    const recorded = JSON.parse(
+      await readFile(resolve(directory, ".sync-engine", contextName), "utf8"),
+    );
+    expect(recorded.role).toBe("designer");
+    expect(recorded.sha256).toBe(first.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1]);
+    expect(recorded.briefSha256).toMatch(/^[a-f0-9]{64}$/);
+    const output = resolve(directory, ".sync-engine", promptName);
     expect(first.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
     const prompt = await readFile(output, "utf8");
     expect(prompt).toContain("<!-- source: brief.md -->");
@@ -146,7 +154,7 @@ describe("sync-engine-skill command", () => {
     expect(second.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1]).toBe(
       first.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1],
     );
-    expect((await readdir(resolve(directory, ".sync-engine"))).length).toBe(2);
+    expect((await readdir(resolve(directory, ".sync-engine"))).length).toBe(4);
   });
 
   test("keeps generated workflow files out of the design root", async () => {
@@ -154,7 +162,9 @@ describe("sync-engine-skill command", () => {
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
-    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    const product = resolve(directory, "product");
+    await mkdir(product, { recursive: true });
+    await writeFile(resolve(product, "brief.md"), "# Brief\n");
     const strayAssignment = resolve(design, "assignment.md");
     await writeFile(strayAssignment, "Assignment.\n");
 
@@ -169,7 +179,7 @@ describe("sync-engine-skill command", () => {
         "--input",
         `assignment=${strayAssignment}`,
         "--input",
-        `specifications=${resolve(design, "brief.md")}`,
+        `specifications=${resolve(product, "brief.md")}`,
         "--design-root",
         design,
         "--design-digest",
@@ -215,7 +225,7 @@ describe("sync-engine-skill command", () => {
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design);
-    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    await writeFile(resolve(design, "types.md"), "# Types\n");
     const digested = run(["design", "digest", design], directory);
     expect(digested.status).toBe(0);
     const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
@@ -319,8 +329,8 @@ describe("sync-engine-skill command", () => {
       copiedCommand,
     );
     expect(result.status).toBe(0);
-    const written = await readdir(resolve(directory, ".sync-engine"));
-    const output = resolve(directory, ".sync-engine", written[0]!);
+    const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
+    const output = resolve(directory, ".sync-engine", written[1]!);
     expect(await readFile(output, "utf8")).toContain("# Independent designer");
     expect(result.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
     expect(result.stdout).toContain(copiedSkill);
@@ -363,7 +373,9 @@ describe("sync-engine-skill command", () => {
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
-    await cp(taskBrief, resolve(design, "brief.md"));
+    const product = resolve(directory, "product");
+    await mkdir(product, { recursive: true });
+    await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
 
     const criticArguments = [
@@ -372,7 +384,7 @@ describe("sync-engine-skill command", () => {
       "--role",
       "critic",
       "--input",
-      `brief=${resolve(design, "brief.md")}`,
+      `brief=${resolve(product, "brief.md")}`,
       "--input",
       `candidate=${resolve(design, "types.md")}`,
     ];
@@ -391,7 +403,9 @@ describe("sync-engine-skill command", () => {
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
-    await cp(taskBrief, resolve(design, "brief.md"));
+    const product = resolve(directory, "product");
+    await mkdir(product, { recursive: true });
+    await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
     await launchRecord(directory, "designer", { status: "running" });
 
@@ -402,7 +416,7 @@ describe("sync-engine-skill command", () => {
         "--role",
         "critic",
         "--input",
-        `brief=${resolve(design, "brief.md")}`,
+        `brief=${resolve(product, "brief.md")}`,
         "--input",
         `candidate=${resolve(design, "types.md")}`,
       ],
@@ -417,7 +431,9 @@ describe("sync-engine-skill command", () => {
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
-    await cp(taskBrief, resolve(design, "brief.md"));
+    const product = resolve(directory, "product");
+    await mkdir(product, { recursive: true });
+    await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
     await launchRecord(directory, "designer");
     await writeFile(
@@ -432,7 +448,7 @@ describe("sync-engine-skill command", () => {
         "--role",
         "critic",
         "--input",
-        `brief=${resolve(design, "brief.md")}`,
+        `brief=${resolve(product, "brief.md")}`,
         "--input",
         `candidate=${resolve(design, "types.md")}`,
       ],
@@ -447,7 +463,7 @@ describe("sync-engine-skill command", () => {
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
-    await writeFile(resolve(design, "brief.md"), "# Brief\n");
+    await writeFile(resolve(design, "types.md"), "# Types\n");
     const digest = run(["design", "digest", design], directory).stdout.match(/[a-f0-9]{64}/)?.[0];
 
     const empty = run(

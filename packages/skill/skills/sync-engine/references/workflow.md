@@ -66,15 +66,21 @@ If release installation or setup is incomplete, the command leaves no brief and 
 bootstrap steps. Run it alone—do not chain a premature check:
 
 ```sh
-bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+bun "<skill-root>/scripts/command.ts" brief init product/brief.md
 ```
+
+The brief is product authority the coordinator keeps editing, so it lives outside the
+design root; `design digest` refuses a brief inside it.
 
 Replace placeholders from the user's request and decisions. Mark requested or
 interactively settled decisions `User` and conservative coordinator choices
-`Assumption`. Validate once:
+`Assumption`. Durability is product-visible: record whether stored facts survive restart,
+as a decision, never by calling concept State a storage tier. When the request does not
+say and the application is not plainly a demo, ask; an explicit demo or throwaway may
+record in-memory storage as a `User` decision. Validate once:
 
 ```sh
-bun "<skill-root>/scripts/command.ts" brief check design/brief.md
+bun "<skill-root>/scripts/command.ts" brief check product/brief.md
 ```
 
 Open implementation choices and out-of-scope behavior may remain. Ask only if no

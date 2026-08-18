@@ -18,6 +18,42 @@ const extensions: Readonly<Record<WorkspaceKind, string>> = {
   launch: "launch.json",
 };
 
+/** What a built prompt was made from, so a launch can record it without rebuilding. */
+export interface PromptContext {
+  readonly format: "sync-engine.skill.prompt-context";
+  readonly version: 1;
+  readonly role: string;
+  readonly sha256: string;
+  readonly briefSha256?: string;
+  readonly designDigest?: string;
+}
+
+export function promptContextPath(promptPath: string): string {
+  return promptPath.replace(/\.md$/, ".json");
+}
+
+export async function writePromptContext(
+  promptPath: string,
+  context: PromptContext,
+): Promise<void> {
+  await writeFile(
+    promptContextPath(promptPath),
+    `${JSON.stringify(context, undefined, 2)}\n`,
+    "utf8",
+  );
+}
+
+export async function readPromptContext(promptPath: string): Promise<PromptContext | undefined> {
+  try {
+    const value = JSON.parse(
+      await readFile(promptContextPath(promptPath), "utf8"),
+    ) as PromptContext;
+    return value.format === "sync-engine.skill.prompt-context" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class WorkspaceError extends Error {
   override readonly name = "WorkspaceError";
 }
@@ -75,6 +111,8 @@ export interface LaunchRecord {
   readonly thinking?: string;
   readonly cwd: string;
   readonly prompt: { readonly path: string; readonly sha256: string; readonly bytes: number };
+  readonly briefSha256?: string;
+  readonly designDigest?: string;
   readonly startedAt: string;
   readonly settledAt: string;
   readonly status: string;

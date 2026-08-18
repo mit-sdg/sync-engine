@@ -516,7 +516,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const workflow = await stage("implementation");
     const normalized = workflow.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "Put brief storage guarantees in implementation assignments, not concept State",
+      "Put the brief's durability decision in every concept assignment as a storage guarantee, never as a claim about concept State",
     );
     expect(normalized).toContain(
       "Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand",
@@ -627,7 +627,13 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Launch every one with the compiler's `launch`, which records what the harness attests; a role with no launch record did not run",
     );
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
-    expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
+    expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init product/brief.md');
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "The brief is product authority the coordinator keeps editing, so it lives outside the design root; `design digest` refuses a brief inside it",
+    );
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "Durability is product-visible: record whether stored facts survive restart, as a decision, never by calling concept State a storage tier. When the request does not say and the application is not plainly a demo, ask; an explicit demo or throwaway may record in-memory storage as a `User` decision",
+    );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "coordinator writes only the brief, temporary assignment/context files, and setup's documented concept-free scaffold",
     );

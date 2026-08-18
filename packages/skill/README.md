@@ -74,10 +74,14 @@ and concept-free configuration; do not probe or downgrade toolchain versions. On
 setup succeeds, initialize and validate the compact product brief:
 
 ```sh
-bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+bun "<skill-root>/scripts/command.ts" brief init product/brief.md
 # Fill the template.
-bun "<skill-root>/scripts/command.ts" brief check design/brief.md
+bun "<skill-root>/scripts/command.ts" brief check product/brief.md
 ```
+
+The brief is product authority the coordinator keeps editing, so it lives outside the
+design root and `design digest` refuses a brief inside it: design identity covers only
+role-owned design, while the brief is tracked separately in each prompt's context record.
 
 `brief init` refuses to create a file before setup and prints the required bootstrap
 commands. After independent review and authorization close, capture the authored design
