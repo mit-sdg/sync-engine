@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -30,6 +30,10 @@ interface JsonDocument {
     readonly status: string;
     readonly detail?: string;
   }[];
+}
+
+function documentLabel(absolute: string, supplied: string): string {
+  return (relative(root, absolute) || supplied).split(sep).join("/");
 }
 
 function run(args: readonly string[]) {
@@ -102,14 +106,14 @@ beforeAll(async () => {
   await writeFile(
     brokenVerificationConfig,
     'import { assembleReadingCircle } from "' +
-      `${relative(temporary, join(root, "examples/reading-circle/src/assembly.ts"))}` +
+      `${pathToFileURL(join(root, "examples/reading-circle/src/assembly.ts")).href}` +
       '";\n\n' +
       "export default {\n" +
       "  assemble: assembleReadingCircle,\n" +
       '  title: "Broken JSON verification fixture",\n' +
       "  conceptSet: {\n" +
       '    module: new URL("' +
-      `${relative(temporary, join(root, "examples/reading-circle/src/concepts.ts"))}` +
+      `${pathToFileURL(join(root, "examples/reading-circle/src/concepts.ts")).href}` +
       '", import.meta.url),\n' +
       "  },\n" +
       '  design: { version: 1, documents: [new URL("./design.md", import.meta.url)] },\n' +
@@ -175,7 +179,7 @@ describe("versioned JSON validation output", () => {
       expect.objectContaining({
         code: "SSF_NEAR_MISS_KEYWORD",
         severity: "error",
-        path: relative(root, invalidStatePath),
+        path: documentLabel(invalidStatePath, invalidStatePath),
         line: 21,
         column: 3,
         suggestion: "a seq of Notes with",
