@@ -9,13 +9,14 @@ export const settledStatus = "idle";
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
 export const workspaceDirectory = ".sync-engine";
 
-export type WorkspaceKind = "prompt" | "followup" | "assignment" | "launch";
+export type WorkspaceKind = "prompt" | "followup" | "assignment" | "launch" | "response";
 
 const extensions: Readonly<Record<WorkspaceKind, string>> = {
   prompt: "prompt.md",
   followup: "followup.md",
   assignment: "assignment.md",
   launch: "launch.json",
+  response: "response.md",
 };
 
 /** What a built prompt was made from, so a launch can record it without rebuilding. */
@@ -132,6 +133,25 @@ export interface LaunchRecord {
   readonly startedAt: string;
   readonly settledAt: string;
   readonly status: string;
+  readonly response?: {
+    readonly path: string;
+    readonly sha256: string;
+    readonly bytes: number;
+    readonly contract: "met" | "violated";
+  };
+}
+
+/**
+ * What a role must return. The prompts already state it; a role that ignores it costs the
+ * coordinator the context the boundary exists to protect, so check it at the boundary.
+ */
+export function responseContract(role: string, response: string): string | undefined {
+  const text = response.trim();
+  if (text === "") return `${role} returned nothing`;
+  if (role !== "critic") return undefined;
+  if (text === "No material findings.") return undefined;
+  if (text.startsWith("- `")) return undefined;
+  return `critic must return "No material findings." or begin with its findings, with no preamble`;
 }
 
 export function isLaunchRecord(value: unknown): value is LaunchRecord {
@@ -186,6 +206,7 @@ export async function verifiedRecords(
       continue;
     }
     if (entry.record.status !== settledStatus) continue;
+    if (entry.record.response?.contract === "violated") continue;
     if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
       found.push(entry);
     }

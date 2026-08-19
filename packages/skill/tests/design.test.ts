@@ -7,6 +7,7 @@ import {
   digestDesign,
   requireDesignDigest,
 } from "../skills/sync-engine/scripts/design.ts";
+import { responseContract } from "../skills/sync-engine/scripts/workspace.ts";
 
 const temporary: string[] = [];
 
@@ -65,5 +66,27 @@ describe("closed design digest", () => {
 
     await writeFile(resolve(root, "concepts/Counting.md"), "# Counting\n");
     expect((await digestDesign(root)).files).toBe(5);
+  });
+});
+
+describe("role return contract", () => {
+  test("accepts the clean sentinel and a bare findings list from a critic", () => {
+    expect(responseContract("critic", "No material findings.\n")).toBeUndefined();
+    expect(
+      responseContract("critic", "- `design/concepts/Shortening.md` — Undeclared branch.\n"),
+    ).toBeUndefined();
+  });
+
+  test("refuses a critic that buries its verdict under a preamble", () => {
+    expect(
+      responseContract("critic", "I reviewed the four files.\n\nNo material findings.\n"),
+    ).toContain("no preamble");
+  });
+
+  test("refuses any role that returns nothing", () => {
+    expect(responseContract("application-worker", "   \n")).toContain("returned nothing");
+    expect(
+      responseContract("application-worker", "Changed src/assembly.ts; check passed."),
+    ).toBeUndefined();
   });
 });

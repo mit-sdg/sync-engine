@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import {
   canonical,
   type LaunchRecord,
   requireInsideWorkspace,
   readPromptContext,
   reserveWorkspacePath,
+  responseContract,
   settledStatus,
   writeLaunchRecord,
 } from "./workspace.ts";
@@ -148,6 +149,19 @@ export interface LaunchResult {
 }
 
 /**
+ * The role's last message, read from the harness rather than the role. Nothing is asked of
+ * the agent and nothing enters its prompt, so a role cannot present a report it did not
+ * give. An agent settles on its reply, so the last text entry is that reply.
+ */
+function finalResponse(agentId: string): string {
+  try {
+    return paseo(["logs", agentId, "--filter", "text", "--tail", "1"]);
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Launch one fresh role agent, deliver its prompt as a file, wait for it, and record what
  * the harness attests. The record — not the coordinator's account — is the evidence that
  * the role ran.
@@ -230,6 +244,15 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   paseo(["send", started.agentId, "--prompt-file", promptPath, "--no-wait"]);
   const settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
 
+  const response = finalResponse(started.agentId);
+  const responsePath = await reserveWorkspacePath(
+    "response",
+    options.role,
+    options.applicationRoot,
+  );
+  await writeFile(responsePath, response, "utf8");
+  const violation = responseContract(options.role, response);
+
   const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
     format: "sync-engine.skill.launch-record",
@@ -247,9 +270,20 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     startedAt,
     settledAt: new Date().toISOString(),
     status: settled.Status,
+    response: {
+      path: responsePath,
+      sha256: createHash("sha256").update(response).digest("hex"),
+      bytes: Buffer.byteLength(response, "utf8"),
+      contract: violation === undefined ? "met" : "violated",
+    },
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);
   await writeLaunchRecord(recordPath, record);
+  if (violation !== undefined) {
+    throw new LaunchError(
+      `Launched ${options.role} did not return what its prompt requires: ${violation}. Its reply is at ${responsePath}; the record does not count this role as run.`,
+    );
+  }
   return { recordPath, record };
 }
 
