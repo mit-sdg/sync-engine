@@ -78,7 +78,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(critic.replace(/\s+/g, " ")).toContain(
       "compensation, repair, and a declared branch for an absent input identity; verify each query's body agrees with its `one`, `optional`, or `many` cardinality and its row marks optional State values optional",
     );
-    expect(critic).toContain("Reject bare typed-link text");
+    expect(critic).toContain(
+      "`check-design` already accepted instance,\n   binding, and typed-link form; never restate a form it passed",
+    );
+    expect(critic).toContain(
+      "A finding a previous\npass already made, unrepaired, is not a new finding: report it once and stop",
+    );
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
