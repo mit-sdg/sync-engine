@@ -102,17 +102,19 @@ describe("role read boundary", () => {
   });
 
   test("keeps every role out of the skill's own sources", () => {
-    const skill = "/home/dev/.claude/skills/sync-engine";
+    const skill = resolve("packages/skill/skills/sync-engine");
     for (const role of ["designer", "critic", "application-worker"]) {
-      expect(readAudit(role, [`${skill}/prompts/inputs/http.md`])).toEqual([
-        `${skill}/prompts/inputs/http.md`,
-      ]);
-      expect(readAudit(role, [`${skill}/prompts/roles/designer.md`])).toHaveLength(1);
-      expect(readAudit(role, [`${skill}/scripts/command.ts`])).toHaveLength(1);
+      expect(readAudit(role, [`${skill}/prompts/inputs/http.md`], skill)).toHaveLength(1);
+      expect(readAudit(role, [`${skill}/scripts/command.ts`], skill)).toHaveLength(1);
     }
-    expect(readAudit("application-worker", ["src/compositions/Api.ts", "design/types.md"])).toEqual(
-      [],
-    );
+    // An application's own prompt library is its own business.
+    expect(
+      readAudit(
+        "application-worker",
+        ["prompts/templates/welcome.md", "src/skills/x/scripts/a.ts"],
+        skill,
+      ),
+    ).toEqual([]);
   });
 
   test("lets implementation roles read examples and user docs, nothing else", () => {

@@ -159,19 +159,17 @@ export interface LaunchRecord {
   readonly resumes?: number;
 }
 
-/** The skill's own prompt sources and compiler, which the compiler expands for a role. */
-const skillMaterial = /\/prompts\/(roles|common|inputs|templates)\/|\/skills\/[^/]+\/scripts\//;
-
 /**
  * Where a role may read: a designer or critic from supplied prompt material alone, an
  * implementation role additionally from the installed package's examples and user docs.
  * No role reads the skill's own sources; the compiler delivers what each one needs.
  */
-export function readAudit(role: string, paths: readonly string[]): string[] {
+export function readAudit(role: string, paths: readonly string[], skillRoot?: string): string[] {
+  const skill = skillRoot === undefined ? undefined : canonical(skillRoot);
   const offending: string[] = [];
   for (const path of paths) {
     const normalized = path.split(sep).join("/");
-    if (skillMaterial.test(normalized)) {
+    if (skill !== undefined && inside(skill, canonical(path))) {
       offending.push(path);
       continue;
     }
@@ -182,8 +180,8 @@ export function readAudit(role: string, paths: readonly string[]): string[] {
       continue;
     }
     if (!packaged.startsWith("@mit-sdg/")) continue;
-    const inside = packaged.replace(/^@mit-sdg\/[^/]+\//, "");
-    if (!inside.startsWith("examples/") && !inside.startsWith("docs/user/")) {
+    const withinPackage = packaged.replace(/^@mit-sdg\/[^/]+\//, "");
+    if (!withinPackage.startsWith("examples/") && !withinPackage.startsWith("docs/user/")) {
       offending.push(path);
     }
   }

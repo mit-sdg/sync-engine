@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import {
@@ -17,6 +19,9 @@ import {
 
 /** The single harness this skill drives today; other harnesses get their own module. */
 export const harness = "paseo";
+
+/** This skill's own directory: no role reads it, the compiler delivers what each needs. */
+const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** How many times a role that ended in error is asked to continue before the launch fails. */
 const maxResumes = 2;
@@ -296,7 +301,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   await writeFile(responsePath, response, "utf8");
   const violation = responseContract(options.role, response);
   const opened = readPaths(started.agentId);
-  const readViolations = readAudit(options.role, opened.paths);
+  const readViolations = readAudit(options.role, opened.paths, skillRoot);
 
   const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
