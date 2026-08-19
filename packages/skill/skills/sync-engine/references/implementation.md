@@ -48,6 +48,11 @@ Prompt budgets: designer 32, critic 48, concept 24, application 48, frontend 48,
 32 KiB. Split a worker into explicit batches only on budget overflow or user-requested
 parallelism.
 
+A concept worker is gated on `design/concepts/` alone, so take its digest with
+`design digest design --role concept-worker`; every other role uses the whole design. A
+role relaunched only because a digest moved gets an assignment saying so, to confirm its
+implementation still matches and change nothing otherwise.
+
 Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand. Add
 `--model <model>` only when the user named a model for roles; the launch record attests
 whichever model ran.

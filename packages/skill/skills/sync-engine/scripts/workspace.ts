@@ -243,6 +243,10 @@ export const roleAfter: Readonly<Record<string, string>> = {
   "evidence-worker": "application-worker",
 };
 
+export function previousRole(role: string): string | undefined {
+  return roleAfter[role];
+}
+
 export const requiredRoles = [
   "designer",
   "critic",

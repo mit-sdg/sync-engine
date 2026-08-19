@@ -7,10 +7,11 @@ import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from "no
 import { fileURLToPath } from "node:url";
 import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
-import { digestDesign, requireDesignDigest } from "./design.ts";
+import { designScope, digestDesign, requireDesignDigest } from "./design.ts";
 import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
 import { agentExists, harness, launchRole } from "./launch.ts";
 import {
+  previousRole,
   requireCompletedRole,
   workspaceFileRole,
   requireInsideWorkspace,
@@ -198,7 +199,7 @@ function usage(): string {
   sync-engine-skill release check [<application-directory>]
   sync-engine-skill brief init <brief.md>
   sync-engine-skill brief check <brief.md>
-  sync-engine-skill design digest <design-directory>
+  sync-engine-skill design digest <design-directory> [--role <role>]
   sync-engine-skill follow-up new --role <role>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
@@ -333,8 +334,9 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
-  if (args[0] === "design" && args[1] === "digest" && args.length === 3) {
-    const result = await digestDesign(args[2]!);
+  if (args[0] === "design" && args[1] === "digest" && (args.length === 3 || args.length === 5)) {
+    const scoped = args[3] === "--role" ? designScope(args[4] ?? "") : "all";
+    const result = await digestDesign(args[2]!, scoped);
     process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
     next(process.stdout, [
       `read ${reference("implementation.md")}`,
@@ -381,7 +383,12 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
-    await requireCompletedRole(options.role, undefined, options.designDigest);
+    const predecessor = previousRole(options.role);
+    const predecessorDigest =
+      options.designRoot === undefined || predecessor === undefined
+        ? options.designDigest
+        : (await digestDesign(options.designRoot, designScope(predecessor))).digest;
+    await requireCompletedRole(options.role, undefined, predecessorDigest);
     for (const input of options.inputs) {
       if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
     }
@@ -514,6 +521,10 @@ async function run(args: readonly string[]): Promise<void> {
       throw new Error(`handback check accepts only --brief after the design digest`);
     }
     await requireDesignDigest(args[3]!, args[5]!);
+    const scopedDigests = new Map<string, string>();
+    for (const role of requiredRoles) {
+      scopedDigests.set(role, (await digestDesign(args[3]!, designScope(role))).digest);
+    }
     const briefSha256 =
       args.length === 8
         ? createHash("sha256")
@@ -546,7 +557,10 @@ async function run(args: readonly string[]): Promise<void> {
         for (const churn of entry.record.rewrites ?? []) {
           churned.push(`${role} wrote ${churn.path} ${churn.writes} times`);
         }
-        if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
+        if (
+          entry.record.designDigest !== undefined &&
+          entry.record.designDigest !== scopedDigests.get(role)
+        ) {
           drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
         }
         if (
