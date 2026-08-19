@@ -125,7 +125,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      expect(bytes(await stage(name))).toBeLessThanOrEqual(6 * 1024);
+      // Raised for compiler-owned follow-ups: coordinators improvised four naming
+      // conventions across three trials and invented timestamps that drifted 16 minutes.
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(6.25 * 1024);
     }
 
     expect(workflow).not.toContain("## Design and criticism");

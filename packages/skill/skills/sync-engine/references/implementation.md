@@ -64,10 +64,11 @@ the complete application. It may report existing evidence sufficient and edit on
 assigned scenario/test paths.
 
 Return an ordinary implementation defect to the original worker, not a replacement, in
-a file containing only the new diagnostic, affected paths, and affected command. Do not
-resend its full prompt. Before delivery require:
+a compiler-named file holding only the new diagnostic, affected paths, and affected
+command. Never resend its full prompt or name a follow-up yourself:
 
 ```sh
+bun "<skill-root>/scripts/command.ts" follow-up new --role <role>
 bun "<skill-root>/scripts/command.ts" follow-up check <file> \
   --design-root design --design-digest <sha256>
 ```

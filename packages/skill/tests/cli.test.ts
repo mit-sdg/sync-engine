@@ -571,6 +571,23 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     expect(run(["assignment", "check", path!], directory).status).toBe(0);
   });
 
+  test("names follow-up files itself", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-followup-");
+    temporary.push(directory);
+    const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
+    expect(started.status).toBe(0);
+    const path = started.stdout.match(/Follow-up started: (\S+)/)?.[1];
+    expect(dirname(path!)).toBe(resolve(directory, ".sync-engine"));
+    expect(basename(path!)).toMatch(/^\d{4}-\d{2}-\d{2}T[\d-]+Z-concept-worker\.followup\.md$/);
+    expect(await readFile(path!, "utf8")).toBe("");
+
+    const second = run(["follow-up", "new", "--role", "concept-worker"], directory);
+    expect(second.status).toBe(0);
+    expect(second.stdout.match(/Follow-up started: (\S+)/)?.[1]).not.toBe(path);
+
+    expect(run(["follow-up", "new", "--role", "designer-2"], directory).status).toBe(1);
+  });
+
   test("launches only through the harness and only from the workspace", async () => {
     const directory = await temporaryDirectory("sync-engine-skill-launch-");
     temporary.push(directory);

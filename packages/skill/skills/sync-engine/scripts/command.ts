@@ -202,6 +202,7 @@ function usage(): string {
   sync-engine-skill brief init <brief.md>
   sync-engine-skill brief check <brief.md>
   sync-engine-skill design digest <design-directory>
+  sync-engine-skill follow-up new --role <role>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
   sync-engine-skill assignment new --role <role> --design-digest <sha256>
@@ -337,6 +338,20 @@ async function run(args: readonly string[]): Promise<void> {
     next(process.stdout, [
       `read ${reference("implementation.md")}`,
       `every downstream build and follow-up adds --design-root ${args[2]} --design-digest ${result.digest}`,
+    ]);
+    return;
+  }
+
+  if (args[0] === "follow-up" && args[1] === "new" && args.length === 4) {
+    if (args[2] !== "--role") throw new Error(`follow-up new requires --role`);
+    const role = args[3]!;
+    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    const path = await reserveWorkspacePath("followup", role);
+    await writeFile(path, "", "utf8");
+    process.stdout.write(`Follow-up started: ${path}\n`);
+    next(process.stdout, [
+      `write only the new diagnostic, affected paths, and affected command into ${path}`,
+      `${compiler} follow-up check ${path} --design-root <design-root> --design-digest <sha256>`,
     ]);
     return;
   }
