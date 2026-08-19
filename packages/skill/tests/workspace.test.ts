@@ -8,6 +8,7 @@ import {
   isLaunchRecord,
   readLaunchRecords,
   requireCompletedRole,
+  finishedStatuses,
   requireInsideWorkspace,
   reserveWorkspacePath,
   stamp,
@@ -140,6 +141,16 @@ describe("launch records", () => {
       readViolations: ["node_modules/@mit-sdg/sync-engine/dist/x"],
     });
     expect((await verifiedRecords("designer", nosy)).length).toBe(0);
+  });
+
+  test("treats a dead role as finished but not settled", async () => {
+    expect(finishedStatuses).toContain("idle");
+    for (const dead of ["error", "failed", "closed"]) {
+      expect(finishedStatuses).toContain(dead);
+      const root = await applicationRoot();
+      await record(root, "designer", { status: dead });
+      expect((await verifiedRecords("designer", root)).length).toBe(0);
+    }
   });
 
   test("gates each role on the one before it", async () => {

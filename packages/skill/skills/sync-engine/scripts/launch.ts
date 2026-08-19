@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import {
   canonical,
   type LaunchRecord,
+  finishedStatuses,
   requireInsideWorkspace,
   readPromptContext,
   readAudit,
@@ -119,17 +120,17 @@ function pause(milliseconds: number): Promise<void> {
 /**
  * `paseo wait` returns on any transition to not-running, including an agent that merely
  * stopped to ask permission, so one wait is not proof the role finished. Wait again until
- * the agent is genuinely settled or the caller's deadline passes.
+ * the agent reaches a status it never leaves or the caller's deadline passes.
  */
 async function waitUntilSettled(agentId: string, timeoutSeconds: number): Promise<InspectedAgent> {
   const deadline = Date.now() + timeoutSeconds * 1000;
   let agent = inspectAgent(agentId);
-  while (agent.Status !== settledStatus) {
+  while (!finishedStatuses.includes(agent.Status)) {
     const remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) return agent;
     paseo(["wait", agentId, "--timeout", String(remaining)], remaining + 30);
     agent = inspectAgent(agentId);
-    if (agent.Status === settledStatus) break;
+    if (finishedStatuses.includes(agent.Status)) break;
     await pause(2000);
   }
   return agent;
@@ -293,6 +294,11 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);
   await writeLaunchRecord(recordPath, record);
+  if (settled.Status !== settledStatus) {
+    throw new LaunchError(
+      `Launched ${options.role} ended ${settled.Status}, not ${settledStatus}; the record does not count this role as run`,
+    );
+  }
   if (readViolations.length > 0) {
     throw new LaunchError(
       `Launched ${options.role} read outside its boundary: ${readViolations.join(", ")}. The record does not count this role as run.`,

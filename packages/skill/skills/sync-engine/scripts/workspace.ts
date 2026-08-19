@@ -6,6 +6,9 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 /** The agent status that means a launched role finished; anything else is unsettled. */
 export const settledStatus = "idle";
 
+/** Statuses a role never leaves. Waiting past one of these only burns the deadline. */
+export const finishedStatuses: readonly string[] = [settledStatus, "error", "failed", "closed"];
+
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
 export const workspaceDirectory = ".sync-engine";
 
