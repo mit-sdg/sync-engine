@@ -51,7 +51,7 @@ async function writePackage(
 
 async function writeConfiguredApplication(directory: string): Promise<void> {
   for (const name of Object.keys(executables)) {
-    await writePackage(directory, name, "1.0.0-beta.12");
+    await writePackage(directory, name, "1.0.0-beta.13");
   }
   await Promise.all([
     writeFile(resolve(directory, "package.json"), '{"private":true,"type":"module"}\n'),
@@ -78,7 +78,7 @@ describe("sync-engine-skill command", () => {
     await expect(readFile(path, "utf8")).rejects.toThrow();
 
     for (const name of Object.keys(executables)) {
-      await writePackage(directory, name, "1.0.0-beta.12");
+      await writePackage(directory, name, "1.0.0-beta.13");
     }
     const unconfigured = run(["brief", "init", path], directory);
     expect(unconfigured.status).toBe(1);
@@ -126,7 +126,7 @@ describe("sync-engine-skill command", () => {
     const result = run(["brief", "check", taskBrief], directory);
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(
-      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.12\.\n/,
+      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.13\.\n/,
     );
     expect(result.stderr).toBe("");
   });
@@ -273,27 +273,27 @@ describe("sync-engine-skill command", () => {
       "@mit-sdg/sync-engine-analysis",
       "@mit-sdg/sync-engine-catalog",
     ]) {
-      await writePackage(directory, name, "1.0.0-beta.12");
+      await writePackage(directory, name, "1.0.0-beta.13");
     }
     const valid = run(["release", "check", directory], directory);
     expect(valid.status).toBe(0);
-    expect(valid.stdout).toContain("Installed sync-engine release matches skill 1.0.0-beta.12.\n");
+    expect(valid.stdout).toContain("Installed sync-engine release matches skill 1.0.0-beta.13.\n");
     expect(valid.stdout).toContain("Next: bunx --no-install sync-engine setup\n");
 
     await rm(resolve(directory, "node_modules/@mit-sdg/sync-engine-catalog/dist/command.js"));
     const missingTarget = run(["release", "check", directory], directory);
     expect(missingTarget.status).toBe(1);
     expect(missingTarget.stderr).toContain("has missing or escaping target");
-    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.12");
+    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.13");
 
     await writePackage(directory, "@mit-sdg/sync-engine", "0.0.0");
     const mixed = run(["release", "check", directory], directory);
     expect(mixed.status).toBe(1);
-    expect(mixed.stderr).toContain("does not match skill 1.0.0-beta.12");
+    expect(mixed.stderr).toContain("does not match skill 1.0.0-beta.13");
     expect(mixed.stderr).toContain("@mit-sdg/sync-engine@0.0.0");
 
-    await writePackage(directory, "@mit-sdg/sync-engine", "1.0.0-beta.12", "sync-engine");
-    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.12", "catalog");
+    await writePackage(directory, "@mit-sdg/sync-engine", "1.0.0-beta.13", "sync-engine");
+    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.13", "catalog");
     const staleExecutable = run(["release", "check", directory], directory);
     expect(staleExecutable.status).toBe(1);
     expect(staleExecutable.stderr).toContain(
@@ -309,14 +309,14 @@ describe("sync-engine-skill command", () => {
       resolve(directory, "package.json"),
       JSON.stringify({
         name: "@mit-sdg/sync-engine",
-        version: "1.0.0-beta.12",
+        version: "1.0.0-beta.13",
         bin: { "sync-engine": "./dist/command.js" },
       }),
     );
     await mkdir(resolve(directory, "dist"));
     await writeFile(resolve(directory, "dist/command.js"), "#!/usr/bin/env node\n");
     for (const name of ["@mit-sdg/sync-engine-analysis", "@mit-sdg/sync-engine-catalog"]) {
-      await writePackage(resolve(directory, "application"), name, "1.0.0-beta.12");
+      await writePackage(resolve(directory, "application"), name, "1.0.0-beta.13");
     }
 
     const result = run(

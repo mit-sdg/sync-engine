@@ -13,8 +13,8 @@
     }
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.12",
-    "@mit-sdg/sync-engine-http": "1.0.0-beta.12"
+    "@mit-sdg/sync-engine": "1.0.0-beta.13",
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.13"
   },
   "devDependencies": {
     "typescript": ">=6 <7"

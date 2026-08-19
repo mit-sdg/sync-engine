@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-ssf",
-  "version": "1.0.0-beta.12",
+  "version": "1.0.0-beta.13",
   "private": true,
   "description": "Private Simple State Form parser for the sync-engine workspace",
   "license": "Apache-2.0",
