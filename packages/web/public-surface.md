@@ -56,9 +56,11 @@ The candidate's preview realization serves ordinary live holders over the
 same system under `candidatePathPrefix` plus the revision; candidate
 endpoints must be exact literal rendered endpoints (`receive({})` responding
 with one renderer invocation), and may not claim paths inside the reserved
-prefix. The manifest retains the authored `source` whole. Discarding a
-candidate is `candidate.realization.close()`: its holders close and nothing
-durable changes.
+prefix. The manifest retains the authored `source` whole and carries the
+candidate's display `name` and `requester` attribution, so a record of the
+candidate — what it is called, who asked, when — projects directly from it.
+Discarding a candidate is `candidate.realization.close()`: its holders close
+and nothing durable changes.
 
 `promote(candidate)` makes the candidate what the accepted claims serve,
 atomically for new opens; the claim set changes with it. Holders already

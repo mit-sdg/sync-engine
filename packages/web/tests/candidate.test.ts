@@ -197,7 +197,13 @@ test("revision identity follows canonical content, not module identity", async (
   const first = pageExports(concepts, "One", false);
   const second = pageExports(concepts, "One", false);
   const third = pageExports(concepts, "Two", false);
-  const a = await assembleCandidate({ system, exports: first.exports, interface: first.Browser });
+  const a = await assembleCandidate({
+    system,
+    exports: first.exports,
+    interface: first.Browser,
+    name: "Numbered notes",
+    requester: "person",
+  });
   const b = await assembleCandidate({ system, exports: second.exports, interface: second.Browser });
   const c = await assembleCandidate({ system, exports: third.exports, interface: third.Browser });
   expect(a.revision).toBe(b.revision);
@@ -207,8 +213,11 @@ test("revision identity follows canonical content, not module identity", async (
     format: "sync-engine.web-candidate",
     interface: "Browser",
     revision: a.revision,
+    name: "Numbered notes",
+    requester: "person",
     renderers: ["Page"],
   });
+  expect(b.manifest).toMatchObject({ name: null, requester: null });
 });
 
 test("accepted and candidate holders revise side by side from one settled change", async () => {

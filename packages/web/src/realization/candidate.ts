@@ -28,6 +28,10 @@ export interface CandidateManifest {
   readonly version: 1;
   readonly interface: string;
   readonly revision: string;
+  /** The display name the record and spine project for this candidate. */
+  readonly name: string | null;
+  /** Who asked for the candidate — requester attribution for its record. */
+  readonly requester: string | null;
   /** The accepted interface revision the candidate was assembled against, when known. */
   readonly base: string | null;
   readonly endpoints: readonly {
@@ -73,6 +77,10 @@ export async function assembleCandidate(options: {
   immediates?: ImmediateBindings;
   /** The authored source, retained whole in the manifest. */
   source?: string;
+  /** The display name the candidate's record projects. */
+  name?: string;
+  /** Who asked for the candidate. */
+  requester?: string;
   /** The accepted interface revision this candidate revises. */
   base?: string;
 }): Promise<WebCandidate> {
@@ -137,6 +145,8 @@ export async function assembleCandidate(options: {
     version: 1,
     interface: binding.identity,
     revision,
+    name: options.name ?? null,
+    requester: options.requester ?? null,
     base: options.base ?? null,
     endpoints: Object.freeze(
       binding.endpoints.map(({ identity, path: endpointPath, match }) =>
