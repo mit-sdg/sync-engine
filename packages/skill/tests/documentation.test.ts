@@ -542,6 +542,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain(
       "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
     );
+    expect(normalized).toContain(
+      "A product exposing HTTP installs `@mit-sdg/sync-engine-http` at that release and hosts through it; a hand-rolled server, router, or CORS is a defect",
+    );
+    expect(normalized).toContain(
+      "Pass packaged HTTP reference `<skill-root>/prompts/inputs/http.md` as `reference` to any HTTP application worker and to any frontend worker",
+    );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB, frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget overflow or explicit user-requested parallelism",
