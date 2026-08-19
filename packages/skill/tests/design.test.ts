@@ -113,6 +113,8 @@ describe("role read boundary", () => {
     for (const role of ["designer", "critic", "application-worker"]) {
       expect(readAudit(role, [`${skill}/prompts/inputs/http.md`], skill)).toHaveLength(1);
       expect(readAudit(role, [`${skill}/scripts/command.ts`], skill)).toHaveLength(1);
+      // A harness tells its agents to read installed skills.
+      expect(readAudit(role, [`${skill}/SKILL.md`], skill)).toEqual([]);
     }
     // An application's own prompt library is its own business.
     expect(

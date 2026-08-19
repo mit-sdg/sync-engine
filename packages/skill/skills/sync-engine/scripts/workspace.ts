@@ -169,7 +169,9 @@ export function readAudit(role: string, paths: readonly string[], skillRoot?: st
   const offending: string[] = [];
   for (const path of paths) {
     const normalized = path.split(sep).join("/");
-    if (skill !== undefined && inside(skill, canonical(path))) {
+    // A harness advertises its skills, so a role may open the entry document without
+    // choosing to. What no role may open is the compiler and the prompt sources.
+    if (skill !== undefined && inside(skill, canonical(path)) && basename(path) !== "SKILL.md") {
       offending.push(path);
       continue;
     }
