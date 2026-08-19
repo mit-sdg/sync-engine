@@ -144,10 +144,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     const limits: Record<string, number> = {
       designer: 13 * 1024,
       critic: 10.5 * 1024,
-      "concept-worker": 2.25 * 1024,
+      // Raised with the generated-output rule in common/internals.md: a trial worker read
+      // generated/wire.ts to infer expected shapes instead of using its references.
+      "concept-worker": 2.375 * 1024,
       // Raised for the no-reverse-engineering rule: a trial worker with no composition
-      // reference probed framework brands at runtime for ~200 tool calls instead.
-      "application-worker": 3 * 1024,
+      // reference probed framework brands at runtime for ~200 tool calls instead. Raised
+      // again to name the design-defect diagnostics: trial workers rewrote one test file
+      // 35 times and hit UNRESOLVED_LINK 45 times rather than blocking on the design.
+      "application-worker": 3.25 * 1024,
       "frontend-worker": 2.5 * 1024,
       "evidence-worker": 2.125 * 1024,
     };
