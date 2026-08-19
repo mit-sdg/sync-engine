@@ -39,9 +39,8 @@ export interface HttpCookieBinding {
 }
 
 /**
- * One route served directly rather than over POST/JSON. The endpoint still declares a
- * value; this declares how that value reaches a client that cannot post — a browser
- * following a link. `path` may carry `{name}` segments, each naming an endpoint input.
+ * How an endpoint's value reaches a client that cannot post. Each `{name}` path segment
+ * names an endpoint input.
  */
 export interface HttpDirectRoute {
   readonly method: "GET";

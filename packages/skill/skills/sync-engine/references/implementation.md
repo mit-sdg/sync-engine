@@ -50,10 +50,9 @@ concept and focused test paths. Concepts remain independent.
 After concept validation passes, start one application worker owning assigned
 compositions, types, registrations, concept set, assembly, configuration, host wiring,
 and generated integration paths. A product exposing HTTP installs
-`@mit-sdg/sync-engine-http` at that release and serves its JSON surface through the
-handler. The host owns the listener and may add routes the POST/JSON projection cannot
-express, such as a redirect; reimplementing the handler, its policy, or its error shaping
-is a defect.
+`@mit-sdg/sync-engine-http` at that release and serves every route through the handler:
+POST/JSON by default, and a policy `direct` route where a client cannot post. A
+hand-rolled router, redirect, or error shaping is a defect.
 
 If the brief requests a frontend, after application validation passes start one frontend worker owning
 only assigned frontend paths. It implements the requested browser, command-line, or other

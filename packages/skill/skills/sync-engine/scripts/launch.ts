@@ -25,9 +25,9 @@ const maxResumes = 2;
 const gracePauseMilliseconds = 30_000;
 
 const resumeRequest =
-  "Your last turn ended in a harness or provider error, not a workflow decision. Nothing " +
-  "about your assignment changed. Continue the assignment you were given from where it " +
-  "stopped; do not restart it and do not ask for confirmation.";
+  "Your last turn ended in a harness or provider error, not a workflow decision. Your " +
+  "assignment is unchanged: continue it from where it stopped, do not restart it, and do " +
+  "not ask for confirmation.";
 
 const standby =
   "Wait for a file-delivered assignment. Do not inspect files, modify files, or begin work.";
@@ -162,11 +162,7 @@ export interface LaunchResult {
   readonly record: LaunchRecord;
 }
 
-/**
- * The role's last message, read from the harness rather than the role. Nothing is asked of
- * the agent and nothing enters its prompt, so a role cannot present a report it did not
- * give. An agent settles on its reply, so the last text entry is that reply.
- */
+/** The role's last message, read from the harness: nothing is asked of the agent. */
 /** Paths the role opened, as the harness reports them; the agent is not asked. */
 function readPaths(agentId: string): string[] {
   let output: string;
@@ -271,13 +267,12 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   let settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
   let resumes = 0;
   while (settled.Status === resumableStatus && resumes < maxResumes) {
-    let remaining = Math.ceil((deadline - Date.now()) / 1000);
-    if (remaining <= 0) break;
+    if (Date.now() >= deadline) break;
     // A reported error can clear itself; look again before speaking to the role.
     await pause(gracePauseMilliseconds);
     settled = inspectAgent(started.agentId);
     if (settled.Status !== resumableStatus) continue;
-    remaining = Math.ceil((deadline - Date.now()) / 1000);
+    const remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) break;
     resumes += 1;
     paseo(["send", started.agentId, resumeRequest, "--no-wait"]);

@@ -114,6 +114,19 @@ export function httpPolicy(init: HttpPolicyInit): HttpPolicy {
       'httpPolicy: requestOrigins cannot be false when a cookie uses SameSite="None".',
     );
   }
+  const direct = compileDirectRoutes(init.direct);
+  const cookiePaths = new Set(
+    Object.values(cookies ?? {}).flatMap((binding) => [
+      ...binding.issue.map(({ path }) => path),
+      ...binding.clear,
+    ]),
+  );
+  const guarded = direct?.find((route) => cookiePaths.has(route.endpoint));
+  if (guarded !== undefined) {
+    throw new Error(
+      `httpPolicy: direct route ${guarded.path} serves ${guarded.endpoint}, which issues or clears a cookie; a direct route carries no cookies.`,
+    );
+  }
   const basePath = normalizeHttpBasePath(init.basePath);
   const policy: Record<PropertyKey, unknown> = {
     ...(publicOrigin === undefined ? {} : { publicOrigin }),
@@ -125,7 +138,7 @@ export function httpPolicy(init: HttpPolicyInit): HttpPolicy {
     ...(requestOrigins === undefined ? {} : { requestOrigins }),
     ...(cookies === undefined ? {} : { cookies }),
     ...(init.limits === undefined ? {} : { limits: normalizeLimits(init.limits) }),
-    ...(init.direct === undefined ? {} : { direct: compileDirectRoutes(init.direct) }),
+    ...(direct === undefined ? {} : { direct }),
   };
   Object.defineProperty(policy, HttpPolicyBrand, {
     configurable: false,

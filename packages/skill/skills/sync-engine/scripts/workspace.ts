@@ -9,11 +9,7 @@ export const settledStatus = "idle";
 /** Statuses a role never leaves on its own. Waiting past one only burns the deadline. */
 export const finishedStatuses: readonly string[] = [settledStatus, "error", "failed", "closed"];
 
-/**
- * A role reports `error` for a dropped stream or a provider fault as well as for its own
- * failure, and the two are indistinguishable from outside. Ask it to continue rather than
- * discarding delivered work on what is usually transport.
- */
+/** A dropped stream and a role's own failure both report `error`; ask before giving up. */
 export const resumableStatus = "error";
 
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
@@ -162,9 +158,8 @@ export interface LaunchRecord {
 }
 
 /**
- * Where a role may read. A designer or critic works from supplied prompt material alone;
- * an implementation role may consult the installed package's examples and user docs and
- * nothing else inside it.
+ * Where a role may read: a designer or critic from supplied prompt material alone, an
+ * implementation role additionally from the installed package's examples and user docs.
  */
 export function readAudit(role: string, paths: readonly string[]): string[] {
   const offending: string[] = [];

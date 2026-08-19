@@ -35,10 +35,7 @@ async function authoredMarkdown(root: string, directory: string): Promise<Author
   return files;
 }
 
-/**
- * A concept file carries its concept's name, so that references and diagnostics, which
- * name the concept, lead to the file. Compositions carry prose titles and are exempt.
- */
+/** A concept file carries its concept's name; compositions carry prose titles. */
 async function requireConceptFileNames(files: readonly AuthoredFile[]): Promise<void> {
   for (const file of files) {
     if (!file.relativePath.startsWith("concepts/")) continue;
