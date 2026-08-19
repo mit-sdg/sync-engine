@@ -61,11 +61,11 @@ former(name, (input, free) => where(...).form({ ...shape }));
   fragment leaves with `null`.
 - `count(query, input, outputVariable)` requires one non-union query reference and its
   complete input mapping; undeclared fields are rejected recursively.
-- `compute(namedComputation, input, output)` runs a named pure computation. `conceptSet`
-  takes them as its optional second argument and exposes the references as
-  `set.computations`, so `compute` never takes a bare function:
-  `conceptSet({ ... }, { isLive })` then `compute(set.computations.isLive, { now }, { live })`.
-  Compose that record before constructing the set; references from separate sets do not mix.
+- `compute(named, input, output)` runs a pure function `conceptSet` took as its optional
+  second argument and exposed as `set.computations`; it never takes a bare function. Write
+  `conceptSet({ ... }, { isLive: ({ now, expiresAt }) => now < expiresAt })`, then
+  `compute(set.computations.isLive, { now, expiresAt }, live)`, binding one output variable.
+  Build that record before the set; references from separate sets do not mix.
 - A query's `"one" | "optional" | "many"` promise links to a record return for `"one"` and
   an array of records otherwise, at type level and at runtime.
 
