@@ -48,6 +48,9 @@ requires nonempty unfenced prose without imposing a scenario count.
 
 ## HTTP reference
 
+`prompts/inputs/composition.md` compacts the `language` and `boundary` declaration API
+from `docs/user/reference/public-api.md`.
+
 `prompts/inputs/http.md` compacts the `@mit-sdg/sync-engine-http` README, its public
 surface, and the message-board example's host, edge policy, and web client. Only the
 application and frontend workers receive it, as a `reference` input for web

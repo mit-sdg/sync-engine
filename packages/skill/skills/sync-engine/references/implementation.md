@@ -50,8 +50,8 @@ concept and focused test paths. Concepts remain independent.
 After concept validation passes, start one application worker owning assigned
 compositions, types, registrations, concept set, assembly, configuration, host wiring,
 and generated integration paths. A product exposing HTTP installs
-`@mit-sdg/sync-engine-http` at that release and hosts through it; a hand-rolled
-server, router, or CORS is a defect.
+`@mit-sdg/sync-engine-http` at that release and hosts through it; a hand-rolled server,
+router, or CORS is a defect.
 
 If the brief requests a frontend, after application validation passes start one frontend worker owning
 only assigned frontend paths. It implements the requested browser, command-line, or other
@@ -59,8 +59,10 @@ shell strictly as a client of the assembled endpoints. A web-application assignm
 the projected HTTP wire and base path; the frontend owns its `createHttpClient`
 construction.
 
-Pass packaged HTTP reference `<skill-root>/prompts/inputs/http.md` as `reference` to any
-HTTP application worker and to any frontend worker; do not read it yourself.
+Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application
+worker; it is the declaration API that role exists to use. Add
+`<skill-root>/prompts/inputs/http.md` for an HTTP product and any frontend worker. Never
+read either yourself.
 
 Finally start one fresh evidence worker. Supply focused commands, not
 the complete application. It may report existing evidence sufficient and edit only
