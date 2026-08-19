@@ -51,7 +51,16 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
-    expect(bytes(composition)).toBeLessThanOrEqual(5.5 * 1024);
+    expect(bytes(composition)).toBeLessThanOrEqual(6 * 1024);
+    // A skeleton with placeholder identifiers taught a worker nothing, so the declaration
+    // API states a real trigger and a real export rather than their shapes.
+    expect(composition).toContain(
+      "when(Posting.publish({ author }).responds({ post })).then(Indexing.add({ item: post }))",
+    );
+    expect(composition).toContain('`when(returned({ post }, { by: "Posting.publish" }))`');
+    expect(composition).toContain(
+      "export const composition = { Publishing: { PublishPost, IndexOnPublish } };",
+    );
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -547,7 +556,10 @@ describe("compact sync-engine Agent Skill documents", () => {
       "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
     );
     expect(normalized).toContain(
-      "A product exposing HTTP installs `@mit-sdg/sync-engine-http` at that release and serves every route through the handler: POST/JSON by default, and a policy `direct` route where a client cannot post. A hand-rolled router, redirect, or error shaping is a defect",
+      "An HTTP product installs `@mit-sdg/sync-engine-http` at that release and serves every route through the handler: POST/JSON by default, and a policy `direct` route where a client cannot post. A hand-rolled router, redirect, or error shaping is a defect",
+    );
+    expect(normalized).toContain(
+      "Reactions, views, formers and endpoints are separate mechanisms; confirm each one the design uses appears in an example",
     );
     expect(normalized).toContain(
       "Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application worker; it is the declaration API that role exists to use",
@@ -557,7 +569,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB, frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget overflow or explicit user-requested parallelism",
+      "Prompt budgets: designer 32, critic 48, concept 24, application 48, frontend 48, evidence 32 KiB. Split a worker into explicit batches only on budget overflow or user-requested parallelism",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "Return an ordinary implementation defect to the original worker, not a replacement",
