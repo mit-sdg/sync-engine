@@ -82,7 +82,9 @@ export function identifyRow(
     }
     const key = JSON.stringify(canonicalPortable(read.identity.map((field) => record[field])));
     if (identities.has(key)) {
-      throw new TypeError(`${site}: ${read.concept}.${read.query} answered duplicate row identity.`);
+      throw new TypeError(
+        `${site}: ${read.concept}.${read.query} answered duplicate row identity.`,
+      );
     }
     identities.add(key);
     return { segment: `key-${hex(key)}`, key };

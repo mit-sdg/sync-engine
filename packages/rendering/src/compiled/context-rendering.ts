@@ -223,7 +223,11 @@ export function compileContext(binding: InterfaceBinding): CompiledContextRender
         );
         const childAddress = `${seat}/renderer`;
         formation.sources.push(
-          Object.freeze({ kind: "renderer", address: childAddress, identity: declaration.identity }),
+          Object.freeze({
+            kind: "renderer",
+            address: childAddress,
+            identity: declaration.identity,
+          }),
         );
         pieces.push(
           await formNode(

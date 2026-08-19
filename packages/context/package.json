@@ -1,0 +1,28 @@
+{
+  "name": "@mit-sdg/sync-engine-context",
+  "version": "1.0.0-beta.11",
+  "private": true,
+  "description": "Participant-context realizations for @mit-sdg/sync-engine",
+  "license": "Apache-2.0",
+  "author": "Barish Namazov and Eagon Meng",
+  "files": [
+    "README.md",
+    "public-surface.md",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./realization": {
+      "types": "./dist/realization/index.d.ts",
+      "import": "./dist/realization/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@mit-sdg/sync-engine": "1.0.0-beta.11",
+    "@mit-sdg/sync-engine-rendering": "1.0.0-beta.11"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

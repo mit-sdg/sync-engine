@@ -21,20 +21,21 @@ class ReasoningConcept {
   _get(_input: { consideration: string }): Array<{ question: string }> {
     return [];
   }
-  _extensions(_input: { consideration: string }): Array<{ extension: string; contribution: string }> {
+  _extensions(_input: {
+    consideration: string;
+  }): Array<{ extension: string; contribution: string }> {
     return [];
   }
-  extend(_input: {
-    consideration: string;
-    reasoner: string;
-    contribution: string;
-  }): { extension: string } {
+  extend(_input: { consideration: string; reasoner: string; contribution: string }): {
+    extension: string;
+  } {
     return { extension: "extension" };
   }
-  conclude(_input: { consideration: string; reasoner: string; answer: string }): Record<
-    string,
-    never
-  > {
+  conclude(_input: {
+    consideration: string;
+    reasoner: string;
+    answer: string;
+  }): Record<string, never> {
     return {};
   }
 }
@@ -67,7 +68,11 @@ describe("context family", () => {
   test("forms one unit: shows, identified rows, and generic flow asks", async () => {
     const Open = renderer(
       "Projects one open consideration to its designated reasoner.",
-      ({ consideration, reasoner }, { question, extension, prior }, { contribution, answer }) => context`
+      (
+        { consideration, reasoner },
+        { question, extension, prior },
+        { contribution, answer },
+      ) => context`
         ## Question
 
         ${where(Reasoning._get({ consideration }).is({ question })).context`
@@ -75,9 +80,8 @@ describe("context family", () => {
 
           ## Your prior contributions
 
-          ${each(
-            Reasoning._extensions({ consideration }).is({ extension, contribution: prior }),
-          ).context`
+          ${each(Reasoning._extensions({ consideration }).is({ extension, contribution: prior }))
+            .context`
             - ${prior}
           `}
           ${Reasoning.extend({ consideration, reasoner, contribution })}
