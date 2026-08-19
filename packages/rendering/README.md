@@ -41,6 +41,15 @@ show and read positions supply structural addresses; a query's optional
 row patches. A repeated query without an identity promise remains valid and
 falls back to replacement of its one authored clause.
 
+HTML has a sibling presentation family for machine participants. A `context`
+renderer projects plain text — literal content, shows, query-backed blocks,
+and named context children — plus registered asks interpolated in flow
+position, and `compileContext` forms one root invocation into a deliberative
+unit: readable text, a generic ask set answered by opaque identity and named
+blanks, a read footprint, and addressed sources. The same declaration,
+identity, scope, and row-identity semantics carry across both families;
+provider roles, tool names, and wire schemas stay with the connected edge.
+
 ## Public path
 
 | Package path                              | Purpose                                                |

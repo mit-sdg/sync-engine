@@ -26,6 +26,19 @@ an identified row therefore moves its existing browser range; entering or
 leaving rows does not replace siblings. An unidentified repeated query falls
 back to replacement of its own clause, never to positional identity.
 
+`compileContext(...)` checks the context-family renderer closure the same way
+and forms one root invocation into a `FormedContext`: the deliberative unit's
+readable text, its generic ask set, its read footprint, and the sources
+responsible for each addressed segment. The unit's `holder` is its root
+invocation identity — canonical renderer identity plus resolved caller inputs
+— and its `revision` canonically identifies the exact formation for evidence.
+A formed ask carries the registered concept action, resolved input values, and
+named blanks under an opaque `id`; provider tool names, JSON schemas, and wire
+shapes never appear. `resolveContextAsk(formed, askId, blanks)` validates one
+edge-supplied blank mapping and returns the exact registered action input;
+nothing parses an address. Runs of blank lines in the assembled unit collapse
+to one, and the text ends with a single terminating newline.
+
 ## `@mit-sdg/sync-engine-rendering/language`
 
 <!-- register:rendering-language:start -->
@@ -120,3 +133,38 @@ the implementation by identity and refuses to realize an admitted renderer
 whose immediates lack bindings. An immediate never writes concept State and
 never sends asks; those rules are review-enforced discipline over registered
 code, not a sandbox.
+
+### `context`
+
+```ts
+context(strings: TemplateStringsArray, ...statements: readonly unknown[]): ContextNode
+```
+
+`context` is the participant-context presentation family: the projection a
+model or another machine participant reads. Its medium is plain text, so
+literal text is first-class content and the family adds no placement members.
+`${value}` shows an input or read binding in a text seat (strings and finite
+numbers only — projecting structure into text is a deliberate authoring act);
+`each(...).context` and `where(...).context` form query-backed blocks; a
+context renderer invocation composes as a named child; and a static concept
+action line interpolated in flow position joins the unit's ask set without
+contributing text. Blanks appear only inside asks and are supplied atomically
+at ask time — a blank cannot be shown, and `.responds`/`.refuses` display-seat
+qualifiers are refused because an answer or refusal returns to the edge
+through the ask itself. Immediates arm HTML elements and are refused here.
+Cross-family placement is refused in both families; a translator, if ever
+earned, is explicit.
+
+The common authored indentation is stripped from each template's literal
+lines, blank leading and trailing lines are trimmed, and the last content line
+keeps its terminating newline so composed blocks — rows of an `each` clause
+especially — stay line-separated. Provider vocabulary never enters this
+family: roles, tool names, and wire schemas belong to the connected edge's
+adapter, and instruction standing is design state projected by ordinary
+composition rather than a grammar seat.
+
+An ask is refused under an `each` clause at declaration time: one deliberative
+unit is the endpoint- or host-opened root invocation, one model act needs one
+unambiguous ask set, and an identified row is plural by construction. If each
+row deserves asks, each row's identity deserves its own unit. Asks under
+`where` clauses remain legal.

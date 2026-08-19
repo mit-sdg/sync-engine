@@ -339,13 +339,20 @@ export function compileContext(binding: InterfaceBinding): CompiledContextRender
       formation.sources.push(
         Object.freeze({ kind: "renderer", address: "root", identity: declaration.identity }),
       );
-      const text = await formNode(
+      const assembled = await formNode(
         declaration.body,
         { inputs, bindings: {} },
         formation,
         "root",
         reader,
       );
+      // Composition concatenates dedented templates, so empty clauses and row
+      // boundaries can stack blank lines; the formed unit keeps at most one
+      // blank line between blocks and one terminating newline.
+      const text = assembled
+        .replaceAll(/\n{3,}/g, "\n\n")
+        .replace(/^\n+/, "")
+        .replace(/\n+$/, "\n");
       const evidence = {
         holder,
         text,
