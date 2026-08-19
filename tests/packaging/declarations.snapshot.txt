@@ -1372,7 +1372,7 @@ import type { QueryReadLine, SlotPattern } from "../../reads/lines.ts";
 import type { ExactPattern } from "../../reads/type-inference.ts";
 import type { CheckedComputationFns, ComputationFn, ComputationRef } from "../../reads/computations.ts";
 import { type ConceptMetadata } from "../concepts/concept-metadata.ts";
-import type { ActionCall, InstrumentedAction, Reaction, TriggerActionLine } from "../types.ts";
+import type { ActionCall, InstrumentedAction, OpenBindingBag, Reaction, ReactionResult, TriggerActionLine } from "../types.ts";
 import type { QueryPromise } from "../../reads/query-metadata.ts";
 export { isActionRef, isQueryRef } from "./references.ts";
 export type { ActionRef, QueryRef } from "./references.ts";
@@ -1486,10 +1486,10 @@ export declare function vocabularyMetadata(vocab: object): Record<string, Concep
  * Tag a reaction so an assembly can discover it in composition exports.
  * Views and formers carry their own tags, as do endpoint declarations that
  * specialize the reaction frame; untagged helpers remain ordinary exports.
- * The wrapper also lets the callback's destructured parameter infer as
- * {@link Vars}, so reactions need no type annotation.
+ * The wrapper gives the callback an open proxy bag, so destructured bindings
+ * stay exact even with `noUncheckedIndexedAccess`.
  */
-export declare function reaction(reaction: Reaction): Reaction;
+export declare function reaction(build: (vars: OpenBindingBag) => ReactionResult): Reaction;
 export declare function isReaction(value: unknown): value is Reaction;
 
 === dist/engine/reactions/authoring/vars.d.ts ===
@@ -2941,6 +2941,8 @@ export interface InstrumentedQuery extends QueryMetadata {
 }
 /** The untyped logic-variable proxy supplied to reaction functions. */
 export type Vars = Record<string, symbol>;
+/** Authored proxy bags mint a symbol per name; openness keeps strict destructuring exact. */
+export type OpenBindingBag = Record<string, any>;
 export type Reaction = (vars: Vars) => ReactionResult;
 export type ReactionMap = Record<string, Reaction>;
 /** The canonical no-fields mapping. */
@@ -3193,8 +3195,8 @@ export {};
 import type { Condition } from "./where-ops.ts";
 import type { ReadLine } from "./lines.ts";
 import type { ViewBlock } from "./views.ts";
-import { type FreeBindings, type InputBindings } from "./sentence.ts";
 import { type CountNode, type DistinctNode, type EachNode, type FirstNode, type FormerEntry, type FormerNode, type FormerRef, type FusedFormer, type RecordNode, type FormerUse } from "./former-nodes.ts";
+import type { OpenBindingBag } from "../reactions/types.ts";
 /** A formed object whose flat fragment splices are being stated. */
 export interface FormNode extends RecordNode {
     splicing(...uses: readonly (FusedFormer | FormerUse)[]): FormNode;
@@ -3237,7 +3239,7 @@ export declare function each(line: ReadLine): SelectionBuilder;
  * object or captured selection. Put the question this former answers in the
  * doc comment above its definition.
  */
-export declare function former(name: string, build: (inputs: InputBindings, bindings: FreeBindings) => FormerNode): FormerRef;
+export declare function former(name: string, build: (inputs: OpenBindingBag, bindings: OpenBindingBag) => FormerNode): FormerRef;
 export {};
 
 === dist/engine/reads/former-evaluation.d.ts ===
@@ -4421,8 +4423,9 @@ export {};
 
 === dist/engine/reads/type-inference.d.ts ===
 /** Type-only helpers for exact authored input and output patterns. */
+import type { FusedFormer } from "./former-nodes.ts";
 /** One pattern slot is either the slot's literal value or one logic variable. */
-export type PatternValue<Value> = Value | symbol;
+export type PatternValue<Value> = Value | symbol | FusedFormer;
 export type InputPattern<Input extends object> = {
     readonly [Key in keyof Input]: PatternValue<Input[Key]>;
 };
@@ -4554,10 +4557,9 @@ export declare function viewLineIR(op: WhereOpIR | ViewOpIR): op is Extract<View
  * the number of matching rows at the moment of asking, never stored.
  *
  */
-import type { InstrumentedQuery, Mapping } from "../reactions/types.ts";
+import type { InstrumentedQuery, Mapping, OpenBindingBag } from "../reactions/types.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import type { ViewOpIR } from "./ir.ts";
-import { type FreeBindings, type InputBindings, type OutputBindings } from "./sentence.ts";
 import type { RelationView } from "./lines.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 import type { FormNode } from "./former-builders.ts";
@@ -4609,7 +4611,7 @@ export declare function relationViewWith(name: string, ins: readonly string[], o
  * returned `where(...)` blocks are alternatives. End a predicate in
  * `holds()`. Output views default to `many()` and may state a narrower promise.
  */
-export declare function view(name: string, build: (inputs: InputBindings, outputs: OutputBindings, bindings: FreeBindings) => ViewBlock | readonly ViewBlock[]): RelationView;
+export declare function view(name: string, build: (inputs: OpenBindingBag, outputs: OpenBindingBag, bindings: OpenBindingBag) => ViewBlock | readonly ViewBlock[]): RelationView;
 export {};
 
 === dist/engine/reads/where-evaluation.d.ts ===

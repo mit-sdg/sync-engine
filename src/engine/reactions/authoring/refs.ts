@@ -51,7 +51,9 @@ import type {
   ActionCall,
   InstrumentedAction,
   Mapping,
+  OpenBindingBag,
   Reaction,
+  ReactionResult,
   TriggerActionLine,
 } from "../types.ts";
 import { validateQueryContractMap, validateQueryIdentityMap } from "@engine/reads/query-contracts";
@@ -515,14 +517,14 @@ export function vocabularyMetadata(vocab: object): Record<string, ConceptMetadat
  * Tag a reaction so an assembly can discover it in composition exports.
  * Views and formers carry their own tags, as do endpoint declarations that
  * specialize the reaction frame; untagged helpers remain ordinary exports.
- * The wrapper also lets the callback's destructured parameter infer as
- * {@link Vars}, so reactions need no type annotation.
+ * The wrapper gives the callback an open proxy bag, so destructured bindings
+ * stay exact even with `noUncheckedIndexedAccess`.
  */
-export function reaction(reaction: Reaction): Reaction {
-  if (typeof reaction !== "function") {
+export function reaction(build: (vars: OpenBindingBag) => ReactionResult): Reaction {
+  if (typeof build !== "function") {
     throw new Error("reaction(...) takes a function that declares the reaction.");
   }
-  return brand(reaction, ReactionBrand);
+  return brand(build, ReactionBrand) as Reaction;
 }
 
 export function isReaction(value: unknown): value is Reaction {

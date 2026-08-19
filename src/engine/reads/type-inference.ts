@@ -1,7 +1,9 @@
 /** Type-only helpers for exact authored input and output patterns. */
 
+import type { FusedFormer } from "./former-nodes.ts";
+
 /** One pattern slot is either the slot's literal value or one logic variable. */
-export type PatternValue<Value> = Value | symbol;
+export type PatternValue<Value> = Value | symbol | FusedFormer;
 
 export type InputPattern<Input extends object> = {
   readonly [Key in keyof Input]: PatternValue<Input[Key]>;

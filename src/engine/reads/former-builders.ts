@@ -32,7 +32,7 @@ import {
   type FormerUse,
   useFormer,
 } from "./former-nodes.ts";
-import type { Mapping } from "@engine/reactions/types";
+import type { Mapping, OpenBindingBag } from "@engine/reactions/types";
 import { assertFormerBindings } from "./former-bindings.ts";
 import { operationFootprint, symbolsInMapping } from "./operation-footprint.ts";
 import { lowerFormerBody } from "./former-lowering.ts";
@@ -382,7 +382,7 @@ function symbolsUsed(node: FormerNode, into: Set<symbol>): void {
  */
 export function former(
   name: string,
-  build: (inputs: InputBindings, bindings: FreeBindings) => FormerNode,
+  build: (inputs: OpenBindingBag, bindings: OpenBindingBag) => FormerNode,
 ): FormerRef {
   const inputs = bindingBag<InputBindings>();
   const bindings = bindingBag<FreeBindings>();

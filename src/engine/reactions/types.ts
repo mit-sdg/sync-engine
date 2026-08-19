@@ -342,6 +342,8 @@ export interface InstrumentedQuery extends QueryMetadata {
 
 /** The untyped logic-variable proxy supplied to reaction functions. */
 export type Vars = Record<string, symbol>;
+/** Authored proxy bags mint a symbol per name; openness keeps strict destructuring exact. */
+export type OpenBindingBag = Record<string, any>;
 export type Reaction = (vars: Vars) => ReactionResult;
 export type ReactionMap = Record<string, Reaction>;
 

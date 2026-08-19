@@ -33,7 +33,7 @@
  *
  */
 
-import type { InstrumentedQuery, Mapping } from "@engine/reactions/types";
+import type { InstrumentedQuery, Mapping, OpenBindingBag } from "@engine/reactions/types";
 import type { Condition, WhereOp } from "./where-ops.ts";
 import { conditionOp } from "./where-ops.ts";
 import { brand, CountOpBrand, hasBrand, ViewBlockBrand } from "./brands.ts";
@@ -268,9 +268,9 @@ export function relationViewWith(
 export function view(
   name: string,
   build: (
-    inputs: InputBindings,
-    outputs: OutputBindings,
-    bindings: FreeBindings,
+    inputs: OpenBindingBag,
+    outputs: OpenBindingBag,
+    bindings: OpenBindingBag,
   ) => ViewBlock | readonly ViewBlock[],
 ): RelationView {
   const inputs = bindingBag<InputBindings>();

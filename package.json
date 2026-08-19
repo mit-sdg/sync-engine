@@ -67,7 +67,7 @@
   },
   "scripts": {
     "build": "bun scripts/build.ts",
-    "check": "bun scripts/check-architecture.ts && bun scripts/check-specs.ts && vp check",
+    "check": "bun scripts/check-architecture.ts && bun scripts/check-specs.ts && bun scripts/check-strict-consumer.ts && vp check",
     "coverage": "bun scripts/coverage.ts",
     "declarations:check": "bun run build && bun scripts/declarations.ts check",
     "declarations:pin": "bun run build && bun scripts/declarations.ts pin",
