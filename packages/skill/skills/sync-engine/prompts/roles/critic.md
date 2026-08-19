@@ -17,7 +17,8 @@ decision:
 1. Scope: reject behavior the brief does not need; verify brief-visible success and
    expected refusals are deliverable.
 2. Concepts: each purpose and Principle establishes a needed coherent mechanism, not
-   an entity, endpoint, or screen.
+   an entity, endpoint, or screen. State the Principle never exercises, or that changes
+   for reasons the purpose does not name, is a second mechanism inside one concept.
 3. Ownership: peer dependence, interpreted or copied peer facts, duplicate authority.
 4. Actions: refusals, post-refusal state, lifecycle, repetition, deletion,
    compensation, repair, and a declared branch for an absent input identity; verify each
