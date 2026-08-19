@@ -163,15 +163,23 @@ export interface LaunchResult {
 }
 
 /** The role's last message, read from the harness: nothing is asked of the agent. */
-/** Paths the role opened, as the harness reports them; the agent is not asked. */
-function readPaths(agentId: string): string[] {
+/**
+ * Paths the role opened, as the harness reports them; the agent is not asked. A harness
+ * that names its tools without their arguments cannot be audited, and reporting that as no
+ * violation would attest what was never seen.
+ */
+function readPaths(agentId: string): { readonly observed: boolean; readonly paths: string[] } {
   let output: string;
   try {
     output = paseo(["logs", agentId, "--filter", "tools"]);
   } catch {
-    return [];
+    return { observed: false, paths: [] };
   }
-  return [...output.matchAll(/^\[(?:Read|Write|Edit)\]\s+(\S+)/gm)].map((match) => match[1]!);
+  const paths = [...output.matchAll(/^\[(?:Read|Write|Edit)\]\s+(\S+)/gm)]
+    .map((match) => match[1]!)
+    .filter((candidate) => candidate.includes("/"));
+  if (paths.length > 0) return { observed: true, paths };
+  return { observed: !/^\[(?:Read|Write|Edit)\]/m.test(output), paths: [] };
 }
 
 function finalResponse(agentId: string): string {
@@ -287,7 +295,8 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   );
   await writeFile(responsePath, response, "utf8");
   const violation = responseContract(options.role, response);
-  const readViolations = readAudit(options.role, readPaths(started.agentId));
+  const opened = readPaths(started.agentId);
+  const readViolations = readAudit(options.role, opened.paths);
 
   const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
@@ -314,6 +323,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       contract: violation === undefined ? "met" : "violated",
     },
     ...(readViolations.length === 0 ? {} : { readViolations }),
+    ...(opened.observed ? {} : { readAudit: "unavailable" as const }),
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);
   await writeLaunchRecord(recordPath, record);

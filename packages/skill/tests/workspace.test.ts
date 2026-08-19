@@ -161,6 +161,12 @@ describe("launch records", () => {
     expect((await verifiedRecords("designer", root)).length).toBe(1);
   });
 
+  test("still counts a role whose harness hid its tool arguments", async () => {
+    const root = await applicationRoot();
+    await record(root, "designer", { readAudit: "unavailable" });
+    expect((await verifiedRecords("designer", root)).length).toBe(1);
+  });
+
   test("gates each role on the one before it", async () => {
     const root = await applicationRoot();
     await expect(requireCompletedRole("critic", root)).rejects.toThrow(

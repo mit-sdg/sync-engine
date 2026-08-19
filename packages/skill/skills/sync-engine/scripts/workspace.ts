@@ -154,6 +154,8 @@ export interface LaunchRecord {
     readonly contract: "met" | "violated";
   };
   readonly readViolations?: readonly string[];
+  /** Present when the harness named its tools without arguments, so paths were unseen. */
+  readonly readAudit?: "unavailable";
   readonly resumes?: number;
 }
 
