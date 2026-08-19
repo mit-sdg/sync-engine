@@ -3,7 +3,7 @@
 ## Assignment
 
 Implement composition and shared integration only in exact assignment paths. Do not read,
-write, inspect, search, or traverse other repository paths. Approved Markdown and concept
+write, inspect, search, or traverse other repository paths. You may read the installed package's `examples/` and `docs/user/` freely; the assignment governs this repository. Approved Markdown and concept
 public surfaces are read-only; do not edit unrelated tests or generated output by hand.
 
 <!-- include: ../common/internals.md -->
@@ -12,7 +12,9 @@ Own assigned composition, types, registration, assembly, config, host, and artif
 wiring. Import public subpaths only. Routine construction:
 
 - `registerConcept({ class, spec, refusals? })` binds imported concept Markdown to its
-  implementation and stable refusal classes.
+  implementation and stable refusal classes. Register the class the concept worker wrote,
+  imported from its module; a wrapper, adapter or subclass that narrows what the checker
+  sees is a defect to return, not a way to pass.
 - `conceptSet({ ...registrations }, computations?)` maps each instance key to its
   registered definition and creates typed refs. Shared definition names require equal
   canonical specs; the authored inventory matches the assembly.

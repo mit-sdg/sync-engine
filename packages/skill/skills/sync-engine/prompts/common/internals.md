@@ -5,4 +5,5 @@ that inspects internal objects, brands, or shapes. A diagnostic may name a frame
 file; do not open it. Generated output is not documentation; never read it to infer
 expected shapes. Use only supplied prompt material and assigned paths; when they are
 insufficient—at the latest when a focused check fails the same way twice—return a context
-blocker rather than explore.
+blocker rather than explore. Making the typechecker reveal an API, such as assigning a
+wrong value to read a type's members out of the error, is exploring.

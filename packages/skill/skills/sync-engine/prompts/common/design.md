@@ -90,7 +90,19 @@ invariants/prose, storage, or behavior.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
 wildcards. Cover each authored endpoint and reaction tree and each named view and
-former; declare each executable computation once.
+former; declare each executable computation once. A composition document reads as prose
+carrying its links, each naming module, group and declaration:
+
+```text
+Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
+about it. A circle page shows the circle, its members and that discussion
+[as one record](former:Circle.Pages.CirclePage), and only a member
+[may respond](view:Circle.Reading.MemberMayRespond).
+```
+
+An application document is not an API specification. It carries no endpoint sections and
+no input, return or refusal listings: the concept specification owns those, and a second
+copy drifts from the one the checker reads.
 
 `check-design` proves grammar and authored form only. Config checking proves shapes,
 bindings, links, computations, source agreement. Neither proves boundaries, prose truth,

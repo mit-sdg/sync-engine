@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   type LaunchRecord,
@@ -9,6 +9,7 @@ import {
   readLaunchRecords,
   requireCompletedRole,
   finishedStatuses,
+  registrationWrappers,
   requireInsideWorkspace,
   resumableStatus,
   reserveWorkspacePath,
@@ -198,5 +199,39 @@ describe("launch records", () => {
       "utf8",
     );
     await expect(readLaunchRecords(root)).rejects.toThrow("not readable JSON");
+  });
+});
+
+describe("registrationWrappers", () => {
+  test("accepts a registry that registers the imported concept class", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "wrappers-")));
+    await mkdir(join(root, "src/concepts"), { recursive: true });
+    await writeFile(
+      join(root, "src/concepts/Posting.registry.ts"),
+      'import { PostingConcept } from "./Posting.ts";\n' +
+        "export const posting = registerConcept({ class: PostingConcept, spec });\n",
+      "utf8",
+    );
+    expect(await registrationWrappers(root)).toEqual([]);
+  });
+
+  test("reports a delegating class declared beside the registration", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "wrappers-")));
+    await mkdir(join(root, "src/concepts"), { recursive: true });
+    await writeFile(
+      join(root, "src/concepts/Authorizing.registry.ts"),
+      'import { Authorizing } from "./Authorizing.ts";\n' +
+        "class AuthorizingInstance {\n  private readonly inner: Authorizing;\n}\n" +
+        "export const authorizing = registerConcept({ class: AuthorizingInstance, spec });\n",
+      "utf8",
+    );
+    expect(await registrationWrappers(root)).toEqual([
+      "src/concepts/Authorizing.registry.ts registers AuthorizingInstance declared beside it",
+    ]);
+  });
+
+  test("stays quiet when an application has no concepts directory", async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "wrappers-")));
+    expect(await registrationWrappers(root)).toEqual([]);
   });
 });

@@ -92,7 +92,19 @@ invariants/prose, storage, or behavior.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
 wildcards. Cover each authored endpoint and reaction tree and each named view and
-former; declare each executable computation once.
+former; declare each executable computation once. A composition document reads as prose
+carrying its links, each naming module, group and declaration:
+
+```text
+Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
+about it. A circle page shows the circle, its members and that discussion
+[as one record](former:Circle.Pages.CirclePage), and only a member
+[may respond](view:Circle.Reading.MemberMayRespond).
+```
+
+An application document is not an API specification. It carries no endpoint sections and
+no input, return or refusal listings: the concept specification owns those, and a second
+copy drifts from the one the checker reads.
 
 `check-design` proves grammar and authored form only. Config checking proves shapes,
 bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
@@ -283,6 +295,23 @@ normalizeTitle(raw: String) : String
 
 Prose may use `[normalization](computation:normalizeTitle)`. Routes stay in prose; link
 targets are exact dotted source paths.
+
+# What a design says about its boundary
+
+An endpoint takes one request and produces one answer. Endpoints are the only way into
+the application, and every caller reaches them the same way, whether that caller is a
+browser, a command line, or another part of the same program.
+
+Say what a caller supplies, what comes back, and every refusal with a stable code and
+its meaning. Do not say how any of that is rendered: no methods, status codes, headers,
+exit codes, or address shapes beyond an endpoint's own name. Rendering belongs to the
+application layer and differs by transport, so naming one asks for a guarantee the
+boundary may not be able to give.
+
+When two refusals have to be indistinguishable to a caller, say that as behaviour.
+
+A concept that depends on the current time or on a generated identifier says so in its
+prose. The implementation injects it; the concept never reaches for a clock itself.
 
 ## Assignment
 

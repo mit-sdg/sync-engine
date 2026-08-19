@@ -154,6 +154,7 @@ export interface LaunchRecord {
     readonly contract: "met" | "violated";
   };
   readonly readViolations?: readonly string[];
+  readonly rewrites?: readonly Readonly<{ path: string; writes: number }>[];
   /** Present when the harness named its tools without arguments, so paths were unseen. */
   readonly readAudit?: "unavailable";
   readonly resumes?: number;
@@ -241,6 +242,10 @@ export const roleAfter: Readonly<Record<string, string>> = {
   "frontend-worker": "application-worker",
   "evidence-worker": "application-worker",
 };
+
+export function previousRole(role: string): string | undefined {
+  return roleAfter[role];
+}
 
 export const requiredRoles = [
   "designer",
@@ -330,4 +335,28 @@ export async function readLaunchRecords(
     found.push({ path, record: value });
   }
   return found;
+}
+
+/**
+ * A registry may only register the concept class its module imports. A class declared
+ * beside the registration narrows what source agreement sees, so the assembly runs an
+ * object the concept tests never construct.
+ */
+export async function registrationWrappers(applicationRoot?: string): Promise<string[]> {
+  const root = resolve(applicationRoot ?? process.cwd(), "src/concepts");
+  let entries: string[];
+  try {
+    entries = (await readdir(root)).filter((name) => name.endsWith(".registry.ts"));
+  } catch {
+    return [];
+  }
+  const offending: string[] = [];
+  for (const name of entries.sort()) {
+    const source = await readFile(resolve(root, name), "utf8");
+    const registered = source.match(/class:\s*([A-Za-z_$][\w$]*)/)?.[1];
+    if (registered === undefined) continue;
+    const declared = new RegExp(`\\bclass\\s+${registered}\\b`).test(source);
+    if (declared) offending.push(`src/concepts/${name} registers ${registered} declared beside it`);
+  }
+  return offending;
 }

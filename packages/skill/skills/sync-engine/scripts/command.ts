@@ -7,16 +7,18 @@ import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from "no
 import { fileURLToPath } from "node:url";
 import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
-import { digestDesign, requireDesignDigest } from "./design.ts";
+import { designScope, digestDesign, requireDesignDigest } from "./design.ts";
 import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
 import { agentExists, harness, launchRole } from "./launch.ts";
 import {
+  previousRole,
   requireCompletedRole,
   workspaceFileRole,
   requireInsideWorkspace,
   requiredRoles,
   reserveWorkspacePath,
   settledStatus,
+  registrationWrappers,
   verifiedRecords,
   workspaceDirectory,
   writePromptContext,
@@ -197,13 +199,14 @@ function usage(): string {
   sync-engine-skill release check [<application-directory>]
   sync-engine-skill brief init <brief.md>
   sync-engine-skill brief check <brief.md>
-  sync-engine-skill design digest <design-directory>
+  sync-engine-skill design digest <design-directory> [--role <role>]
   sync-engine-skill follow-up new --role <role>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
   sync-engine-skill assignment new --role <role> --design-digest <sha256>
   sync-engine-skill assignment check <file>
   sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
+    [--model <model>] only when the user names one for roles
     [--thinking <id>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
     [--brief <path>]
@@ -331,8 +334,9 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
-  if (args[0] === "design" && args[1] === "digest" && args.length === 3) {
-    const result = await digestDesign(args[2]!);
+  if (args[0] === "design" && args[1] === "digest" && (args.length === 3 || args.length === 5)) {
+    const scoped = args[3] === "--role" ? designScope(args[4] ?? "") : "all";
+    const result = await digestDesign(args[2]!, scoped);
     process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
     next(process.stdout, [
       `read ${reference("implementation.md")}`,
@@ -379,7 +383,12 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
-    await requireCompletedRole(options.role, undefined, options.designDigest);
+    const predecessor = previousRole(options.role);
+    const predecessorDigest =
+      options.designRoot === undefined || predecessor === undefined
+        ? options.designDigest
+        : (await digestDesign(options.designRoot, designScope(predecessor))).digest;
+    await requireCompletedRole(options.role, undefined, predecessorDigest);
     for (const input of options.inputs) {
       if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
     }
@@ -465,11 +474,13 @@ async function run(args: readonly string[]): Promise<void> {
     let prompt: string | undefined;
     let timeoutSeconds = 1800;
     let thinking: string | undefined;
+    let model: string | undefined;
     for (let index = 1; index < args.length; index += 1) {
       const argument = args[index]!;
       if (argument === "--role") role = takeValue(args, index, argument);
       else if (argument === "--prompt") prompt = takeValue(args, index, argument);
       else if (argument === "--thinking") thinking = takeValue(args, index, argument);
+      else if (argument === "--model") model = takeValue(args, index, argument);
       else if (argument === "--timeout") {
         timeoutSeconds = Number(takeValue(args, index, argument));
         if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
@@ -492,6 +503,7 @@ async function run(args: readonly string[]): Promise<void> {
       applicationRoot: process.cwd(),
       timeoutSeconds,
       ...(thinking === undefined ? {} : { thinking }),
+      ...(model === undefined ? {} : { model }),
     });
     const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
     process.stdout.write(
@@ -509,6 +521,10 @@ async function run(args: readonly string[]): Promise<void> {
       throw new Error(`handback check accepts only --brief after the design digest`);
     }
     await requireDesignDigest(args[3]!, args[5]!);
+    const scopedDigests = new Map<string, string>();
+    for (const role of requiredRoles) {
+      scopedDigests.set(role, (await digestDesign(args[3]!, designScope(role))).digest);
+    }
     const briefSha256 =
       args.length === 8
         ? createHash("sha256")
@@ -517,9 +533,11 @@ async function run(args: readonly string[]): Promise<void> {
         : undefined;
     const drifted: string[] = [];
     const strayed: string[] = [];
+    const churned: string[] = [];
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
+    const wrapped = await registrationWrappers();
     const lines: string[] = [];
     for (const role of requiredRoles) {
       const records = await verifiedRecords(role);
@@ -536,7 +554,13 @@ async function run(args: readonly string[]): Promise<void> {
         for (const path of entry.record.readViolations ?? []) {
           strayed.push(`${role} read ${path}`);
         }
-        if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
+        for (const churn of entry.record.rewrites ?? []) {
+          churned.push(`${role} wrote ${churn.path} ${churn.writes} times`);
+        }
+        if (
+          entry.record.designDigest !== undefined &&
+          entry.record.designDigest !== scopedDigests.get(role)
+        ) {
           drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
         }
         if (
@@ -557,10 +581,18 @@ async function run(args: readonly string[]): Promise<void> {
       ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
       ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
       ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
+      ...(wrapped.length === 0
+        ? []
+        : [`registered a class beside its registry: ${wrapped.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
     if (strayed.length > 0) {
       process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
+    }
+    if (churned.length > 0) {
+      process.stdout.write(
+        `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
+      );
     }
     process.stdout.write(`Every required role ran independently.\n`);
     return;

@@ -25,6 +25,8 @@ const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** How many times a role that ended in error is asked to continue before the launch fails. */
 const maxResumes = 2;
+/** Rewriting one file more often than this is churn worth reporting, not normal repair. */
+const rewriteReportThreshold = 5;
 
 /** Grace before treating a reported error as the role's own, rather than a passing fault. */
 const gracePauseMilliseconds = 30_000;
@@ -159,12 +161,36 @@ export interface LaunchOptions {
   readonly applicationRoot: string;
   readonly timeoutSeconds: number;
   readonly thinking?: string;
+  /** Set only when the user names a model for roles; otherwise a role inherits. */
+  readonly model?: string;
   readonly coordinatorId?: string;
 }
 
 export interface LaunchResult {
   readonly recordPath: string;
   readonly record: LaunchRecord;
+}
+
+/**
+ * Count how often the role rewrote one file. A role that cannot find a fact brute-forces
+ * against a checker, and the count is the only trace that leaves.
+ */
+function rewriteCounts(agentId: string): Array<{ path: string; writes: number }> {
+  let output: string;
+  try {
+    output = paseo(["logs", agentId, "--filter", "tools"]);
+  } catch {
+    return [];
+  }
+  const counts = new Map<string, number>();
+  for (const match of output.matchAll(/^\[(?:Write|Edit)\]\s+(\S+)/gm)) {
+    const path = match[1]!;
+    counts.set(path, (counts.get(path) ?? 0) + 1);
+  }
+  return [...counts]
+    .filter(([, writes]) => writes >= rewriteReportThreshold)
+    .sort((left, right) => right[1] - left[1])
+    .map(([path, writes]) => ({ path, writes }));
 }
 
 /** The role's last message, read from the harness: nothing is asked of the agent. */
@@ -212,6 +238,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     );
   }
   const coordinator = inspectAgent(coordinatorId);
+  const model = options.model ?? coordinator.Model;
   const applicationRoot = canonical(options.applicationRoot);
   const thinking = childThinking(
     coordinator.Provider,
@@ -246,7 +273,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       "--provider",
       coordinator.Provider,
       "--model",
-      coordinator.Model,
+      model,
       ...(thinking === undefined ? [] : ["--thinking", thinking]),
       ...placement,
       "--background",
@@ -262,7 +289,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   const child = inspectAgent(started.agentId);
   const mismatches = [
     ...(child.Provider === coordinator.Provider ? [] : [`provider ${child.Provider}`]),
-    ...(child.Model === coordinator.Model ? [] : [`model ${child.Model}`]),
+    ...(child.Model === model ? [] : [`model ${child.Model}`]),
     ...(thinking === undefined || child.Thinking === thinking
       ? []
       : [`thinking ${child.Thinking}`]),
@@ -284,8 +311,15 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     // A reported error can clear itself; look again before speaking to the role.
     await pause(gracePauseMilliseconds);
     settled = inspectAgent(started.agentId);
-    if (settled.Status !== resumableStatus) continue;
-    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    let remaining = Math.ceil((deadline - Date.now()) / 1000);
+    if (settled.Status !== resumableStatus) {
+      // Clearing on its own puts the role back to work, so wait for it rather than
+      // recording a status it is still moving through.
+      if (finishedStatuses.includes(settled.Status) || remaining <= 0) break;
+      settled = await waitUntilSettled(started.agentId, remaining);
+      continue;
+    }
+    remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) break;
     resumes += 1;
     paseo(["send", started.agentId, resumeRequest, "--no-wait"]);
@@ -301,6 +335,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   await writeFile(responsePath, response, "utf8");
   const violation = responseContract(options.role, response);
   const opened = readPaths(started.agentId);
+  const rewrites = rewriteCounts(started.agentId);
   const readViolations = readAudit(options.role, opened.paths, skillRoot);
 
   const context = await readPromptContext(promptPath);
@@ -328,6 +363,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       contract: violation === undefined ? "met" : "violated",
     },
     ...(readViolations.length === 0 ? {} : { readViolations }),
+    ...(rewrites.length === 0 ? {} : { rewrites }),
     ...(opened.observed ? {} : { readAudit: "unavailable" as const }),
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);

@@ -6,6 +6,8 @@
 
 <!-- include: ../common/concept-format.md -->
 
+<!-- include: ../inputs/boundary.md -->
+
 ## Assignment
 
 Create the smallest complete design for the brief from mechanism and ownership, not

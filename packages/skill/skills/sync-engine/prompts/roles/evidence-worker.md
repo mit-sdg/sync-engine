@@ -4,10 +4,15 @@
 
 Test the assembled application against the brief and approved contracts. Inspect only
 supplied prompt material and assignment paths. Do not read, write, inspect, search, or
-traverse other repository paths. Edit only assigned scenarios or tests.
+traverse other repository paths. You may read the installed package's `examples/` and
+`docs/user/` freely; the assignment governs this repository. Edit only assigned scenarios or tests.
 Do not edit production source, generated output, design, or unrelated tests.
 
 <!-- include: ../common/internals.md -->
+
+Reach a brief outcome through the application's own boundary, an endpoint by way of the
+gateway, a client, or the host, never by calling a concept class; a required outcome no
+boundary call can produce is a blocker, not a gap to cover another way.
 
 Use existing evidence when it already proves every required outcome; return that
 existing evidence is sufficient and change nothing. Otherwise add the smallest

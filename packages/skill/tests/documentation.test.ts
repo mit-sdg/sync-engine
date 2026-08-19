@@ -46,12 +46,37 @@ describe("compact sync-engine Agent Skill documents", () => {
     const internals = await text(new URL("common/internals.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
     const composition = await text(new URL("inputs/composition.md", promptRoot));
-    expect(bytes(internals)).toBeLessThanOrEqual(0.625 * 1024);
-    expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
+    const boundary = await text(new URL("inputs/boundary.md", promptRoot));
+    expect(bytes(internals)).toBeLessThanOrEqual(0.8 * 1024);
+    expect(bytes(design)).toBeLessThanOrEqual(5.75 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
-    expect(bytes(composition)).toBeLessThanOrEqual(5.5 * 1024);
+    expect(bytes(composition)).toBeLessThanOrEqual(6.5 * 1024);
+    // The designer's boundary note must never grow into a second http.md: naming a
+    // transport is what put unbuildable renderings into a design.
+    expect(bytes(boundary)).toBeLessThanOrEqual(1.25 * 1024);
+    expect(boundary).not.toMatch(/HTTP|POST|\bGET\b|JSON/);
+    // A skeleton with placeholder identifiers taught a worker nothing, so the declaration
+    // API states a real trigger and a real export rather than their shapes.
+    expect(composition).toContain(
+      "when(Posting.publish({ author }).responds({ post })).then(Indexing.add({ item: post }))",
+    );
+    expect(composition).toContain('`when(returned({ post }, { by: "Posting.publish" }))`');
+    expect(composition).toContain(
+      "export const composition = { Publishing: { PublishPost, IndexOnPublish } };",
+    );
+    // A worker probed the typechecker for a union it had already been given, and read the
+    // direct-route rule as forbidding a redirect status the handler accepts.
+    expect(internals).toContain("Making the typechecker reveal an API");
+    // A run shipped an application with no endpoints and passed every check, because
+    // evidence exercised concept classes instead of the boundary.
+    expect(await text(new URL("roles/evidence-worker.md", promptRoot))).toContain(
+      "never by calling a concept class",
+    );
+    // Criticism cannot settle a capability gap; eight passes on one run proved it.
+    expect(await stage("implementation")).toContain("no critic can settle it");
+    expect(http).toContain('redirect: "target", status: 307');
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -127,7 +152,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      expect(bytes(await stage(name))).toBeLessThanOrEqual(6.5 * 1024);
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(8.25 * 1024);
     }
 
     expect(workflow).not.toContain("## Design and criticism");
@@ -143,13 +168,15 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const internals = await text(new URL("common/internals.md", promptRoot));
+    const boundaryNote = await text(new URL("inputs/boundary.md", promptRoot));
+    const composition = await text(new URL("inputs/composition.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 13 * 1024,
-      critic: 10.5 * 1024,
-      "concept-worker": 2.375 * 1024,
-      "application-worker": 3.25 * 1024,
-      "frontend-worker": 2.5 * 1024,
-      "evidence-worker": 2.125 * 1024,
+      designer: 14.75 * 1024,
+      critic: 18 * 1024,
+      "concept-worker": 2.875 * 1024,
+      "application-worker": 3.75 * 1024,
+      "frontend-worker": 2.625 * 1024,
+      "evidence-worker": 2.75 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
@@ -160,6 +187,8 @@ describe("compact sync-engine Agent Skill documents", () => {
             "../common/ssf.md": ssf,
             "../common/concept-format.md": format,
             "../common/internals.md": internals,
+            "../inputs/boundary.md": boundaryNote,
+            "../inputs/composition.md": composition,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -366,7 +395,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("gives every role narrow file inputs and mutation boundaries", async () => {
     const expectedSlots: Record<string, string[]> = {
       designer: ["brief", "existing-design", "catalog"],
-      critic: ["brief", "candidate", "catalog"],
+      critic: ["brief", "candidate", "catalog", "blocker"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
       // examples is required for the two roles that must write framework-shaped code
       "application-worker": [
@@ -547,7 +576,10 @@ describe("compact sync-engine Agent Skill documents", () => {
       "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
     );
     expect(normalized).toContain(
-      "A product exposing HTTP installs `@mit-sdg/sync-engine-http` at that release and serves every route through the handler: POST/JSON by default, and a policy `direct` route where a client cannot post. A hand-rolled router, redirect, or error shaping is a defect",
+      "An HTTP product installs `@mit-sdg/sync-engine-http` at that release and serves every route through the handler: POST/JSON by default, and a policy `direct` route where a client cannot post. A hand-rolled router, redirect, or error shaping is a defect",
+    );
+    expect(normalized).toContain(
+      "Reactions, views, formers and endpoints are separate mechanisms; confirm each one the design uses appears in an example",
     );
     expect(normalized).toContain(
       "Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application worker; it is the declaration API that role exists to use",
@@ -557,7 +589,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB, frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget overflow or explicit user-requested parallelism",
+      "Prompt budgets: designer 32, critic 48, concept 24, application 48, frontend 48, evidence 32 KiB. Split a worker into explicit batches only on budget overflow or user-requested parallelism",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "Return an ordinary implementation defect to the original worker, not a replacement",

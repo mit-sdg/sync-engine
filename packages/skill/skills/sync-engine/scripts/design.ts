@@ -52,17 +52,34 @@ async function requireConceptFileNames(files: readonly AuthoredFile[]): Promise<
   }
 }
 
-export async function digestDesign(directory: string): Promise<DesignDigest> {
+/** Concept implementation depends on concept specifications, not on composition prose. */
+export type DesignScope = "all" | "concepts";
+
+export function designScope(role: string): DesignScope {
+  return role === "concept-worker" ? "concepts" : "all";
+}
+
+export async function digestDesign(
+  directory: string,
+  scope: DesignScope = "all",
+): Promise<DesignDigest> {
   const root = resolve(directory);
   const rootEntry = await lstat(root);
   if (rootEntry.isSymbolicLink() || !rootEntry.isDirectory()) {
     throw new DesignDigestError(`Design root must be a directory, not a symbolic link: ${root}`);
   }
 
-  const files = (await authoredMarkdown(root, root)).sort((left, right) =>
+  const authored = await authoredMarkdown(root, root);
+  if (authored.length === 0) {
+    throw new DesignDigestError(`Design contains no Markdown files: ${root}`);
+  }
+  const files = (
+    scope === "concepts"
+      ? authored.filter((file) => file.relativePath.startsWith("concepts/"))
+      : authored
+  ).sort((left, right) =>
     left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
   );
-  if (files.length === 0) throw new DesignDigestError(`Design contains no Markdown files: ${root}`);
   const brief = files.find((file) => file.relativePath.endsWith("brief.md"));
   if (brief !== undefined) {
     throw new DesignDigestError(
@@ -89,11 +106,12 @@ export async function digestDesign(directory: string): Promise<DesignDigest> {
 export async function requireDesignDigest(
   directory: string,
   expected: string,
+  scope: DesignScope = "all",
 ): Promise<DesignDigest> {
   if (!/^[a-f0-9]{64}$/.test(expected)) {
     throw new DesignDigestError(`Expected design digest must be 64 lowercase hexadecimal digits`);
   }
-  const actual = await digestDesign(directory);
+  const actual = await digestDesign(directory, scope);
   if (actual.digest !== expected) {
     throw new DesignDigestError(
       `Design digest changed: expected ${expected}, found ${actual.digest}`,

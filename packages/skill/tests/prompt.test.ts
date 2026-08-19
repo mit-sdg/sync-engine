@@ -237,6 +237,8 @@ describe("deterministic prompt construction", () => {
     await mkdir(design);
     await writeFile(resolve(design, "types.md"), "# Types\n");
     const reviewed = await digestDesign(design);
+    // A concept worker is gated on its specifications alone, so it takes that digest.
+    const conceptsDigest = (await digestDesign(design, "concepts")).digest;
 
     await expect(
       buildPrompt({
@@ -252,12 +254,22 @@ describe("deterministic prompt construction", () => {
         inputs: [{ slot: "assignment", path: assignment }],
         promptRoot: setup.root,
         designRoot: design,
-        expectedDesignDigest: reviewed.digest,
+        expectedDesignDigest: role === "concept-worker" ? conceptsDigest : reviewed.digest,
       });
       expect(built.content).toContain("Implement the approved design.");
     }
 
     await writeFile(resolve(design, "types.md"), "# Changed types\n");
+    // A concept worker survives a change outside concepts/, which is the point of the scope.
+    await expect(
+      buildPrompt({
+        role: "concept-worker",
+        inputs: [{ slot: "assignment", path: assignment }],
+        promptRoot: setup.root,
+        designRoot: design,
+        expectedDesignDigest: conceptsDigest,
+      }),
+    ).resolves.toBeDefined();
     await expect(
       buildPrompt({
         role: "application-worker",

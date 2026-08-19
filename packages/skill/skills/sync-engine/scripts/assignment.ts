@@ -127,8 +127,9 @@ Design digest: \`${designDigest}\`
 
 ## Storage guarantee
 
-<The brief's durability decision, stated as what survives restart. Concept State is not
-storage; say what the implementation must do.>
+<The brief's durability decision. Say what survives restart, or that in-memory state is
+sufficient when the brief requires nothing to. Concept State is not storage; say what the
+implementation must do.>
 
 ## Allowed read paths
 

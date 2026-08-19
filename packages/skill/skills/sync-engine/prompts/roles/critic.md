@@ -4,6 +4,8 @@
 
 <!-- include: ../common/ssf.md -->
 
+<!-- include: ../inputs/composition.md -->
+
 ## Assignment
 
 Review every candidate concept, composition, and `types.md` against the brief. Authored
@@ -17,7 +19,8 @@ decision:
 1. Scope: reject behavior the brief does not need; verify brief-visible success and
    expected refusals are deliverable.
 2. Concepts: each purpose and Principle establishes a needed coherent mechanism, not
-   an entity, endpoint, or screen.
+   an entity, endpoint, or screen. State the Principle never exercises, or that changes
+   for reasons the purpose does not name, is a second mechanism inside one concept.
 3. Ownership: peer dependence, interpreted or copied peer facts, duplicate authority.
 4. Actions: refusals, post-refusal state, lifecycle, repetition, deletion,
    compensation, repair, and a declared branch for an absent input identity; verify each
@@ -26,7 +29,9 @@ decision:
 5. Composition: reaction pressure, cross-concept failure rules, authorization
    enforcement points, visible results.
 6. Application documents: reject external aliases, inferred storage isolation, and concept
-   actions presented as application declarations. `check-design` already accepted instance,
+   actions presented as application declarations. Prose promising a consequence, a derived
+   value, or a shared decision needs the matching `reaction:`, `former:`, `view:` or
+   `computation:` link; unlinked prose is not implementable. `check-design` already accepted instance,
    binding, and typed-link form; never restate a form it passed.
 
 Application documents declare their linked endpoint trees, views, formers, and
@@ -59,3 +64,7 @@ Return the report now; never wait for a request to emit it.
 ## Selected catalog alternatives
 
 <!-- input?: catalog -->
+
+## Outstanding implementation blocker
+
+<!-- input?: blocker -->

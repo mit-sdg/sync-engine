@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { requireDesignDigest } from "./design.ts";
+import { designScope, requireDesignDigest } from "./design.ts";
 
 export const promptRoles = [
   "designer",
@@ -138,7 +138,11 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     throw new PromptBuildError(`Role ${role} does not accept a closed design digest`);
   }
   if (downstream) {
-    await requireDesignDigest(options.designRoot!, options.expectedDesignDigest!);
+    await requireDesignDigest(
+      options.designRoot!,
+      options.expectedDesignDigest!,
+      designScope(role),
+    );
   }
   const root = resolve(options.promptRoot);
   const templatePath = resolve(root, "roles", `${role}.md`);
@@ -234,7 +238,11 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
 
   const content = normalizeMarkdown(renderedLines.join("\n"));
   if (downstream) {
-    await requireDesignDigest(options.designRoot!, options.expectedDesignDigest!);
+    await requireDesignDigest(
+      options.designRoot!,
+      options.expectedDesignDigest!,
+      designScope(role),
+    );
   }
   const bytes = byteLength(content);
   const budget = options.maxBytes ?? roleBudgets[role];

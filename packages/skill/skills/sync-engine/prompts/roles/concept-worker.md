@@ -3,7 +3,7 @@
 ## Assignment
 
 Implement approved concepts only in exact assignment paths. Do not read, write, inspect,
-search, or traverse other repository paths. Approved Markdown is read-only. Never edit
+search, or traverse other repository paths. You may read the installed package's `examples/` and `docs/user/` freely; the assignment governs this repository. Approved Markdown is read-only. Never edit
 unassigned concepts, composition, registration, assembly, configuration, hosts, generated
 output, or unrelated tests.
 
@@ -11,7 +11,10 @@ output, or unrelated tests.
 
 Use ordinary TypeScript classes; no engine base class is needed. Each action takes one
 named input object and returns its named result. `_` queries return the declared
-row shape and cardinality. Expected refusals use stable mapped error classes; faults
+row shape and cardinality. Registration reads the prototype: only actions and `_`
+queries may appear there, so a helper is `#private` or module-level—TypeScript `private`
+still emits one, which the checker reads as an undeclared action. Give every constructor
+parameter a default, so the class constructs with no arguments. Expected refusals use stable mapped error classes; faults
 remain unexpected. Enforce invariants and race-sensitive decisions in the owning action
 and storage transaction or constraint.
 
