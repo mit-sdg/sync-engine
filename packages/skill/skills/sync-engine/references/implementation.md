@@ -90,7 +90,9 @@ Application workers run focused source-agreement, artifact, integration, and bou
 checks for assigned wiring; evidence workers run assigned scenarios or tests, not a
 production-wide build chain. A mismatch is material when implementation requires a new
 owner, action, refusal, lifecycle, application policy, external type binding, cross-concept
-failure rule, or visible behavior. Return it to design; never silently change approved
+failure rule, or visible behavior. Return it to design as a follow-up to the designer that
+wrote it, naming the missing declaration; a fresh designer instead takes the current design
+as `existing-design` so it revises rather than restarts. Never silently change approved
 Markdown. A blocker reporting that the framework cannot express something is none of
 these and no critic can settle it: revise the design so it stops asking, or put the
 product decision to the user.
