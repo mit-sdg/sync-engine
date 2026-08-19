@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
@@ -12,6 +12,7 @@ import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./p
 import { agentExists, harness, launchRole } from "./launch.ts";
 import {
   requireCompletedRole,
+  workspaceFileRole,
   requireInsideWorkspace,
   requiredRoles,
   reserveWorkspacePath,
@@ -356,6 +357,13 @@ async function run(args: readonly string[]): Promise<void> {
       throw new Error(`follow-up check requires --design-root then --design-digest`);
     }
     const followUpPath = requireInsideWorkspace(args[2]!);
+    const followUpName = basename(followUpPath);
+    const followUpRole = workspaceFileRole(followUpName, "followup");
+    if (followUpRole === undefined || !promptRoles.includes(followUpRole as PromptRole)) {
+      throw new Error(
+        `Follow-up file names its role: expected ${workspaceDirectory}/<stamp>-<role>.followup.md, found ${followUpName}; start it with follow-up new`,
+      );
+    }
     const content = await readFile(followUpPath, "utf8");
     const bytes = Buffer.byteLength(content, "utf8");
     if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);

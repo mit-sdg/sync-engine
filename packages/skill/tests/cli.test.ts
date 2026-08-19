@@ -247,8 +247,19 @@ describe("sync-engine-skill command", () => {
       `Next: every downstream build and follow-up adds --design-root ${design} --design-digest ${digest}`,
     );
 
-    const followUp = resolve(directory, ".sync-engine", "repair.followup.md");
     await mkdir(resolve(directory, ".sync-engine"), { recursive: true });
+    const named = resolve(directory, ".sync-engine", "repair.followup.md");
+    await writeFile(named, "Run `bun run test`.\n");
+    expect(
+      run(
+        ["follow-up", "check", named, "--design-root", design, "--design-digest", digest!],
+        directory,
+      ).stderr,
+    ).toContain("start it with follow-up new");
+
+    const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
+    expect(started.status).toBe(0);
+    const followUp = started.stdout.match(/Follow-up started: (\S+)/)?.[1]!;
     await writeFile(followUp, "Run `bun run test`.\n");
     const checked = run(
       ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],

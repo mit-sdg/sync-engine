@@ -105,7 +105,8 @@ bun "<skill-root>/scripts/command.ts" design digest design
 
 Every concept, application, frontend, and evidence prompt build requires
 `--design-root design` and `--design-digest <sha256>`; the compiler rejects drift. Put
-the digest in each temporary assignment and verify it before every diagnostic follow-up
-with `follow-up check`. Any design change invalidates the digest, downstream prompts,
+the digest in each temporary assignment. Start every diagnostic follow-up with
+`follow-up new --role <role>`, which names it, and verify it with `follow-up check`;
+never name one yourself. Any design change invalidates the digest, downstream prompts,
 and conclusions: stop downstream work, rerun syntax and fresh criticism as applicable,
 complete authorization, and capture a new digest.

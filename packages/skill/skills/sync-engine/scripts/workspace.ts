@@ -117,6 +117,14 @@ export async function reserveWorkspacePath(
   }
 }
 
+/** The role a compiler-named workspace file belongs to, or undefined if it was not one. */
+export function workspaceFileRole(name: string, kind: WorkspaceKind): string | undefined {
+  const suffix = extensions[kind].replaceAll(".", "\\.");
+  return name.match(
+    new RegExp(`^\\d{4}-\\d{2}-\\d{2}T[\\d-]+Z-([a-z-]+?)(?:-\\d+)?\\.${suffix}$`),
+  )?.[1];
+}
+
 export interface LaunchRecord {
   readonly format: "sync-engine.skill.launch-record";
   readonly version: 1;
