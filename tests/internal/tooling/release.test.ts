@@ -484,7 +484,7 @@ describe("release source facts", () => {
     "name: Generated artifacts",
     "run: bun run examples:check",
     "name: CI required",
-    "needs: [check, release, build, package, generated, scenario, test, coverage]",
+    "needs: [check, release, build, package, generated, scenario, test, coverage, coverage-report]",
   ])("rejects CI without %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/ci.yml", fact, "omitted-ci-fact");
@@ -493,9 +493,12 @@ describe("release source facts", () => {
 
   test.each([
     ["package", "os: [ubuntu-latest]"],
-    ["test", "os: [ubuntu-latest, windows-latest, macos-latest]"],
+    ["test", "os: [windows-latest, macos-latest]"],
     ["test", "- name: Platform application scenarios"],
-    ["test", "if: runner.os != 'Linux'"],
+    ["test", "if: matrix.shard == 1"],
+    ["coverage", "name: coverage-blob-${{ matrix.shard }}"],
+    ["coverage-report", "pattern: coverage-blob-*"],
+    ["coverage-report", "run: bun run coverage --mergeReports=.vitest-reports"],
   ])("rejects a %s job without %s", (job, fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/ci.yml", fact, "omitted-platform-fact");
@@ -509,8 +512,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       ".github/workflows/ci.yml",
-      "      - name: Platform application scenarios\n        if: runner.os != 'Linux'\n        run: bun run scenario",
-      "      - name: Platform application scenarios\n        if: runner.os != 'Linux'\n        run: bun run test",
+      "      - name: Platform application scenarios\n        if: matrix.shard == 1\n        run: bun run scenario",
+      "      - name: Platform application scenarios\n        if: matrix.shard == 1\n        run: bun run test",
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/ci.yml: test job is missing run: bun run scenario",

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.vitest-reports/
 *.tsbuildinfo
 tests/.sync-engine-discovery-*/
 tests/.sync-engine-diff-*/

@@ -803,7 +803,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "name: Generated artifacts",
     "run: bun run examples:check",
     "name: CI required",
-    "needs: [check, release, build, package, generated, scenario, test, coverage]",
+    "needs: [check, release, build, package, generated, scenario, test, coverage, coverage-report]",
   ]) {
     if (!ci.includes(fact)) failures.push(`.github/workflows/ci.yml: missing ${fact}`);
   }
@@ -815,10 +815,24 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     [
       "test",
       [
-        "os: [ubuntu-latest, windows-latest, macos-latest]",
+        "os: [windows-latest, macos-latest]",
+        "shard: [1, 2, 3]",
+        "run: bun run test --shard=${{ matrix.shard }}/3",
         "- name: Platform application scenarios",
-        "if: runner.os != 'Linux'",
+        "if: matrix.shard == 1",
         "run: bun run scenario",
+      ],
+    ],
+    [
+      "coverage",
+      ["runs-on: ubuntu-latest", "shard: [1, 2, 3]", "name: coverage-blob-${{ matrix.shard }}"],
+    ],
+    [
+      "coverage-report",
+      [
+        "needs: [coverage]",
+        "pattern: coverage-blob-*",
+        "run: bun run coverage --mergeReports=.vitest-reports",
       ],
     ],
   ] as const) {
@@ -830,7 +844,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     }
   }
   if (nodeMajor !== undefined) {
-    for (const name of ["package", "test"]) {
+    for (const name of ["package", "test", "coverage"]) {
       const job = workflowJob(ci, name);
       for (const fact of [
         "- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
