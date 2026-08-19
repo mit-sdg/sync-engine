@@ -47,20 +47,20 @@ function run(args: readonly string[]) {
   return spawnSync("bun", [main, ...args], { cwd: root, encoding: "utf8" });
 }
 
-function jsonModes(args: readonly string[]): {
-  readonly text: ReturnType<typeof run>;
-  readonly json: JsonDocument;
-} {
-  const text = run(args);
+// Each spawn re-runs the command's full TypeScript analysis, so pinning the exit code the caller
+// already knows costs half as much as running the command a second time without --format json to
+// compare against. Text mode keeps its own exit-code coverage in the check-specs, manifest, and
+// verify tests.
+function jsonMode(args: readonly string[], status: number): JsonDocument {
   const result = run([...args, "--format", "json"]);
   expect(result.error).toBeUndefined();
-  expect(result.status).toBe(text.status);
+  expect(result.status).toBe(status);
   expect(result.stderr).toBe("");
 
   const json = JSON.parse(result.stdout) as JsonDocument;
   // The canonical reserialization proves stdout contained only this one JSON document.
   expect(result.stdout).toBe(`${JSON.stringify(json)}\n`);
-  return { text, json };
+  return json;
 }
 
 const invalidState = `# Noting
@@ -136,39 +136,39 @@ afterAll(async () => {
 
 describe("versioned JSON validation output", () => {
   test("check emits application diagnostics and preserves pass/fail exit codes", () => {
-    const passing = jsonModes(["check", "--config", readingCircle]);
-    expect(passing.text.status).toBe(0);
-    expect(passing.json).toMatchObject({
+    const passing = jsonMode(["check", "--config", readingCircle], 0);
+    expect(passing).toMatchObject({
       format: "sync-engine.diagnostic-report",
       version: 1,
       command: "check",
       status: "passed",
     });
-    expect(passing.json.diagnostics).toContainEqual(
+    expect(passing.diagnostics).toContainEqual(
       expect.objectContaining({ code: "MISSING_ENDPOINT_FALLBACK", severity: "warning" }),
     );
 
-    const failing = jsonModes(["check", "--config", readingCircle, "--fail-on-warnings"]);
-    expect(failing.text.status).toBe(1);
-    expect(failing.json).toMatchObject({
+    const failing = jsonMode(["check", "--config", readingCircle, "--fail-on-warnings"], 1);
+    expect(failing).toMatchObject({
       format: "sync-engine.diagnostic-report",
       version: 1,
       command: "check",
       status: "failed",
     });
-    expect(failing.json.diagnostics).toContainEqual(
+    expect(failing.diagnostics).toContainEqual(
       expect.objectContaining({ code: "MISSING_ENDPOINT_FALLBACK", severity: "warning" }),
     );
   }, 60_000);
 
   test("check-design emits located SSF records and preserves pass/fail exit codes", () => {
-    const passing = jsonModes([
-      "check-design",
-      "examples/reading-circle/design/types.md",
-      "examples/reading-circle/design/compositions/ReadingCircle.md",
-    ]);
-    expect(passing.text.status).toBe(0);
-    expect(passing.json).toEqual({
+    const passing = jsonMode(
+      [
+        "check-design",
+        "examples/reading-circle/design/types.md",
+        "examples/reading-circle/design/compositions/ReadingCircle.md",
+      ],
+      0,
+    );
+    expect(passing).toEqual({
       format: "sync-engine.diagnostic-report",
       version: 1,
       command: "check-design",
@@ -176,15 +176,14 @@ describe("versioned JSON validation output", () => {
       diagnostics: [],
     });
 
-    const failing = jsonModes(["check-design", invalidStatePath]);
-    expect(failing.text.status).toBe(1);
-    expect(failing.json).toMatchObject({
+    const failing = jsonMode(["check-design", invalidStatePath], 1);
+    expect(failing).toMatchObject({
       format: "sync-engine.diagnostic-report",
       version: 1,
       command: "check-design",
       status: "failed",
     });
-    expect(failing.json.diagnostics).toEqual([
+    expect(failing.diagnostics).toEqual([
       expect.objectContaining({
         code: "SSF_NEAR_MISS_KEYWORD",
         severity: "error",
@@ -213,9 +212,8 @@ describe("versioned JSON validation output", () => {
   }, 30_000);
 
   test("artifacts check emits a JSON-only result and preserves pass/fail exit codes", () => {
-    const passing = jsonModes(["artifacts", "check", "--config", readingCircle]);
-    expect(passing.text.status).toBe(0);
-    expect(passing.json).toEqual({
+    const passing = jsonMode(["artifacts", "check", "--config", readingCircle], 0);
+    expect(passing).toEqual({
       format: "sync-engine.diagnostic-report",
       version: 1,
       command: "artifacts check",
@@ -223,23 +221,21 @@ describe("versioned JSON validation output", () => {
       diagnostics: [],
     });
 
-    const failing = jsonModes(["artifacts", "check", "--config", packaging]);
-    expect(failing.text.status).toBe(1);
-    expect(failing.json).toMatchObject({
+    const failing = jsonMode(["artifacts", "check", "--config", packaging], 1);
+    expect(failing).toMatchObject({
       format: "sync-engine.diagnostic-report",
       version: 1,
       command: "artifacts check",
       status: "failed",
     });
-    expect(failing.json.diagnostics).toEqual([
+    expect(failing.diagnostics).toEqual([
       expect.objectContaining({ code: "ARTIFACT_CHECK_FAILURE", severity: "error" }),
     ]);
   }, 60_000);
 
   test("verify serializes its report directly and preserves pass/fail exit codes", () => {
-    const passing = jsonModes(["verify", "--config", readingCircle]);
-    expect(passing.text.status).toBe(0);
-    expect(passing.json).toMatchObject({
+    const passing = jsonMode(["verify", "--config", readingCircle], 0);
+    expect(passing).toMatchObject({
       format: "sync-engine.verification-report",
       version: 1,
       status: "passed",
@@ -249,8 +245,8 @@ describe("versioned JSON validation output", () => {
         { name: "artifacts check", status: "passed" },
       ],
     });
-    expect(passing.json.config).toBe(readingCircle);
-    expect(passing.json.configuration).toEqual(
+    expect(passing.config).toBe(readingCircle);
+    expect(passing.configuration).toEqual(
       expect.objectContaining({
         status: "loaded",
         documents: [
@@ -261,9 +257,8 @@ describe("versioned JSON validation output", () => {
     );
 
     const config = relative(root, brokenVerificationConfig);
-    const failing = jsonModes(["verify", "--config", config]);
-    expect(failing.text.status).toBe(1);
-    expect(failing.json).toMatchObject({
+    const failing = jsonMode(["verify", "--config", config], 1);
+    expect(failing).toMatchObject({
       format: "sync-engine.verification-report",
       version: 1,
       status: "failed",
@@ -273,34 +268,33 @@ describe("versioned JSON validation output", () => {
         expect.objectContaining({ name: "artifacts check", status: "failed" }),
       ],
     });
-    expect(failing.json.config).toBe(config);
-    expect(failing.json.configuration).toEqual(
+    expect(failing.config).toBe(config);
+    expect(failing.configuration).toEqual(
       expect.objectContaining({
         status: "loaded",
         documents: [join(temporary, "design.md")],
       }),
     );
-    expect(failing.json.steps?.[0]?.detail).toContain("exact non-wildcard");
+    expect(failing.steps?.[0]?.detail).toContain("exact non-wildcard");
   }, 120_000);
 
   test("verify serializes a failed configuration report and skips every check", () => {
     const config = relative(root, unloadableVerificationConfig);
-    const failedConfiguration = jsonModes(["verify", "--config", config]);
-    expect(failedConfiguration.text.status).toBe(1);
-    expect(failedConfiguration.json).toMatchObject({
+    const failedConfiguration = jsonMode(["verify", "--config", config], 1);
+    expect(failedConfiguration).toMatchObject({
       format: "sync-engine.verification-report",
       version: 1,
       status: "failed",
     });
-    expect(failedConfiguration.json.config).toBe(config);
-    expect(failedConfiguration.json.configuration).toEqual(
+    expect(failedConfiguration.config).toBe(config);
+    expect(failedConfiguration.configuration).toEqual(
       expect.objectContaining({
         status: "failed",
         documents: [],
         detail: expect.stringMatching(/\S/),
       }),
     );
-    expect(failedConfiguration.json.steps).toEqual([
+    expect(failedConfiguration.steps).toEqual([
       expect.objectContaining({ name: "check-design", status: "skipped" }),
       expect.objectContaining({ name: "check", status: "skipped" }),
       expect.objectContaining({ name: "artifacts check", status: "skipped" }),
