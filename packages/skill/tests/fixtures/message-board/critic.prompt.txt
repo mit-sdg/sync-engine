@@ -314,3 +314,7 @@ _for(subject: Subject) : many (comment: Comment, author: Person, text: String)
 
 
 ## Outstanding implementation blocker
+
+
+
+## Declaration API

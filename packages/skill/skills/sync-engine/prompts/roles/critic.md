@@ -66,3 +66,7 @@ Return the report now; never wait for a request to emit it.
 ## Outstanding implementation blocker
 
 <!-- input?: blocker -->
+
+## Declaration API
+
+<!-- input?: reference -->

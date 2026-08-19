@@ -66,8 +66,9 @@ bun "<skill-root>/scripts/command.ts" prompt build --role critic \
   --input candidate=design/compositions/<name>.md
 ```
 
-Pass `--input blocker=<file>` when an implementation blocker sent the design back, so the
-pass is aimed at it. A critic sees only the brief and the candidate files, so it cannot
+Pass `<skill-root>/prompts/inputs/composition.md` as `reference` so criticism can see what
+a declaration can express, and `--input blocker=<file>` when an implementation blocker sent
+the design back, so the pass is aimed at it. A critic sees only the brief and the candidate files, so it cannot
 know what an earlier pass said. Compare passes yourself: a finding the previous pass
 already made, still unrepaired, is the same finding and does not buy another pass.
 

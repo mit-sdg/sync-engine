@@ -152,7 +152,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      expect(bytes(await stage(name))).toBeLessThanOrEqual(7.25 * 1024);
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(7.75 * 1024);
     }
 
     expect(workflow).not.toContain("## Design and criticism");
@@ -172,10 +172,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     const limits: Record<string, number> = {
       designer: 14.75 * 1024,
       critic: 11.75 * 1024,
-      "concept-worker": 2.5 * 1024,
-      "application-worker": 3.625 * 1024,
+      "concept-worker": 2.625 * 1024,
+      "application-worker": 3.75 * 1024,
       "frontend-worker": 2.625 * 1024,
-      "evidence-worker": 2.5 * 1024,
+      "evidence-worker": 2.75 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
@@ -393,7 +393,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("gives every role narrow file inputs and mutation boundaries", async () => {
     const expectedSlots: Record<string, string[]> = {
       designer: ["brief", "existing-design", "catalog"],
-      critic: ["brief", "candidate", "catalog", "blocker"],
+      critic: ["brief", "candidate", "catalog", "blocker", "reference"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
       // examples is required for the two roles that must write framework-shaped code
       "application-worker": [

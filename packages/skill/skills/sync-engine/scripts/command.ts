@@ -522,6 +522,7 @@ async function run(args: readonly string[]): Promise<void> {
         : undefined;
     const drifted: string[] = [];
     const strayed: string[] = [];
+    const churned: string[] = [];
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
@@ -541,6 +542,9 @@ async function run(args: readonly string[]): Promise<void> {
         }
         for (const path of entry.record.readViolations ?? []) {
           strayed.push(`${role} read ${path}`);
+        }
+        for (const churn of entry.record.rewrites ?? []) {
+          churned.push(`${role} wrote ${churn.path} ${churn.writes} times`);
         }
         if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
           drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
@@ -570,6 +574,11 @@ async function run(args: readonly string[]): Promise<void> {
     if (failures.length > 0) throw new Error(failures.join("; "));
     if (strayed.length > 0) {
       process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
+    }
+    if (churned.length > 0) {
+      process.stdout.write(
+        `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
+      );
     }
     process.stdout.write(`Every required role ran independently.\n`);
     return;

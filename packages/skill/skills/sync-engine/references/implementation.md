@@ -95,7 +95,8 @@ wrote it, naming the missing declaration; a fresh designer instead takes the cur
 as `existing-design` so it revises rather than restarts. Never silently change approved
 Markdown. A blocker reporting that the framework cannot express something is none of
 these and no critic can settle it: revise the design so it stops asking, or put the
-product decision to the user.
+product decision to the user; under preauthorized delivery decide it yourself, record it in
+the brief as your assumption, and revise the design.
 
 ## Validate once and stop
 
@@ -110,8 +111,11 @@ bun test                                            # unless the application def
 bun run start                                       # bounded host readiness and clean exit
 ```
 
-`verify` reports `check-design`, `check`, and `artifacts check` independently, so a
-failed step names its own diagnostic. Add the scenario commands the brief requires. On
+No link kind names an endpoint, so no check proves one exists; the critic and the evidence
+worker are its only guards. Before handback, confirm every brief visible success and
+expected refusal appears in the evidence worker's covered outcomes, and treat an uncovered
+one as blocking. `verify` reports `check-design`, `check`, and `artifacts check`
+independently, so a failed step names its own diagnostic. Add the scenario commands the brief requires. On
 failure, return that focused diagnostic to the original worker, rerun the affected
 focused command, then every check invalidated by the changed paths regardless of chain
 position. Do not repeat unaffected checks.

@@ -3,7 +3,7 @@
 ## Assignment
 
 Implement composition and shared integration only in exact assignment paths. Do not read,
-write, inspect, search, or traverse other repository paths. Approved Markdown and concept
+write, inspect, search, or traverse other repository paths. You may read the installed package's `examples/` and `docs/user/` freely; the assignment governs this repository. Approved Markdown and concept
 public surfaces are read-only; do not edit unrelated tests or generated output by hand.
 
 <!-- include: ../common/internals.md -->

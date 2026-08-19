@@ -25,6 +25,8 @@ const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** How many times a role that ended in error is asked to continue before the launch fails. */
 const maxResumes = 2;
+/** Rewriting one file more often than this is churn worth reporting, not normal repair. */
+const rewriteReportThreshold = 5;
 
 /** Grace before treating a reported error as the role's own, rather than a passing fault. */
 const gracePauseMilliseconds = 30_000;
@@ -169,6 +171,28 @@ export interface LaunchResult {
   readonly record: LaunchRecord;
 }
 
+/**
+ * Count how often the role rewrote one file. A role that cannot find a fact brute-forces
+ * against a checker, and the count is the only trace that leaves.
+ */
+function rewriteCounts(agentId: string): Array<{ path: string; writes: number }> {
+  let output: string;
+  try {
+    output = paseo(["logs", agentId, "--filter", "tools"]);
+  } catch {
+    return [];
+  }
+  const counts = new Map<string, number>();
+  for (const match of output.matchAll(/^\[(?:Write|Edit)\]\s+(\S+)/gm)) {
+    const path = match[1]!;
+    counts.set(path, (counts.get(path) ?? 0) + 1);
+  }
+  return [...counts]
+    .filter(([, writes]) => writes >= rewriteReportThreshold)
+    .sort((left, right) => right[1] - left[1])
+    .map(([path, writes]) => ({ path, writes }));
+}
+
 /** The role's last message, read from the harness: nothing is asked of the agent. */
 /**
  * Paths the role opened, as the harness reports them; the agent is not asked. A harness
@@ -311,6 +335,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   await writeFile(responsePath, response, "utf8");
   const violation = responseContract(options.role, response);
   const opened = readPaths(started.agentId);
+  const rewrites = rewriteCounts(started.agentId);
   const readViolations = readAudit(options.role, opened.paths, skillRoot);
 
   const context = await readPromptContext(promptPath);
@@ -338,6 +363,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       contract: violation === undefined ? "met" : "violated",
     },
     ...(readViolations.length === 0 ? {} : { readViolations }),
+    ...(rewrites.length === 0 ? {} : { rewrites }),
     ...(opened.observed ? {} : { readAudit: "unavailable" as const }),
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);

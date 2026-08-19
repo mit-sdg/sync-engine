@@ -3,7 +3,7 @@
 ## Assignment
 
 Implement approved concepts only in exact assignment paths. Do not read, write, inspect,
-search, or traverse other repository paths. Approved Markdown is read-only. Never edit
+search, or traverse other repository paths. You may read the installed package's `examples/` and `docs/user/` freely; the assignment governs this repository. Approved Markdown is read-only. Never edit
 unassigned concepts, composition, registration, assembly, configuration, hosts, generated
 output, or unrelated tests.
 

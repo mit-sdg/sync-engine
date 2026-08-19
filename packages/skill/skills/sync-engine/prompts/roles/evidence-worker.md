@@ -4,7 +4,8 @@
 
 Test the assembled application against the brief and approved contracts. Inspect only
 supplied prompt material and assignment paths. Do not read, write, inspect, search, or
-traverse other repository paths. Edit only assigned scenarios or tests.
+traverse other repository paths. You may read the installed package's `examples/` and
+`docs/user/` freely; the assignment governs this repository. Edit only assigned scenarios or tests.
 Do not edit production source, generated output, design, or unrelated tests.
 
 <!-- include: ../common/internals.md -->
