@@ -77,6 +77,13 @@ describe("role return contract", () => {
     ).toBeUndefined();
   });
 
+  test("accepts the fenced form its own prompt shows", () => {
+    expect(responseContract("critic", "```text\nNo material findings.\n```")).toBeUndefined();
+    expect(
+      responseContract("critic", "```\n- `design/types.md` — Undeclared branch.\n```\n"),
+    ).toBeUndefined();
+  });
+
   test("refuses a critic that buries its verdict under a preamble", () => {
     expect(
       responseContract("critic", "I reviewed the four files.\n\nNo material findings.\n"),

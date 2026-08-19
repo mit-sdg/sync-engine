@@ -192,8 +192,14 @@ export function readAudit(role: string, paths: readonly string[], skillRoot?: st
  * What a role must return. A reply that buries its verdict costs the coordinator the
  * context the boundary exists to protect, so check the shape at the boundary.
  */
+/** The prompt shows each verdict inside a fence, so a faithful reply may reproduce one. */
+function unfenced(text: string): string {
+  const fenced = text.match(/^```[a-z]*\n([\s\S]*?)\n?```$/);
+  return fenced === null ? text : fenced[1]!.trim();
+}
+
 export function responseContract(role: string, response: string): string | undefined {
-  const text = response.trim();
+  const text = unfenced(response.trim());
   if (text === "") return `${role} returned nothing`;
   if (role !== "critic") return undefined;
   if (text === "No material findings.") return undefined;
