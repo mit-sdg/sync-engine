@@ -63,7 +63,11 @@ former(name, (input, free) => where(...).form({ ...shape }));
   its leaves with `null`.
 - `count(query, input, outputVariable)` requires one non-union query reference and its
   complete input mapping; undeclared fields are rejected recursively.
-- `compute(namedComputation, input, output)` names a computation the concept set supplies.
+- `compute(namedComputation, input, output)` runs a named pure computation. `conceptSet`
+  takes them as its optional second argument and exposes the references as
+  `set.computations`, so `compute` never takes a bare function:
+  `conceptSet({ ... }, { isLive })` then `compute(set.computations.isLive, { now }, { live })`.
+  Compose that record before constructing the set; references from separate sets do not mix.
 - A query's `"one" | "optional" | "many"` promise links to a record return for `"one"` and
   an array of records otherwise, at type level and at runtime.
 
@@ -83,6 +87,11 @@ endpoint(path, vars => receive(input)...then(respond(body)), { input?, validator
   `requestId` or `errorKind`.
 - A stage may state `.afterFlowSettles()` to form its response at a settlement frontier; add
   conditions identifying the terminal state the endpoint requires.
+- Sibling answers are alternatives, not ordered fall-through: an unconditional sibling
+  overlaps every conditional one, and an endpoint records at most one answer. Give each
+  branch a condition that excludes the others. Branching on whether an optional input was
+  supplied needs a declared computation returning that test; if the design declares none,
+  block rather than invent one.
 - Validators are explicit and schema-library neutral: `input`, `output` and `domainError`,
   each returning `{ ok: true } | { ok: false; detail?: string }` synchronously. The
   domain-error validator receives exactly the authored response's top-level `error` value. A

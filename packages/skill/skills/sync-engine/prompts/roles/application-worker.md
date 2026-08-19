@@ -30,7 +30,8 @@ checks for this wiring; the coordinator owns the final acceptance chain. Repair 
 defects. A check naming `MISSING_COVERAGE`, `UNRESOLVED_LINK`,
 `UNDECLARED_SELECTED_INSTANCE`, or `UNREGISTERED_COMPUTATION` reports design that does
 not declare what this wiring needs. That is a design defect you may not repair: block
-naming the missing link, and never rewrite source or tests to make such a check pass. Stop with a material contract blocker if implementation needs a new owner,
+the first time one appears, naming the missing link. Do not look for another encoding that
+avoids it, and never rewrite source or tests to make such a check pass. Stop with a material contract blocker if implementation needs a new owner,
 action, refusal, lifecycle, application policy, external binding, cross-concept failure
 rule, or visible behavior. Assignment prose is not an API reference: block rather than
 guess an undocumented call. Never change approved design or concept contracts.
