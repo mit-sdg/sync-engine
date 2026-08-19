@@ -128,7 +128,7 @@ describe("sync-engine-skill command", () => {
     const result = run(["brief", "check", taskBrief], directory);
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(
-      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.13\.\n/,
+      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.14\.\n/,
     );
     expect(result.stderr).toBe("");
   });
