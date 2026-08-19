@@ -128,9 +128,10 @@ Each operand is an explicit Markdown file. At least one path is required; the on
 accepted option is `--format json`. Operands can mix concept specifications, composition documents, and
 application-types documents in any order or location. The command classifies valid
 files by their contents rather than their names or paths, checks them in operand order,
-and stops at the first missing, non-regular, unreadable, or invalid file. An ambiguous
-plural pair is reported as advice without failing the check; otherwise success prints
-only the number of checked files.
+and reports every missing, non-regular, unreadable, or invalid file instead of stopping
+at the first. A file it cannot parse takes no part in the checks that span documents. An
+ambiguous plural pair is reported as advice without failing the check; otherwise success
+prints only the number of checked files.
 
 Concept documents must pass the strict version-1 concept parser.
 Application-design documents use the same parser and assembly-independent validator as

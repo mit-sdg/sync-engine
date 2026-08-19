@@ -5,6 +5,116 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.13] - 2026-08-19
+
+This beta makes application designs declare their concept instances explicitly,
+parses Simple State Form instead of carrying it as opaque text, reports coded
+diagnostics with machine-readable output, and adds one gate command and a
+manifest differ.
+
+### Compatibility
+
+- Application design now declares an explicit static instance inventory.
+  `instances` fences hold `instantiate Definition [as Instance] [with ...]`
+  declarations, `bindings` fences hold detached `Instance.External is Target`
+  declarations, and `types` fences hold only `concrete Name` declarations with
+  prose. One definition may have several differently named instances. Each
+  instance places its bindings inline or detached, never both. The core-owned
+  `RequestBoundary` stays outside the authored inventory.
+- Concept-set keys and the `assemble` `instances` option name application
+  instances rather than concept definitions. Within one assembly, two names
+  cannot use the same raw implementation object, and each `implementations(...)`
+  call constructs one object per selected key.
+- Simple State Form is parsed. The bounded parser recognizes set, sequence,
+  element, subset, alias, and field declarations with their multiplicities,
+  articles, identifiers, subset graph, and name uniqueness, and it resolves
+  qualified external-binding targets against the names a concept owns. Two
+  authored spellings of one owned type join when they form an unambiguous
+  singular and plural pair, including irregular pairs; `alias Alias for Target`
+  states a synonym directly. An ambiguous pair reports advice without failing
+  the check. External type names take the uppercase type-name form and may not
+  reuse an SSF primitive.
+- Invariant prose belongs on a `Rule:` line inside the `state` fence. Every
+  other nonblank line must parse. Prose after the fence, and unparseable lines
+  that earlier passed as opaque text, are now reported.
+- `parseConceptSpecification` returns `ConceptSpecParseResult` with accumulated
+  coded diagnostics and source locations instead of throwing at the first fault;
+  the throwing entry point is gone. `ConceptSpecDiagnostic`,
+  `ConceptSpecDiagnosticCode`, and `ConceptSpecParseResult` are exported from
+  `@mit-sdg/sync-engine/tooling`. `check-design` reports every fault in every
+  supplied file rather than stopping at the first.
+- Added `sync-engine verify [--config path] [--fail-on-warnings]`. It runs the
+  configured design, application, and artifact checks, adds no checks of its
+  own, and runs each step independently so one failure cannot hide another.
+- Added `sync-engine artifacts diff <old-manifest>`, which reports what changed
+  against a saved manifest, splits the changes into breaking and non-breaking,
+  exits non-zero on a breaking change, and refuses a manifest it cannot decode.
+- Added `--format json` to `check`, `check-design`, `artifacts check`, and
+  `verify`. In JSON mode a command writes exactly one document to stdout,
+  suppresses its human-readable text, and still exits 1 on failure.
+- `sync-engine setup` writes a `.gitignore` when the application has none and
+  leaves an existing one untouched.
+- The skill launches every role through its own compiler rather than the harness
+  CLI. `launch` drives Paseo today, reusing the coordinator's provider, model,
+  and reasoning setting, and writes a launch record under `.sync-engine/`.
+  Building a role's prompt requires a settled record for the role before it, and
+  handback requires one for every required role. Independence and placement
+  rules for role-written code are now mechanical, and
+  `references/harnesses/contract.md` states what another harness must supply.
+- Fixed a manifest defect the differ exposed: an endpoint declaring no input
+  options was omitted from the copied input contracts, so the application
+  produced a manifest its own validator rejected.
+
+### Migration
+
+- Rewrite each application `types` document. Move every concept instance into an
+  `instances` fence and every external binding into that instance's `with` block
+  or a `bindings` fence. Keep `types` fences to `concrete Name` declarations.
+  Update concept-set keys and any `instances` argument to name application
+  instances.
+- Move invariant prose from below the `state` fence onto `Rule:` lines inside
+  it, and repair State lines that earlier survived as opaque text. Run
+  `sync-engine check-design <paths...>` to enumerate the remaining faults.
+- Update `parseConceptSpecification` callers to read the returned result and
+  decide for themselves whether to abort; it no longer throws.
+- Regenerate artifacts with `sync-engine artifacts pin`. Manifests saved by an
+  earlier beta are rejected rather than upconverted; keep a regenerated manifest
+  as the baseline for `artifacts diff`.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.13` when they
+  are used together. Existing skill users should regenerate prompts through the
+  packaged compiler and launch roles with `launch`, since later stages require
+  launch records.
+
+### Generated formats
+
+- Core application manifests remain at version 1, but the schema is replaced in
+  place: manifests written by earlier betas are rejected without upconversion.
+  Generated Markdown replaces its selected-instances-and-bindings section with
+  an `Instances` section that names each instance, its definition, and its
+  bindings.
+- Added the version-1 `sync-engine.diagnostic-report` document for
+  `check-design`, `check`, and `artifacts check`, and the version-1
+  `sync-engine.verification-report` document for `verify`. Unavailable facts are
+  omitted rather than encoded as `null` or synthetic coordinates.
+- Analysis application indexes, impact traces, source indexes, and project
+  snapshots remain at version 3.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.13`.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- State parsing, JSON diagnostics, `verify`, and manifest diffing are static
+  tooling. They do not add runtime schema validation, authorization,
+  persistence, transactions, or frontend trust guarantees; endpoint policies and
+  operational controls remain application responsibilities.
+- Separate implementation objects are not proof of separate durable state. A
+  persistent floor factory should use its instance-name argument to select an
+  explicit repository, collection, schema, or namespace when isolation is
+  required.
+
+[Release][1.0.0-beta.13] | [Changes since 1.0.0-beta.12][1.0.0-beta.13-compare]
+
 ## [1.0.0-beta.12] - 2026-08-16
 
 This beta adds a deterministic, self-contained Agent Skill prompt workflow and
@@ -1019,6 +1129,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.13]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.13
+[1.0.0-beta.13-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.12...v1.0.0-beta.13
 [1.0.0-beta.12]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.12
 [1.0.0-beta.12-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.11...v1.0.0-beta.12
 [1.0.0-beta.11]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.11
