@@ -1,6 +1,6 @@
 import { cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, test } from "vite-plus/test";
@@ -8,6 +8,11 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 const command = resolve("packages/skill/skills/sync-engine/scripts/command.ts");
 const taskBrief = resolve("packages/skill/tests/fixtures/task-manager/brief.md");
 const temporary: string[] = [];
+
+/** Commands report native paths; assertions on path shape read them separator-free. */
+function posixPaths(output: string): string {
+  return output.replaceAll("\\", "/");
+}
 
 /** macOS resolves the temp root through a symlink; commands report the real path. */
 async function temporaryDirectory(prefix: string): Promise<string> {
@@ -111,7 +116,7 @@ describe("sync-engine-skill command", () => {
     expect(checked.status).toBe(0);
     expect(checked.stdout).toContain("1 decisions, open decisions none");
     expect(checked.stdout).toContain("Next: read ");
-    expect(checked.stdout).toContain("references/design-and-criticism.md\n");
+    expect(posixPaths(checked.stdout)).toContain("references/design-and-criticism.md\n");
     expect(checked.stdout).toContain(`prompt build --role designer --input brief=${path}`);
   });
 
@@ -235,7 +240,7 @@ describe("sync-engine-skill command", () => {
     expect(digested.status).toBe(0);
     const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
     expect(digest).toBeDefined();
-    expect(digested.stdout).toContain("references/implementation.md\n");
+    expect(posixPaths(digested.stdout)).toContain("references/implementation.md\n");
     expect(digested.stdout).toContain(
       `Next: every downstream build and follow-up adds --design-root ${design} --design-digest ${digest}`,
     );
@@ -499,7 +504,8 @@ describe("sync-engine-skill command", () => {
     );
     expect(started.status).toBe(0);
     const path = started.stdout.match(/Assignment started: (\S+)/)?.[1];
-    expect(path).toMatch(/\.sync-engine\/\d{4}-.*-concept-worker\.assignment\.md$/);
+    expect(dirname(path!)).toBe(resolve(directory, ".sync-engine"));
+    expect(basename(path!)).toMatch(/^\d{4}-.*-concept-worker\.assignment\.md$/);
 
     const complete = `# concept-worker assignment
 
