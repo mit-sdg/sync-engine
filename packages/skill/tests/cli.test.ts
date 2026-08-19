@@ -554,6 +554,19 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     const unstated = run(["assignment", "check", path!], directory);
     expect(unstated.status).toBe(1);
     expect(unstated.stderr).toContain("Assignment states no storage guarantee");
+
+    await writeFile(
+      path!,
+      complete.replace(
+        "## Allowed write paths",
+        `## Allowed read paths
+
+- \`node_modules/@mit-sdg/sync-engine/examples/message-board/src/concepts/Posting.registry.ts\`
+
+## Allowed write paths`,
+      ),
+    );
+    expect(run(["assignment", "check", path!], directory).status).toBe(0);
   });
 
   test("launches only through the harness and only from the workspace", async () => {
