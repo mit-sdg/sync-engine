@@ -385,27 +385,32 @@ export interface RenderedSurface {
 }
 
 export function claimsForEndpoints(
-  endpoints: readonly { readonly path: string; readonly match?: "prefix" }[],
+  endpoints: readonly { readonly identity: string; readonly path: string; readonly match?: "prefix" }[],
   servedPath: (path: string) => string,
 ): readonly FetchClaim[] {
-  const byKey = new Map<string, { path: string; match?: "prefix" }>();
+  const byKey = new Map<string, { path: string; match?: "prefix"; declarations: string[] }>();
   for (const endpoint of endpoints) {
     const key = `${endpoint.match ?? "exact"}\0${endpoint.path}`;
-    byKey.set(key, {
+    const claim = byKey.get(key) ?? {
       path: servedPath(endpoint.path),
       ...(endpoint.match === undefined ? {} : { match: endpoint.match }),
-    });
+      declarations: [],
+    };
+    claim.declarations.push(endpoint.identity);
+    byKey.set(key, claim);
   }
   return Object.freeze(
     [...byKey.values()]
       .sort((left, right) => left.path.localeCompare(right.path))
-      .flatMap(({ path, match }) =>
+      .flatMap(({ path, match, declarations }) =>
         (["GET", "POST"] as const).map((method) =>
           Object.freeze({
             method,
             path,
             ...(match === undefined ? {} : { match }),
-            declarations: Object.freeze([] as string[]),
+            declarations: Object.freeze(
+              [...declarations].sort((left, right) => left.localeCompare(right)),
+            ),
           }),
         ),
       ),
@@ -788,13 +793,17 @@ export function realize(options: {
   const reader = readerFor(options.system);
   const gateway = createGateway({ application: options.system });
 
-  const endpointDefs: { path: string; match?: "prefix" }[] = [];
+  const endpointDefs: { identity: string; path: string; match?: "prefix" }[] = [];
   for (const member of selected.members) {
     if (member.kind !== "endpoint") continue;
     const dependencies = selected.dependencies[member.identity] ?? [];
     if (dependencies.length === 0) continue;
     const { path, match } = member.value as EndpointDef;
-    endpointDefs.push({ path, ...(match === undefined ? {} : { match }) });
+    endpointDefs.push({
+      identity: member.identity,
+      path,
+      ...(match === undefined ? {} : { match }),
+    });
   }
 
   let revision: Promise<string> | undefined;

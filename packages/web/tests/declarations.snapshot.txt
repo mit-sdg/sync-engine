@@ -163,6 +163,7 @@ export interface RenderedSurface {
     revision(): Promise<string>;
 }
 export declare function claimsForEndpoints(endpoints: readonly {
+    readonly identity: string;
     readonly path: string;
     readonly match?: "prefix";
 }[], servedPath: (path: string) => string): readonly FetchClaim[];

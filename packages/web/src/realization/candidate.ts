@@ -126,7 +126,10 @@ export async function assembleCandidate(options: {
     interface: binding.identity,
     rendering,
     claims: claimsForEndpoints(
-      binding.endpoints.map(({ path: endpointPath }) => ({ path: endpointPath })),
+      binding.endpoints.map(({ identity, path: endpointPath }) => ({
+        identity,
+        path: endpointPath,
+      })),
       servedPath,
     ),
     async open(requested) {
