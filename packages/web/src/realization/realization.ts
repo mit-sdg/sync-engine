@@ -385,7 +385,11 @@ export interface RenderedSurface {
 }
 
 export function claimsForEndpoints(
-  endpoints: readonly { readonly identity: string; readonly path: string; readonly match?: "prefix" }[],
+  endpoints: readonly {
+    readonly identity: string;
+    readonly path: string;
+    readonly match?: "prefix";
+  }[],
   servedPath: (path: string) => string,
 ): readonly FetchClaim[] {
   const byKey = new Map<string, { path: string; match?: "prefix"; declarations: string[] }>();
