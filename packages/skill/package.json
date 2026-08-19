@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-skill",
-  "version": "1.0.0-beta.13",
+  "version": "1.0.0-beta.14",
   "description": "Agent Skill for independently designed and reviewed sync-engine applications",
   "keywords": [
     "agent-skills",
@@ -33,9 +33,9 @@
     "tag": "beta"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.13",
-    "@mit-sdg/sync-engine-analysis": "1.0.0-beta.13",
-    "@mit-sdg/sync-engine-catalog": "1.0.0-beta.13"
+    "@mit-sdg/sync-engine": "1.0.0-beta.14",
+    "@mit-sdg/sync-engine-analysis": "1.0.0-beta.14",
+    "@mit-sdg/sync-engine-catalog": "1.0.0-beta.14"
   },
   "engines": {
     "node": ">=24 <25"

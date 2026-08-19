@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-http",
-  "version": "1.0.0-beta.13",
+  "version": "1.0.0-beta.14",
   "description": "First-party HTTP transport for @mit-sdg/sync-engine",
   "keywords": [
     "http",
@@ -47,7 +47,7 @@
     "tag": "beta"
   },
   "peerDependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.13"
+    "@mit-sdg/sync-engine": "1.0.0-beta.14"
   },
   "engines": {
     "node": ">=24 <25"

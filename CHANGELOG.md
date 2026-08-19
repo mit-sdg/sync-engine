@@ -5,6 +5,101 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.14] - 2026-08-19
+
+This beta makes the skill's role launches verify themselves against the harness
+rather than against the coordinator's account, binds every delivery to the design
+digest it was built for, and lets an HTTP policy declare direct `GET` routes for
+clients that cannot post.
+
+### Compatibility
+
+- `httpPolicy` accepts `direct`, the routes an application serves outside
+  POST/JSON for a client that cannot post. A route names a `GET` path whose
+  `{name}` segments fill the endpoint inputs of those names, percent-decoded; an
+  empty segment does not match. `redirect` names a response field holding an
+  absolute URL and answers `302`; `status` alone answers that status with the
+  JSON body; a route must state one of them. Parameter names may not repeat, two
+  routes may not share a method and shape, and the endpoint keeps its `POST`
+  path. `HttpDirectRoute` is exported from `@mit-sdg/sync-engine-http`.
+- A direct route carries no cookies and skips the request-origin check, so
+  `httpPolicy` refuses one that serves an endpoint issuing or clearing a cookie.
+- `sync-engine setup` writes a `tsconfig.json` that maps `@design/*` to
+  `./design/*`, which the shipped examples already use.
+- The skill's `launch` reads the role's last message and the paths it opened from
+  the harness, so a role cannot be recorded as doing work it did not do. The
+  reply is written to `<stamp>-<role>.response.md` under `.sync-engine/` and
+  summarized in the launch record. A reply that breaks its role's contract fails
+  the launch and does not count the role as run; a critic must return
+  `No material findings.` or begin with its findings, with no preamble.
+- A role that ends in error is inspected again after a pause and then asked to
+  continue, up to twice, before its launch fails.
+- A read outside a role's boundary is recorded in the launch record and reported
+  by `handback check` rather than failing the launch. No role may read the
+  skill's own sources except `SKILL.md`, a designer or critic may read no
+  installed package, and an implementation role may read only a `@mit-sdg`
+  package's `examples/` and `docs/user/`. A harness that names its tools without
+  their arguments records `readAudit: "unavailable"` rather than attesting to a
+  boundary it never saw.
+- `prompt build` counts a predecessor launch only when that launch ran against
+  the same `--design-digest`, and it names the stale digest when design was
+  reopened after the earlier role ran.
+- Added `follow-up new --role <role>`, which names the follow-up file.
+  `follow-up check` now requires a compiler-named file that states its role.
+- `design digest` requires each concept document to be `concepts/<Concept>.md`,
+  matching the name in its heading.
+- `assignment check` reads owned paths from the `Allowed write paths` section
+  alone, so bulleted read paths elsewhere in an assignment no longer claim
+  ownership.
+- Added the packaged `prompts/inputs/composition.md` reference for the `language`
+  and `boundary` declaration API: reactions, views, formers, computations, and
+  endpoints. Every application worker receives it as a `reference` input, and an
+  HTTP product adds `prompts/inputs/http.md`.
+- An application worker treats `MISSING_COVERAGE`, `UNRESOLVED_LINK`,
+  `UNDECLARED_SELECTED_INSTANCE`, and `UNREGISTERED_COMPUTATION` as design
+  defects to block on rather than defects to repair.
+- Unknown roles and unknown input slots report the accepted values.
+
+### Migration
+
+- Replace hand-written listeners and route matching for browser-reachable `GET`
+  paths with policy `direct` routes. The endpoint itself does not change.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.14` when they
+  are used together.
+- Rename each concept document to match its heading before taking a design
+  digest, and move every owned path in a temporary assignment under
+  `## Allowed write paths`.
+- Start diagnostic follow-ups with `follow-up new --role <role>` instead of
+  naming the file yourself.
+- Rebuild prompts and relaunch roles after reopening design. A delivery recorded
+  against another digest no longer satisfies the role that follows it.
+- Pass `<skill-root>/prompts/inputs/composition.md` to every application worker.
+
+### Generated formats
+
+- The version-1 `sync-engine.skill.launch-record` gains the optional `response`,
+  `readViolations`, `readAudit`, and `resumes` members. Records written by
+  1.0.0-beta.13 remain readable; a role relaunched under this release records its
+  reply. `.sync-engine/` gains the `<stamp>-<role>.response.md` file kind.
+- Core application manifests remain at version 1 and analysis application
+  indexes, impact traces, source indexes, and project snapshots remain at
+  version 3, unchanged in shape.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.14`.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- A direct route answers before the request-origin check and emits no cookie or
+  CORS headers. Its endpoint still owns authorization, and its redirect target
+  comes from that endpoint's own response value, so an endpoint reachable by a
+  direct route must treat its path segments as untrusted input.
+- The read audit is evidence, not a sandbox. It reports what the harness observed
+  after the role ran, it does not confine a role, and an audit the harness cannot
+  supply is recorded as unavailable rather than as clean.
+
+[Release][1.0.0-beta.14] | [Changes since 1.0.0-beta.13][1.0.0-beta.14-compare]
+
 ## [1.0.0-beta.13] - 2026-08-19
 
 This beta makes application designs declare their concept instances explicitly,
@@ -1129,6 +1224,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.14]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.14
+[1.0.0-beta.14-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.13...v1.0.0-beta.14
 [1.0.0-beta.13]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.13
 [1.0.0-beta.13-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.12...v1.0.0-beta.13
 [1.0.0-beta.12]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.12
