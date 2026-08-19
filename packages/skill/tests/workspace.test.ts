@@ -10,6 +10,7 @@ import {
   requireCompletedRole,
   finishedStatuses,
   requireInsideWorkspace,
+  resumableStatus,
   reserveWorkspacePath,
   stamp,
   verifiedRecords,
@@ -151,6 +152,13 @@ describe("launch records", () => {
       await record(root, "designer", { status: dead });
       expect((await verifiedRecords("designer", root)).length).toBe(0);
     }
+  });
+
+  test("keeps a resumed role countable and records the attempts", async () => {
+    expect(finishedStatuses).toContain(resumableStatus);
+    const root = await applicationRoot();
+    await record(root, "designer", { resumes: 2 });
+    expect((await verifiedRecords("designer", root)).length).toBe(1);
   });
 
   test("gates each role on the one before it", async () => {

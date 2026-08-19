@@ -6,6 +6,7 @@ import {
   type LaunchRecord,
   finishedStatuses,
   requireInsideWorkspace,
+  resumableStatus,
   readPromptContext,
   readAudit,
   reserveWorkspacePath,
@@ -16,6 +17,14 @@ import {
 
 /** The single harness this skill drives today; other harnesses get their own module. */
 export const harness = "paseo";
+
+/** How many times a role that ended in error is asked to continue before the launch fails. */
+const maxResumes = 2;
+
+const resumeRequest =
+  "Your last turn ended in a harness or provider error, not a workflow decision. Nothing " +
+  "about your assignment changed. Continue the assignment you were given from where it " +
+  "stopped; do not restart it and do not ask for confirmation.";
 
 const standby =
   "Wait for a file-delivered assignment. Do not inspect files, modify files, or begin work.";
@@ -255,7 +264,16 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   }
 
   paseo(["send", started.agentId, "--prompt-file", promptPath, "--no-wait"]);
-  const settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
+  const deadline = Date.now() + options.timeoutSeconds * 1000;
+  let settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
+  let resumes = 0;
+  while (settled.Status === resumableStatus && resumes < maxResumes) {
+    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    if (remaining <= 0) break;
+    resumes += 1;
+    paseo(["send", started.agentId, resumeRequest, "--no-wait"]);
+    settled = await waitUntilSettled(started.agentId, remaining);
+  }
 
   const response = finalResponse(started.agentId);
   const responsePath = await reserveWorkspacePath(
@@ -284,6 +302,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     startedAt,
     settledAt: new Date().toISOString(),
     status: settled.Status,
+    ...(resumes === 0 ? {} : { resumes }),
     response: {
       path: responsePath,
       sha256: createHash("sha256").update(response).digest("hex"),
@@ -296,7 +315,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   await writeLaunchRecord(recordPath, record);
   if (settled.Status !== settledStatus) {
     throw new LaunchError(
-      `Launched ${options.role} ended ${settled.Status}, not ${settledStatus}; the record does not count this role as run`,
+      `Launched ${options.role} ended ${settled.Status}, not ${settledStatus}, after ${resumes} resume attempts; the record does not count this role as run`,
     );
   }
   if (readViolations.length > 0) {

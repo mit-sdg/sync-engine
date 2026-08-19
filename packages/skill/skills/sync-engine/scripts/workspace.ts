@@ -6,8 +6,15 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 /** The agent status that means a launched role finished; anything else is unsettled. */
 export const settledStatus = "idle";
 
-/** Statuses a role never leaves. Waiting past one of these only burns the deadline. */
+/** Statuses a role never leaves on its own. Waiting past one only burns the deadline. */
 export const finishedStatuses: readonly string[] = [settledStatus, "error", "failed", "closed"];
+
+/**
+ * A role reports `error` for a dropped stream or a provider fault as well as for its own
+ * failure, and the two are indistinguishable from outside. Ask it to continue rather than
+ * discarding delivered work on what is usually transport.
+ */
+export const resumableStatus = "error";
 
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
 export const workspaceDirectory = ".sync-engine";
@@ -151,6 +158,7 @@ export interface LaunchRecord {
     readonly contract: "met" | "violated";
   };
   readonly readViolations?: readonly string[];
+  readonly resumes?: number;
 }
 
 /**
