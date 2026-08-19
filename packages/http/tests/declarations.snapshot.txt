@@ -158,10 +158,24 @@ export interface ValidatedCookieBinding extends CookieBindingFacts {
 export declare function validateCookieBindings(facts: WireProjectionFacts, policy: HttpPolicy): readonly ValidatedCookieBinding[];
 export declare function omitTopLevel(type: WireType, omitted: ReadonlySet<string>): WireType;
 
+=== packages/http/dist/policy/direct.d.ts ===
+import type { HttpDirectRoute } from "./types.ts";
+/** A direct route's literal segments and the input each `{name}` segment fills. */
+export interface CompiledDirectRoute extends HttpDirectRoute {
+    readonly segments: readonly string[];
+    readonly parameters: readonly (string | undefined)[];
+}
+export declare function compileDirectRoutes(declaration: readonly HttpDirectRoute[] | undefined): readonly CompiledDirectRoute[] | undefined;
+/** The endpoint input a request path fills, or undefined when no direct route matches. */
+export declare function matchDirectRoute(routes: readonly CompiledDirectRoute[] | undefined, method: string, path: string): {
+    readonly route: CompiledDirectRoute;
+    readonly input: Record<string, string>;
+} | undefined;
+
 === packages/http/dist/policy/index.d.ts ===
 export { httpPolicy } from "./normalize.ts";
 export { HttpPolicyBrand } from "./types.ts";
-export type { HttpBrowserPolicy, HttpCookieBinding, HttpLimits, HttpPolicy, HttpPolicyInit, HttpPublicErrorCategory, HttpRequestOriginPolicy, } from "./types.ts";
+export type { HttpBrowserPolicy, HttpCookieBinding, HttpDirectRoute, HttpLimits, HttpPolicy, HttpPolicyInit, HttpPublicErrorCategory, HttpRequestOriginPolicy, } from "./types.ts";
 
 === packages/http/dist/policy/normalize.d.ts ===
 import { type HttpPolicy, type HttpPolicyInit } from "./types.ts";
@@ -199,6 +213,18 @@ export interface HttpCookieBinding {
     readonly path?: string;
     readonly domain?: string;
 }
+/**
+ * One route served directly rather than over POST/JSON. The endpoint still declares a
+ * value; this declares how that value reaches a client that cannot post — a browser
+ * following a link. `path` may carry `{name}` segments, each naming an endpoint input.
+ */
+export interface HttpDirectRoute {
+    readonly method: "GET";
+    readonly path: string;
+    readonly endpoint: string;
+    readonly redirect?: string;
+    readonly status?: number;
+}
 export interface HttpPolicyInit {
     readonly publicOrigin?: string;
     readonly basePath?: string;
@@ -207,6 +233,7 @@ export interface HttpPolicyInit {
     readonly requestOrigins?: HttpRequestOriginPolicy | false;
     readonly cookies?: Readonly<Record<string, HttpCookieBinding>>;
     readonly limits?: HttpLimits;
+    readonly direct?: readonly HttpDirectRoute[];
 }
 /** Runtime marker shared by every installed copy of this package. */
 export declare const HttpPolicyBrand: unique symbol;

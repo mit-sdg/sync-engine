@@ -7,6 +7,7 @@ const register = {
   policy: [
     "HttpBrowserPolicy",
     "HttpCookieBinding",
+    "HttpDirectRoute",
     "HttpLimits",
     "HttpPolicy",
     "HttpPolicyBrand",

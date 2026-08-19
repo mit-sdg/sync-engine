@@ -6,6 +6,7 @@ import {
   normalizeRequestOrigins,
 } from "./browser.ts";
 import { normalizeCookies } from "./cookies.ts";
+import { compileDirectRoutes } from "./direct.ts";
 import {
   HttpPolicyBrand,
   type HttpLimits,
@@ -124,6 +125,7 @@ export function httpPolicy(init: HttpPolicyInit): HttpPolicy {
     ...(requestOrigins === undefined ? {} : { requestOrigins }),
     ...(cookies === undefined ? {} : { cookies }),
     ...(init.limits === undefined ? {} : { limits: normalizeLimits(init.limits) }),
+    ...(init.direct === undefined ? {} : { direct: compileDirectRoutes(init.direct) }),
   };
   Object.defineProperty(policy, HttpPolicyBrand, {
     configurable: false,
