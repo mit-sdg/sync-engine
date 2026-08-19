@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
@@ -20,7 +20,7 @@ import {
 const temporary: string[] = [];
 
 async function applicationRoot(): Promise<string> {
-  const root = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-workspace-"));
+  const root = await realpath(await mkdtemp(resolve(tmpdir(), "sync-engine-skill-workspace-")));
   temporary.push(root);
   await mkdir(resolve(root, workspaceDirectory), { recursive: true });
   return root;
