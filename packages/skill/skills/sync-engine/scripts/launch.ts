@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import {
+  canonical,
   type LaunchRecord,
   requireInsideWorkspace,
   readPromptContext,
@@ -164,7 +164,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     );
   }
   const coordinator = inspectAgent(coordinatorId);
-  const applicationRoot = resolve(options.applicationRoot);
+  const applicationRoot = canonical(options.applicationRoot);
   const thinking = childThinking(
     coordinator.Provider,
     coordinator.Model,
@@ -173,7 +173,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   );
 
   const placement =
-    resolve(coordinator.Cwd) === applicationRoot
+    canonical(coordinator.Cwd) === applicationRoot
       ? ["--cwd", applicationRoot]
       : [
           "--workspace",
@@ -218,7 +218,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     ...(thinking === undefined || child.Thinking === thinking
       ? []
       : [`thinking ${child.Thinking}`]),
-    ...(resolve(child.Cwd) === applicationRoot ? [] : [`working directory ${child.Cwd}`]),
+    ...(canonical(child.Cwd) === applicationRoot ? [] : [`working directory ${child.Cwd}`]),
   ];
   if (mismatches.length > 0) {
     paseo(["stop", started.agentId]);

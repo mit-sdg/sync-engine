@@ -1,4 +1,13 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,6 +17,11 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 const command = resolve("packages/skill/skills/sync-engine/scripts/command.ts");
 const taskBrief = resolve("packages/skill/tests/fixtures/task-manager/brief.md");
 const temporary: string[] = [];
+
+/** macOS resolves the temp root through a symlink; commands report the real path. */
+async function temporaryDirectory(prefix: string): Promise<string> {
+  return realpath(await mkdtemp(resolve(tmpdir(), prefix)));
+}
 
 function run(args: readonly string[], cwd = process.cwd(), executable = command) {
   return spawnSync("bun", [executable, ...args], { cwd, encoding: "utf8" });
@@ -57,7 +71,7 @@ afterEach(async () => {
 
 describe("sync-engine-skill command", () => {
   test("requires setup before initializing the exact brief template", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-brief-init-"));
+    const directory = await temporaryDirectory("sync-engine-skill-brief-init-");
     temporary.push(directory);
     const path = resolve(directory, "product/brief.md");
     const premature = run(["brief", "init", path], directory);
@@ -111,7 +125,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("validates a brief before an application release set is installed", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-"));
+    const directory = await temporaryDirectory("sync-engine-skill-bootstrap-");
     temporary.push(directory);
     const result = run(["brief", "check", taskBrief], directory);
     expect(result.status).toBe(0);
@@ -122,7 +136,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("writes prompt bytes into the workspace and reports sources separately", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-cli-"));
+    const directory = await temporaryDirectory("sync-engine-skill-cli-");
     temporary.push(directory);
     const build = ["prompt", "build", "--role", "designer", "--input", `brief=${taskBrief}`];
     const first = run(build, directory);
@@ -158,7 +172,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("keeps generated workflow files out of the design root", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-placement-"));
+    const directory = await temporaryDirectory("sync-engine-skill-placement-");
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
@@ -221,7 +235,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("digests closed design and bounds diagnostic follow-ups", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-design-cli-"));
+    const directory = await temporaryDirectory("sync-engine-skill-design-cli-");
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design);
@@ -256,7 +270,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("checks an installed application against the embedded release", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-version-"));
+    const directory = await temporaryDirectory("sync-engine-skill-version-");
     temporary.push(directory);
     for (const name of [
       "@mit-sdg/sync-engine",
@@ -292,7 +306,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("does not accept an ancestor source package as an installed dependency", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-ancestor-"));
+    const directory = await temporaryDirectory("sync-engine-skill-ancestor-");
     temporary.push(directory);
     await mkdir(resolve(directory, "application"));
     await writeFile(
@@ -318,7 +332,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("runs from a standalone copied skill without package installation", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-copy-"));
+    const directory = await temporaryDirectory("sync-engine-skill-copy-");
     temporary.push(directory);
     const copiedSkill = resolve(directory, "sync-engine");
     await cp(resolve("packages/skill/skills/sync-engine"), copiedSkill, { recursive: true });
@@ -369,7 +383,7 @@ describe("sync-engine-skill command", () => {
   }
 
   test("builds a later role only after its predecessor actually ran", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-chain-"));
+    const directory = await temporaryDirectory("sync-engine-skill-chain-");
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
@@ -399,7 +413,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("treats a role that never settled as not having run", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-unsettled-"));
+    const directory = await temporaryDirectory("sync-engine-skill-unsettled-");
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
@@ -427,7 +441,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("refuses a launch record whose prompt no longer matches", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-tamper-"));
+    const directory = await temporaryDirectory("sync-engine-skill-tamper-");
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
@@ -459,7 +473,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("handback names every role that has no independent evidence", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-handback-"));
+    const directory = await temporaryDirectory("sync-engine-skill-handback-");
     temporary.push(directory);
     const design = resolve(directory, "design");
     await mkdir(design, { recursive: true });
@@ -486,7 +500,7 @@ describe("sync-engine-skill command", () => {
   });
 
   test("refuses an assignment that crosses role ownership", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-assignment-"));
+    const directory = await temporaryDirectory("sync-engine-skill-assignment-");
     temporary.push(directory);
     const started = run(
       ["assignment", "new", "--role", "concept-worker", "--design-digest", "a".repeat(64)],
@@ -546,7 +560,7 @@ In-memory only; nothing survives restart, per the brief's demo decision.
   });
 
   test("launches only through the harness and only from the workspace", async () => {
-    const directory = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-launch-"));
+    const directory = await temporaryDirectory("sync-engine-skill-launch-");
     temporary.push(directory);
     const stray = resolve(directory, "designer.prompt.md");
     await writeFile(stray, "# designer\n");

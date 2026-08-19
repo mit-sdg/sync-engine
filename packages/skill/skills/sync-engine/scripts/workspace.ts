@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 /** The agent status that means a launched role finished; anything else is unsettled. */
 export const settledStatus = "idle";
@@ -58,8 +58,24 @@ export class WorkspaceError extends Error {
   override readonly name = "WorkspaceError";
 }
 
+/**
+ * Resolve symbolic links as far as the path exists. Comparing paths textually is not
+ * enough: macOS reaches temporary and user directories through `/var` -> `/private/var`,
+ * so a caller's path and the process's own working directory can name one directory in
+ * two spellings.
+ */
+export function canonical(path: string): string {
+  const resolved = resolve(path);
+  try {
+    return realpathSync(resolved);
+  } catch {
+    const parent = dirname(resolved);
+    return parent === resolved ? resolved : resolve(canonical(parent), basename(resolved));
+  }
+}
+
 export function workspaceRoot(applicationRoot: string = process.cwd()): string {
-  return resolve(applicationRoot, workspaceDirectory);
+  return canonical(resolve(applicationRoot, workspaceDirectory));
 }
 
 export function inside(root: string, path: string): boolean {
@@ -68,7 +84,7 @@ export function inside(root: string, path: string): boolean {
 }
 
 export function requireInsideWorkspace(path: string, applicationRoot?: string): string {
-  const resolved = resolve(path);
+  const resolved = canonical(path);
   const root = workspaceRoot(applicationRoot);
   if (!inside(root, resolved) || resolved === root) {
     throw new WorkspaceError(
