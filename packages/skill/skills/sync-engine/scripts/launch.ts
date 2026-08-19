@@ -284,8 +284,15 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     // A reported error can clear itself; look again before speaking to the role.
     await pause(gracePauseMilliseconds);
     settled = inspectAgent(started.agentId);
-    if (settled.Status !== resumableStatus) continue;
-    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    let remaining = Math.ceil((deadline - Date.now()) / 1000);
+    if (settled.Status !== resumableStatus) {
+      // Clearing on its own puts the role back to work, so wait for it rather than
+      // recording a status it is still moving through.
+      if (finishedStatuses.includes(settled.Status) || remaining <= 0) break;
+      settled = await waitUntilSettled(started.agentId, remaining);
+      continue;
+    }
+    remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) break;
     resumes += 1;
     paseo(["send", started.agentId, resumeRequest, "--no-wait"]);
