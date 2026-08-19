@@ -21,6 +21,9 @@ export const harness = "paseo";
 /** How many times a role that ended in error is asked to continue before the launch fails. */
 const maxResumes = 2;
 
+/** Grace before treating a reported error as the role's own, rather than a passing fault. */
+const gracePauseMilliseconds = 30_000;
+
 const resumeRequest =
   "Your last turn ended in a harness or provider error, not a workflow decision. Nothing " +
   "about your assignment changed. Continue the assignment you were given from where it " +
@@ -268,7 +271,13 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   let settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
   let resumes = 0;
   while (settled.Status === resumableStatus && resumes < maxResumes) {
-    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    let remaining = Math.ceil((deadline - Date.now()) / 1000);
+    if (remaining <= 0) break;
+    // A reported error can clear itself; look again before speaking to the role.
+    await pause(gracePauseMilliseconds);
+    settled = inspectAgent(started.agentId);
+    if (settled.Status !== resumableStatus) continue;
+    remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) break;
     resumes += 1;
     paseo(["send", started.agentId, resumeRequest, "--no-wait"]);
