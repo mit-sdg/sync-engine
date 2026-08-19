@@ -1,2 +1,2 @@
-export { serve } from "./serve.ts";
-export type { ServeOptions, ServerAddress } from "./serve.ts";
+export { open, serve } from "./serve.ts";
+export type { RunningServer, ServeOptions, ServerAddress } from "./serve.ts";

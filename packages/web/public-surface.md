@@ -4,7 +4,7 @@
 
 <!-- register:web-realization:start -->
 
-`ImmediateBindings`, `WebHead`, `realize`
+`CandidateManifest`, `CandidateSelection`, `ImmediateBindings`, `SelectionApplication`, `WebCandidate`, `WebHead`, `WebRealization`, `applySelection`, `assembleCandidate`, `candidatePathPrefix`, `interfaceRevision`, `realize`
 
 <!-- register:web-realization:end -->
 
@@ -38,6 +38,45 @@ clears on the next acceptance; an ask without declared seats falls back to the
 nearest enclosing `[data-rendered-answer]` element. Attribute patches address
 elements through their `data-rendered-attrs` marker and set or remove one
 attribute in place.
+
+`realize` returns a `WebRealization`: the Fetch realization plus `revision()`,
+`promote(candidate)`, and `close()`. `interfaceRevision(binding)` is the
+canonical content revision — a hash over the lowered declarations of the
+interface's members and reachable dependencies, each rendered endpoint
+contributing its route and exact root invocation — so two interfaces with the
+same canonical content share a revision regardless of the modules that
+carried them.
+
+`assembleCandidate({ system, exports, interface, head?, immediates?, source?, base? })`
+assembles one interface-only candidate against the running system: it
+validates the complete claims (canonical exports, renderer closure, routes,
+bound immediates, head) and constructs the realization without serving
+anything, returning an immutable `WebCandidate` or throwing a named refusal.
+The candidate's preview realization serves ordinary live holders over the
+same system under `candidatePathPrefix` plus the revision; candidate
+endpoints must be exact literal rendered endpoints (`receive({})` responding
+with one renderer invocation), and may not claim paths inside the reserved
+prefix. The manifest retains the authored `source` whole. Discarding a
+candidate is `candidate.realization.close()`: its holders close and nothing
+durable changes.
+
+`promote(candidate)` makes the candidate what the accepted claims serve,
+atomically for new opens; the claim set changes with it. Holders already
+open are repaired with one root patch: the repair re-runs the holder's
+endpoint under the new revision and replaces the rendered root, so two
+revisions need no correspondence between their authored clauses. A holder
+whose endpoint the new surface no longer declares closes; its page marks the
+rendered root `data-rendered-gone` when the stream is gone. Held drafts do
+not survive promotion. Promotion refuses a candidate assembled against
+another system, and promoting a retained earlier candidate is the same act —
+restore needs no separate machinery.
+
+`applySelection({ sourceRevision, selection })` states the startup precedence
+for a durable `CandidateSelection` completely: `spent` when the source
+already carries the selected revision, `apply` when it matches the
+selection's base, and `stale` — serve the source, surface the selection —
+when the source moved on. A selection is never silently applied over newer
+source and never silently dropped.
 
 ## `@mit-sdg/sync-engine-web/immediates`
 

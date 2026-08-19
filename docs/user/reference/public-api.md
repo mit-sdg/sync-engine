@@ -282,7 +282,7 @@ recovery.
 
 <!-- register:boundary:start -->
 
-`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointRouteContext`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `InputContractDecl`, `InterfaceBinding`, `InterfaceDefinition`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `bindInterface`, `createGateway`, `defineInterface`, `endpoint`, `endpointPrefix`, `receive`, `respond`, `serializeJsonValue`
+`ApplicationInterface`, `TransportBinding`, `WireProjectionFacts`, `EndpointDef`, `EndpointOptions`, `EndpointRouteContext`, `EndpointValidator`, `EndpointValidators`, `ExecutionLimits`, `FrameworkErrorCode`, `Gateway`, `GatewayOptions`, `GatewayTarget`, `BoundInterfaceEndpoint`, `BoundInterfaceExports`, `EvaluatedEndpoint`, `InputContractDecl`, `InterfaceBinding`, `InterfaceDefinition`, `InterfaceExportBindings`, `InvocationResult`, `InvokeOptions`, `Invoker`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `ValidationResult`, `assertPortableRoutePath`, `bindTransport`, `bindInterface`, `bindInterfaceExports`, `createGateway`, `defineInterface`, `endpoint`, `endpointPrefix`, `evaluateEndpoint`, `receive`, `respond`, `serializeJsonValue`
 
 <!-- register:boundary:end -->
 
@@ -303,6 +303,16 @@ resulting `InterfaceBinding` includes the selected declarations and any
 declarations on which they depend, allowing a realization to inspect exactly the
 interface it is realizing. A definition from another system is refused rather
 than silently rebound.
+
+`bindInterfaceExports(exports)` binds a module's flat interface exports without
+assembling an application: the same canonical naming, membership,
+dependency-closure, and route checks `assemble` performs, returning
+`InterfaceExportBindings` whose `binding(definition)` yields a
+`BoundInterfaceExports` — an `InterfaceBinding` extended with each endpoint's
+route and, when the endpoint has the literal rendered shape, the one root
+invocation it responds with. This is how a proposed interface revision is
+checked against a system that is already running. `evaluateEndpoint(identity,
+def)` is the per-endpoint form.
 
 ### Endpoints
 

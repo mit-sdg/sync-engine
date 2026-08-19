@@ -1,5 +1,6 @@
 export {
   defineFetchRealization,
+  defineLiveFetchRealization,
   fetchClaimMatches,
   fetchClaimsOverlap,
   isFetchRealization,

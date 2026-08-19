@@ -45,6 +45,31 @@ export function fetchClaimsOverlap(left: FetchClaim, right: FetchClaim): boolean
   return left.path === right.path;
 }
 
+/**
+ * A checked Fetch value whose claim set may change while it is served — the
+ * promotable Web realization uses this so an accepted promotion revises what
+ * its paths serve without re-deploying. `claims` is read live on every
+ * routing decision.
+ */
+export function defineLiveFetchRealization<
+  T extends {
+    readonly interface: string;
+    fetch(request: Request): Promise<Response>;
+  },
+>(value: T & { claims(): readonly FetchClaim[] }): Omit<T, "claims"> & FetchRealization {
+  const { claims, ...members } = value;
+  const realization = Object.freeze(
+    Object.defineProperties(members, {
+      claims: {
+        enumerable: true,
+        get: () => claims(),
+      },
+    }),
+  ) as unknown as Omit<T, "claims"> & FetchRealization;
+  FetchRealizations.add(realization);
+  return realization;
+}
+
 /** First-party realization floors use this constructor for checked Fetch values. */
 export function defineFetchRealization(value: FetchRealization): FetchRealization {
   const realization: FetchRealization = Object.freeze({

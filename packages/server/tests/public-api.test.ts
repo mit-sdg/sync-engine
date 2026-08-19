@@ -24,8 +24,10 @@ test("Server has one exact serving surface", () => {
       ? statement.exportClause.elements.map(({ name }) => name.text)
       : [],
   );
-  expect(names.sort()).toEqual(["ServeOptions", "ServerAddress", "serve"].sort());
+  expect(names.sort()).toEqual(
+    ["RunningServer", "ServeOptions", "ServerAddress", "open", "serve"].sort(),
+  );
   expect(readFileSync(resolve(root, "public-surface.md"), "utf8")).toContain(
-    "<!-- register:server-serve:start -->\n\n`ServeOptions`, `ServerAddress`, `serve`\n\n<!-- register:server-serve:end -->",
+    "<!-- register:server-serve:start -->\n\n`RunningServer`, `ServeOptions`, `ServerAddress`, `open`, `serve`\n\n<!-- register:server-serve:end -->",
   );
 });

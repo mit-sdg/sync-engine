@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { defineFetchRealization } from "@mit-sdg/sync-engine-http/realization";
-import { serve } from "../src/serve/index.ts";
+import { open, serve } from "../src/serve/index.ts";
 
 function realization(interfaceName: string) {
   return defineFetchRealization({
@@ -49,4 +49,39 @@ describe("serve", () => {
       serve({ at: { hostname: "127.0.0.1", port: 0 }, realizations: [family, atlas] }),
     ).rejects.toThrow("GET /welcome/atlas overlaps claims");
   });
+
+  // The listener itself needs the Bun runtime; the reasoning host's candidate
+  // evidence exercises it live. This suite covers the pre-listener checks.
+  test.skipIf(typeof Bun === "undefined")(
+    "a running server mounts and unmounts realizations while serving",
+    async () => {
+      const preview = defineFetchRealization({
+        interface: "Preview",
+        claims: [{ method: "GET", path: "/candidate/abc/", declarations: ["Preview.Home"] }],
+        async fetch() {
+          return new Response("preview");
+        },
+      });
+      const running = await open({
+        at: { hostname: "127.0.0.1", port: 0 },
+        realizations: [realization("Browser")],
+      });
+      try {
+        expect(await (await fetch(new URL("/", running.url))).text()).toBe("Browser");
+        expect((await fetch(new URL("/candidate/abc/", running.url))).status).toBe(404);
+
+        running.mount(preview);
+        expect(await (await fetch(new URL("/candidate/abc/", running.url))).text()).toBe("preview");
+        expect(() => running.mount(realization("Colliding"))).toThrow(
+          'GET / is claimed by both "Browser" and "Colliding"',
+        );
+
+        running.unmount(preview);
+        expect((await fetch(new URL("/candidate/abc/", running.url))).status).toBe(404);
+        expect(await (await fetch(new URL("/", running.url))).text()).toBe("Browser");
+      } finally {
+        await running.close();
+      }
+    },
+  );
 });

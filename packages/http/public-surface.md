@@ -4,13 +4,17 @@
 
 <!-- register:http-realization:start -->
 
-`FetchClaim`, `FetchRealization`, `defineFetchRealization`, `fetchClaimMatches`, `fetchClaimsOverlap`, `isFetchRealization`, `realize`
+`FetchClaim`, `FetchRealization`, `defineFetchRealization`, `defineLiveFetchRealization`, `fetchClaimMatches`, `fetchClaimsOverlap`, `isFetchRealization`, `realize`
 
 <!-- register:http-realization:end -->
 
 `realize({ system, interface })` returns a checked POST/JSON Fetch realization
 for the selected endpoint declarations. `defineFetchRealization(...)` is the
 first-party floor constructor used by other Fetch realization packages.
+`defineLiveFetchRealization(...)` is its sibling for a realization whose claim
+set may change while served — `claims` is a function read live on every
+routing decision, and extra members on the value survive onto the checked
+realization; the promotable Web realization is built with it.
 `FetchClaim.match` is absent for an exact path and is `"prefix"` for all
 nonempty descendants of a trailing-slash prefix. `fetchClaimMatches(...)` and
 `fetchClaimsOverlap(...)` apply that shared routing rule to host composition.

@@ -9,6 +9,16 @@ export { defineInterface } from "@engine/boundary/protocol/interface-definition"
 export type { InterfaceDefinition } from "@engine/boundary/protocol/interface-definition";
 export { bindInterface } from "@engine/boundary/gateway/interface-binding";
 export type { InterfaceBinding } from "@engine/boundary/gateway/interface-binding";
+export {
+  bindInterfaceExports,
+  evaluateEndpoint,
+} from "@engine/boundary/assembly/interface-exports";
+export type {
+  BoundInterfaceEndpoint,
+  BoundInterfaceExports,
+  EvaluatedEndpoint,
+  InterfaceExportBindings,
+} from "@engine/boundary/assembly/interface-exports";
 export type { InputContractDecl } from "@engine/boundary/protocol/endpoints";
 export type {
   EndpointValidator,

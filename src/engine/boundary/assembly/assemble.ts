@@ -70,7 +70,6 @@ import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
 import { setOwn } from "@engine/utils/own-property";
 import { ListenerSet } from "@engine/utils/listener-set";
-import { brand, hasBrand } from "@engine/reads/brands";
 import type { InputContractDecl, RequestBoundaryActions } from "../protocol/endpoints.ts";
 import type { ApplicationInterface, ContractShape } from "../protocol/types.ts";
 import {
@@ -98,13 +97,8 @@ import { assertApplicationLocality } from "./locality-validation.ts";
 import { validateConceptImplementation } from "./concept-set.ts";
 import { implementationFloorOf } from "./implementation-registry.ts";
 import { walkValueTree } from "@engine/reads/value-tree";
-import {
-  installInterfaceDeclarationIdentity,
-  isInterfaceDefinition,
-  type AssembledInterfaces,
-  type AssembledInterfaceDefinition,
-  type AssembledInterfaceDeclaration,
-} from "../protocol/interface-definition.ts";
+import type { AssembledInterfaces } from "../protocol/interface-definition.ts";
+import { brandEndpointDef, collectInterfaceExports, isEndpointDef } from "./interface-exports.ts";
 
 // Endpoints author against these request-boundary references.
 
@@ -140,8 +134,6 @@ export function respond(body: Mapping = {}) {
 }
 
 // ── endpoint — one path, one reaction, and an optional input contract ──────
-
-const EndpointBrand: unique symbol = Symbol("EndpointBrand");
 
 // Endpoint variables are an open authoring proxy: every property access creates
 // one stable logic-variable symbol. TypeScript cannot express that guarantee
@@ -193,8 +185,7 @@ export function endpoint(path: string, reaction: Reaction, opts?: EndpointOption
     ...(opts?.input !== undefined ? { input: opts.input } : {}),
     ...(opts?.validators !== undefined ? { validators: opts.validators } : {}),
   } as EndpointDef;
-  brand(def, EndpointBrand);
-  return def;
+  return brandEndpointDef(def);
 }
 
 export function endpointPrefix(
@@ -221,12 +212,7 @@ export function endpointPrefix(
     ...(opts?.input !== undefined ? { input: opts.input } : {}),
     ...(opts?.validators !== undefined ? { validators: opts.validators } : {}),
   } as EndpointDef;
-  brand(def, EndpointBrand);
-  return def;
-}
-
-function isEndpointDef(value: unknown): value is EndpointDef {
-  return hasBrand(value, EndpointBrand);
+  return brandEndpointDef(def);
 }
 
 /** Pin every boundary-request trigger in a declaration to the endpoint's path. */
@@ -633,55 +619,10 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const formers: Array<readonly [FormerRef, AuthoredDeclarationIdentity]> = [];
   const activeContainerPaths = new WeakMap<object, string>();
   const shownContainerPath = (path: string): string => (path === "" ? "<composition>" : path);
-  const interfaceDeclarations: Record<string, AssembledInterfaceDeclaration> = {};
-  const interfaceDefinitions: Array<{
-    identity: string;
-    definition: AssembledInterfaceDefinition["definition"];
-  }> = [];
-  const canonicalInterfaceName = new WeakMap<object, string>();
+  const collectedInterfaces = collectInterfaceExports("assemble", options.interfaces ?? {});
+  const interfaceDeclarations = collectedInterfaces.declarations;
+  const interfaceDefinitions = collectedInterfaces.definitions;
   const endpointDependencies = new Map<string, Set<string>>();
-
-  for (const [identity, value] of Object.entries(options.interfaces ?? {})) {
-    if (value === null || (typeof value !== "object" && typeof value !== "function")) {
-      throw new TypeError(
-        `assemble: interface export ${JSON.stringify(identity)} must be a declaration or named interface.`,
-      );
-    }
-    const object = value as object;
-    const previous = canonicalInterfaceName.get(object);
-    if (previous !== undefined) {
-      throw new Error(
-        `assemble: the same interface value is exported as both ${JSON.stringify(previous)} and ${JSON.stringify(identity)}; one value has one canonical identity.`,
-      );
-    }
-    canonicalInterfaceName.set(object, identity);
-    if (isInterfaceDefinition(value)) {
-      interfaceDefinitions.push({ identity, definition: value });
-      continue;
-    }
-    installInterfaceDeclarationIdentity(value, identity);
-    setOwn(interfaceDeclarations, identity, {
-      identity,
-      value,
-      kind: isEndpointDef(value) ? "endpoint" : "declaration",
-    });
-  }
-
-  for (const { identity, definition } of interfaceDefinitions) {
-    for (const [member, value] of Object.entries(definition.members)) {
-      const canonical = interfaceDeclarations[member];
-      if (canonical === undefined || canonical.value !== value) {
-        const exported = canonicalInterfaceName.get(value);
-        const detail =
-          exported === undefined
-            ? "is not a canonical top-level interface export"
-            : `is canonically exported as ${JSON.stringify(exported)}`;
-        throw new Error(
-          `assemble: interface ${JSON.stringify(identity)} member ${JSON.stringify(member)} ${detail}.`,
-        );
-      }
-    }
-  }
 
   const visit = (value: unknown, name: string): void => {
     if (isReaction(value)) {
