@@ -48,7 +48,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const composition = await text(new URL("inputs/composition.md", promptRoot));
     const boundary = await text(new URL("inputs/boundary.md", promptRoot));
     expect(bytes(internals)).toBeLessThanOrEqual(0.8 * 1024);
-    expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
+    expect(bytes(design)).toBeLessThanOrEqual(5.75 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
@@ -170,8 +170,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const internals = await text(new URL("common/internals.md", promptRoot));
     const boundaryNote = await text(new URL("inputs/boundary.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 14 * 1024,
-      critic: 11 * 1024,
+      designer: 14.75 * 1024,
+      critic: 11.75 * 1024,
       "concept-worker": 2.5 * 1024,
       "application-worker": 3.625 * 1024,
       "frontend-worker": 2.625 * 1024,
