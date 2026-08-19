@@ -15,7 +15,7 @@ async function designFixture(): Promise<string> {
   temporary.push(root);
   await mkdir(resolve(root, "concepts"));
   await mkdir(resolve(root, "compositions"));
-  await writeFile(resolve(root, "brief.md"), "# Brief\n");
+  await writeFile(resolve(root, "purpose.md"), "# Brief\n");
   await writeFile(resolve(root, "types.md"), "```types\n```\n");
   await writeFile(resolve(root, "concepts/tasks.md"), "# Tasks\n");
   await writeFile(resolve(root, "compositions/app.md"), "# Application\n");
@@ -46,7 +46,7 @@ describe("closed design digest", () => {
     await writeFile(resolve(root, "notes.txt"), "not authored authority");
     expect(await digestDesign(root)).toEqual(first);
 
-    await symlink(resolve(root, "brief.md"), resolve(root, "linked.md"));
+    await symlink(resolve(root, "purpose.md"), resolve(root, "linked.md"));
     await expect(digestDesign(root)).rejects.toBeInstanceOf(DesignDigestError);
   });
 });

@@ -46,6 +46,12 @@ export async function digestDesign(directory: string): Promise<DesignDigest> {
     left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
   );
   if (files.length === 0) throw new DesignDigestError(`Design contains no Markdown files: ${root}`);
+  const brief = files.find((file) => file.relativePath.endsWith("brief.md"));
+  if (brief !== undefined) {
+    throw new DesignDigestError(
+      `The brief is product authority the coordinator keeps editing, not role-owned design: move ${brief.relativePath} out of ${root}`,
+    );
+  }
 
   const hash = createHash("sha256");
   for (const file of files) {

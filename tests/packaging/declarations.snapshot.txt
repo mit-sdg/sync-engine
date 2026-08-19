@@ -170,6 +170,12 @@ export interface SetupResult {
 /** Initialize a supported concept-free application without replacing application-owned files. */
 export declare function setupProject(directory?: string, options?: SetupOptions): Promise<SetupResult>;
 
+=== dist/command/setup/src/text.d.ts ===
+declare module "*.md" {
+  const text: string;
+  export default text;
+}
+
 === dist/command/verify.d.ts ===
 export type VerificationStatus = "passed" | "failed" | "skipped";
 export type VerificationStepName = "check-design" | "check" | "artifacts check";

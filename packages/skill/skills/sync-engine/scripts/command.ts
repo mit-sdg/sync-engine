@@ -1,12 +1,25 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
 import { digestDesign, requireDesignDigest } from "./design.ts";
-import { buildPrompt, type PromptInput } from "./prompt.ts";
+import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
+import { agentExists, harness, launchRole } from "./launch.ts";
+import {
+  requireCompletedRole,
+  requireInsideWorkspace,
+  requiredRoles,
+  reserveWorkspacePath,
+  settledStatus,
+  verifiedRecords,
+  workspaceDirectory,
+  writePromptContext,
+} from "./workspace.ts";
 
 interface PackageManifest {
   readonly name?: string;
@@ -35,6 +48,16 @@ const packageExecutables = {
 } as const;
 const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
 const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
+const compiler = `bun ${JSON.stringify(resolve(skillRoot, "scripts/command.ts"))}`;
+
+function reference(name: string): string {
+  return resolve(skillRoot, "references", name);
+}
+
+/** Report the exact syntax of the commands this one leads to, choosing no stage. */
+function next(stream: NodeJS.WritableStream, steps: readonly string[]): void {
+  for (const step of steps) stream.write(`Next: ${step}\n`);
+}
 
 function parent(path: string): string | undefined {
   const next = parse(path).dir;
@@ -174,13 +197,22 @@ function usage(): string {
   sync-engine-skill brief check <brief.md>
   sync-engine-skill design digest <design-directory>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
-  sync-engine-skill prompt build --role <role> --input <slot>=<path>... --output <path>
-  sync-engine-skill prompt build --role <role> --input <slot>=<path>... --stdout
+  sync-engine-skill prompt build --role <role> --input <slot>=<path>...
+  sync-engine-skill assignment new --role <role> --design-digest <sha256>
+  sync-engine-skill assignment check <file>
+  sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
+    [--thinking <id>]
+  sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
+    [--brief <path>]
 
 Prompt options:
   --design-root <directory>       Required for implementation and evidence roles
   --design-digest <sha256>        Closed reviewed design digest for that directory
   --max-bytes <positive integer>  Override the role's default byte budget
+  --stdout                        Print prompt bytes instead of writing the prompt file
+
+Generated prompts, follow-ups, assignments, and launch records belong in
+${workspaceDirectory}/ under the application root; the compiler owns those paths.
 `;
 }
 
@@ -193,7 +225,6 @@ function takeValue(args: readonly string[], index: number, option: string): stri
 interface PromptArguments {
   readonly role: string;
   readonly inputs: readonly PromptInput[];
-  readonly output?: string;
   readonly stdout: boolean;
   readonly maxBytes?: number;
   readonly designRoot?: string;
@@ -202,7 +233,6 @@ interface PromptArguments {
 
 function parsePromptArguments(args: readonly string[]): PromptArguments {
   let role: string | undefined;
-  let output: string | undefined;
   let stdout = false;
   let maxBytes: number | undefined;
   let designRoot: string | undefined;
@@ -222,9 +252,6 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
         throw new Error(`--input must have the form <slot>=<path>`);
       }
       inputs.push({ slot: value.slice(0, separator), path: value.slice(separator + 1) });
-    } else if (argument === "--output") {
-      output = takeValue(args, index, argument);
-      index += 1;
     } else if (argument === "--stdout") {
       stdout = true;
     } else if (argument === "--design-root") {
@@ -246,10 +273,10 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   }
 
   if (role === undefined) throw new Error(`prompt build requires --role`);
-  if ((output === undefined) === !stdout) {
-    throw new Error(`prompt build requires exactly one of --output or --stdout`);
+  for (const input of inputs) {
+    if (input.slot === "assignment") requireInsideWorkspace(input.path);
   }
-  return { role, inputs, output, stdout, maxBytes, designRoot, designDigest };
+  return { role, inputs, stdout, maxBytes, designRoot, designDigest };
 }
 
 async function run(args: readonly string[]): Promise<void> {
@@ -263,6 +290,11 @@ async function run(args: readonly string[]): Promise<void> {
     const applicationRoot = resolve(args[2] ?? process.cwd());
     const version = await validateReleaseSet(release, applicationRoot);
     process.stdout.write(`Installed sync-engine release matches skill ${version}.\n`);
+    next(process.stdout, [
+      setupFiles.every((file) => existsSync(resolve(applicationRoot, file)))
+        ? `${compiler} brief init design/brief.md`
+        : `bunx --no-install sync-engine setup`,
+    ]);
     return;
   }
 
@@ -276,9 +308,8 @@ async function run(args: readonly string[]): Promise<void> {
       "utf8",
     );
     await writeFile(path, template, { encoding: "utf8", flag: "wx" });
-    process.stdout.write(
-      "Brief template initialized. Fill placeholders before running brief check.\n",
-    );
+    process.stdout.write("Brief template initialized. Fill placeholders.\n");
+    next(process.stdout, [`${compiler} brief check ${args[2]}`]);
     return;
   }
 
@@ -287,12 +318,20 @@ async function run(args: readonly string[]): Promise<void> {
     process.stdout.write(
       `Brief valid: ${result.bytes} bytes, ${result.decisions} decisions, open decisions ${result.openDecisions ? "present" : "none"}; release ${release.skill}.\n`,
     );
+    next(process.stdout, [
+      `read ${reference("design-and-criticism.md")}`,
+      `${compiler} prompt build --role designer --input brief=${args[2]} --output <prompt-file>`,
+    ]);
     return;
   }
 
   if (args[0] === "design" && args[1] === "digest" && args.length === 3) {
     const result = await digestDesign(args[2]!);
     process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
+    next(process.stdout, [
+      `read ${reference("implementation.md")}`,
+      `every downstream build and follow-up adds --design-root ${args[2]} --design-digest ${result.digest}`,
+    ]);
     return;
   }
 
@@ -300,16 +339,22 @@ async function run(args: readonly string[]): Promise<void> {
     if (args[3] !== "--design-root" || args[5] !== "--design-digest") {
       throw new Error(`follow-up check requires --design-root then --design-digest`);
     }
-    const content = await readFile(args[2]!, "utf8");
+    const followUpPath = requireInsideWorkspace(args[2]!);
+    const content = await readFile(followUpPath, "utf8");
     const bytes = Buffer.byteLength(content, "utf8");
     if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
     await requireDesignDigest(args[4]!, args[6]!);
     process.stdout.write(`Follow-up valid: ${bytes} bytes; design ${args[6]}.\n`);
+    next(process.stdout, [`deliver ${args[2]} to the original role as a file`]);
     return;
   }
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
+    await requireCompletedRole(options.role);
+    for (const input of options.inputs) {
+      if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
+    }
     const result = await buildPrompt({
       role: options.role,
       inputs: options.inputs,
@@ -318,8 +363,28 @@ async function run(args: readonly string[]): Promise<void> {
       designRoot: options.designRoot,
       expectedDesignDigest: options.designDigest,
     });
-    if (options.stdout) process.stdout.write(result.content);
-    else await writeFile(resolve(options.output!), result.content, "utf8");
+    const promptPath = options.stdout
+      ? undefined
+      : await reserveWorkspacePath("prompt", result.role);
+    if (promptPath === undefined) process.stdout.write(result.content);
+    else {
+      await writeFile(promptPath, result.content, "utf8");
+      const brief = options.inputs.find((input) => input.slot === "brief");
+      await writePromptContext(promptPath, {
+        format: "sync-engine.skill.prompt-context",
+        version: 1,
+        role: result.role,
+        sha256: result.sha256,
+        ...(brief === undefined
+          ? {}
+          : {
+              briefSha256: createHash("sha256")
+                .update(await readFile(resolve(brief.path), "utf8"))
+                .digest("hex"),
+            }),
+        ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
+      });
+    }
 
     const report = [
       `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
@@ -328,7 +393,139 @@ async function run(args: readonly string[]): Promise<void> {
           `  ${source.kind} ${source.displayName}: ${source.bytes} bytes (${source.path})`,
       ),
     ].join("\n");
-    (options.stdout ? process.stderr : process.stdout).write(`${report}\n`);
+    const stream = options.stdout ? process.stderr : process.stdout;
+    stream.write(`${report}\n`);
+    const delivered = promptPath ?? "the built prompt";
+    next(stream, [
+      `deliver ${delivered} to a fresh ${result.role} as a file`,
+      ...(options.designRoot === undefined
+        ? []
+        : [
+            `${compiler} follow-up check <file> --design-root ${options.designRoot} --design-digest ${options.designDigest}`,
+          ]),
+    ]);
+    return;
+  }
+
+  if (args[0] === "assignment" && args[1] === "new" && args.length === 6) {
+    if (args[2] !== "--role" || args[4] !== "--design-digest") {
+      throw new Error(`assignment new requires --role then --design-digest`);
+    }
+    const role = args[3]!;
+    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    const path = await reserveWorkspacePath("assignment", role);
+    await writeFile(path, assignmentTemplate(role, args[5]!), "utf8");
+    process.stdout.write(`Assignment started: ${path}\n`);
+    next(process.stdout, [
+      `fill it, then ${compiler} assignment check ${path}`,
+      `${compiler} prompt build --role ${role} --input assignment=${path} ...`,
+    ]);
+    return;
+  }
+
+  if (args[0] === "assignment" && args[1] === "check" && args.length === 3) {
+    const checked = await checkAssignmentFile(resolve(args[2]!));
+    process.stdout.write(
+      `Assignment valid: role ${checked.role}; ${checked.bytes} bytes; ${checked.writePaths.length} listed paths.\n`,
+    );
+    return;
+  }
+
+  if (args[0] === "launch") {
+    let role: string | undefined;
+    let prompt: string | undefined;
+    let timeoutSeconds = 1800;
+    let thinking: string | undefined;
+    for (let index = 1; index < args.length; index += 1) {
+      const argument = args[index]!;
+      if (argument === "--role") role = takeValue(args, index, argument);
+      else if (argument === "--prompt") prompt = takeValue(args, index, argument);
+      else if (argument === "--thinking") thinking = takeValue(args, index, argument);
+      else if (argument === "--timeout") {
+        timeoutSeconds = Number(takeValue(args, index, argument));
+        if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
+          throw new Error(`--timeout must be a positive whole number of seconds`);
+        }
+      } else {
+        throw new Error(`Unknown launch option: ${argument}`);
+      }
+      index += 1;
+    }
+    if (role === undefined || prompt === undefined) {
+      throw new Error(`launch requires --role and --prompt`);
+    }
+    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    await requireCompletedRole(role);
+    const launched = await launchRole({
+      role,
+      promptPath: prompt,
+      applicationRoot: process.cwd(),
+      timeoutSeconds,
+      ...(thinking === undefined ? {} : { thinking }),
+    });
+    const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
+    process.stdout.write(
+      `Launched ${role} through ${harness}: agent ${launched.record.agentId}; ${attested}; settled ${launched.record.status}; record ${launched.recordPath}.\n`,
+    );
+    next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
+    return;
+  }
+
+  if (args[0] === "handback" && args[1] === "check" && (args.length === 6 || args.length === 8)) {
+    if (args[2] !== "--design-root" || args[4] !== "--design-digest") {
+      throw new Error(`handback check requires --design-root then --design-digest`);
+    }
+    if (args.length === 8 && args[6] !== "--brief") {
+      throw new Error(`handback check accepts only --brief after the design digest`);
+    }
+    await requireDesignDigest(args[3]!, args[5]!);
+    const briefSha256 =
+      args.length === 8
+        ? createHash("sha256")
+            .update(await readFile(resolve(args[7]!), "utf8"))
+            .digest("hex")
+        : undefined;
+    const drifted: string[] = [];
+    const missing: string[] = [];
+    const unknown: string[] = [];
+    const unsettled: string[] = [];
+    const lines: string[] = [];
+    for (const role of requiredRoles) {
+      const records = await verifiedRecords(role);
+      if (records.length === 0) {
+        missing.push(role);
+        continue;
+      }
+      for (const entry of records) {
+        const known = agentExists(entry.record.agentId);
+        if (!known) unknown.push(`${role} ${entry.record.agentId}`);
+        if (entry.record.status !== settledStatus) {
+          unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
+        }
+        if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
+          drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
+        }
+        if (
+          briefSha256 !== undefined &&
+          entry.record.briefSha256 !== undefined &&
+          entry.record.briefSha256 !== briefSha256
+        ) {
+          drifted.push(`${role} ran against an earlier brief`);
+        }
+        lines.push(
+          `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${harness}; ${entry.record.provider} ${entry.record.model}; settled ${entry.record.status}`,
+        );
+      }
+    }
+    process.stdout.write(`Handback check for design ${args[5]}:\n${lines.join("\n")}\n`);
+    const failures = [
+      ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
+      ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
+      ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
+      ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
+    ];
+    if (failures.length > 0) throw new Error(failures.join("; "));
+    process.stdout.write(`Every required role ran independently.\n`);
     return;
   }
 

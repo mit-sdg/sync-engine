@@ -27,24 +27,24 @@ requires nonempty unfenced prose without imposing a scenario count.
 
 ## Skill workflow sources
 
-| Previous source                                                | Destination                                                                        |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `SKILL.md` normal path and boundaries                          | `SKILL.md`; `references/workflow.md`                                               |
-| `references/workflow.md` setup and baseline                    | `references/workflow.md#start-safely`                                              |
-| product discussion and assumptions                             | `references/workflow.md#maintain-the-product-brief`                                |
-| analysis selection and fallback                                | `references/workflow.md#start-safely`; `#select-compact-context`                   |
-| design approval and renewed approval                           | `references/workflow.md#design-and-criticism`; `#implement-in-bounded-phases`      |
-| final checks and acceptance                                    | `references/workflow.md#validate-once-and-stop`                                    |
-| `references/design-roles.md` closed context and catalog bounds | `references/workflow.md#select-compact-context`; designer and critic templates     |
-| designer read/write/output contract                            | `prompts/roles/designer.md#assignment`; `#return`                                  |
-| draft parser protocol                                          | designer self-check; `references/workflow.md#design-and-criticism` gate            |
-| critic read/output contract                                    | `prompts/roles/critic.md#assignment`                                               |
-| criticism and repair                                           | `references/workflow.md#design-and-criticism`                                      |
-| `references/implementation-roles.md` concept isolation         | `references/workflow.md#implement-in-bounded-phases`; concept-worker template      |
-| composition and integration isolation                          | application-worker template                                                        |
-| evidence isolation                                             | evidence-worker template                                                           |
-| framework-internal read exclusion                              | all role templates; harness contract; bounded-phase workflow                       |
-| contract blockers                                              | all implementation templates; `references/workflow.md#implement-in-bounded-phases` |
+| Previous source                                                | Destination                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `SKILL.md` normal path and boundaries                          | `SKILL.md`; `references/workflow.md` and its two stage references               |
+| `references/workflow.md` setup and baseline                    | `references/workflow.md#start-safely`                                           |
+| product discussion and assumptions                             | `references/workflow.md#maintain-the-product-brief`                             |
+| analysis selection and fallback                                | `workflow.md#start-safely`; `design-and-criticism.md#select-compact-context`    |
+| design approval and renewed approval                           | `design-and-criticism.md`; `implementation.md#implement-in-bounded-phases`      |
+| final checks and acceptance                                    | `implementation.md#validate-once-and-stop`                                      |
+| `references/design-roles.md` closed context and catalog bounds | `design-and-criticism.md#select-compact-context`; designer and critic templates |
+| designer read/write/output contract                            | `prompts/roles/designer.md#assignment`; `#return`                               |
+| draft parser protocol                                          | designer self-check; `design-and-criticism.md` gate                             |
+| critic read/output contract                                    | `prompts/roles/critic.md#assignment`                                            |
+| criticism and repair                                           | `design-and-criticism.md`                                                       |
+| `references/implementation-roles.md` concept isolation         | `implementation.md#implement-in-bounded-phases`; concept-worker template        |
+| composition and integration isolation                          | application-worker template                                                     |
+| evidence isolation                                             | evidence-worker template                                                        |
+| framework-internal read exclusion                              | all role templates; harness contract; bounded-phase workflow                    |
+| contract blockers                                              | all implementation templates; `implementation.md#implement-in-bounded-phases`   |
 
 ## HTTP reference
 

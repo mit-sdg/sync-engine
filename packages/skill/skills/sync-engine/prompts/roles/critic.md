@@ -20,8 +20,9 @@ decision:
    an entity, endpoint, or screen.
 3. Ownership: peer dependence, interpreted or copied peer facts, duplicate authority.
 4. Actions: refusals, post-refusal state, lifecycle, repetition, deletion,
-   compensation, repair; verify each query's body agrees with its `one`, `optional`, or
-   `many` cardinality and its row marks optional State values optional.
+   compensation, repair, and a declared branch for an absent input identity; verify each
+   query's body agrees with its `one`, `optional`, or `many` cardinality and its row
+   marks optional State values optional.
 5. Composition: reaction pressure, cross-concept failure rules, authorization
    enforcement points, visible results.
 6. Application documents: exact static instances, one binding placement, and every

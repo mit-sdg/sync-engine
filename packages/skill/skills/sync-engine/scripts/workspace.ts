@@ -1,0 +1,225 @@
+import { existsSync, realpathSync } from "node:fs";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+
+/** The agent status that means a launched role finished; anything else is unsettled. */
+export const settledStatus = "idle";
+
+/** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
+export const workspaceDirectory = ".sync-engine";
+
+export type WorkspaceKind = "prompt" | "followup" | "assignment" | "launch";
+
+const extensions: Readonly<Record<WorkspaceKind, string>> = {
+  prompt: "prompt.md",
+  followup: "followup.md",
+  assignment: "assignment.md",
+  launch: "launch.json",
+};
+
+/** What a built prompt was made from, so a launch can record it without rebuilding. */
+export interface PromptContext {
+  readonly format: "sync-engine.skill.prompt-context";
+  readonly version: 1;
+  readonly role: string;
+  readonly sha256: string;
+  readonly briefSha256?: string;
+  readonly designDigest?: string;
+}
+
+export function promptContextPath(promptPath: string): string {
+  return promptPath.replace(/\.md$/, ".json");
+}
+
+export async function writePromptContext(
+  promptPath: string,
+  context: PromptContext,
+): Promise<void> {
+  await writeFile(
+    promptContextPath(promptPath),
+    `${JSON.stringify(context, undefined, 2)}\n`,
+    "utf8",
+  );
+}
+
+export async function readPromptContext(promptPath: string): Promise<PromptContext | undefined> {
+  try {
+    const value = JSON.parse(
+      await readFile(promptContextPath(promptPath), "utf8"),
+    ) as PromptContext;
+    return value.format === "sync-engine.skill.prompt-context" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export class WorkspaceError extends Error {
+  override readonly name = "WorkspaceError";
+}
+
+/**
+ * Resolve symbolic links as far as the path exists. Comparing paths textually is not
+ * enough: macOS reaches temporary and user directories through `/var` -> `/private/var`,
+ * so a caller's path and the process's own working directory can name one directory in
+ * two spellings.
+ */
+export function canonical(path: string): string {
+  const resolved = resolve(path);
+  try {
+    return realpathSync(resolved);
+  } catch {
+    const parent = dirname(resolved);
+    return parent === resolved ? resolved : resolve(canonical(parent), basename(resolved));
+  }
+}
+
+export function workspaceRoot(applicationRoot: string = process.cwd()): string {
+  return canonical(resolve(applicationRoot, workspaceDirectory));
+}
+
+export function inside(root: string, path: string): boolean {
+  const child = relative(root, path);
+  return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
+}
+
+export function requireInsideWorkspace(path: string, applicationRoot?: string): string {
+  const resolved = canonical(path);
+  const root = workspaceRoot(applicationRoot);
+  if (!inside(root, resolved) || resolved === root) {
+    throw new WorkspaceError(
+      `Generated workflow files belong in ${workspaceDirectory}/; ${path} is outside it`,
+    );
+  }
+  return resolved;
+}
+
+/** Seconds-resolution UTC stamp that sorts chronologically and is safe on every filesystem. */
+export function stamp(at: Date = new Date()): string {
+  return `${at.toISOString().slice(0, 19).replaceAll(":", "-")}Z`;
+}
+
+export async function reserveWorkspacePath(
+  kind: WorkspaceKind,
+  label: string,
+  applicationRoot?: string,
+  at?: Date,
+): Promise<string> {
+  const root = workspaceRoot(applicationRoot);
+  await mkdir(root, { recursive: true });
+  const base = `${stamp(at)}-${label}`;
+  const extension = extensions[kind];
+  for (let attempt = 0; ; attempt += 1) {
+    const name = attempt === 0 ? `${base}.${extension}` : `${base}-${attempt + 1}.${extension}`;
+    const candidate = resolve(root, name);
+    if (!existsSync(candidate)) return candidate;
+  }
+}
+
+export interface LaunchRecord {
+  readonly format: "sync-engine.skill.launch-record";
+  readonly version: 1;
+  readonly role: string;
+  readonly agentId: string;
+  readonly parentAgentId?: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly thinking?: string;
+  readonly cwd: string;
+  readonly prompt: { readonly path: string; readonly sha256: string; readonly bytes: number };
+  readonly briefSha256?: string;
+  readonly designDigest?: string;
+  readonly startedAt: string;
+  readonly settledAt: string;
+  readonly status: string;
+}
+
+export function isLaunchRecord(value: unknown): value is LaunchRecord {
+  const record = value as LaunchRecord | undefined;
+  return (
+    typeof record === "object" &&
+    record !== null &&
+    record.format === "sync-engine.skill.launch-record" &&
+    record.version === 1 &&
+    typeof record.role === "string" &&
+    typeof record.agentId === "string" &&
+    typeof record.provider === "string" &&
+    typeof record.model === "string" &&
+    typeof record.prompt?.sha256 === "string" &&
+    typeof record.prompt.path === "string"
+  );
+}
+
+export async function writeLaunchRecord(path: string, record: LaunchRecord): Promise<void> {
+  await writeFile(path, `${JSON.stringify(record, undefined, 2)}\n`, "utf8");
+}
+
+/** The role that must already have run and settled before each later role is built. */
+export const roleAfter: Readonly<Record<string, string>> = {
+  critic: "designer",
+  "concept-worker": "critic",
+  "application-worker": "concept-worker",
+  "frontend-worker": "application-worker",
+  "evidence-worker": "application-worker",
+};
+
+export const requiredRoles = [
+  "designer",
+  "critic",
+  "concept-worker",
+  "application-worker",
+  "evidence-worker",
+] as const;
+
+/** A record counts only when its prompt file still exists and still hashes to the record. */
+export async function verifiedRecords(
+  role: string,
+  applicationRoot?: string,
+): Promise<Array<{ path: string; record: LaunchRecord }>> {
+  const found: Array<{ path: string; record: LaunchRecord }> = [];
+  for (const entry of await readLaunchRecords(applicationRoot)) {
+    if (entry.record.role !== role) continue;
+    let content: string;
+    try {
+      content = await readFile(entry.record.prompt.path, "utf8");
+    } catch {
+      continue;
+    }
+    if (entry.record.status !== settledStatus) continue;
+    if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
+      found.push(entry);
+    }
+  }
+  return found;
+}
+
+export async function requireCompletedRole(role: string, applicationRoot?: string): Promise<void> {
+  const predecessor = roleAfter[role];
+  if (predecessor === undefined) return;
+  if ((await verifiedRecords(predecessor, applicationRoot)).length > 0) return;
+  throw new WorkspaceError(
+    `Role ${role} requires a settled ${predecessor} launch in ${workspaceDirectory}/; launch that role first`,
+  );
+}
+
+/** Every readable launch record in the workspace, oldest file name first. */
+export async function readLaunchRecords(
+  applicationRoot?: string,
+): Promise<Array<{ path: string; record: LaunchRecord }>> {
+  const root = workspaceRoot(applicationRoot);
+  if (!existsSync(root)) return [];
+  const found: Array<{ path: string; record: LaunchRecord }> = [];
+  for (const name of (await readdir(root)).sort()) {
+    if (!name.endsWith(`.${extensions.launch}`)) continue;
+    const path = resolve(root, name);
+    let value: unknown;
+    try {
+      value = JSON.parse(await readFile(path, "utf8"));
+    } catch {
+      throw new WorkspaceError(`Launch record is not readable JSON: ${path}`);
+    }
+    if (!isLaunchRecord(value)) throw new WorkspaceError(`Launch record is malformed: ${path}`);
+    found.push({ path, record: value });
+  }
+  return found;
+}

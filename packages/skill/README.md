@@ -5,6 +5,12 @@ workflow for designing and building sync-engine applications. It keeps authored
 Markdown as design authority, separates concept and application implementation, and
 requires independent objective evidence.
 
+Roles are launched through [Paseo](https://paseo.dev), which is the only harness the
+compiler drives today. Support for other harnesses is planned: each needs its own launch
+module, and `references/harnesses/contract.md` states what one must provide. Everything
+else — the prompt compiler, the brief and assignment checks, the design digest — is
+harness-independent.
+
 Install an exact published release into Pi, replacing `VERSION` with the desired beta:
 
 ```sh
@@ -74,10 +80,14 @@ and concept-free configuration; do not probe or downgrade toolchain versions. On
 setup succeeds, initialize and validate the compact product brief:
 
 ```sh
-bun "<skill-root>/scripts/command.ts" brief init design/brief.md
+bun "<skill-root>/scripts/command.ts" brief init product/brief.md
 # Fill the template.
-bun "<skill-root>/scripts/command.ts" brief check design/brief.md
+bun "<skill-root>/scripts/command.ts" brief check product/brief.md
 ```
+
+The brief is product authority the coordinator keeps editing, so it lives outside the
+design root and `design digest` refuses a brief inside it: design identity covers only
+role-owned design, while the brief is tracked separately in each prompt's context record.
 
 `brief init` refuses to create a file before setup and prints the required bootstrap
 commands. After independent review and authorization close, capture the authored design
@@ -87,18 +97,37 @@ identity:
 bun "<skill-root>/scripts/command.ts" design digest design
 ```
 
-Build a role prompt directly to a file:
+Build a role prompt:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build \
   --role designer \
-  --input brief=design/brief.md \
-  --output /tmp/designer.prompt.md
+  --input brief=design/brief.md
 ```
+
+The compiler names and writes the prompt under `.sync-engine/` in the application root
+and reports the path. Generated prompts, follow-ups, assignments, and launch records all
+live there; the compiler refuses to read a generated follow-up or assignment from
+anywhere else, so nothing generated lands in `design/`, whose Markdown carries the design
+identity. Nothing writes `.gitignore`: track the directory or ignore it as you prefer.
 
 Concept, application, and evidence prompt builds also require `--design-root design`
 and `--design-digest <sha256>`. Diagnostic follow-up files must pass `follow-up check`
 with the same design identity and the 4 KiB limit.
+
+Launch each role through the compiler rather than the harness CLI:
+
+```sh
+bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-file>
+```
+
+`launch` drives Paseo today: it inspects the coordinator through `$PASEO_AGENT_ID`,
+reuses that provider, model and reasoning setting, places the child in the application
+root, delivers the prompt file, waits until the agent settles, and writes a launch
+record. A role reasons like the coordinator unless `--thinking` names another setting. Building a role's prompt requires a settled record for the role before it, and
+`handback check` requires one for every required role, still hashing to its prompt and
+still known to the harness. A coordinator that quietly does a role itself therefore
+cannot reach handback. Other harnesses need their own launch module.
 
 The npm package also exposes `sync-engine-skill` as a convenience command, but the
 workflow uses the bundled source path so copied skills and new applications bootstrap
@@ -108,8 +137,10 @@ Templates support only static `include`, required `input`, and optional `input?`
 Markdown directives. The compiler normalizes line endings and final newlines, orders
 input files deterministically, enforces role budgets, binds downstream work to the
 reviewed design digest, and reports sources, byte count, and SHA-256 outside prompt
-bytes. It does not choose product decisions, workflow stages, approval, criticism,
-repair, or acceptance.
+bytes. Every command ends with `Next:` lines carrying the exact syntax of the commands
+it leads to and the stage reference to read, with the design digest already interpolated.
+It does not choose product decisions, workflow stages, approval, criticism, repair, or
+acceptance; a `Next:` line is syntax, not permission.
 
 Use file-based delivery in the agent harness. Generated Markdown must not be embedded
 in a shell argument.

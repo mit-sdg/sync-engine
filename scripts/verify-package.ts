@@ -1,6 +1,16 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -850,7 +860,7 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
     "node_modules/.bin",
     process.platform === "win32" ? "sync-engine-skill.cmd" : "sync-engine-skill",
   );
-  const brief = resolve(consumer, "design/brief.md");
+  const brief = resolve(consumer, "product/brief.md");
   await mkdir(dirname(brief), { recursive: true });
   await writeFile(
     brief,
@@ -858,13 +868,13 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   );
   run(bin, ["release", "check", consumer], consumer);
   run(bin, ["brief", "check", brief], consumer);
-  const prompt = resolve(consumer, "designer.prompt.md");
-  run(
-    bin,
-    ["prompt", "build", "--role", "designer", "--input", `brief=${brief}`, "--output", prompt],
-    consumer,
-  );
-  const promptSource = await readFile(prompt, "utf8");
+  run(bin, ["prompt", "build", "--role", "designer", "--input", `brief=${brief}`], consumer);
+  const workspace = resolve(consumer, ".sync-engine");
+  const written = (await readdir(workspace)).filter((name) => name.endsWith(".prompt.md"));
+  if (written.length !== 1) {
+    throw new Error(`skill prompt build wrote ${written.length} prompts into .sync-engine`);
+  }
+  const promptSource = await readFile(resolve(workspace, written[0]!), "utf8");
   if (
     !promptSource.includes("# Independent designer") ||
     !promptSource.includes("# Packed skill")
@@ -878,22 +888,19 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   await mkdir(standaloneApplication, { recursive: true });
   const standaloneCommand = resolve(standalone, "scripts/command.ts");
   run("bun", [standaloneCommand, "brief", "check", brief], standaloneApplication);
-  const standalonePrompt = resolve(standaloneApplication, "designer.prompt.md");
   run(
     "bun",
-    [
-      standaloneCommand,
-      "prompt",
-      "build",
-      "--role",
-      "designer",
-      "--input",
-      `brief=${brief}`,
-      "--output",
-      standalonePrompt,
-    ],
+    [standaloneCommand, "prompt", "build", "--role", "designer", "--input", `brief=${brief}`],
     standaloneApplication,
   );
+  const standaloneWorkspace = resolve(standaloneApplication, ".sync-engine");
+  const standaloneWritten = (await readdir(standaloneWorkspace)).filter((name) =>
+    name.endsWith(".prompt.md"),
+  );
+  if (standaloneWritten.length !== 1) {
+    throw new Error("standalone copied skill compiler did not write one designer prompt");
+  }
+  const standalonePrompt = resolve(standaloneWorkspace, standaloneWritten[0]!);
   if (!(await readFile(standalonePrompt, "utf8")).includes("# Packed skill")) {
     throw new Error("standalone copied skill compiler did not produce the designer prompt");
   }

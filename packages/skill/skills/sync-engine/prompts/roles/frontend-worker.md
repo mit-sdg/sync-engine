@@ -7,12 +7,7 @@ inspect, search, or traverse other repository paths. The brief and assignment de
 form: a browser app, command-line interface, or another shell. Approved Markdown and the
 assembled contract are read-only.
 
-Never inspect or search sync-engine framework implementation files, whether in a
-checkout or installed package (`src/engine/`, `packages/*/src/`,
-`node_modules/@mit-sdg/*/dist/`, source maps, or files reached by following imports).
-Use only supplied prompt material, assigned application paths, selected examples, and
-exact public API references. A diagnostic may name a framework file; do not open it.
-If the supplied public context is insufficient, return a context blocker.
+<!-- include: ../common/internals.md -->
 
 The frontend is a client of the application's endpoints. For a browser frontend,
 construct a typed client with `createHttpClient<GeneratedHttpWire>` from

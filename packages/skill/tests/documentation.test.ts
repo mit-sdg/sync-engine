@@ -25,6 +25,12 @@ function bytes(value: string): number {
   return Buffer.byteLength(value, "utf8");
 }
 
+type Stage = "workflow" | "design-and-criticism" | "implementation";
+
+async function stage(name: Stage): Promise<string> {
+  return text(new URL(`references/${name}.md`, skillRoot));
+}
+
 function staticPrompt(roleSource: string, includes: Readonly<Record<string, string>>): string {
   return Object.entries(includes).reduce(
     (rendered, [path, source]) => rendered.replace(`<!-- include: ${path} -->`, source.trimEnd()),
@@ -37,10 +43,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const internals = await text(new URL("common/internals.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
+    expect(bytes(internals)).toBeLessThanOrEqual(0.625 * 1024);
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
-    expect(bytes(format)).toBeLessThanOrEqual(3.25 * 1024);
+    // Raised for the RequestBoundary clarification: the old "except `RequestBoundary`"
+    // read as an exemption from the once rule, and a trial designer duly declared five.
+    expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
@@ -65,14 +75,17 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(designer).toContain("bunx --no-install sync-engine check-design design/concepts/*.md");
     expect(designer).toContain("coordinator will rerun the same gate independently");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
-    expect(critic).toContain(
-      "verify each query's body agrees with its `one`, `optional`, or\n   `many` cardinality and its row marks optional State values optional",
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "compensation, repair, and a declared branch for an absent input identity; verify each query's body agrees with its `one`, `optional`, or `many` cardinality and its row marks optional State values optional",
     );
     expect(critic).toContain("Reject bare typed-link text");
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
-      expect(await text(new URL(`roles/${role}`, promptRoot))).not.toContain("<!-- include:");
+      const worker = await text(new URL(`roles/${role}`, promptRoot));
+      expect(worker.match(/<!-- include: [^>]+ -->/g)).toEqual([
+        "<!-- include: ../common/internals.md -->",
+      ]);
     }
   });
 
@@ -86,10 +99,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     const compact = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const internals = await text(new URL("common/internals.md", promptRoot));
     const includes = {
       "../common/design.md": compact,
       "../common/ssf.md": ssf,
       "../common/concept-format.md": format,
+      "../common/internals.md": internals,
     };
     const designer = staticPrompt(await text(new URL("roles/designer.md", promptRoot)), includes);
     const critic = staticPrompt(await text(new URL("roles/critic.md", promptRoot)), includes);
@@ -98,17 +113,43 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(critic)).toBeLessThanOrEqual(bytes(oldDesign + grammar + review) * 0.4);
   });
 
+  test("keeps the entry context small and defers later stages", async () => {
+    const entry = await text(new URL("SKILL.md", skillRoot));
+    const workflow = await stage("workflow");
+    const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
+    const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
+
+    const baseline = [entry, workflow, contract, paseo].reduce(
+      (total, document) => total + bytes(document),
+      0,
+    );
+    expect(baseline).toBeLessThanOrEqual(13 * 1024);
+    for (const name of ["design-and-criticism", "implementation"] as const) {
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(6 * 1024);
+    }
+
+    expect(workflow).not.toContain("## Design and criticism");
+    expect(workflow).not.toContain("## Implement in bounded phases");
+    expect(workflow).not.toContain("## Validate once and stop");
+    expect(entry).toContain("[design and criticism](references/design-and-criticism.md)");
+    expect(entry).toContain("[implementation](references/implementation.md)");
+    expect(entry).toContain("on reaching those stages, not before");
+  });
+
   test("keeps optimized static role guidance bounded", async () => {
     const design = await text(new URL("common/design.md", promptRoot));
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
+    const internals = await text(new URL("common/internals.md", promptRoot));
     const limits: Record<string, number> = {
       designer: 13 * 1024,
       critic: 10.5 * 1024,
       "concept-worker": 2.25 * 1024,
-      "application-worker": 2.75 * 1024,
+      // Raised for the no-reverse-engineering rule: a trial worker with no composition
+      // reference probed framework brands at runtime for ~200 tool calls instead.
+      "application-worker": 3 * 1024,
       "frontend-worker": 2.5 * 1024,
-      "evidence-worker": 2 * 1024,
+      "evidence-worker": 2.125 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
@@ -118,6 +159,7 @@ describe("compact sync-engine Agent Skill documents", () => {
             "../common/design.md": design,
             "../common/ssf.md": ssf,
             "../common/concept-format.md": format,
+            "../common/internals.md": internals,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -326,6 +368,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       designer: ["brief", "existing-design", "catalog"],
       critic: ["brief", "candidate", "catalog"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
+      // examples is required for the two roles that must write framework-shaped code
       "application-worker": [
         "assignment",
         "brief",
@@ -357,37 +400,38 @@ describe("compact sync-engine Agent Skill documents", () => {
       "evidence-worker",
     ]) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
-      expect(source).toContain(
-        "Never inspect or search sync-engine framework implementation files",
-      );
-      expect(source).toContain("node_modules/@mit-sdg/*/dist/");
-      expect(source).toContain("files reached by following imports");
-      expect(source).toContain("do not open it");
-      expect(source).toContain("return a context blocker");
+      expect(source).toContain("<!-- include: ../common/internals.md -->");
       expect(source.replace(/\s+/g, " ")).toContain(
         "Do not read, write, inspect, search, or traverse other repository paths",
       );
     }
 
     const entry = await text(new URL("SKILL.md", skillRoot));
-    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    const implementation = await stage("implementation");
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
-    expect(entry.replace(/\s+/g, " ")).toContain("never inspect framework implementation source");
-    expect(workflow).toContain("Never include framework checkout source");
-    expect(workflow).toContain("instead of searching internals");
-    expect(contract).toContain("framework source and installed package internals");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Nobody reverse-engineers the framework, the coordinator included. Inside the installed package read only `examples/` and `docs/user/`, never `dist/` or a checkout's source",
+    );
+    expect(implementation.replace(/\s+/g, " ")).toContain(
+      "Never include framework checkout source, installed package contents, build output, source maps, or paths reached by following framework imports",
+    );
+    expect(implementation.replace(/\s+/g, " ")).toContain(
+      "A worker with no example for a mechanism returns a context blocker rather than discovering it",
+    );
     expect(contract).toContain("role prompts must require agents");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Write every generated prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never place generated Markdown in a shell argument",
+    );
   });
 
   test("keeps filesystem confinement best effort for downstream roles", async () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
-    const workflow = await text(new URL("references/workflow.md", skillRoot));
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
     const normalizedContract = contract.replace(/\s+/g, " ");
 
     expect(normalizedContract).toContain(
-      "give implementation and evidence roles narrow assigned application paths that exclude framework source and installed package internals and, when available, enforce read and write denial outside them",
+      "give implementation and evidence roles narrow assigned application paths and, when available, enforce read and write denial outside them",
     );
     expect(normalizedContract).toContain(
       "Filesystem confinement is best effort and is not a launch prerequisite",
@@ -396,7 +440,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(paseo.replace(/\s+/g, " ")).toContain(
       "Use provider or harness read and write denial outside assigned application paths when available",
     );
-    expect(workflow.replace(/\s+/g, " ")).toContain(
+    expect((await stage("design-and-criticism")).replace(/\s+/g, " ")).toContain(
       "prompt limits designer writes to its listed `design/` paths",
     );
     expect(entry.replace(/\s+/g, " ")).toContain(
@@ -444,14 +488,18 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(workflow).toContain(
       "autonomous delivery, agent-led work with approvals, or user-led collaboration",
     );
+    expect(workflow).toContain(
+      "the other two modes are interactive and require approval before implementation",
+    );
     expect(template).not.toContain("Decision:**");
   });
 
   test("bounds ordinary criticism and lets preauthorized work resolve blockers", async () => {
-    const workflow = await text(new URL("references/workflow.md", skillRoot));
-    const normalized = workflow.replace(/\s+/g, " ");
+    const criticism = await stage("design-and-criticism");
+    const handback = await stage("implementation");
+    const normalized = criticism.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "Launch a fresh read-only normal-reasoning critic. Two passes are the normal automatic budget",
+      "Launch a fresh read-only critic the same way. Two passes are the normal automatic budget",
     );
     expect(normalized).toContain("No material findings ends criticism immediately");
     expect(normalized).toContain(
@@ -470,23 +518,26 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain(
       "every concept/composition file as repeated `--input candidate=<path>`",
     );
-    expect(workflow).toContain("Once required checks pass, hand back immediately");
-    expect(normalized).toContain(
+    expect(handback).toContain("Once required checks pass, hand back immediately");
+    expect(handback.replace(/\s+/g, " ")).toContain(
       "Record formatting, naming polish, unchanged explanation, and informational checker advisories; do not reopen repair or criticism",
     );
   });
 
   test("uses one implementation worker per phase and independent evidence", async () => {
-    const workflow = await text(new URL("references/workflow.md", skillRoot));
+    const workflow = await stage("implementation");
     const normalized = workflow.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "Put brief storage guarantees in implementation assignments, not concept State",
+      "Carry the brief's durability decision into every concept assignment as a storage guarantee, never as a claim about concept State",
     );
-    expect(workflow).toContain("one normal-reasoning concept worker");
-    expect(workflow).toContain("one normal-reasoning application worker");
+    expect(normalized).toContain(
+      "Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand",
+    );
+    expect(workflow).toContain("Start one concept worker");
+    expect(workflow).toContain("start one application worker");
     expect(workflow).toContain("start one frontend worker");
     expect(workflow).toContain("as a client of the assembled");
-    expect(workflow).toContain("one fresh normal-reasoning evidence worker");
+    expect(workflow).toContain("one fresh evidence worker");
 
     const frontend = await text(new URL("roles/frontend-worker.md", promptRoot));
     expect(frontend).toContain("client of the application's endpoints");
@@ -497,16 +548,24 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Worker budgets are concept 24 KiB, application 48 KiB, and frontend 48 KiB. Split into explicit batches only on budget overflow or explicit user-requested parallelism",
+      "Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB, frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget overflow or explicit user-requested parallelism",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "Return an ordinary implementation defect to the original worker, not a replacement",
     );
-    expect(workflow).toContain("design digest design");
+    expect(await stage("design-and-criticism")).toContain("design digest design");
     expect(workflow).toContain("follow-up check <file>");
+    expect(workflow).toContain("bunx --no-install sync-engine verify --format json");
     expect(normalized).toContain(
-      "On final-command failure, return its focused diagnostic to the original worker, rerun the affected focused command, then every final check invalidated by the changed paths regardless of chain position",
+      "`verify` reports `check-design`, `check`, and `artifacts check` independently",
     );
+    expect(normalized).toContain(
+      "On failure, return that focused diagnostic to the original worker, rerun the affected focused command, then every check invalidated by the changed paths regardless of chain position",
+    );
+    expect(normalized).toContain(
+      "It refuses one role's paths going to another, a concept worker with application-wide commands or no focused type check, and a missing storage guarantee",
+    );
+    expect(workflow).toContain("assignment new --role <role>");
 
     const evidence = await text(new URL("roles/evidence-worker.md", promptRoot));
     expect(evidence).toMatch(/existing\s+evidence is sufficient/);
@@ -543,10 +602,13 @@ describe("compact sync-engine Agent Skill documents", () => {
       },
     });
     expect(await filesBelow(new URL("scripts/", skillRoot))).toEqual([
+      "assignment.ts",
       "brief.ts",
       "command.ts",
       "design.ts",
+      "launch.ts",
       "prompt.ts",
+      "workspace.ts",
     ]);
 
     const catalog = JSON.parse(await text(new URL("../catalog/package.json", packageRoot))) as {
@@ -558,20 +620,40 @@ describe("compact sync-engine Agent Skill documents", () => {
 
   test("keeps harness guidance minimal and file-based", async () => {
     const entry = await text(new URL("SKILL.md", skillRoot));
-    const workflow = await text(new URL("references/workflow.md", skillRoot));
-    const normalizedWorkflow = workflow.replace(/\s+/g, " ");
+    const workflow = await stage("workflow");
+    const criticism = await stage("design-and-criticism");
+    const implementation = await stage("implementation");
+    const normalizedCriticism = criticism.replace(/\s+/g, " ");
     const contract = await text(new URL("references/harnesses/contract.md", skillRoot));
     const paseo = await text(new URL("references/harnesses/paseo.md", skillRoot));
+    expect(entry).toContain(
+      "Use for building an application on the framework, never for changing the framework itself.",
+    );
     expect(entry).toContain("Paseo guide");
     expect(entry).toContain("self-contained compiler");
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "writes only the brief and temporary assignments/context, never role-owned design, production source, or tests",
+      "writes only the brief and assignments, never role-owned design, production source, or tests",
+    );
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Every role inherits the coordinator's exact provider, model, and reasoning setting unless the user names another",
     );
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
     expect(entry).toContain("do not\n   read or recreate the packaged template directly");
-    expect(entry).toContain("coordinator's exact provider and model");
+    expect(entry).toContain("coordinator's exact provider, model, and reasoning setting");
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "a reported `Next:` line is syntax, not permission",
+    );
+    expect(entry.replace(/\s+/g, " ")).toContain(
+      "Launch every one with the compiler's `launch`; a role with no launch record did not run, and if a required role cannot launch, stop",
+    );
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
-    expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init design/brief.md');
+    expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init product/brief.md');
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "The brief is product authority the coordinator keeps editing, so it lives outside the design root; `design digest` refuses a brief inside it",
+    );
+    expect(workflow.replace(/\s+/g, " ")).toContain(
+      "Durability is product-visible: record whether stored facts survive restart, as a decision, never by calling concept State a storage tier. Ask when the request does not say, unless the application is plainly a demo, where in-memory storage is a `User` decision",
+    );
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "coordinator writes only the brief, temporary assignment/context files, and setup's documented concept-free scaffold",
     );
@@ -587,16 +669,19 @@ describe("compact sync-engine Agent Skill documents", () => {
       "If release installation or setup is incomplete, the command leaves no brief and prints bootstrap steps",
     );
     expect(workflow).toContain("Run it alone—do not chain a premature check");
-    expect(workflow).toContain("Default to no catalog context");
-    expect(normalizedWorkflow).toContain(
-      "Deliver it through the harness; do not rebuild or resend the full designer prompt",
+    expect(criticism).toContain("Default to no catalog context");
+    expect(normalizedCriticism).toContain(
+      "carrying only check output, affected paths and repair request; never rebuild or resend the full prompt",
     );
-    expect(normalizedWorkflow).toContain(
-      "The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate draft concept files and rerun the installed design form check from application root",
+    expect(normalizedCriticism).toContain(
+      "The designer runs its permitted syntax command and repairs syntax before returning. Independently enumerate draft concept files and rerun the form check from application root",
     );
-    expect(workflow).toContain("never aggregate candidate files into an intermediate file");
-    expect(workflow).toContain("--input candidate=design/types.md");
-    expect(workflow).toContain("Every concept, application, frontend, and evidence prompt build");
+    expect(criticism).toContain("never aggregate candidate files into an intermediate file");
+    expect(normalizedCriticism).toContain(
+      "Never split criticism; one critic sees every candidate, so on overflow raise `--max-bytes`",
+    );
+    expect(criticism).toContain("--input candidate=design/types.md");
+    expect(criticism).toContain("Every concept, application, frontend, and evidence prompt build");
     for (const slot of [
       "specifications",
       "concept-surfaces",
@@ -605,24 +690,35 @@ describe("compact sync-engine Agent Skill documents", () => {
       "contracts",
       "existing-tests",
     ]) {
-      expect(workflow).toContain(slot);
+      expect(implementation).toContain(slot);
     }
-    expect(workflow).not.toContain("bunx --no-install sync-engine-skill");
-    expect(contract).toContain("normal reasoning setting");
+    for (const reference of [workflow, criticism, implementation]) {
+      expect(reference).not.toContain("bunx --no-install sync-engine-skill");
+    }
+    expect(contract.replace(/\s+/g, " ")).toContain(
+      "The compiler launches roles through Paseo, the only harness it drives today; running under another harness needs a launch module beside it",
+    );
+    expect(contract.replace(/\s+/g, " ")).toContain(
+      "expose the coordinator's exact provider, model, and reasoning setting, and attest those values on every role launch",
+    );
     expect(contract).toContain("deliver initial and follow-up prompts from files");
-    expect(paseo).toContain("Pi `openai-codex/...` models still use `pi`, not `codex`");
-    expect(paseo).toContain("use those values without\nprovider discovery");
-    expect(paseo).toContain("Otherwise use provider\nmodel discovery once");
-    expect(paseo).toContain("omit `--mode` for Pi when `AvailableModes` is empty");
-    expect(paseo).toContain("displayed `Mode` is not a valid child option");
-    expect(paseo).toContain("Launch every role without probing command help");
-    expect(paseo).toContain('paseo workspace create --isolation local --path "$application_root"');
-    expect(paseo).toContain("An agent-scoped `--cwd` alone does not override the caller workspace");
-    expect(paseo).toContain("do not ask the user to restart");
-    expect(paseo).toContain("Wait for a file-delivered assignment");
-    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$prompt_file" --no-wait');
-    expect(paseo).toContain('paseo inspect "$PASEO_AGENT_ID" --json');
-    expect(paseo).toContain("Never put generated\nprompt contents");
+    const normalizedPaseo = paseo.replace(/\s+/g, " ");
+    expect(paseo).toContain("launch --role <role> --prompt <prompt-file>");
+    expect(normalizedPaseo).toContain(
+      "Delegation is the default and every role is launched. Only an explicit repository instruction forbidding subagents overrides it, and then stop and report; never take a role yourself because launching looked unavailable",
+    );
+    expect(normalizedPaseo).toContain(
+      "Never hand-roll `paseo run`: a role with no launch record did not run",
+    );
+    expect(normalizedPaseo).toContain("reuses that exact provider, model and reasoning setting");
+    expect(normalizedPaseo).toContain("Pass `--thinking` only when the user names a setting");
+    expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$follow_up_file" --no-wait');
+    expect(normalizedPaseo).toContain(
+      "do not enter an inspect, log, permission, or wait polling loop",
+    );
+    expect(paseo.replace(/\s+/g, " ")).toContain(
+      "The contract's path discipline still binds every assignment",
+    );
   });
 
   test("keeps source inventory coverage explicit", async () => {
