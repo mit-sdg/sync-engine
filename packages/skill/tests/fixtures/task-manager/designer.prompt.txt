@@ -102,6 +102,10 @@ about it. A circle page shows the circle, its members and that discussion
 [may respond](view:Circle.Reading.MemberMayRespond).
 ```
 
+An application document is not an API specification. It carries no endpoint sections and
+no input, return or refusal listings: the concept specification owns those, and a second
+copy drifts from the one the checker reads.
+
 `check-design` proves grammar and authored form only. Config checking proves shapes,
 bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
 persistence, transactions, authorization, repair, or behavior; review and test.
