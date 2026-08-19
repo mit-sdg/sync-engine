@@ -27,7 +27,9 @@ decision:
 5. Composition: reaction pressure, cross-concept failure rules, authorization
    enforcement points, visible results.
 6. Application documents: reject external aliases, inferred storage isolation, and concept
-   actions presented as application declarations. `check-design` already accepted instance,
+   actions presented as application declarations. Prose promising a consequence, a derived
+   value, or a shared decision needs the matching `reaction:`, `former:`, `view:` or
+   `computation:` link; unlinked prose is not implementable. `check-design` already accepted instance,
    binding, and typed-link form; never restate a form it passed.
 
 Application documents declare their linked endpoint trees, views, formers, and

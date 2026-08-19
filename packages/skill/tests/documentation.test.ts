@@ -171,7 +171,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const boundaryNote = await text(new URL("inputs/boundary.md", promptRoot));
     const limits: Record<string, number> = {
       designer: 14 * 1024,
-      critic: 10.75 * 1024,
+      critic: 11 * 1024,
       "concept-worker": 2.5 * 1024,
       "application-worker": 3.625 * 1024,
       "frontend-worker": 2.625 * 1024,
