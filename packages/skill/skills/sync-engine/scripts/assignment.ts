@@ -51,8 +51,17 @@ export interface CheckedAssignment {
   readonly writePaths: readonly string[];
 }
 
+/** Only the write-path section grants ownership; read paths use the same bullet form. */
+function writePathSection(source: string): string {
+  const start = source.search(/^##\s+Allowed write paths\s*$/m);
+  if (start === -1) return "";
+  const rest = source.slice(start);
+  const end = rest.slice(1).search(/^##\s+/m);
+  return end === -1 ? rest : rest.slice(0, end + 1);
+}
+
 function writePaths(source: string): string[] {
-  return [...source.matchAll(/^\s*[-*]\s+`([^`]+)`/gm)]
+  return [...writePathSection(source).matchAll(/^\s*[-*]\s+`([^`]+)`/gm)]
     .map((match) => match[1]!)
     .filter((path) => !path.includes(" "));
 }

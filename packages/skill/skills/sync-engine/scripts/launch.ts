@@ -1,18 +1,38 @@
 import { execFileSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import {
   canonical,
   type LaunchRecord,
+  finishedStatuses,
   requireInsideWorkspace,
+  resumableStatus,
   readPromptContext,
+  readAudit,
   reserveWorkspacePath,
+  responseContract,
   settledStatus,
   writeLaunchRecord,
 } from "./workspace.ts";
 
 /** The single harness this skill drives today; other harnesses get their own module. */
 export const harness = "paseo";
+
+/** This skill's own directory: no role reads it, the compiler delivers what each needs. */
+const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** How many times a role that ended in error is asked to continue before the launch fails. */
+const maxResumes = 2;
+
+/** Grace before treating a reported error as the role's own, rather than a passing fault. */
+const gracePauseMilliseconds = 30_000;
+
+const resumeRequest =
+  "Your last turn ended in a harness or provider error, not a workflow decision. Your " +
+  "assignment is unchanged: continue it from where it stopped, do not restart it, and do " +
+  "not ask for confirmation.";
 
 const standby =
   "Wait for a file-delivered assignment. Do not inspect files, modify files, or begin work.";
@@ -117,17 +137,17 @@ function pause(milliseconds: number): Promise<void> {
 /**
  * `paseo wait` returns on any transition to not-running, including an agent that merely
  * stopped to ask permission, so one wait is not proof the role finished. Wait again until
- * the agent is genuinely settled or the caller's deadline passes.
+ * the agent reaches a status it never leaves or the caller's deadline passes.
  */
 async function waitUntilSettled(agentId: string, timeoutSeconds: number): Promise<InspectedAgent> {
   const deadline = Date.now() + timeoutSeconds * 1000;
   let agent = inspectAgent(agentId);
-  while (agent.Status !== settledStatus) {
+  while (!finishedStatuses.includes(agent.Status)) {
     const remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) return agent;
     paseo(["wait", agentId, "--timeout", String(remaining)], remaining + 30);
     agent = inspectAgent(agentId);
-    if (agent.Status === settledStatus) break;
+    if (finishedStatuses.includes(agent.Status)) break;
     await pause(2000);
   }
   return agent;
@@ -145,6 +165,34 @@ export interface LaunchOptions {
 export interface LaunchResult {
   readonly recordPath: string;
   readonly record: LaunchRecord;
+}
+
+/** The role's last message, read from the harness: nothing is asked of the agent. */
+/**
+ * Paths the role opened, as the harness reports them; the agent is not asked. A harness
+ * that names its tools without their arguments cannot be audited, and reporting that as no
+ * violation would attest what was never seen.
+ */
+function readPaths(agentId: string): { readonly observed: boolean; readonly paths: string[] } {
+  let output: string;
+  try {
+    output = paseo(["logs", agentId, "--filter", "tools"]);
+  } catch {
+    return { observed: false, paths: [] };
+  }
+  const paths = [...output.matchAll(/^\[(?:Read|Write|Edit)\]\s+(\S+)/gm)]
+    .map((match) => match[1]!)
+    .filter((candidate) => candidate.includes("/"));
+  if (paths.length > 0) return { observed: true, paths };
+  return { observed: !/^\[(?:Read|Write|Edit)\]/m.test(output), paths: [] };
+}
+
+function finalResponse(agentId: string): string {
+  try {
+    return paseo(["logs", agentId, "--filter", "text", "--tail", "1"]);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -228,7 +276,32 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   }
 
   paseo(["send", started.agentId, "--prompt-file", promptPath, "--no-wait"]);
-  const settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
+  const deadline = Date.now() + options.timeoutSeconds * 1000;
+  let settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
+  let resumes = 0;
+  while (settled.Status === resumableStatus && resumes < maxResumes) {
+    if (Date.now() >= deadline) break;
+    // A reported error can clear itself; look again before speaking to the role.
+    await pause(gracePauseMilliseconds);
+    settled = inspectAgent(started.agentId);
+    if (settled.Status !== resumableStatus) continue;
+    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    if (remaining <= 0) break;
+    resumes += 1;
+    paseo(["send", started.agentId, resumeRequest, "--no-wait"]);
+    settled = await waitUntilSettled(started.agentId, remaining);
+  }
+
+  const response = finalResponse(started.agentId);
+  const responsePath = await reserveWorkspacePath(
+    "response",
+    options.role,
+    options.applicationRoot,
+  );
+  await writeFile(responsePath, response, "utf8");
+  const violation = responseContract(options.role, response);
+  const opened = readPaths(started.agentId);
+  const readViolations = readAudit(options.role, opened.paths, skillRoot);
 
   const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
@@ -247,9 +320,28 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     startedAt,
     settledAt: new Date().toISOString(),
     status: settled.Status,
+    ...(resumes === 0 ? {} : { resumes }),
+    response: {
+      path: responsePath,
+      sha256: createHash("sha256").update(response).digest("hex"),
+      bytes: Buffer.byteLength(response, "utf8"),
+      contract: violation === undefined ? "met" : "violated",
+    },
+    ...(readViolations.length === 0 ? {} : { readViolations }),
+    ...(opened.observed ? {} : { readAudit: "unavailable" as const }),
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);
   await writeLaunchRecord(recordPath, record);
+  if (settled.Status !== settledStatus) {
+    throw new LaunchError(
+      `Launched ${options.role} ended ${settled.Status}, not ${settledStatus}, after ${resumes} resume attempts; the record does not count this role as run`,
+    );
+  }
+  if (violation !== undefined) {
+    throw new LaunchError(
+      `Launched ${options.role} did not return what its prompt requires: ${violation}. Its reply is at ${responsePath}; the record does not count this role as run.`,
+    );
+  }
   return { recordPath, record };
 }
 

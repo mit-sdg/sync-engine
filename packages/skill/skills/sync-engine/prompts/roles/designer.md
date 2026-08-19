@@ -30,7 +30,7 @@ internals. The coordinator will rerun the same gate independently.
 
 Create or revise only:
 
-- `design/concepts/*.md` for reusable concept definitions;
+- `design/concepts/<Concept>.md` for reusable concept definitions;
 - `design/compositions/*.md` for application decisions and exact intended
   `reaction:`, `view:`, `former:`, and `computation:` links; and
 - `design/types.md` for application `concrete` declarations, the complete

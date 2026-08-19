@@ -1,158 +1,173 @@
 # @mit-sdg/sync-engine-skill
 
-`@mit-sdg/sync-engine-skill` gives coding agents a compact, independently reviewed
-workflow for designing and building sync-engine applications. It keeps authored
-Markdown as design authority, separates concept and application implementation, and
-requires independent objective evidence.
+`@mit-sdg/sync-engine-skill` is an Agent Skill for building applications on the sync-engine framework. A coding agent loads the skill and becomes the run coordinator. The coordinator writes only the product brief and a short assignment for each role. It launches a separate agent to do every other task.
 
-Roles are launched through [Paseo](https://paseo.dev), which is the only harness the
-compiler drives today. Support for other harnesses is planned: each needs its own launch
-module, and `references/harnesses/contract.md` states what one must provide. Everything
-else — the prompt compiler, the brief and assignment checks, the design digest — is
-harness-independent.
+This split provides independence. The designer has not seen an implementation. The critic did not write the design. The evidence worker did not build the application it tests. Package checks reject a run that skips this structure.
 
-Install an exact published release into Pi, replacing `VERSION` with the desired beta:
+## Install
 
 ```sh
 pi install npm:@mit-sdg/sync-engine-skill@VERSION
 ```
 
-For development from a checkout:
+From a checkout, point the harness skill loader at the package's `skills/sync-engine/` directory. Install one copy. Two copies under the same skill name are ambiguous.
 
-```sh
-pi install /absolute/path/to/sync-engine/packages/skill
-```
+An application never depends on this package. The skill reads its own `release.json` and installs the matching `@mit-sdg/sync-engine`, `@mit-sdg/sync-engine-analysis`, and `@mit-sdg/sync-engine-catalog` releases into the application. It refuses to continue when the installed versions disagree with its release.
 
-Pi discovers `skills/sync-engine/` in the package. Other Agent Skills loaders can point
-directly to that directory. Do not also copy the same skill into a second discovery
-location because duplicate names are ambiguous.
+## Run
 
-The skill is self-contained: its prompt compiler and brief validator are TypeScript
-under `skills/sync-engine/scripts/` and require only Bun and platform APIs. A new
-application does not install the skill package. The workflow instead reads
-`release.json`, installs the exact matching core, catalog, and analysis releases into
-the application, and rejects a mixed installed release set.
+Open an agent in an empty directory and ask for an application in plain language. The agent coordinates the workflow, writes output as each stage finishes, and stops at handback.
 
-## Workflow
-
-A normal run maintains a short `design/brief.md`, then performs:
+Work appears in this layout:
 
 ```text
-independent design → syntax → normal two-pass criticism
-→ approval or autonomous preauthorized resolution → concept implementation
-→ application implementation → independent evidence → required validation → handback
+product/brief.md   Product brief maintained by the coordinator
+design/            Authored concept specifications, compositions, and types
+src/               Concept and application implementation
+tests/             Application tests and evidence checks
+.sync-engine/      Generated workflow files and launch records
 ```
 
-Criticism stops after the first clean pass. A second pass happens only after a material
-repair. Interactive work needs an explicit “review more thoroughly” request for another
-pass. Preauthorized work instead repairs a remaining safe/coherent-implementation
-blocker autonomously while each pass makes progress, or records a nonblocking finding
-as an open decision for handback. It never defers authority, non-bypassable
-authorization, ownership, or brief-required behavior. Passing required checks hands
-back immediately; optional polish and informational findings do not create another
-cycle.
+## Stages
 
-The default uses one concept worker and one application worker rather than repeating
-role instructions for every concept and composition. A phase splits only for a prompt
-budget or explicit user-requested parallelism. Implementation and evidence workers are
-restricted to assigned application paths and supplied public references; they never
-inspect framework source or installed package internals.
+A run follows this order:
 
-Start with [`skills/sync-engine/SKILL.md`](skills/sync-engine/SKILL.md). The coordinator
-workflow and harness guides are linked there. Designer and critic prompts share one
-small semantic design document; role templates declare their exact file inputs.
+1. Brief.
+2. Design.
+3. Design syntax check.
+4. Criticism.
+5. Approval.
+6. Concept implementation.
+7. Application implementation.
+8. Frontend implementation, when the brief requests a frontend.
+9. Evidence.
+10. Required validation.
+11. Handback.
 
-## Deterministic prompt commands
+The coordinator maintains `product/brief.md`. It records what the product does and the decisions behind it. Each decision is marked as the user's choice or the coordinator's assumption. The file stays outside `design/` because the coordinator continues to edit it.
 
-Resolve `<skill-root>` as the directory containing the loaded `SKILL.md`. For an empty
-directory, read `release.json` and first write a minimal private module package whose
-`packageManager` uses its exact Bun version. Do not run a Vite+ migration or choose
-another package manager. After installing application dependencies and before setup,
-verify their exact release and executable targets:
+The designer authors everything under `design/`, including concept specifications, compositions, and the types document. Every downstream role treats that directory as read-only.
 
-```sh
-bun "<skill-root>/scripts/command.ts" release check .
-bunx --no-install sync-engine setup
+Criticism repeats until a pass reports nothing material. A repair goes back to the agent that produced the work through a short follow-up file, never through a new copy of the full prompt.
+
+By default, one concept worker implements all concepts and one application worker wires them together. Either role splits only when its prompt exceeds the byte budget or the user asks for parallel work.
+
+## Roles
+
+Five roles are required. A sixth is conditional:
+
+- `designer`
+- `critic`
+- `concept-worker`
+- `application-worker`
+- `evidence-worker`
+- `frontend-worker`, only when the brief requests a frontend
+
+## Enforcement
+
+### Generated files
+
+The compiler writes prompts, assignments, follow-ups, launch records, and captured replies under `.sync-engine/` in the application root. It chooses each filename using a UTC timestamp and the role. The coordinator never names a generated file.
+
+### Launch records
+
+Every role starts through the skill's `launch` command, not through the harness CLI. The command reads the coordinator's provider, model, and reasoning setting and gives the child the same settings. It places the child in the application root, delivers the prompt as a file, and waits for the child to settle.
+
+After settlement, `launch` writes a record with the agent ID, parent ID, prompt hash and size, brief hash, design digest, start time, and settle time.
+
+Building a role prompt requires a settled record for the preceding role. Handback requires a record for every required role. Each record must still hash to its prompt and refer to an agent known to the harness. Work done directly by the coordinator has no record and cannot pass handback.
+
+### Reply and path audits
+
+After a role settles, two checks read from the harness instead of trusting the role's account of its work.
+
+The reply check compares the final message with the role's return contract. A critic returns either the required clean sentence or its findings, optionally inside a code fence, and nothing else. A worker reports changed paths and check outcomes. A response that does not match means the role does not count.
+
+The path check records every path the role opened, and handback reports any that fall
+outside where that role may read. It does not fail the launch: the role has already
+finished, and only whoever maintains the prompts can act on it. A designer or critic works from its prompt alone. An implementation worker may also read the installed engine's `examples/` and `docs/user/`, but no other location inside the installed package. No role may read the skill's own sources.
+
+If harness tool records omit file paths, the launch record marks the audit unavailable rather than marking the role clean.
+
+### Design and assignment checks
+
+`design digest` hashes the authored design. Downstream prompts carry that digest, and a role launched against another digest does not count. Reopening the design after implementation requires relaunching the roles below it.
+
+`assignment check` reads the assignment's write-path section. It rejects assignments that give a role another role's files. It also rejects a concept assignment with application-wide commands, no focused type check, or no storage guarantee for the data held by the concepts.
+
+### Transient failures
+
+When a role ends in an error, `launch` inspects it again after a pause because the first error may be a dropped connection. If the error remains, the role is asked to continue, at most twice. A further error fails the launch.
+
+## Commands
+
+Run every command as `bun "<skill-root>/scripts/command.ts" <command>`, where `<skill-root>` is the directory that contains the loaded `SKILL.md`.
+
+```text
+release check [<application-directory>]
+brief init <brief.md>
+brief check <brief.md>
+design digest <design-directory>
+prompt build --role <role> --input <slot>=<path>...
+assignment new --role <role> --design-digest <sha256>
+assignment check <file>
+follow-up new --role <role>
+follow-up check <file> --design-root <directory> --design-digest <sha256>
+launch --role <role> --prompt <path> [--timeout <seconds>]
+handback check --design-root <directory> --design-digest <sha256>
 ```
 
-Setup supplies the supported TypeScript, Bun and Node declarations, standard scripts,
-and concept-free configuration; do not probe or downgrade toolchain versions. Only after
-setup succeeds, initialize and validate the compact product brief:
+Valid roles are `designer`, `critic`, `concept-worker`, `application-worker`, `frontend-worker`, and `evidence-worker`.
 
-```sh
-bun "<skill-root>/scripts/command.ts" brief init product/brief.md
-# Fill the template.
-bun "<skill-root>/scripts/command.ts" brief check product/brief.md
-```
+Every command ends with `Next:` lines that give the exact syntax of possible following commands and name the relevant reference document. These lines describe syntax, not permission. The compiler does not decide product questions, approve a design, or decide when a stage is complete.
 
-The brief is product authority the coordinator keeps editing, so it lives outside the
-design root and `design digest` refuses a brief inside it: design identity covers only
-role-owned design, while the brief is tracked separately in each prompt's context record.
+## Choosing what each role sees
 
-`brief init` refuses to create a file before setup and prints the required bootstrap
-commands. After independent review and authorization close, capture the authored design
-identity:
+The coordinator decides what a role needs. The compiler puts it in the prompt.
 
-```sh
-bun "<skill-root>/scripts/command.ts" design digest design
-```
+Each role template declares named slots, and the coordinator fills them with
+`--input <slot>=<path>`, repeating a slot for several files:
 
-Build a role prompt:
+- `designer`: the brief, and optional catalog entries.
+- `critic`: the brief, every candidate design file, and optional catalog entries.
+- `concept-worker`: its assignment, the approved specifications, implementation examples,
+  and an optional reference.
+- `application-worker`: its assignment, the brief, the approved design, the public concept
+  surfaces rather than their internals, existing shared wiring, examples, and an optional
+  reference.
+- `frontend-worker`: its assignment, the brief, and the assembled public interface.
+- `evidence-worker`: its assignment, the brief, the contracts for its scenario, and the
+  assembled public interface.
 
-```sh
-bun "<skill-root>/scripts/command.ts" prompt build \
-  --role designer \
-  --input brief=design/brief.md
-```
+Three sources fill those slots. `sync-engine-catalog` lists and shows existing concepts,
+which a designer can reuse or reject and a critic can cite to argue for a better boundary.
+The installed engine ships implementation examples; an assignment names at most one per
+concept and one per mechanism. The skill carries two references of its own, for composition
+declarations and for HTTP, and they go to the workers that need them.
 
-The compiler names and writes the prompt under `.sync-engine/` in the application root
-and reports the path. Generated prompts, follow-ups, assignments, and launch records all
-live there; the compiler refuses to read a generated follow-up or assignment from
-anywhere else, so nothing generated lands in `design/`, whose Markdown carries the design
-identity. Nothing writes `.gitignore`: track the directory or ignore it as you prefer.
+`sync-engine-analysis` is for the coordinator alone. It helps decide what to select, and
+its output never reaches a designer or critic.
 
-Concept, application, and evidence prompt builds also require `--design-root design`
-and `--design-digest <sha256>`. Diagnostic follow-up files must pass `follow-up check`
-with the same design identity and the 4 KiB limit.
+The compiler resolves each path, keeps the inputs in a fixed order, rejects a slot the role
+does not declare, and rejects a required slot left empty. A role gets exactly the files
+named on the command line, and the prompt record lists all of them.
 
-Launch each role through the compiler rather than the harness CLI:
+## Prompt compiler
 
-```sh
-bun "<skill-root>/scripts/command.ts" launch --role designer --prompt <prompt-file>
-```
+Prompt templates use three directives: `include` adds shared text, `input` requires a file, and `input?` accepts an optional file.
 
-`launch` drives Paseo today: it inspects the coordinator through `$PASEO_AGENT_ID`,
-reuses that provider, model and reasoning setting, places the child in the application
-root, delivers the prompt file, waits until the agent settles, and writes a launch
-record. A role reasons like the coordinator unless `--thinking` names another setting. Building a role's prompt requires a settled record for the role before it, and
-`handback check` requires one for every required role, still hashing to its prompt and
-still known to the harness. A coordinator that quietly does a role itself therefore
-cannot reach handback. Other harnesses need their own launch module.
+The compiler applies a byte budget to each role: 32 KiB for the designer, 48 KiB for the critic, 24 KiB for a concept worker, 48 KiB for an application or frontend worker, and 32 KiB for the evidence worker.
 
-The npm package also exposes `sync-engine-skill` as a convenience command, but the
-workflow uses the bundled source path so copied skills and new applications bootstrap
-without a package-local binary.
+Inputs have the same order on every build. The compiler reports sources, byte count, and SHA-256 separately from the prompt.
 
-Templates support only static `include`, required `input`, and optional `input?`
-Markdown directives. The compiler normalizes line endings and final newlines, orders
-input files deterministically, enforces role budgets, binds downstream work to the
-reviewed design digest, and reports sources, byte count, and SHA-256 outside prompt
-bytes. Every command ends with `Next:` lines carrying the exact syntax of the commands
-it leads to and the stage reference to read, with the design digest already interpolated.
-It does not choose product decisions, workflow stages, approval, criticism, repair, or
-acceptance; a `Next:` line is syntax, not permission.
+Generated Markdown is delivered as a file. It is never placed in a shell argument.
 
-Use file-based delivery in the agent harness. Generated Markdown must not be embedded
-in a shell argument.
+## Harness support
 
-## Matching context tools
+The `launch` command currently drives [Paseo](https://paseo.dev). The compiler, checks, and design digest are harness independent. Another harness needs its own launch module, following `references/harnesses/contract.md`.
 
-Use the unambiguous installed catalog command without downloads:
+## Read next
 
-```sh
-bunx --no-install sync-engine-catalog list
-bunx --no-install sync-engine-catalog show concept/commenting --raw
-```
+Start with `skills/sync-engine/SKILL.md`. It links to the coordinator workflow and the reference for each stage.
 
-`sync-engine-analysis` remains coordinator-only bounded context selection. Designer and
-critic prompts never receive analysis output or instructions.
+Role prompt templates declare their own inputs, and the compiler assembles them. Operators do not need to read the templates.

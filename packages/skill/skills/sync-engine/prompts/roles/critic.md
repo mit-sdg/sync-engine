@@ -25,10 +25,9 @@ decision:
    marks optional State values optional.
 5. Composition: reaction pressure, cross-concept failure rules, authorization
    enforcement points, visible results.
-6. Application documents: exact static instances, one binding placement, and every
-   binding's direction and SSF-owned target. Accept direct owned-type cycles; reject
-   external aliases or inferred storage isolation. Reject bare typed-link text,
-   route-shaped targets, and concept actions presented as application declarations.
+6. Application documents: reject external aliases, inferred storage isolation, and concept
+   actions presented as application declarations. `check-design` already accepted instance,
+   binding, and typed-link form; never restate a form it passed.
 
 Application documents declare their linked endpoint trees, views, formers, and
 computations; do not demand an artificial API/adapter concept merely to own them.

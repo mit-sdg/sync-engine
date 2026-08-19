@@ -89,8 +89,10 @@ describe("sync-engine-skill command", () => {
     const initialized = run(["brief", "init", path], directory);
     expect(initialized.status).toBe(0);
     expect(initialized.stdout).toContain("Brief template initialized. Fill placeholders.\n");
-    expect(initialized.stdout).toContain(`Next: bun "`);
-    expect(initialized.stdout).toContain(`command.ts" brief check ${path}\n`);
+    expect(initialized.stdout).toContain(
+      `Next: bun "<skill-root>/scripts/command.ts" brief check ${path}\n`,
+    );
+    expect(initialized.stdout).not.toContain(dirname(command));
     const template = await readFile(
       resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
       "utf8",
@@ -245,8 +247,19 @@ describe("sync-engine-skill command", () => {
       `Next: every downstream build and follow-up adds --design-root ${design} --design-digest ${digest}`,
     );
 
-    const followUp = resolve(directory, ".sync-engine", "repair.followup.md");
     await mkdir(resolve(directory, ".sync-engine"), { recursive: true });
+    const named = resolve(directory, ".sync-engine", "repair.followup.md");
+    await writeFile(named, "Run `bun run test`.\n");
+    expect(
+      run(
+        ["follow-up", "check", named, "--design-root", design, "--design-digest", digest!],
+        directory,
+      ).stderr,
+    ).toContain("start it with follow-up new");
+
+    const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
+    expect(started.status).toBe(0);
+    const followUp = started.stdout.match(/Follow-up started: (\S+)/)![1]!;
     await writeFile(followUp, "Run `bun run test`.\n");
     const checked = run(
       ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
@@ -349,7 +362,12 @@ describe("sync-engine-skill command", () => {
   async function launchRecord(
     directory: string,
     role: string,
-    options: { agentId?: string; promptBytes?: string; status?: string } = {},
+    options: {
+      agentId?: string;
+      promptBytes?: string;
+      status?: string;
+      designDigest?: string;
+    } = {},
   ): Promise<string> {
     const workspace = resolve(directory, ".sync-engine");
     await mkdir(workspace, { recursive: true });
@@ -369,6 +387,7 @@ describe("sync-engine-skill command", () => {
         sha256: createHash("sha256").update(content).digest("hex"),
         bytes: Buffer.byteLength(content, "utf8"),
       },
+      ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
       startedAt: "2026-01-01T00:00:00.000Z",
       settledAt: "2026-01-01T00:05:00.000Z",
       status: options.status ?? "idle",
@@ -406,6 +425,50 @@ describe("sync-engine-skill command", () => {
     const gated = run(criticArguments, directory);
     expect(gated.status).toBe(0);
     expect(gated.stdout).toContain("Prompt built: role critic");
+  });
+
+  test("stops counting a role once design reopens under it", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-reopened-");
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    const product = resolve(directory, "product");
+    await mkdir(product, { recursive: true });
+    await cp(taskBrief, resolve(product, "brief.md"));
+    await writeFile(resolve(design, "types.md"), "# Types\n");
+    const reviewed = "b".repeat(64);
+    await launchRecord(directory, "critic", { designDigest: reviewed });
+    const assignment = resolve(
+      directory,
+      ".sync-engine",
+      "2026-01-01T00-06-00Z-concept-worker.assignment.md",
+    );
+    await writeFile(assignment, "# concept-worker assignment\n");
+
+    const build = (digest: string) =>
+      run(
+        [
+          "prompt",
+          "build",
+          "--role",
+          "concept-worker",
+          "--input",
+          `assignment=${assignment}`,
+          "--input",
+          `specifications=${resolve(design, "types.md")}`,
+          "--input",
+          `examples=${resolve(design, "types.md")}`,
+          "--design-root",
+          design,
+          "--design-digest",
+          digest,
+        ],
+        directory,
+      );
+
+    const reopened = build("c".repeat(64));
+    expect(reopened.status).toBe(1);
+    expect(reopened.stderr).toContain("Design reopened after that role ran, so relaunch it");
   });
 
   test("treats a role that never settled as not having run", async () => {
@@ -554,6 +617,63 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     const unstated = run(["assignment", "check", path!], directory);
     expect(unstated.status).toBe(1);
     expect(unstated.stderr).toContain("Assignment states no storage guarantee");
+
+    await writeFile(
+      path!,
+      complete.replace(
+        "## Allowed write paths",
+        `## Allowed read paths
+
+- \`node_modules/@mit-sdg/sync-engine/examples/message-board/src/concepts/Posting.registry.ts\`
+
+## Allowed write paths`,
+      ),
+    );
+    expect(run(["assignment", "check", path!], directory).status).toBe(0);
+  });
+
+  test("names the roles and slots instead of sending the coordinator to the source", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-roles-");
+    temporary.push(directory);
+    const unknown = run(
+      ["assignment", "new", "--role", "concept", "--design-digest", "a".repeat(64)],
+      directory,
+    );
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain(
+      "Unknown role: concept; roles are designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker",
+    );
+    expect(run(["--help"], directory).stdout).toContain(
+      "designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker",
+    );
+
+    await writeConfiguredApplication(directory);
+    const brief = resolve(directory, "product", "brief.md");
+    await mkdir(dirname(brief), { recursive: true });
+    await cp(taskBrief, brief);
+    const wrongSlot = run(
+      ["prompt", "build", "--role", "designer", "--input", `outline=${brief}`],
+      directory,
+    );
+    expect(wrongSlot.status).toBe(1);
+    expect(wrongSlot.stderr).toContain("Role designer has no input slot: outline; its slots are");
+  });
+
+  test("names follow-up files itself", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-followup-");
+    temporary.push(directory);
+    const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
+    expect(started.status).toBe(0);
+    const path = started.stdout.match(/Follow-up started: (\S+)/)?.[1];
+    expect(dirname(path!)).toBe(resolve(directory, ".sync-engine"));
+    expect(basename(path!)).toMatch(/^\d{4}-\d{2}-\d{2}T[\d-]+Z-concept-worker\.followup\.md$/);
+    expect(await readFile(path!, "utf8")).toBe("");
+
+    const second = run(["follow-up", "new", "--role", "concept-worker"], directory);
+    expect(second.status).toBe(0);
+    expect(second.stdout.match(/Follow-up started: (\S+)/)?.[1]).not.toBe(path);
+
+    expect(run(["follow-up", "new", "--role", "designer-2"], directory).status).toBe(1);
   });
 
   test("launches only through the harness and only from the workspace", async () => {

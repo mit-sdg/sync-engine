@@ -46,6 +46,12 @@ requires nonempty unfenced prose without imposing a scenario count.
 | framework-internal read exclusion                              | all role templates; harness contract; bounded-phase workflow                    |
 | contract blockers                                              | all implementation templates; `implementation.md#implement-in-bounded-phases`   |
 
+## Composition declaration reference
+
+`prompts/inputs/composition.md` compacts the `language` and `boundary` declaration API
+from `docs/user/reference/public-api.md`: reactions, views, formers, computations, and
+endpoints. Every application worker receives it as a `reference` input.
+
 ## HTTP reference
 
 `prompts/inputs/http.md` compacts the `@mit-sdg/sync-engine-http` README, its public

@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
@@ -12,6 +12,7 @@ import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./p
 import { agentExists, harness, launchRole } from "./launch.ts";
 import {
   requireCompletedRole,
+  workspaceFileRole,
   requireInsideWorkspace,
   requiredRoles,
   reserveWorkspacePath,
@@ -48,7 +49,8 @@ const packageExecutables = {
 } as const;
 const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
 const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
-const compiler = `bun ${JSON.stringify(resolve(skillRoot, "scripts/command.ts"))}`;
+/** Reported commands name the skill root the way SKILL.md and the references write it. */
+const compiler = 'bun "<skill-root>/scripts/command.ts"';
 
 function reference(name: string): string {
   return resolve(skillRoot, "references", name);
@@ -196,6 +198,7 @@ function usage(): string {
   sync-engine-skill brief init <brief.md>
   sync-engine-skill brief check <brief.md>
   sync-engine-skill design digest <design-directory>
+  sync-engine-skill follow-up new --role <role>
   sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
   sync-engine-skill prompt build --role <role> --input <slot>=<path>...
   sync-engine-skill assignment new --role <role> --design-digest <sha256>
@@ -204,6 +207,9 @@ function usage(): string {
     [--thinking <id>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
     [--brief <path>]
+
+Roles:
+  designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker
 
 Prompt options:
   --design-root <directory>       Required for implementation and evidence roles
@@ -335,11 +341,33 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
+  if (args[0] === "follow-up" && args[1] === "new" && args.length === 4) {
+    if (args[2] !== "--role") throw new Error(`follow-up new requires --role`);
+    const role = args[3]!;
+    if (!promptRoles.includes(role as PromptRole))
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
+    const path = await reserveWorkspacePath("followup", role);
+    await writeFile(path, "", "utf8");
+    process.stdout.write(`Follow-up started: ${path}\n`);
+    next(process.stdout, [
+      `write only the new diagnostic, affected paths, and affected command into ${path}`,
+      `${compiler} follow-up check ${path} --design-root <design-root> --design-digest <sha256>`,
+    ]);
+    return;
+  }
+
   if (args[0] === "follow-up" && args[1] === "check" && args.length === 7) {
     if (args[3] !== "--design-root" || args[5] !== "--design-digest") {
       throw new Error(`follow-up check requires --design-root then --design-digest`);
     }
     const followUpPath = requireInsideWorkspace(args[2]!);
+    const followUpName = basename(followUpPath);
+    const followUpRole = workspaceFileRole(followUpName, "followup");
+    if (followUpRole === undefined || !promptRoles.includes(followUpRole as PromptRole)) {
+      throw new Error(
+        `Follow-up file names its role: expected ${workspaceDirectory}/<stamp>-<role>.followup.md, found ${followUpName}; start it with follow-up new`,
+      );
+    }
     const content = await readFile(followUpPath, "utf8");
     const bytes = Buffer.byteLength(content, "utf8");
     if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
@@ -351,7 +379,7 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
-    await requireCompletedRole(options.role);
+    await requireCompletedRole(options.role, undefined, options.designDigest);
     for (const input of options.inputs) {
       if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
     }
@@ -412,7 +440,8 @@ async function run(args: readonly string[]): Promise<void> {
       throw new Error(`assignment new requires --role then --design-digest`);
     }
     const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    if (!promptRoles.includes(role as PromptRole))
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
     const path = await reserveWorkspacePath("assignment", role);
     await writeFile(path, assignmentTemplate(role, args[5]!), "utf8");
     process.stdout.write(`Assignment started: ${path}\n`);
@@ -454,7 +483,8 @@ async function run(args: readonly string[]): Promise<void> {
     if (role === undefined || prompt === undefined) {
       throw new Error(`launch requires --role and --prompt`);
     }
-    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    if (!promptRoles.includes(role as PromptRole))
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
     await requireCompletedRole(role);
     const launched = await launchRole({
       role,
@@ -486,6 +516,7 @@ async function run(args: readonly string[]): Promise<void> {
             .digest("hex")
         : undefined;
     const drifted: string[] = [];
+    const strayed: string[] = [];
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
@@ -501,6 +532,9 @@ async function run(args: readonly string[]): Promise<void> {
         if (!known) unknown.push(`${role} ${entry.record.agentId}`);
         if (entry.record.status !== settledStatus) {
           unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
+        }
+        for (const path of entry.record.readViolations ?? []) {
+          strayed.push(`${role} read ${path}`);
         }
         if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
           drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
@@ -525,6 +559,9 @@ async function run(args: readonly string[]): Promise<void> {
       ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
+    if (strayed.length > 0) {
+      process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
+    }
     process.stdout.write(`Every required role ran independently.\n`);
     return;
   }

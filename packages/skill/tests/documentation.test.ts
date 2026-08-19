@@ -45,13 +45,13 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const internals = await text(new URL("common/internals.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
+    const composition = await text(new URL("inputs/composition.md", promptRoot));
     expect(bytes(internals)).toBeLessThanOrEqual(0.625 * 1024);
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
-    // Raised for the RequestBoundary clarification: the old "except `RequestBoundary`"
-    // read as an exemption from the once rule, and a trial designer duly declared five.
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
+    expect(bytes(composition)).toBeLessThanOrEqual(5.5 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -78,7 +78,9 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(critic.replace(/\s+/g, " ")).toContain(
       "compensation, repair, and a declared branch for an absent input identity; verify each query's body agrees with its `one`, `optional`, or `many` cardinality and its row marks optional State values optional",
     );
-    expect(critic).toContain("Reject bare typed-link text");
+    expect(critic).toContain(
+      "`check-design` already accepted instance,\n   binding, and typed-link form; never restate a form it passed",
+    );
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
@@ -125,7 +127,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      expect(bytes(await stage(name))).toBeLessThanOrEqual(6 * 1024);
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(6.5 * 1024);
     }
 
     expect(workflow).not.toContain("## Design and criticism");
@@ -144,10 +146,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const limits: Record<string, number> = {
       designer: 13 * 1024,
       critic: 10.5 * 1024,
-      "concept-worker": 2.25 * 1024,
-      // Raised for the no-reverse-engineering rule: a trial worker with no composition
-      // reference probed framework brands at runtime for ~200 tool calls instead.
-      "application-worker": 3 * 1024,
+      "concept-worker": 2.375 * 1024,
+      "application-worker": 3.25 * 1024,
       "frontend-worker": 2.5 * 1024,
       "evidence-worker": 2.125 * 1024,
     };
@@ -546,6 +546,15 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(normalized).toContain(
       "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
     );
+    expect(normalized).toContain(
+      "A product exposing HTTP installs `@mit-sdg/sync-engine-http` at that release and serves every route through the handler: POST/JSON by default, and a policy `direct` route where a client cannot post. A hand-rolled router, redirect, or error shaping is a defect",
+    );
+    expect(normalized).toContain(
+      "Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application worker; it is the declaration API that role exists to use",
+    );
+    expect(normalized).toContain(
+      "Add `<skill-root>/prompts/inputs/http.md` for an HTTP product and any frontend worker. Never read either yourself",
+    );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
       "Prompt budgets are designer 32 KiB, critic 48 KiB, concept 24 KiB, application 48 KiB, frontend 48 KiB, and evidence 32 KiB. Split a worker into explicit batches only on budget overflow or explicit user-requested parallelism",
@@ -563,7 +572,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "On failure, return that focused diagnostic to the original worker, rerun the affected focused command, then every check invalidated by the changed paths regardless of chain position",
     );
     expect(normalized).toContain(
-      "It refuses one role's paths going to another, a concept worker with application-wide commands or no focused type check, and a missing storage guarantee",
+      "`assignment check` refuses one role's paths going to another, a concept worker with application-wide commands or no focused type check, and a missing storage guarantee",
     );
     expect(workflow).toContain("assignment new --role <role>");
 

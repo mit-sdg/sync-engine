@@ -3,6 +3,7 @@ export { HttpPolicyBrand } from "./types.ts";
 export type {
   HttpBrowserPolicy,
   HttpCookieBinding,
+  HttpDirectRoute,
   HttpLimits,
   HttpPolicy,
   HttpPolicyInit,

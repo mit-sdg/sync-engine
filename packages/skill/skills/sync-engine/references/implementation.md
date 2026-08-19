@@ -6,7 +6,8 @@ captured.
 ## Implement in bounded phases
 
 Start each assignment with the compiler, fill it, and check it before building the
-prompt. It refuses one role's paths going to another, a concept worker with
+prompt. Only `Allowed write paths` grants ownership, so a read path costs a role nothing.
+`assignment check` refuses one role's paths going to another, a concept worker with
 application-wide commands or no focused type check, and a missing storage guarantee:
 
 ```sh
@@ -48,25 +49,32 @@ concept and focused test paths. Concepts remain independent.
 
 After concept validation passes, start one application worker owning assigned
 compositions, types, registrations, concept set, assembly, configuration, host wiring,
-and generated integration paths.
+and generated integration paths. A product exposing HTTP installs
+`@mit-sdg/sync-engine-http` at that release and serves every route through the handler:
+POST/JSON by default, and a policy `direct` route where a client cannot post. A
+hand-rolled router, redirect, or error shaping is a defect.
 
 If the brief requests a frontend, after application validation passes start one frontend worker owning
 only assigned frontend paths. It implements the requested browser, command-line, or other
-shell strictly as a client of the assembled endpoints. A web-application assignment
-names the projected HTTP wire and base path; the frontend owns its
-`createHttpClient` construction. Pass packaged HTTP reference
-`<skill-root>/prompts/inputs/http.md` to application and frontend workers as `reference`;
-do not read it yourself.
+shell strictly as a client of the assembled endpoints. A web-application assignment names
+the projected HTTP wire and base path; the frontend owns its `createHttpClient`
+construction.
+
+Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application
+worker; it is the declaration API that role exists to use. Add
+`<skill-root>/prompts/inputs/http.md` for an HTTP product and any frontend worker. Never
+read either yourself.
 
 Finally start one fresh evidence worker. Supply focused commands, not
 the complete application. It may report existing evidence sufficient and edit only
 assigned scenario/test paths.
 
 Return an ordinary implementation defect to the original worker, not a replacement, in
-a file containing only the new diagnostic, affected paths, and affected command. Do not
-resend its full prompt. Before delivery require:
+a compiler-named file holding only the new diagnostic, affected paths, and affected
+command. Never resend its full prompt or name a follow-up yourself:
 
 ```sh
+bun "<skill-root>/scripts/command.ts" follow-up new --role <role>
 bun "<skill-root>/scripts/command.ts" follow-up check <file> \
   --design-root design --design-digest <sha256>
 ```

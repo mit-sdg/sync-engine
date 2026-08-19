@@ -39,6 +39,20 @@ frontend assets beside the policy's `basePath`. Without a policy there are no CO
 cookie headers, bodies are limited to 1 MiB, and private failures become
 `{ "error": "INTERNAL_ERROR" }`.
 
+## Direct routes
+
+A client that cannot post — a browser following a link — reaches an endpoint through a
+policy `direct` route. The endpoint is unchanged; the route says how its value is served.
+
+```ts
+direct: [{ method: "GET", path: "/{code}", endpoint: "/resolve", redirect: "target" }];
+```
+
+Each `{name}` fills the endpoint input of that name. `redirect` names a response field
+holding an absolute URL and answers 302; `status` alone answers that status with the JSON
+body; a route states one of them. GET only. The endpoint keeps its POST path, and a direct
+route carries no cookies and no request-origin check, so it cannot serve a cookie endpoint.
+
 ## Policy
 
 `httpPolicy(init)` from `@mit-sdg/sync-engine-http/policy` freezes deployment facts:
