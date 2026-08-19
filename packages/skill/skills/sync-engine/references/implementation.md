@@ -27,6 +27,8 @@ an example. A concept depending on the current time or a generated identifier ne
 showing that dependency injected. A worker with no example for a mechanism
 returns a context blocker rather than discovering it. Carry the brief's durability decision
 into every concept assignment as a storage guarantee, never as a claim about concept State.
+A brief that asks for nothing to survive restart gets that as the guarantee; never assume a
+stronger one.
 
 Compiler slots are:
 

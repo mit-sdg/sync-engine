@@ -17,6 +17,7 @@ import {
   requiredRoles,
   reserveWorkspacePath,
   settledStatus,
+  registrationWrappers,
   verifiedRecords,
   workspaceDirectory,
   writePromptContext,
@@ -520,6 +521,7 @@ async function run(args: readonly string[]): Promise<void> {
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
+    const wrapped = await registrationWrappers();
     const lines: string[] = [];
     for (const role of requiredRoles) {
       const records = await verifiedRecords(role);
@@ -557,6 +559,9 @@ async function run(args: readonly string[]): Promise<void> {
       ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
       ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
       ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
+      ...(wrapped.length === 0
+        ? []
+        : [`registered a class beside its registry: ${wrapped.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
     if (strayed.length > 0) {

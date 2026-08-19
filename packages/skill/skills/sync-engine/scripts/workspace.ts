@@ -331,3 +331,27 @@ export async function readLaunchRecords(
   }
   return found;
 }
+
+/**
+ * A registry may only register the concept class its module imports. A class declared
+ * beside the registration narrows what source agreement sees, so the assembly runs an
+ * object the concept tests never construct.
+ */
+export async function registrationWrappers(applicationRoot?: string): Promise<string[]> {
+  const root = resolve(applicationRoot ?? process.cwd(), "src/concepts");
+  let entries: string[];
+  try {
+    entries = (await readdir(root)).filter((name) => name.endsWith(".registry.ts"));
+  } catch {
+    return [];
+  }
+  const offending: string[] = [];
+  for (const name of entries.sort()) {
+    const source = await readFile(resolve(root, name), "utf8");
+    const registered = source.match(/class:\s*([A-Za-z_$][\w$]*)/)?.[1];
+    if (registered === undefined) continue;
+    const declared = new RegExp(`\\bclass\\s+${registered}\\b`).test(source);
+    if (declared) offending.push(`src/concepts/${name} registers ${registered} declared beside it`);
+  }
+  return offending;
+}

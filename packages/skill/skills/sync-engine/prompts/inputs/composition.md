@@ -39,6 +39,11 @@ receives those records keyed by module:
 export const composition = { Publishing: { PublishPost, IndexOnPublish } };
 ```
 
+An authored link names the same three parts: `reaction:Board.Publishing.IndexOnPublish`
+requires module `Board`, group `Publishing` and declaration `IndexOnPublish`. Read the
+approved design's links and use those exact names; `MISSING_COVERAGE` reports a selected
+declaration no link names.
+
 ## Views, formers and computations
 
 `view`, `former`, `form`, `each`, `count` and `compute` come from the same subpath.

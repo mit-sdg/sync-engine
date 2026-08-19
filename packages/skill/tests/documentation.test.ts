@@ -52,7 +52,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
-    expect(bytes(composition)).toBeLessThanOrEqual(6 * 1024);
+    expect(bytes(composition)).toBeLessThanOrEqual(6.5 * 1024);
     // The designer's boundary note must never grow into a second http.md: naming a
     // transport is what put unbuildable renderings into a design.
     expect(bytes(boundary)).toBeLessThanOrEqual(1.25 * 1024);
@@ -173,7 +173,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       designer: 14 * 1024,
       critic: 10.75 * 1024,
       "concept-worker": 2.5 * 1024,
-      "application-worker": 3.375 * 1024,
+      "application-worker": 3.625 * 1024,
       "frontend-worker": 2.625 * 1024,
       "evidence-worker": 2.5 * 1024,
     };

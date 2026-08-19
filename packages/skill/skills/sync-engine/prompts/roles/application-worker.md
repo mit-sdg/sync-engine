@@ -12,7 +12,9 @@ Own assigned composition, types, registration, assembly, config, host, and artif
 wiring. Import public subpaths only. Routine construction:
 
 - `registerConcept({ class, spec, refusals? })` binds imported concept Markdown to its
-  implementation and stable refusal classes.
+  implementation and stable refusal classes. Register the class the concept worker wrote,
+  imported from its module; a wrapper, adapter or subclass that narrows what the checker
+  sees is a defect to return, not a way to pass.
 - `conceptSet({ ...registrations }, computations?)` maps each instance key to its
   registered definition and creates typed refs. Shared definition names require equal
   canonical specs; the authored inventory matches the assembly.
