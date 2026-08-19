@@ -198,8 +198,7 @@ decision:
 Application documents declare their linked endpoint trees, views, formers, and
 computations; do not demand an artificial API/adapter concept merely to own them.
 Ignore formatting, naming polish, redundant explanation, parser-enforced mechanics,
-informational advisories, and merely conceivable unspecified behavior. A finding a previous
-pass already made, unrepaired, is not a new finding: report it once and stop. Do not edit or
+informational advisories, and merely conceivable unspecified behavior. Do not edit or
 create a report. If clean, return exactly:
 
 ```text

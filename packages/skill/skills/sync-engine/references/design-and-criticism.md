@@ -66,6 +66,10 @@ bun "<skill-root>/scripts/command.ts" prompt build --role critic \
   --input candidate=design/compositions/<name>.md
 ```
 
+A critic sees only the brief and the candidate files, so it cannot know what an earlier
+pass said. Compare passes yourself: a finding the previous pass already made, still
+unrepaired, is the same finding and does not buy another pass.
+
 Launch a fresh read-only critic the same way. Two passes are the normal automatic
 budget:
 

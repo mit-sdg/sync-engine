@@ -81,9 +81,6 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(critic).toContain(
       "`check-design` already accepted instance,\n   binding, and typed-link form; never restate a form it passed",
     );
-    expect(critic).toContain(
-      "A finding a previous\npass already made, unrepaired, is not a new finding: report it once and stop",
-    );
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
     for (const role of roleFiles.filter((path) => !["designer.md", "critic.md"].includes(path))) {
@@ -575,7 +572,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "On failure, return that focused diagnostic to the original worker, rerun the affected focused command, then every check invalidated by the changed paths regardless of chain position",
     );
     expect(normalized).toContain(
-      "It refuses one role's paths going to another, a concept worker with application-wide commands or no focused type check, and a missing storage guarantee",
+      "`assignment check` refuses one role's paths going to another, a concept worker with application-wide commands or no focused type check, and a missing storage guarantee",
     );
     expect(workflow).toContain("assignment new --role <role>");
 
