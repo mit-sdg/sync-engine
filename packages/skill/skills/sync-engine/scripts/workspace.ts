@@ -220,6 +220,7 @@ export const requiredRoles = [
 export async function verifiedRecords(
   role: string,
   applicationRoot?: string,
+  designDigest?: string,
 ): Promise<Array<{ path: string; record: LaunchRecord }>> {
   const found: Array<{ path: string; record: LaunchRecord }> = [];
   for (const entry of await readLaunchRecords(applicationRoot)) {
@@ -233,6 +234,13 @@ export async function verifiedRecords(
     if (entry.record.status !== settledStatus) continue;
     if (entry.record.response?.contract === "violated") continue;
     if ((entry.record.readViolations ?? []).length > 0) continue;
+    if (
+      designDigest !== undefined &&
+      entry.record.designDigest !== undefined &&
+      entry.record.designDigest !== designDigest
+    ) {
+      continue;
+    }
     if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
       found.push(entry);
     }
@@ -240,10 +248,30 @@ export async function verifiedRecords(
   return found;
 }
 
-export async function requireCompletedRole(role: string, applicationRoot?: string): Promise<void> {
+/**
+ * Reopening design after a role ran leaves its delivery bound to a design nobody approved.
+ * A record built against another digest stops counting, so the coordinator relaunches the
+ * role instead of deciding for itself that stale work still holds.
+ */
+export async function requireCompletedRole(
+  role: string,
+  applicationRoot?: string,
+  designDigest?: string,
+): Promise<void> {
   const predecessor = roleAfter[role];
   if (predecessor === undefined) return;
-  if ((await verifiedRecords(predecessor, applicationRoot)).length > 0) return;
+  if ((await verifiedRecords(predecessor, applicationRoot, designDigest)).length > 0) return;
+  const stale =
+    designDigest === undefined
+      ? []
+      : (await verifiedRecords(predecessor, applicationRoot)).filter(
+          (entry) => entry.record.designDigest !== undefined,
+        );
+  if (stale.length > 0) {
+    throw new WorkspaceError(
+      `Role ${role} requires a ${predecessor} launched against design ${designDigest}; the settled one used ${stale[stale.length - 1]!.record.designDigest}. Design reopened after that role ran, so relaunch it`,
+    );
+  }
   throw new WorkspaceError(
     `Role ${role} requires a settled ${predecessor} launch in ${workspaceDirectory}/; launch that role first`,
   );

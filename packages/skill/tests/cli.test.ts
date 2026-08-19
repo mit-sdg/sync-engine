@@ -351,7 +351,12 @@ describe("sync-engine-skill command", () => {
   async function launchRecord(
     directory: string,
     role: string,
-    options: { agentId?: string; promptBytes?: string; status?: string } = {},
+    options: {
+      agentId?: string;
+      promptBytes?: string;
+      status?: string;
+      designDigest?: string;
+    } = {},
   ): Promise<string> {
     const workspace = resolve(directory, ".sync-engine");
     await mkdir(workspace, { recursive: true });
@@ -371,6 +376,7 @@ describe("sync-engine-skill command", () => {
         sha256: createHash("sha256").update(content).digest("hex"),
         bytes: Buffer.byteLength(content, "utf8"),
       },
+      ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
       startedAt: "2026-01-01T00:00:00.000Z",
       settledAt: "2026-01-01T00:05:00.000Z",
       status: options.status ?? "idle",
@@ -408,6 +414,50 @@ describe("sync-engine-skill command", () => {
     const gated = run(criticArguments, directory);
     expect(gated.status).toBe(0);
     expect(gated.stdout).toContain("Prompt built: role critic");
+  });
+
+  test("stops counting a role once design reopens under it", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-reopened-");
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    const product = resolve(directory, "product");
+    await mkdir(product, { recursive: true });
+    await cp(taskBrief, resolve(product, "brief.md"));
+    await writeFile(resolve(design, "types.md"), "# Types\n");
+    const reviewed = "b".repeat(64);
+    await launchRecord(directory, "critic", { designDigest: reviewed });
+    const assignment = resolve(
+      directory,
+      ".sync-engine",
+      "2026-01-01T00-06-00Z-concept-worker.assignment.md",
+    );
+    await writeFile(assignment, "# concept-worker assignment\n");
+
+    const build = (digest: string) =>
+      run(
+        [
+          "prompt",
+          "build",
+          "--role",
+          "concept-worker",
+          "--input",
+          `assignment=${assignment}`,
+          "--input",
+          `specifications=${resolve(design, "types.md")}`,
+          "--input",
+          `examples=${resolve(design, "types.md")}`,
+          "--design-root",
+          design,
+          "--design-digest",
+          digest,
+        ],
+        directory,
+      );
+
+    const reopened = build("c".repeat(64));
+    expect(reopened.status).toBe(1);
+    expect(reopened.stderr).toContain("Design reopened after that role ran, so relaunch it");
   });
 
   test("treats a role that never settled as not having run", async () => {

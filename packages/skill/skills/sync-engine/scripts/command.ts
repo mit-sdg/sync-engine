@@ -372,7 +372,7 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
-    await requireCompletedRole(options.role);
+    await requireCompletedRole(options.role, undefined, options.designDigest);
     for (const input of options.inputs) {
       if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
     }
