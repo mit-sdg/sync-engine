@@ -35,6 +35,27 @@ async function authoredMarkdown(root: string, directory: string): Promise<Author
   return files;
 }
 
+/**
+ * A concept file carries its concept's name. Cross-document references and every engine
+ * diagnostic name the concept, so a file called `shortening.md` holding `# Shortening`
+ * makes the two disagree for no benefit. Compositions carry prose titles and are exempt.
+ */
+async function requireConceptFileNames(files: readonly AuthoredFile[]): Promise<void> {
+  for (const file of files) {
+    if (!file.relativePath.startsWith("concepts/")) continue;
+    const heading = (await readFile(file.path, "utf8")).match(/^#\s+(\S+)\s*$/m)?.[1];
+    if (heading === undefined) {
+      throw new DesignDigestError(`Concept declares no name heading: ${file.relativePath}`);
+    }
+    const name = file.relativePath.slice("concepts/".length, -".md".length);
+    if (name !== heading) {
+      throw new DesignDigestError(
+        `Concept file name does not match its concept: ${file.relativePath} declares ${heading}; rename it to concepts/${heading}.md`,
+      );
+    }
+  }
+}
+
 export async function digestDesign(directory: string): Promise<DesignDigest> {
   const root = resolve(directory);
   const rootEntry = await lstat(root);
@@ -52,6 +73,8 @@ export async function digestDesign(directory: string): Promise<DesignDigest> {
       `The brief is product authority the coordinator keeps editing, not role-owned design: move ${brief.relativePath} out of ${root}`,
     );
   }
+
+  await requireConceptFileNames(files);
 
   const hash = createHash("sha256");
   for (const file of files) {

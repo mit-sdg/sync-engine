@@ -17,7 +17,7 @@ async function designFixture(): Promise<string> {
   await mkdir(resolve(root, "compositions"));
   await writeFile(resolve(root, "purpose.md"), "# Brief\n");
   await writeFile(resolve(root, "types.md"), "```types\n```\n");
-  await writeFile(resolve(root, "concepts/tasks.md"), "# Tasks\n");
+  await writeFile(resolve(root, "concepts/Tasks.md"), "# Tasks\n");
   await writeFile(resolve(root, "compositions/app.md"), "# Application\n");
   return root;
 }
@@ -36,7 +36,7 @@ describe("closed design digest", () => {
     expect(first.digest).toMatch(/^[a-f0-9]{64}$/);
 
     await requireDesignDigest(root, first.digest);
-    await writeFile(resolve(root, "concepts/tasks.md"), "# Tasks\n\nChanged.\n");
+    await writeFile(resolve(root, "concepts/Tasks.md"), "# Tasks\n\nChanged.\n");
     await expect(requireDesignDigest(root, first.digest)).rejects.toThrow("Design digest changed");
   });
 
@@ -48,5 +48,22 @@ describe("closed design digest", () => {
 
     await symlink(resolve(root, "purpose.md"), resolve(root, "linked.md"));
     await expect(digestDesign(root)).rejects.toBeInstanceOf(DesignDigestError);
+  });
+
+  test("requires a concept file to carry its concept's name", async () => {
+    const root = await designFixture();
+    await writeFile(resolve(root, "concepts/counting.md"), "# Counting\n");
+    await expect(digestDesign(root)).rejects.toThrow(
+      "Concept file name does not match its concept: concepts/counting.md declares Counting; rename it to concepts/Counting.md",
+    );
+
+    await rm(resolve(root, "concepts/counting.md"));
+    await writeFile(resolve(root, "concepts/Counting.md"), "no heading\n");
+    await expect(digestDesign(root)).rejects.toThrow(
+      "Concept declares no name heading: concepts/Counting.md",
+    );
+
+    await writeFile(resolve(root, "concepts/Counting.md"), "# Counting\n");
+    expect((await digestDesign(root)).files).toBe(5);
   });
 });
