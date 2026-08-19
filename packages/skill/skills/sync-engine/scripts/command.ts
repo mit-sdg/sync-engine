@@ -48,7 +48,13 @@ const packageExecutables = {
 } as const;
 const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
 const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
-const compiler = `bun ${JSON.stringify(resolve(skillRoot, "scripts/command.ts"))}`;
+/**
+ * Report commands the way SKILL.md and the references write them. Bun resolves this
+ * module through symlinks, so an absolute path here names the install's canonical
+ * location, not the path the coordinator loaded SKILL.md from, and the two disagree
+ * under the normal symlinked install.
+ */
+const compiler = 'bun "<skill-root>/scripts/command.ts"';
 
 function reference(name: string): string {
   return resolve(skillRoot, "references", name);

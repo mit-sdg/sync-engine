@@ -89,8 +89,10 @@ describe("sync-engine-skill command", () => {
     const initialized = run(["brief", "init", path], directory);
     expect(initialized.status).toBe(0);
     expect(initialized.stdout).toContain("Brief template initialized. Fill placeholders.\n");
-    expect(initialized.stdout).toContain(`Next: bun "`);
-    expect(initialized.stdout).toContain(`command.ts" brief check ${path}\n`);
+    expect(initialized.stdout).toContain(
+      `Next: bun "<skill-root>/scripts/command.ts" brief check ${path}\n`,
+    );
+    expect(initialized.stdout).not.toContain(dirname(command));
     const template = await readFile(
       resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
       "utf8",
