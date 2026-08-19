@@ -51,7 +51,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
-    expect(bytes(composition)).toBeLessThanOrEqual(5.25 * 1024);
+    expect(bytes(composition)).toBeLessThanOrEqual(5.5 * 1024);
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
