@@ -10,15 +10,112 @@ export declare const ClearOnAccept: import("@mit-sdg/sync-engine-rendering/langu
 export declare const RefocusOnRefusal: import("@mit-sdg/sync-engine-rendering/language").Immediate;
 export declare const stockImmediates: ImmediateBindings;
 
+=== packages/web/dist/realization/candidate.d.ts ===
+import { type InterfaceDefinition } from "@mit-sdg/sync-engine/boundary";
+import type { Assembly } from "@mit-sdg/sync-engine/assembly";
+import type { FetchClaim } from "@mit-sdg/sync-engine-http/realization";
+import { type ImmediateBindings, type RenderedSurface, type WebHead, type WebRealization } from "./realization.ts";
+type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
+/** Candidate previews are served under this reserved path prefix. */
+export declare const candidatePathPrefix = "/candidate/";
+/** The durable, portable record of one assembled candidate. */
+export interface CandidateManifest {
+    readonly format: "sync-engine.web-candidate";
+    readonly version: 1;
+    readonly interface: string;
+    readonly revision: string;
+    /** The accepted interface revision the candidate was assembled against, when known. */
+    readonly base: string | null;
+    readonly endpoints: readonly {
+        readonly identity: string;
+        readonly path: string;
+        readonly match?: "prefix";
+    }[];
+    readonly renderers: readonly string[];
+    readonly immediates: readonly string[];
+    /** The authored source the candidate was assembled from, retained whole. */
+    readonly source: string | null;
+}
+/** An immutable, validated interface revision with its live preview realization. */
+export interface WebCandidate {
+    readonly system: AnyAssembly;
+    readonly interface: string;
+    readonly revision: string;
+    /** The preview mount prefix, derived from the revision. */
+    readonly path: string;
+    /** The preview realization's claims, all under the candidate path. */
+    readonly claims: readonly FetchClaim[];
+    /** The live preview: ordinary holders over the same system, at the candidate path. */
+    readonly realization: WebRealization;
+    readonly manifest: CandidateManifest;
+    /** The surface promotion swaps in at the accepted paths. */
+    promotedSurface(): RenderedSurface;
+}
+/**
+ * Assemble one interface-only candidate against a running system: validate
+ * the complete claims the interface makes — canonical exports, renderer
+ * closure, routes, immediates, head — and construct its realization without
+ * serving anything. Returns the immutable candidate or throws a named
+ * refusal; a refused assembly serves nothing and records nothing.
+ */
+export declare function assembleCandidate(options: {
+    system: AnyAssembly;
+    /** The candidate module's flat interface exports. */
+    exports: Readonly<Record<string, unknown>>;
+    interface: InterfaceDefinition;
+    head?: WebHead;
+    immediates?: ImmediateBindings;
+    /** The authored source, retained whole in the manifest. */
+    source?: string;
+    /** The accepted interface revision this candidate revises. */
+    base?: string;
+}): Promise<WebCandidate>;
+/** The durable record of one authorized promotion: which revision the host applies. */
+export interface CandidateSelection {
+    /** The accepted interface revision the selection was ruled over. */
+    readonly base: string;
+    /** The candidate revision the selection makes current. */
+    readonly selected: string;
+}
+export type SelectionApplication = 
+/** The assembled source already carries the selected revision; the selection is spent. */
+{
+    readonly kind: "spent";
+}
+/** The assembled source matches the selection's base; apply the selected candidate. */
+ | {
+    readonly kind: "apply";
+}
+/** The source moved on; serve the source and surface the stale selection for re-ruling. */
+ | {
+    readonly kind: "stale";
+    readonly reason: string;
+};
+/**
+ * The startup precedence for a recorded selection, stated completely: a
+ * selection is never silently applied over newer source and never silently
+ * dropped.
+ */
+export declare function applySelection(options: {
+    sourceRevision: string;
+    selection: CandidateSelection;
+}): SelectionApplication;
+export {};
+
 === packages/web/dist/realization/index.d.ts ===
 export { realize } from "./realization.ts";
-export type { ImmediateBindings, WebHead } from "./realization.ts";
+export type { ImmediateBindings, WebHead, WebRealization } from "./realization.ts";
+export { applySelection, assembleCandidate, candidatePathPrefix } from "./candidate.ts";
+export type { CandidateManifest, CandidateSelection, SelectionApplication, WebCandidate, } from "./candidate.ts";
+export { interfaceRevision } from "./revision.ts";
 
 === packages/web/dist/realization/realization.d.ts ===
 import { type InterfaceDefinition } from "@mit-sdg/sync-engine/boundary";
 import type { Assembly } from "@mit-sdg/sync-engine/assembly";
-import { type FetchRealization } from "@mit-sdg/sync-engine-http/realization";
+import { type FetchClaim, type FetchRealization } from "@mit-sdg/sync-engine-http/realization";
+import { type CompiledHtmlRendering } from "@mit-sdg/sync-engine-rendering/compiled";
 import type { RendererInvocation } from "@mit-sdg/sync-engine-rendering/language";
+import type { WebCandidate } from "./candidate.ts";
 type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
 /** Authored head material shared by every page of one realization. */
 export interface WebHead {
@@ -28,13 +125,74 @@ export interface WebHead {
     /** One admitted styles renderer whose formed content lands in the head. */
     readonly styles?: RendererInvocation;
 }
-/** Realize rendered endpoints in one interface as opening HTML documents. */
 /** Realization-bound implementations for declared immediates, by canonical identity. */
 export type ImmediateBindings = Record<string, (args: never) => unknown>;
+/** How declared reads resolve against the assembled system's queries. */
+export interface RenderedReader {
+    read(read: {
+        concept: string;
+        query: string;
+    }, input: Record<string, unknown>): Promise<unknown>;
+}
+export declare function readerFor(system: AnyAssembly): RenderedReader;
+/** Form the shared document head once: title, checked stylesheet links, formed styles. */
+export declare function headHtmlFor(head: WebHead | undefined, rendering: CompiledHtmlRendering, reader: RenderedReader): () => Promise<string>;
+export declare function assertHeadStylesheets(site: string, head: WebHead | undefined): void;
+export declare function assertImmediatesBound(site: string, rendering: CompiledHtmlRendering, immediates: ImmediateBindings | undefined): string;
+/**
+ * One servable interface surface: the compiled rendering, the served claim
+ * set, and per-path opening. The accepted realization holds exactly one and
+ * promotion replaces it whole.
+ */
+export interface RenderedSurface {
+    readonly interface: string;
+    readonly rendering: CompiledHtmlRendering;
+    readonly claims: readonly FetchClaim[];
+    /** Resolve one served GET path to its root renderer invocation. */
+    open(path: string, request: Request): Promise<RendererInvocation | undefined>;
+    headHtml(): Promise<string>;
+    readonly immediateSource: string;
+    revision(): Promise<string>;
+}
+export declare function claimsForEndpoints(endpoints: readonly {
+    readonly path: string;
+    readonly match?: "prefix";
+}[], servedPath: (path: string) => string): readonly FetchClaim[];
+export interface WebRealization extends FetchRealization {
+    /** The canonical content revision of the surface currently served. */
+    revision(): Promise<string>;
+    /**
+     * Make an assembled candidate what the accepted claims serve, atomically
+     * for new opens; holders already open receive one root repair formed under
+     * the new declarations, and a holder whose endpoint the new surface no
+     * longer declares is closed.
+     */
+    promote(candidate: WebCandidate): Promise<void>;
+    /** Close every holder and detach from settled-change observation. */
+    close(): void;
+}
+/** The shared holder machinery behind the accepted realization and candidate previews. */
+export declare function renderedRealization(options: {
+    system: AnyAssembly;
+    surface: RenderedSurface;
+    onPromote?: (candidate: WebCandidate) => RenderedSurface;
+}): WebRealization;
+/** Realize rendered endpoints in one interface as opening HTML documents. */
 export declare function realize(options: {
     system: AnyAssembly;
     interface: InterfaceDefinition;
     head?: WebHead;
     immediates?: ImmediateBindings;
-}): FetchRealization;
+}): WebRealization;
 export {};
+
+=== packages/web/dist/realization/revision.d.ts ===
+import { type InterfaceBinding } from "@mit-sdg/sync-engine/boundary";
+/**
+ * The canonical content revision of one bound interface: a hash over the
+ * lowered declarations of its members and their reachable dependencies, with
+ * each rendered endpoint contributing its route and exact root invocation.
+ * Two interfaces with the same canonical content share a revision regardless
+ * of the modules that carried them.
+ */
+export declare function interfaceRevision(binding: InterfaceBinding): Promise<string>;

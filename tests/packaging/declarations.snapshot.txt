@@ -34,6 +34,8 @@ export { defineInterface } from "../engine/boundary/protocol/interface-definitio
 export type { InterfaceDefinition } from "../engine/boundary/protocol/interface-definition.ts";
 export { bindInterface } from "../engine/boundary/gateway/interface-binding.ts";
 export type { InterfaceBinding } from "../engine/boundary/gateway/interface-binding.ts";
+export { bindInterfaceExports, evaluateEndpoint, } from "../engine/boundary/assembly/interface-exports.ts";
+export type { BoundInterfaceEndpoint, BoundInterfaceExports, EvaluatedEndpoint, InterfaceExportBindings, } from "../engine/boundary/assembly/interface-exports.ts";
 export type { InputContractDecl } from "../engine/boundary/protocol/endpoints.ts";
 export type { EndpointValidator, EndpointValidators, ValidationResult, } from "../engine/boundary/protocol/validation.ts";
 export { FrameworkErrorCode } from "../engine/boundary/protocol/types.ts";
@@ -148,7 +150,7 @@ import type { EndpointValidators } from "../protocol/validation.ts";
 import type { Invoker } from "../invocation/invoke.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import type { EndpointDeclaration } from "./endpoint-portability.ts";
-import { type AssembledInterfaces } from "../protocol/interface-definition.ts";
+import type { AssembledInterfaces } from "../protocol/interface-definition.ts";
 export declare function receive(input?: Mapping): WhenBuilder;
 /** Answer the request this reaction was triggered by. */
 export declare function respond(body?: Mapping): import("../../reactions/types.ts").ActionCall<((args: Record<string, unknown>) => Record<string, unknown>) & import("../../reactions/types.ts").InstrumentedAction, {
@@ -412,6 +414,69 @@ export interface EndpointDeclaration {
 export declare function rememberImplementations(implementations: Record<string, object>, floor?: string): void;
 /** Recover a floor from the exact map first, then from a safely spread instance. */
 export declare function implementationFloorOf(implementations: object, concept: string, instance: object): string | undefined;
+
+=== dist/engine/boundary/assembly/interface-exports.d.ts ===
+import { type AssembledInterfaceDeclaration, type AssembledInterfaceDefinition, type InterfaceDefinition } from "../protocol/interface-definition.ts";
+import type { EndpointDef } from "./assemble.ts";
+export declare function brandEndpointDef(def: EndpointDef): EndpointDef;
+export declare function isEndpointDef(value: unknown): value is EndpointDef;
+export interface CollectedInterfaceExports {
+    readonly declarations: Record<string, AssembledInterfaceDeclaration>;
+    readonly definitions: readonly {
+        readonly identity: string;
+        readonly definition: InterfaceDefinition;
+    }[];
+    canonicalName(value: object): string | undefined;
+}
+/**
+ * The one walk over a module's flat interface exports: each export gains its
+ * canonical identity, one value has one name, and a named interface may only
+ * select canonical top-level exports. `assemble` runs it while registering an
+ * application; `bindInterfaceExports` runs it for declarations checked
+ * against an already-running system.
+ */
+export declare function collectInterfaceExports(site: string, exports: Readonly<Record<string, unknown>>): CollectedInterfaceExports;
+/** One endpoint of a bound interface, with its opening answer when it has the rendered shape. */
+export interface BoundInterfaceEndpoint {
+    readonly identity: string;
+    readonly path: string;
+    readonly match?: "prefix";
+    /** The one renderer invocation the endpoint responds with, when extractable. */
+    readonly root?: Readonly<Record<string, unknown>>;
+    /** Why no root could be extracted, when it could not. */
+    readonly rootRefusal?: string;
+}
+/** Structurally an `InterfaceBinding`, extended with each endpoint's route and root. */
+export interface BoundInterfaceExports {
+    readonly identity: string;
+    readonly members: readonly AssembledInterfaceDeclaration[];
+    readonly dependencies: Readonly<Record<string, readonly AssembledInterfaceDeclaration[]>>;
+    readonly declarations: Readonly<Record<string, AssembledInterfaceDeclaration>>;
+    readonly endpoints: readonly BoundInterfaceEndpoint[];
+}
+export interface InterfaceExportBindings {
+    readonly declarations: Readonly<Record<string, AssembledInterfaceDeclaration>>;
+    readonly definitions: readonly AssembledInterfaceDefinition[];
+    binding(definition: InterfaceDefinition): BoundInterfaceExports;
+}
+export interface EvaluatedEndpoint extends BoundInterfaceEndpoint {
+    /** The renderer identities the endpoint's declared reaction reaches. */
+    readonly dependencies: readonly string[];
+}
+/**
+ * Evaluate one endpoint declaration without registering it: its route, the
+ * renderer identities it reaches, and — when it has the literal rendered
+ * shape — the one root invocation it responds with.
+ */
+export declare function evaluateEndpoint(identity: string, value: EndpointDef): EvaluatedEndpoint;
+/**
+ * Bind a module's flat interface exports without assembling an application:
+ * the same canonical naming, membership, dependency-closure, and route
+ * checks `assemble` performs, producing per-definition bindings a rendering
+ * compiler can validate. Used to check a proposed interface against a system
+ * that is already running.
+ */
+export declare function bindInterfaceExports(exports: Readonly<Record<string, unknown>>): InterfaceExportBindings;
 
 === dist/engine/boundary/assembly/locality-validation.d.ts ===
 /** Fail closed when ordinary assembly contains behavior that cannot travel as data. */

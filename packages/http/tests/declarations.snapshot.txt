@@ -216,7 +216,7 @@ export interface HttpPolicy extends HttpPolicyInit {
 export {};
 
 === packages/http/dist/realization/index.d.ts ===
-export { defineFetchRealization, fetchClaimMatches, fetchClaimsOverlap, isFetchRealization, realize, } from "./realization.ts";
+export { defineFetchRealization, defineLiveFetchRealization, fetchClaimMatches, fetchClaimsOverlap, isFetchRealization, realize, } from "./realization.ts";
 export type { FetchClaim, FetchRealization } from "./realization.ts";
 
 === packages/http/dist/realization/realization.d.ts ===
@@ -237,6 +237,18 @@ export interface FetchRealization {
 export declare function isFetchRealization(value: unknown): value is FetchRealization;
 export declare function fetchClaimMatches(claim: FetchClaim, method: string, path: string): boolean;
 export declare function fetchClaimsOverlap(left: FetchClaim, right: FetchClaim): boolean;
+/**
+ * A checked Fetch value whose claim set may change while it is served — the
+ * promotable Web realization uses this so an accepted promotion revises what
+ * its paths serve without re-deploying. `claims` is read live on every
+ * routing decision.
+ */
+export declare function defineLiveFetchRealization<T extends {
+    readonly interface: string;
+    fetch(request: Request): Promise<Response>;
+}>(value: T & {
+    claims(): readonly FetchClaim[];
+}): Omit<T, "claims"> & FetchRealization;
 /** First-party realization floors use this constructor for checked Fetch values. */
 export declare function defineFetchRealization(value: FetchRealization): FetchRealization;
 /** Realize the selected interface as ordinary POST/JSON Fetch claims. */
