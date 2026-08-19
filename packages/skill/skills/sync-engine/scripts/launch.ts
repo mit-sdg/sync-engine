@@ -6,6 +6,7 @@ import {
   type LaunchRecord,
   requireInsideWorkspace,
   readPromptContext,
+  readAudit,
   reserveWorkspacePath,
   responseContract,
   settledStatus,
@@ -153,6 +154,17 @@ export interface LaunchResult {
  * the agent and nothing enters its prompt, so a role cannot present a report it did not
  * give. An agent settles on its reply, so the last text entry is that reply.
  */
+/** Paths the role opened, as the harness reports them; the agent is not asked. */
+function readPaths(agentId: string): string[] {
+  let output: string;
+  try {
+    output = paseo(["logs", agentId, "--filter", "tools"]);
+  } catch {
+    return [];
+  }
+  return [...output.matchAll(/^\[(?:Read|Write|Edit)\]\s+(\S+)/gm)].map((match) => match[1]!);
+}
+
 function finalResponse(agentId: string): string {
   try {
     return paseo(["logs", agentId, "--filter", "text", "--tail", "1"]);
@@ -252,6 +264,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   );
   await writeFile(responsePath, response, "utf8");
   const violation = responseContract(options.role, response);
+  const readViolations = readAudit(options.role, readPaths(started.agentId));
 
   const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
@@ -276,9 +289,15 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       bytes: Buffer.byteLength(response, "utf8"),
       contract: violation === undefined ? "met" : "violated",
     },
+    ...(readViolations.length === 0 ? {} : { readViolations }),
   };
   const recordPath = await reserveWorkspacePath("launch", options.role, options.applicationRoot);
   await writeLaunchRecord(recordPath, record);
+  if (readViolations.length > 0) {
+    throw new LaunchError(
+      `Launched ${options.role} read outside its boundary: ${readViolations.join(", ")}. The record does not count this role as run.`,
+    );
+  }
   if (violation !== undefined) {
     throw new LaunchError(
       `Launched ${options.role} did not return what its prompt requires: ${violation}. Its reply is at ${responsePath}; the record does not count this role as run.`,

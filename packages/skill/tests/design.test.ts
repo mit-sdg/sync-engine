@@ -7,7 +7,7 @@ import {
   digestDesign,
   requireDesignDigest,
 } from "../skills/sync-engine/scripts/design.ts";
-import { responseContract } from "../skills/sync-engine/scripts/workspace.ts";
+import { readAudit, responseContract } from "../skills/sync-engine/scripts/workspace.ts";
 
 const temporary: string[] = [];
 
@@ -88,5 +88,30 @@ describe("role return contract", () => {
     expect(
       responseContract("application-worker", "Changed src/assembly.ts; check passed."),
     ).toBeUndefined();
+  });
+});
+
+describe("role read boundary", () => {
+  test("keeps the designer out of installed dependencies", () => {
+    expect(
+      readAudit("designer", [
+        "design/concepts/Shortening.md",
+        "node_modules/@mit-sdg/sync-engine/examples/message-board/src/host.ts",
+      ]),
+    ).toEqual(["node_modules/@mit-sdg/sync-engine/examples/message-board/src/host.ts"]);
+  });
+
+  test("lets implementation roles read examples and user docs, nothing else", () => {
+    expect(
+      readAudit("concept-worker", [
+        "src/concepts/Shortening.ts",
+        "node_modules/@mit-sdg/sync-engine/examples/message-board/src/concepts/Posting.ts",
+        "node_modules/@mit-sdg/sync-engine/docs/user/guide/authoring.md",
+        "node_modules/some-other-package/index.js",
+      ]),
+    ).toEqual([]);
+    expect(
+      readAudit("application-worker", ["node_modules/@mit-sdg/sync-engine/dist/command/main.js"]),
+    ).toEqual(["node_modules/@mit-sdg/sync-engine/dist/command/main.js"]);
   });
 });

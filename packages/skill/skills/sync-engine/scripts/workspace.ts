@@ -139,6 +139,31 @@ export interface LaunchRecord {
     readonly bytes: number;
     readonly contract: "met" | "violated";
   };
+  readonly readViolations?: readonly string[];
+}
+
+/**
+ * Where a role may read. The prompts say this already; the designer's boundary was prose
+ * while the workers' was a regex, so the role with least reason to read implementation had
+ * the weakest rule. A trial designer made 25 reads inside the installed package.
+ */
+export function readAudit(role: string, paths: readonly string[]): string[] {
+  const offending: string[] = [];
+  for (const path of paths) {
+    const normalized = path.split(sep).join("/");
+    const packaged = normalized.match(/(^|\/)node_modules\/(.*)$/)?.[2];
+    if (packaged === undefined) continue;
+    if (role === "designer" || role === "critic") {
+      offending.push(path);
+      continue;
+    }
+    if (!packaged.startsWith("@mit-sdg/")) continue;
+    const inside = packaged.replace(/^@mit-sdg\/[^/]+\//, "");
+    if (!inside.startsWith("examples/") && !inside.startsWith("docs/user/")) {
+      offending.push(path);
+    }
+  }
+  return [...new Set(offending)];
 }
 
 /**
@@ -207,6 +232,7 @@ export async function verifiedRecords(
     }
     if (entry.record.status !== settledStatus) continue;
     if (entry.record.response?.contract === "violated") continue;
+    if ((entry.record.readViolations ?? []).length > 0) continue;
     if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
       found.push(entry);
     }
