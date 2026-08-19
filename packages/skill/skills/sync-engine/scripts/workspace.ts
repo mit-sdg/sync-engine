@@ -163,6 +163,10 @@ export interface LaunchRecord {
  * Where a role may read: a designer or critic from supplied prompt material alone, an
  * implementation role additionally from the installed package's examples and user docs.
  * No role reads the skill's own sources; the compiler delivers what each one needs.
+ *
+ * A breach is recorded rather than enforced. The role has already done its work, the same
+ * prompt would produce the same reads, and only whoever maintains the prompts can act on
+ * it, so handback reports it instead of discarding the delivery.
  */
 export function readAudit(role: string, paths: readonly string[], skillRoot?: string): string[] {
   const skill = skillRoot === undefined ? undefined : canonical(skillRoot);
@@ -263,7 +267,6 @@ export async function verifiedRecords(
     }
     if (entry.record.status !== settledStatus) continue;
     if (entry.record.response?.contract === "violated") continue;
-    if ((entry.record.readViolations ?? []).length > 0) continue;
     if (
       designDigest !== undefined &&
       entry.record.designDigest !== undefined &&

@@ -83,7 +83,9 @@ After a role settles, two checks read from the harness instead of trusting the r
 
 The reply check compares the final message with the role's return contract. A critic returns either the required clean sentence or its findings, optionally inside a code fence, and nothing else. A worker reports changed paths and check outcomes. A response that does not match means the role does not count.
 
-The path check examines every path the role opened. A designer or critic works from its prompt alone. An implementation worker may also read the installed engine's `examples/` and `docs/user/`, but no other location inside the installed package. No role may read the skill's own sources.
+The path check records every path the role opened, and handback reports any that fall
+outside where that role may read. It does not fail the launch: the role has already
+finished, and only whoever maintains the prompts can act on it. A designer or critic works from its prompt alone. An implementation worker may also read the installed engine's `examples/` and `docs/user/`, but no other location inside the installed package. No role may read the skill's own sources.
 
 If harness tool records omit file paths, the launch record marks the audit unavailable rather than marking the role clean.
 

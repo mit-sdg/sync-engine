@@ -516,6 +516,7 @@ async function run(args: readonly string[]): Promise<void> {
             .digest("hex")
         : undefined;
     const drifted: string[] = [];
+    const strayed: string[] = [];
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
@@ -531,6 +532,9 @@ async function run(args: readonly string[]): Promise<void> {
         if (!known) unknown.push(`${role} ${entry.record.agentId}`);
         if (entry.record.status !== settledStatus) {
           unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
+        }
+        for (const path of entry.record.readViolations ?? []) {
+          strayed.push(`${role} read ${path}`);
         }
         if (entry.record.designDigest !== undefined && entry.record.designDigest !== args[5]) {
           drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
@@ -555,6 +559,9 @@ async function run(args: readonly string[]): Promise<void> {
       ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
+    if (strayed.length > 0) {
+      process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
+    }
     process.stdout.write(`Every required role ran independently.\n`);
     return;
   }

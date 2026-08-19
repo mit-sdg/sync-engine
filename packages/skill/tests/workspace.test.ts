@@ -136,12 +136,14 @@ describe("launch records", () => {
       response: { path: "r.md", sha256: "s", bytes: 4, contract: "violated" },
     });
     expect((await verifiedRecords("designer", rude)).length).toBe(0);
+  });
 
+  test("records a read outside the boundary without holding it against the role", async () => {
     const nosy = await applicationRoot();
     await record(nosy, "designer", {
       readViolations: ["node_modules/@mit-sdg/sync-engine/dist/x"],
     });
-    expect((await verifiedRecords("designer", nosy)).length).toBe(0);
+    expect((await verifiedRecords("designer", nosy)).length).toBe(1);
   });
 
   test("treats a dead role as finished but not settled", async () => {

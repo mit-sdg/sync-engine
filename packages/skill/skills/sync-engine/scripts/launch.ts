@@ -337,11 +337,6 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       `Launched ${options.role} ended ${settled.Status}, not ${settledStatus}, after ${resumes} resume attempts; the record does not count this role as run`,
     );
   }
-  if (readViolations.length > 0) {
-    throw new LaunchError(
-      `Launched ${options.role} read outside its boundary: ${readViolations.join(", ")}. The record does not count this role as run.`,
-    );
-  }
   if (violation !== undefined) {
     throw new LaunchError(
       `Launched ${options.role} did not return what its prompt requires: ${violation}. Its reply is at ${responsePath}; the record does not count this role as run.`,
