@@ -121,6 +121,40 @@ Valid roles are `designer`, `critic`, `concept-worker`, `application-worker`, `f
 
 Every command ends with `Next:` lines that give the exact syntax of possible following commands and name the relevant reference document. These lines describe syntax, not permission. The compiler does not decide product questions, approve a design, or decide when a stage is complete.
 
+## Choosing what each role sees
+
+Deciding what a role needs is the coordinator's judgement. Putting it in front of that role
+is the compiler's job, and the compiler does it the same way every time.
+
+Each role template declares named slots, and the coordinator fills them with
+`--input <slot>=<path>`, repeating a slot for several files:
+
+- `designer`: the brief, and optional catalog entries.
+- `critic`: the brief, every candidate design file, and optional catalog entries.
+- `concept-worker`: its assignment, the approved specifications, implementation examples,
+  and an optional reference.
+- `application-worker`: its assignment, the brief, the approved design, the public concept
+  surfaces rather than their internals, existing shared wiring, examples, and an optional
+  reference.
+- `frontend-worker`: its assignment, the brief, and the assembled public interface.
+- `evidence-worker`: its assignment, the brief, the contracts for its scenario, and the
+  assembled public interface.
+
+Three sources feed those slots. The catalog holds existing concepts, listed and shown with
+`sync-engine-catalog`, which a designer may reuse or reject and a critic may cite to argue
+for a better boundary. The installed engine ships implementation examples, and an
+assignment names at most one per concept and one per mechanism. The skill packages two
+references of its own, one for composition declarations and one for HTTP, given to the
+workers that need them.
+
+`sync-engine-analysis` is different. It helps the coordinator decide what to select, and
+its output never reaches a designer or critic.
+
+The compiler resolves each path, orders the inputs identically on every build, refuses a
+slot the role does not declare, and refuses a required slot left empty. A role therefore
+receives exactly the material named on the command line, and the prompt record lists every
+source that went into it.
+
 ## Prompt compiler
 
 Prompt templates use three directives: `include` adds shared text, `input` requires a file, and `input?` accepts an optional file.
