@@ -6,8 +6,9 @@ captured.
 ## Implement in bounded phases
 
 Start each assignment with the compiler, fill it, and check it before building the
-prompt. It refuses one role's paths going to another, a concept worker with
-application-wide commands or no focused type check, and a missing storage guarantee:
+prompt. Only `Allowed write paths` grants ownership. It refuses one role's paths going
+to another, a concept worker with application-wide commands or no focused type check,
+and a missing storage guarantee:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" assignment new --role <role> \
