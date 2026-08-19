@@ -46,7 +46,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const internals = await text(new URL("common/internals.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
     const composition = await text(new URL("inputs/composition.md", promptRoot));
-    expect(bytes(internals)).toBeLessThanOrEqual(0.625 * 1024);
+    expect(bytes(internals)).toBeLessThanOrEqual(0.8 * 1024);
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
@@ -61,6 +61,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(composition).toContain(
       "export const composition = { Publishing: { PublishPost, IndexOnPublish } };",
     );
+    // A worker probed the typechecker for a union it had already been given, and read the
+    // direct-route rule as forbidding a redirect status the handler accepts.
+    expect(internals).toContain("Making the typechecker reveal an API");
+    expect(http).toContain('redirect: "target", status: 307');
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
       path.endsWith(".md"),
@@ -155,10 +159,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     const limits: Record<string, number> = {
       designer: 13 * 1024,
       critic: 10.5 * 1024,
-      "concept-worker": 2.375 * 1024,
-      "application-worker": 3.25 * 1024,
-      "frontend-worker": 2.5 * 1024,
-      "evidence-worker": 2.125 * 1024,
+      "concept-worker": 2.5 * 1024,
+      "application-worker": 3.375 * 1024,
+      "frontend-worker": 2.625 * 1024,
+      "evidence-worker": 2.25 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));

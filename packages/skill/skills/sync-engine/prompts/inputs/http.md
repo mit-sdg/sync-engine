@@ -45,12 +45,12 @@ A client that cannot post — a browser following a link — reaches an endpoint
 policy `direct` route. The endpoint is unchanged; the route says how its value is served.
 
 ```ts
-direct: [{ method: "GET", path: "/{code}", endpoint: "/resolve", redirect: "target" }];
+direct: [{ method: "GET", path: "/{code}", endpoint: "/resolve", redirect: "target", status: 307 }];
 ```
 
 Each `{name}` fills the endpoint input of that name. `redirect` names a response field
-holding an absolute URL and answers 302; `status` alone answers that status with the JSON
-body; a route states one of them. GET only. The endpoint keeps its POST path, and a direct
+holding an absolute URL and answers 302, or the `status` the route also states. Without
+`redirect`, `status` answers that status with the JSON body. A route states at least one. GET only. The endpoint keeps its POST path, and a direct
 route carries no cookies and no request-origin check, so it cannot serve a cookie endpoint.
 
 ## Policy
