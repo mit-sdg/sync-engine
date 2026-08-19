@@ -113,7 +113,7 @@ jobs:
       - name: Test
         run: bun run test --shard=${{ matrix.shard }}/3
       - name: Platform application scenarios
-        if: matrix.shard == 1
+        if: matrix.shard == 2
         run: bun run scenario
 
   coverage:

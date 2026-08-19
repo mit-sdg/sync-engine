@@ -819,7 +819,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
         "shard: [1, 2, 3]",
         "run: bun run test --shard=${{ matrix.shard }}/3",
         "- name: Platform application scenarios",
-        "if: matrix.shard == 1",
+        "if: matrix.shard == 2",
         "run: bun run scenario",
       ],
     ],

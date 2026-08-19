@@ -495,7 +495,7 @@ describe("release source facts", () => {
     ["package", "os: [ubuntu-latest]"],
     ["test", "os: [windows-latest, macos-latest]"],
     ["test", "- name: Platform application scenarios"],
-    ["test", "if: matrix.shard == 1"],
+    ["test", "if: matrix.shard == 2"],
     ["coverage", "name: coverage-blob-${{ matrix.shard }}"],
     ["coverage-report", "pattern: coverage-blob-*"],
     ["coverage-report", "run: bun run coverage --mergeReports=.vitest-reports"],
@@ -512,8 +512,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       ".github/workflows/ci.yml",
-      "      - name: Platform application scenarios\n        if: matrix.shard == 1\n        run: bun run scenario",
-      "      - name: Platform application scenarios\n        if: matrix.shard == 1\n        run: bun run test",
+      "      - name: Platform application scenarios\n        if: matrix.shard == 2\n        run: bun run scenario",
+      "      - name: Platform application scenarios\n        if: matrix.shard == 2\n        run: bun run test",
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/ci.yml: test job is missing run: bun run scenario",
