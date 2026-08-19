@@ -259,7 +259,7 @@ describe("sync-engine-skill command", () => {
 
     const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
     expect(started.status).toBe(0);
-    const followUp = started.stdout.match(/Follow-up started: (\S+)/)?.[1]!;
+    const followUp = started.stdout.match(/Follow-up started: (\S+)/)![1]!;
     await writeFile(followUp, "Run `bun run test`.\n");
     const checked = run(
       ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
