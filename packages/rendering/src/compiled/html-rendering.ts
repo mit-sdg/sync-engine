@@ -1,5 +1,6 @@
 import type { InterfaceBinding } from "@mit-sdg/sync-engine/boundary";
 import {
+  isImmediate,
   isRenderer,
   isRendererInvocation,
   type HtmlNode,
@@ -123,6 +124,8 @@ export type FormedHtmlPatch =
 export interface CompiledHtmlRendering {
   readonly interface: string;
   readonly renderers: readonly string[];
+  /** Immediate identities invoked anywhere in the admitted renderer tree. */
+  readonly immediates: readonly string[];
   form(invocation: RendererInvocation, reader?: RenderingReader): Promise<FormedHtml>;
 }
 
@@ -275,8 +278,13 @@ interface FormedNodeResult {
 /** Compile the HTML renderer closure admitted by one named interface. */
 export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
   const admitted = new Set<string>();
+  const admittedImmediates = new Set<string>();
   for (const dependencies of Object.values(binding.dependencies)) {
     for (const dependency of dependencies) {
+      if (isImmediate(dependency.value)) {
+        admittedImmediates.add(dependency.identity);
+        continue;
+      }
       if (!isRenderer(dependency.value)) {
         throw new TypeError(
           `compileHtml: dependency ${JSON.stringify(dependency.identity)} is not a renderer declaration.`,
@@ -287,6 +295,7 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
   }
   for (const member of binding.members) {
     if (isRenderer(member.value)) admitted.add(member.identity);
+    if (isImmediate(member.value)) admittedImmediates.add(member.identity);
   }
 
   const renderers = Object.freeze([...admitted].sort((left, right) => left.localeCompare(right)));
@@ -486,6 +495,32 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
           );
         }
         values.push(askAttributes.join(" "));
+      } else if (part.kind === "immediate") {
+        const declared = part.invocation.$immediate;
+        if (!admittedImmediates.has(declared.identity)) {
+          throw new TypeError(
+            `compileHtml.form: immediate ${JSON.stringify(declared.identity)} is not admitted by ` +
+              `interface ${JSON.stringify(binding.identity)}.`,
+          );
+        }
+        const locate = (reference: { name: string }): string => {
+          const located = fields.get(reference.name);
+          if (located === undefined) {
+            throw new TypeError(
+              `compileHtml.form: immediate ${JSON.stringify(declared.identity)} uses field ` +
+                `${JSON.stringify(reference.name)} before its element is formed.`,
+            );
+          }
+          return located;
+        };
+        const args = Object.fromEntries(
+          Object.entries(part.invocation.args).map(([name, value]) => [
+            name,
+            Array.isArray(value) ? value.map(locate) : locate(value as { name: string }),
+          ]),
+        );
+        const payload = JSON.stringify({ immediate: declared.identity, args });
+        values.push(`data-rendered-on-${declared.on}="${escapeHtml(payload)}"`);
       } else if (part.kind === "renderer") {
         const declaration = canonical(part.invocation.$renderer.identity);
         const inputs = Object.fromEntries(
@@ -606,6 +641,14 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
     return { html: values.join(""), children: Object.freeze(children) };
   };
 
+  const usedImmediates = new Set<string>();
+  const collectImmediates = (node: HtmlNode): void => {
+    for (const part of node.parts) {
+      if (part.kind === "immediate") usedImmediates.add(part.invocation.$immediate.identity);
+      else if (part.kind === "read") collectImmediates(part.body);
+      else if (part.kind === "renderer") collectImmediates(part.invocation.$renderer.body);
+    }
+  };
   for (const identity of renderers) {
     const declaration = canonical(identity);
     validateInvocation(
@@ -615,11 +658,20 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
       },
       `renderer ${JSON.stringify(identity)}`,
     );
+    collectImmediates(declaration.body);
+  }
+  for (const identity of usedImmediates) {
+    if (!admittedImmediates.has(identity)) {
+      throw new TypeError(
+        `compileHtml: immediate ${JSON.stringify(identity)} is not admitted by interface ${JSON.stringify(binding.identity)}.`,
+      );
+    }
   }
 
   return Object.freeze({
     interface: binding.identity,
     renderers,
+    immediates: Object.freeze([...usedImmediates].sort((left, right) => left.localeCompare(right))),
     async form(invocation: RendererInvocation, reader?: RenderingReader): Promise<FormedHtml> {
       if (!isRendererInvocation(invocation)) {
         throw new TypeError("compileHtml.form: endpoint did not return a renderer invocation.");

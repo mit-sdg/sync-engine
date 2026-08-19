@@ -25,9 +25,12 @@ function scriptData(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 
-function browserRuntime(holder: string, root: string): string {
+function browserRuntime(holder: string, root: string, immediateSource: string): string {
   return `<script type="module">
 const rendering = ${scriptData({ holder, root, sequence: 0 })};
+const immediates = {
+${immediateSource}
+};
 const storageKey = (address) => "sync-engine:" + rendering.root + ":" + address;
 const field = (address) => document.querySelector('[data-rendered-seat="' + CSS.escape(address) + '"]');
 const arm = () => {
@@ -83,6 +86,26 @@ const arm = () => {
           }
           return null;
         };
+        const runImmediate = (attribute) => {
+          const raw = element.getAttribute(attribute);
+          if (!raw) return;
+          try {
+            const spec = JSON.parse(raw);
+            const implementation = immediates[spec.immediate];
+            if (!implementation) return;
+            const resolved = { element };
+            for (const [name, value] of Object.entries(spec.args ?? {})) {
+              resolved[name] = Array.isArray(value) ? value.map(field).filter(Boolean) : field(value);
+            }
+            implementation(resolved);
+            for (const value of Object.values(spec.args ?? {})) {
+              for (const address of Array.isArray(value) ? value : [value]) {
+                const held = field(address);
+                if (held) localStorage.setItem(storageKey(address), held.value);
+              }
+            }
+          } catch {}
+        };
         if (!result.ok) {
           const detail = result.error?.detail ?? result.error?.error ?? "The ask was refused.";
           if (refusalSeats.length > 0) {
@@ -91,6 +114,7 @@ const arm = () => {
             const answer = nearestAnswer();
             if (answer) answer.textContent = detail;
           }
+          runImmediate("data-rendered-on-refused");
           return;
         }
         for (const seat of refusalSeats) seat.textContent = "";
@@ -103,6 +127,7 @@ const arm = () => {
           const answer = nearestAnswer();
           if (answer) answer.textContent = "Accepted.";
         }
+        runImmediate("data-rendered-on-accepted");
       } finally {
         element.removeAttribute("aria-busy");
       }
@@ -236,7 +261,12 @@ function escapeHead(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function documentFor(holder: string, formed: FormedHtml, head: string): string {
+function documentFor(
+  holder: string,
+  formed: FormedHtml,
+  head: string,
+  immediateSource: string,
+): string {
   return [
     "<!doctype html>",
     '<html lang="en">',
@@ -245,19 +275,37 @@ function documentFor(holder: string, formed: FormedHtml, head: string): string {
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     head,
     "</head>",
-    `<body data-rendered-holder="${holder}"><div data-rendered-root>${formed.content.value}</div>${browserRuntime(holder, formed.holder)}</body>`,
+    `<body data-rendered-holder="${holder}"><div data-rendered-root>${formed.content.value}</div>${browserRuntime(holder, formed.holder, immediateSource)}</body>`,
     "</html>",
   ].join("");
 }
 
 /** Realize rendered endpoints in one interface as opening HTML documents. */
+/** Realization-bound implementations for declared immediates, by canonical identity. */
+export type ImmediateBindings = Record<string, (args: never) => unknown>;
+
 export function realize(options: {
   system: AnyAssembly;
   interface: InterfaceDefinition;
   head?: WebHead;
+  immediates?: ImmediateBindings;
 }): FetchRealization {
   const selected = bindInterface(options);
   const rendering = compileHtml(selected);
+  for (const identity of rendering.immediates) {
+    if (typeof options.immediates?.[identity] !== "function") {
+      throw new TypeError(
+        `Web.realize: immediate ${JSON.stringify(identity)} has no bound implementation; ` +
+          "pass it in the immediates option.",
+      );
+    }
+  }
+  const immediateSource = Object.entries(options.immediates ?? {})
+    .map(
+      ([identity, binding]) =>
+        `${JSON.stringify(identity)}: ${String(binding).replaceAll("</script", "<\\/script")}`,
+    )
+    .join(",\n");
   const reader = {
     async read(read: { concept: string; query: string }, input: Record<string, unknown>) {
       const concept = options.system.concepts[read.concept];
@@ -577,7 +625,7 @@ export function realize(options: {
         holders.delete(oldest);
         for (const stream of expired?.streams ?? []) stream.close();
       }
-      return new Response(documentFor(holder, formed, await headHtml()), {
+      return new Response(documentFor(holder, formed, await headHtml(), immediateSource), {
         status: 200,
         headers: {
           "cache-control": "no-store",

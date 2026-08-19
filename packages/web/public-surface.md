@@ -4,7 +4,7 @@
 
 <!-- register:web-realization:start -->
 
-`WebHead`, `realize`
+`ImmediateBindings`, `WebHead`, `realize`
 
 <!-- register:web-realization:end -->
 
@@ -38,3 +38,18 @@ clears on the next acceptance; an ask without declared seats falls back to the
 nearest enclosing `[data-rendered-answer]` element. Attribute patches address
 elements through their `data-rendered-attrs` marker and set or remove one
 attribute in place.
+
+## `@mit-sdg/sync-engine-web/immediates`
+
+<!-- register:web-immediates:start -->
+
+`ClearOnAccept`, `RefocusOnRefusal`, `stockImmediates`
+
+<!-- register:web-immediates:end -->
+
+Stock immediates for the common local consequences: `ClearOnAccept` empties
+its declared fields after the armed element's ask is accepted, and
+`RefocusOnRefusal` focuses its declared field after a refusal. Each is a
+realization-neutral declaration to re-export from an application's interface
+module; `stockImmediates` carries their browser implementations for
+`realize({ immediates })`.

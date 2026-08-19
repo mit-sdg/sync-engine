@@ -5,6 +5,7 @@ export type {
   FormedAsk,
   FormedAskInput,
   FormedAskOutput,
+  FormedAttributeNode,
   FormedClauseNode,
   FormedHtml,
   FormedHtmlContent,

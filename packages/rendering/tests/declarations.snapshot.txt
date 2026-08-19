@@ -113,6 +113,8 @@ export type FormedHtmlPatch = {
 export interface CompiledHtmlRendering {
     readonly interface: string;
     readonly renderers: readonly string[];
+    /** Immediate identities invoked anywhere in the admitted renderer tree. */
+    readonly immediates: readonly string[];
     form(invocation: RendererInvocation, reader?: RenderingReader): Promise<FormedHtml>;
 }
 export interface RenderingReader {
@@ -126,11 +128,11 @@ export declare function diffHtml(previous: FormedHtml, next: FormedHtml): readon
 === packages/rendering/dist/compiled/index.d.ts ===
 export { compileHtml, diffHtml } from "./html-rendering.ts";
 export type { RenderingReader } from "./html-rendering.ts";
-export type { CompiledHtmlRendering, FormedAsk, FormedAskInput, FormedAskOutput, FormedClauseNode, FormedHtml, FormedHtmlContent, FormedHtmlNode, FormedHtmlPatch, FormedHtmlTree, FormedRead, FormedRendererNode, FormedRowNode, FormedShowNode, } from "./html-rendering.ts";
+export type { CompiledHtmlRendering, FormedAsk, FormedAskInput, FormedAskOutput, FormedAttributeNode, FormedClauseNode, FormedHtml, FormedHtmlContent, FormedHtmlNode, FormedHtmlPatch, FormedHtmlTree, FormedRead, FormedRendererNode, FormedRowNode, FormedShowNode, } from "./html-rendering.ts";
 
 === packages/rendering/dist/language/index.d.ts ===
-export { each, html, isRenderer, isRendererInvocation, renderer, where } from "./renderer.ts";
-export type { HtmlNode, Renderer, RendererAsk, RendererBindings, RendererBuilder, RendererDeclaration, RendererInputs, RendererInvocation, RendererRead, RendererValueRef, RenderingNode, } from "./renderer.ts";
+export { each, html, immediate, isImmediate, isImmediateInvocation, isRenderer, isRendererInvocation, many, renderer, where, } from "./renderer.ts";
+export type { AttributeValuePart, HtmlNode, Immediate, ImmediateArgKind, ImmediateDeclaration, ImmediateInvocation, ImmediateTrigger, Renderer, RendererAsk, RendererBindings, RendererBuilder, RendererDeclaration, RendererInputs, RendererInvocation, RendererRead, RendererValueRef, RenderingNode, } from "./renderer.ts";
 
 === packages/rendering/dist/language/renderer.d.ts ===
 import type { ReadLine } from "@mit-sdg/sync-engine/language";
@@ -163,6 +165,30 @@ export type AttributeValuePart = {
     readonly kind: "ref";
     readonly ref: RendererValueRef;
 };
+export type ImmediateTrigger = "accepted" | "refused";
+export type ImmediateArgKind = "field" | {
+    readonly many: "field";
+};
+/** Declare that an immediate argument names several values of one kind. */
+export declare function many(kind: "field"): {
+    readonly many: "field";
+};
+export interface ImmediateDeclaration {
+    readonly format: "sync-engine.immediate";
+    readonly version: 1;
+    readonly identity: string;
+    readonly description: string;
+    readonly on: ImmediateTrigger;
+    readonly contract: Readonly<Record<string, ImmediateArgKind>>;
+}
+export interface ImmediateInvocation {
+    readonly $immediate: ImmediateDeclaration;
+    readonly args: Readonly<Record<string, RendererValueRef | readonly RendererValueRef[]>>;
+}
+export interface Immediate {
+    (args: Record<string, unknown>): ImmediateInvocation;
+    readonly declaration: ImmediateDeclaration;
+}
 export interface HtmlNode {
     readonly kind: "html";
     readonly parts: readonly ({
@@ -189,6 +215,9 @@ export interface HtmlNode {
     } | {
         readonly kind: "ask";
         readonly ask: RendererAsk;
+    } | {
+        readonly kind: "immediate";
+        readonly invocation: ImmediateInvocation;
     } | {
         readonly kind: "read";
         readonly cardinality: "each" | "where";
@@ -226,6 +255,11 @@ interface RendererReadBuilder {
 }
 export declare function each(line: ReadLine): RendererReadBuilder;
 export declare function where(line: ReadLine): RendererReadBuilder;
+export declare function immediate(description: string, contract: {
+    readonly on: ImmediateTrigger;
+} & Record<string, unknown>): Immediate;
+export declare function isImmediate(value: unknown): value is Immediate;
+export declare function isImmediateInvocation(value: unknown): value is ImmediateInvocation;
 export declare function renderer(description: string, build: RendererBuilder<OpenRendererBag, OpenRendererBag, OpenRendererBag>): Renderer<RendererInputs>;
 export declare function renderer<Inputs extends RendererInputs, Bindings extends RendererBindings = Record<string, never>, Fields extends RendererBindings = Record<string, never>>(description: string, build: RendererBuilder<Inputs, Bindings, Fields>): Renderer<Inputs>;
 export declare function isRenderer(value: unknown): value is Renderer;

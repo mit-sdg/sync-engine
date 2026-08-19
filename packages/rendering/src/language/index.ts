@@ -1,6 +1,23 @@
-export { each, html, isRenderer, isRendererInvocation, renderer, where } from "./renderer.ts";
+export {
+  each,
+  html,
+  immediate,
+  isImmediate,
+  isImmediateInvocation,
+  isRenderer,
+  isRendererInvocation,
+  many,
+  renderer,
+  where,
+} from "./renderer.ts";
 export type {
+  AttributeValuePart,
   HtmlNode,
+  Immediate,
+  ImmediateArgKind,
+  ImmediateDeclaration,
+  ImmediateInvocation,
+  ImmediateTrigger,
   Renderer,
   RendererAsk,
   RendererBindings,

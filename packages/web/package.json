@@ -16,6 +16,10 @@
     "./realization": {
       "types": "./dist/realization/index.d.ts",
       "import": "./dist/realization/index.js"
+    },
+    "./immediates": {
+      "types": "./dist/immediates/index.d.ts",
+      "import": "./dist/immediates/index.js"
     }
   },
   "peerDependencies": {

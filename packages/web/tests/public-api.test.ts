@@ -8,7 +8,7 @@ test("Web has one exact realization surface", () => {
   const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
     exports: Record<string, unknown>;
   };
-  expect(Object.keys(manifest.exports)).toEqual(["./realization"]);
+  expect(Object.keys(manifest.exports)).toEqual(["./realization", "./immediates"]);
 
   const source = ts.createSourceFile(
     "index.ts",
@@ -24,8 +24,12 @@ test("Web has one exact realization surface", () => {
       ? statement.exportClause.elements.map(({ name }) => name.text)
       : [],
   );
-  expect(names).toEqual(["realize"]);
-  expect(readFileSync(resolve(root, "public-surface.md"), "utf8")).toContain(
-    "<!-- register:web-realization:start -->\n\n`realize`\n\n<!-- register:web-realization:end -->",
+  expect(names).toEqual(["realize", "ImmediateBindings", "WebHead"]);
+  const surface = readFileSync(resolve(root, "public-surface.md"), "utf8");
+  expect(surface).toContain(
+    "<!-- register:web-realization:start -->\n\n`ImmediateBindings`, `WebHead`, `realize`\n\n<!-- register:web-realization:end -->",
+  );
+  expect(surface).toContain(
+    "<!-- register:web-immediates:start -->\n\n`ClearOnAccept`, `RefocusOnRefusal`, `stockImmediates`\n\n<!-- register:web-immediates:end -->",
   );
 });

@@ -30,7 +30,7 @@ back to replacement of its own clause, never to positional identity.
 
 <!-- register:rendering-language:start -->
 
-`AttributeValuePart`, `HtmlNode`, `Renderer`, `RendererAsk`, `RendererBindings`, `RendererBuilder`, `RendererDeclaration`, `RendererInputs`, `RendererInvocation`, `RendererRead`, `RendererValueRef`, `RenderingNode`, `each`, `html`, `isRenderer`, `isRendererInvocation`, `renderer`, `where`
+`AttributeValuePart`, `HtmlNode`, `Immediate`, `ImmediateArgKind`, `ImmediateDeclaration`, `ImmediateInvocation`, `ImmediateTrigger`, `Renderer`, `RendererAsk`, `RendererBindings`, `RendererBuilder`, `RendererDeclaration`, `RendererInputs`, `RendererInvocation`, `RendererRead`, `RendererValueRef`, `RenderingNode`, `each`, `html`, `immediate`, `isImmediate`, `isImmediateInvocation`, `isRenderer`, `isRendererInvocation`, `many`, `renderer`, `where`
 
 <!-- register:rendering-language:end -->
 
@@ -103,3 +103,20 @@ Named renderers, shows, query-backed clauses, fields, and asks are members of
 one rendered statement family. The current ordered part representation is floor
 machinery and may change without changing the authored syntax or statement
 semantics.
+
+### `immediate`
+
+```ts
+immediate(description: string, contract: { on: "accepted" | "refused" } & Record<string, "field" | { many: "field" }>): Immediate
+```
+
+An immediate declares a local consequence of one armed element's ask outcome —
+the declaration is realization-neutral and carries no code. Its canonical
+interface export supplies identity, like a renderer's. Invoking it inside a
+builder (`${ClearOnAccept({ fields: [draft] })}`) arms the element with inert
+identity-and-args data, checked against the declared contract; args name
+fields from the third bag, singly or via `many("field")`. A realization binds
+the implementation by identity and refuses to realize an admitted renderer
+whose immediates lack bindings. An immediate never writes concept State and
+never sends asks; those rules are review-enforced discipline over registered
+code, not a sandbox.

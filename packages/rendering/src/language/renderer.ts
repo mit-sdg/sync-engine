@@ -31,6 +31,34 @@ export type AttributeValuePart =
   | { readonly kind: "literal"; readonly value: string }
   | { readonly kind: "ref"; readonly ref: RendererValueRef };
 
+export type ImmediateTrigger = "accepted" | "refused";
+
+export type ImmediateArgKind = "field" | { readonly many: "field" };
+
+/** Declare that an immediate argument names several values of one kind. */
+export function many(kind: "field"): { readonly many: "field" } {
+  return Object.freeze({ many: kind });
+}
+
+export interface ImmediateDeclaration {
+  readonly format: "sync-engine.immediate";
+  readonly version: 1;
+  readonly identity: string;
+  readonly description: string;
+  readonly on: ImmediateTrigger;
+  readonly contract: Readonly<Record<string, ImmediateArgKind>>;
+}
+
+export interface ImmediateInvocation {
+  readonly $immediate: ImmediateDeclaration;
+  readonly args: Readonly<Record<string, RendererValueRef | readonly RendererValueRef[]>>;
+}
+
+export interface Immediate {
+  (args: Record<string, unknown>): ImmediateInvocation;
+  readonly declaration: ImmediateDeclaration;
+}
+
 export interface HtmlNode {
   readonly kind: "html";
   readonly parts: readonly (
@@ -49,6 +77,7 @@ export interface HtmlNode {
         readonly value: readonly AttributeValuePart[];
       }
     | { readonly kind: "ask"; readonly ask: RendererAsk }
+    | { readonly kind: "immediate"; readonly invocation: ImmediateInvocation }
     | {
         readonly kind: "read";
         readonly cardinality: "each" | "where";
@@ -524,6 +553,16 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
       parts.push(ask);
       continue;
     }
+    if (isImmediateInvocation(statement)) {
+      if (scanner.state !== "tag") {
+        throw new TypeError(
+          `html: immediate ${JSON.stringify(statement.$immediate.identity)} at interpolation ` +
+            `${interpolation} must arm an element.`,
+        );
+      }
+      parts.push(Object.freeze({ kind: "immediate" as const, invocation: statement }));
+      continue;
+    }
     if (!isRendererInvocation(statement)) {
       throw new TypeError(
         `html: interpolation ${interpolation} is not a checked authored statement. ` +
@@ -866,6 +905,148 @@ function resolveRefusalSeats(identity: string, body: HtmlNode): HtmlNode {
   return resolved;
 }
 
+// ── immediates ─────────────────────────────────────────────────────────────
+//
+// An immediate declares a local consequence of an observed ask outcome. The
+// declaration is realization-neutral and carries no code; a realization binds
+// the implementation by canonical identity. Invoking a declared immediate in a
+// renderer arms an element with inert identity-and-args data.
+
+const Immediates = new WeakSet<object>();
+
+function immediateFieldRef(value: unknown, site: string): RendererValueRef {
+  if (typeof value !== "symbol") {
+    throw new TypeError(`${site} must name a renderer field.`);
+  }
+  const reference = currentBuildContext()?.values.get(value);
+  if (reference === undefined || reference.scope !== "field") {
+    throw new TypeError(`${site} must use the field bag.`);
+  }
+  return reference;
+}
+
+export function immediate(
+  description: string,
+  contract: { readonly on: ImmediateTrigger } & Record<string, unknown>,
+): Immediate {
+  if (description.trim() === "") {
+    throw new TypeError("immediate(...) needs a human description.");
+  }
+  const { on, ...argKinds } = contract;
+  if (on !== "accepted" && on !== "refused") {
+    throw new TypeError('immediate(...) needs an "on" trigger: "accepted" or "refused".');
+  }
+  const declaredArgs: Record<string, ImmediateArgKind> = {};
+  for (const [name, kind] of Object.entries(argKinds)) {
+    const isMany =
+      typeof kind === "object" && kind !== null && (kind as { many?: unknown }).many === "field";
+    if (kind !== "field" && !isMany) {
+      throw new TypeError(
+        `immediate(...) argument ${JSON.stringify(name)} needs the kind "field" or many("field").`,
+      );
+    }
+    declaredArgs[name] = isMany ? Object.freeze({ many: "field" as const }) : "field";
+  }
+
+  let identity: string | undefined;
+  let declaration: ImmediateDeclaration | undefined;
+  const declared = ((args: Record<string, unknown>) => {
+    if (typeof args !== "object" || args === null || Array.isArray(args)) {
+      throw new TypeError("An immediate invocation needs an argument mapping.");
+    }
+    const installed = declared.declaration;
+    const resolved: Record<string, RendererValueRef | readonly RendererValueRef[]> = {};
+    for (const [name, kind] of Object.entries(installed.contract)) {
+      if (!Object.hasOwn(args, name)) {
+        throw new TypeError(
+          `Immediate ${JSON.stringify(installed.identity)} omitted declared argument ${JSON.stringify(name)}.`,
+        );
+      }
+      const site = `immediate ${JSON.stringify(installed.identity)} argument ${JSON.stringify(name)}`;
+      const value = args[name];
+      if (kind === "field") {
+        resolved[name] = immediateFieldRef(value, site);
+      } else {
+        if (!Array.isArray(value)) {
+          throw new TypeError(`${site} must name a list of renderer fields.`);
+        }
+        resolved[name] = Object.freeze(value.map((entry) => immediateFieldRef(entry, site)));
+      }
+    }
+    for (const name of Object.keys(args)) {
+      if (!Object.hasOwn(installed.contract, name)) {
+        throw new TypeError(
+          `Immediate ${JSON.stringify(installed.identity)} received undeclared argument ${JSON.stringify(name)}.`,
+        );
+      }
+    }
+    return Object.freeze({ $immediate: installed, args: Object.freeze(resolved) });
+  }) as Immediate;
+
+  interfaceDeclaration(declared, (installed) => {
+    if (identity !== undefined && identity !== installed) {
+      throw new Error(
+        `immediate: one declaration cannot be installed as both ${JSON.stringify(identity)} and ${JSON.stringify(installed)}.`,
+      );
+    }
+    identity = installed;
+  });
+
+  Object.defineProperty(declared, "declaration", {
+    enumerable: true,
+    get() {
+      if (identity === undefined) {
+        throw new Error(
+          `immediate: ${JSON.stringify(description)} must be a canonical top-level interface export before it is invoked.`,
+        );
+      }
+      declaration ??= Object.freeze({
+        format: "sync-engine.immediate" as const,
+        version: 1 as const,
+        identity,
+        description,
+        on,
+        contract: Object.freeze(declaredArgs),
+      });
+      return declaration;
+    },
+  });
+
+  Immediates.add(declared);
+  return declared;
+}
+
+export function isImmediate(value: unknown): value is Immediate {
+  return typeof value === "function" && Immediates.has(value);
+}
+
+export function isImmediateInvocation(value: unknown): value is ImmediateInvocation {
+  if (typeof value !== "object" || value === null || !Object.hasOwn(value, "$immediate")) {
+    return false;
+  }
+  const declaration = (value as { $immediate?: unknown }).$immediate;
+  if (typeof declaration !== "object" || declaration === null) return false;
+  const candidate = declaration as Partial<ImmediateDeclaration>;
+  if (
+    candidate.format !== "sync-engine.immediate" ||
+    candidate.version !== 1 ||
+    typeof candidate.identity !== "string" ||
+    typeof candidate.description !== "string" ||
+    (candidate.on !== "accepted" && candidate.on !== "refused") ||
+    typeof candidate.contract !== "object" ||
+    candidate.contract === null
+  ) {
+    return false;
+  }
+  const args = (value as { args?: unknown }).args;
+  if (typeof args !== "object" || args === null) return false;
+  return Object.values(args).every((entry) =>
+    Array.isArray(entry)
+      ? entry.every((ref) => isRendererValueRef(ref) && ref.scope === "field")
+      : isRendererValueRef(entry) && (entry as RendererValueRef).scope === "field",
+  );
+}
+
 export function renderer(
   description: string,
   build: RendererBuilder<OpenRendererBag, OpenRendererBag, OpenRendererBag>,
@@ -1138,6 +1319,8 @@ function isPortableHtmlNode(node: HtmlNode, inputs: readonly string[], seen: Set
       }
     } else if (part.kind === "ask") {
       if (!isPortableAsk(part.ask, inputs)) return false;
+    } else if (part.kind === "immediate") {
+      if (!isImmediateInvocation(part.invocation)) return false;
     } else if (part.kind === "read") {
       if (!isPortableReadPlacement(part, inputs, seen)) return false;
     } else if (part.kind === "renderer") {
