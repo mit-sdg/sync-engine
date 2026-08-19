@@ -123,8 +123,7 @@ Every command ends with `Next:` lines that give the exact syntax of possible fol
 
 ## Choosing what each role sees
 
-Deciding what a role needs is the coordinator's judgement. Putting it in front of that role
-is the compiler's job, and the compiler does it the same way every time.
+The coordinator decides what a role needs. The compiler puts it in the prompt.
 
 Each role template declares named slots, and the coordinator fills them with
 `--input <slot>=<path>`, repeating a slot for several files:
@@ -140,20 +139,18 @@ Each role template declares named slots, and the coordinator fills them with
 - `evidence-worker`: its assignment, the brief, the contracts for its scenario, and the
   assembled public interface.
 
-Three sources feed those slots. The catalog holds existing concepts, listed and shown with
-`sync-engine-catalog`, which a designer may reuse or reject and a critic may cite to argue
-for a better boundary. The installed engine ships implementation examples, and an
-assignment names at most one per concept and one per mechanism. The skill packages two
-references of its own, one for composition declarations and one for HTTP, given to the
-workers that need them.
+Three sources fill those slots. `sync-engine-catalog` lists and shows existing concepts,
+which a designer can reuse or reject and a critic can cite to argue for a better boundary.
+The installed engine ships implementation examples; an assignment names at most one per
+concept and one per mechanism. The skill carries two references of its own, for composition
+declarations and for HTTP, and they go to the workers that need them.
 
-`sync-engine-analysis` is different. It helps the coordinator decide what to select, and
+`sync-engine-analysis` is for the coordinator alone. It helps decide what to select, and
 its output never reaches a designer or critic.
 
-The compiler resolves each path, orders the inputs identically on every build, refuses a
-slot the role does not declare, and refuses a required slot left empty. A role therefore
-receives exactly the material named on the command line, and the prompt record lists every
-source that went into it.
+The compiler resolves each path, keeps the inputs in a fixed order, rejects a slot the role
+does not declare, and rejects a required slot left empty. A role gets exactly the files
+named on the command line, and the prompt record lists all of them.
 
 ## Prompt compiler
 
