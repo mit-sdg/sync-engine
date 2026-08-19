@@ -159,6 +159,8 @@ export interface LaunchOptions {
   readonly applicationRoot: string;
   readonly timeoutSeconds: number;
   readonly thinking?: string;
+  /** Set only when the user names a model for roles; otherwise a role inherits. */
+  readonly model?: string;
   readonly coordinatorId?: string;
 }
 
@@ -212,6 +214,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     );
   }
   const coordinator = inspectAgent(coordinatorId);
+  const model = options.model ?? coordinator.Model;
   const applicationRoot = canonical(options.applicationRoot);
   const thinking = childThinking(
     coordinator.Provider,
@@ -246,7 +249,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       "--provider",
       coordinator.Provider,
       "--model",
-      coordinator.Model,
+      model,
       ...(thinking === undefined ? [] : ["--thinking", thinking]),
       ...placement,
       "--background",
@@ -262,7 +265,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   const child = inspectAgent(started.agentId);
   const mismatches = [
     ...(child.Provider === coordinator.Provider ? [] : [`provider ${child.Provider}`]),
-    ...(child.Model === coordinator.Model ? [] : [`model ${child.Model}`]),
+    ...(child.Model === model ? [] : [`model ${child.Model}`]),
     ...(thinking === undefined || child.Thinking === thinking
       ? []
       : [`thinking ${child.Thinking}`]),

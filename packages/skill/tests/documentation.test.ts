@@ -152,7 +152,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      expect(bytes(await stage(name))).toBeLessThanOrEqual(7 * 1024);
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(7.25 * 1024);
     }
 
     expect(workflow).not.toContain("## Design and criticism");

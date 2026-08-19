@@ -48,7 +48,9 @@ Prompt budgets: designer 32, critic 48, concept 24, application 48, frontend 48,
 32 KiB. Split a worker into explicit batches only on budget overflow or user-requested
 parallelism.
 
-Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand.
+Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand. Add
+`--model <model>` only when the user named a model for roles; the launch record attests
+whichever model ran.
 Start one concept worker for all approved concepts, owning only assigned
 concept and focused test paths.
 
