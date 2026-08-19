@@ -173,7 +173,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const limits: Record<string, number> = {
       designer: 14.75 * 1024,
       critic: 18 * 1024,
-      "concept-worker": 2.625 * 1024,
+      "concept-worker": 2.875 * 1024,
       "application-worker": 3.75 * 1024,
       "frontend-worker": 2.625 * 1024,
       "evidence-worker": 2.75 * 1024,

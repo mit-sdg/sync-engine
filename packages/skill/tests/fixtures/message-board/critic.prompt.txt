@@ -294,7 +294,10 @@ endpoint(path, vars => receive(input)...then(respond(body)), { input?, validator
 - `InputContractDecl` takes `required` (a missing listed key returns `INVALID_INPUT`) and
   `defaults` (filled only when a key is absent). Without one, assembly intersects the keys
   every exported `receive(...)` for that path mentions. An explicit contract replaces that
-  rather than merging, and only one may declare it per path.
+  rather than merging, and only one may declare it per path. It must leave one `receive`
+  alternative reachable: every key that alternative mentions is `required` or carries a
+  matching default, or assembly refuses the path. A second alternative differing only by
+  an omitted key is the invention the sibling rule forbids.
 
 ## Assignment
 

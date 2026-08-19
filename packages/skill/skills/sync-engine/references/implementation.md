@@ -83,7 +83,10 @@ scenario/test paths.
 
 Return an ordinary implementation defect to the original worker, not a replacement, in
 a compiler-named file holding only the new diagnostic, affected paths, and
-command. Never resend its full prompt or name a follow-up:
+command. Quote the failing check verbatim, including every name it lists, and name the
+command that produced it: a paraphrase drops declarations, and a narrower check that
+cannot reproduce the failure proves nothing by passing. Never resend its full prompt or
+name a follow-up:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" follow-up new --role <role>
