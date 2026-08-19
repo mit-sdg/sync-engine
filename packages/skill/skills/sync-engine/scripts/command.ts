@@ -208,6 +208,9 @@ function usage(): string {
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
     [--brief <path>]
 
+Roles:
+  designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker
+
 Prompt options:
   --design-root <directory>       Required for implementation and evidence roles
   --design-digest <sha256>        Closed reviewed design digest for that directory
@@ -341,7 +344,8 @@ async function run(args: readonly string[]): Promise<void> {
   if (args[0] === "follow-up" && args[1] === "new" && args.length === 4) {
     if (args[2] !== "--role") throw new Error(`follow-up new requires --role`);
     const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    if (!promptRoles.includes(role as PromptRole))
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
     const path = await reserveWorkspacePath("followup", role);
     await writeFile(path, "", "utf8");
     process.stdout.write(`Follow-up started: ${path}\n`);
@@ -436,7 +440,8 @@ async function run(args: readonly string[]): Promise<void> {
       throw new Error(`assignment new requires --role then --design-digest`);
     }
     const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    if (!promptRoles.includes(role as PromptRole))
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
     const path = await reserveWorkspacePath("assignment", role);
     await writeFile(path, assignmentTemplate(role, args[5]!), "utf8");
     process.stdout.write(`Assignment started: ${path}\n`);
@@ -478,7 +483,8 @@ async function run(args: readonly string[]): Promise<void> {
     if (role === undefined || prompt === undefined) {
       throw new Error(`launch requires --role and --prompt`);
     }
-    if (!promptRoles.includes(role as PromptRole)) throw new Error(`Unknown role: ${role}`);
+    if (!promptRoles.includes(role as PromptRole))
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
     await requireCompletedRole(role);
     const launched = await launchRole({
       role,

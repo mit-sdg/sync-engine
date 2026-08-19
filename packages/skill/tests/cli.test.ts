@@ -632,6 +632,33 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     expect(run(["assignment", "check", path!], directory).status).toBe(0);
   });
 
+  test("names the roles and slots instead of sending the coordinator to the source", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-roles-");
+    temporary.push(directory);
+    const unknown = run(
+      ["assignment", "new", "--role", "concept", "--design-digest", "a".repeat(64)],
+      directory,
+    );
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain(
+      "Unknown role: concept; roles are designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker",
+    );
+    expect(run(["--help"], directory).stdout).toContain(
+      "designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker",
+    );
+
+    await writeConfiguredApplication(directory);
+    const brief = resolve(directory, "product", "brief.md");
+    await mkdir(dirname(brief), { recursive: true });
+    await cp(taskBrief, brief);
+    const wrongSlot = run(
+      ["prompt", "build", "--role", "designer", "--input", `outline=${brief}`],
+      directory,
+    );
+    expect(wrongSlot.status).toBe(1);
+    expect(wrongSlot.stderr).toContain("Role designer has no input slot: outline; its slots are");
+  });
+
   test("names follow-up files itself", async () => {
     const directory = await temporaryDirectory("sync-engine-skill-followup-");
     temporary.push(directory);

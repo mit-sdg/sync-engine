@@ -71,6 +71,12 @@ function displayName(path: string): string {
   return normalized === "" ? basename(resolve(path)) : normalized;
 }
 
+/** Every slot a role accepts, required ones first, optional ones marked. */
+function describeSlots(slots: ReadonlyMap<string, boolean>): string {
+  const names = [...slots].sort(([, a], [, b]) => Number(b) - Number(a));
+  return names.map(([name, required]) => (required ? name : `${name} (optional)`)).join(", ");
+}
+
 function parseTemplate(source: string): ReadonlyMap<string, boolean> {
   const slots = new Map<string, boolean>();
   for (const line of source.split("\n")) {
@@ -106,7 +112,9 @@ export interface BuildPromptOptions {
 
 export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPrompt> {
   if (!promptRoles.includes(options.role as PromptRole)) {
-    throw new PromptBuildError(`Unknown role: ${options.role}`);
+    throw new PromptBuildError(
+      `Unknown role: ${options.role}; roles are ${promptRoles.join(", ")}`,
+    );
   }
   const role = options.role as PromptRole;
   const downstream = [
@@ -144,8 +152,11 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
   const seenDisplayNames = new Set<string>();
 
   for (const input of options.inputs) {
-    if (!slots.has(input.slot))
-      throw new PromptBuildError(`Role ${role} has no input slot: ${input.slot}`);
+    if (!slots.has(input.slot)) {
+      throw new PromptBuildError(
+        `Role ${role} has no input slot: ${input.slot}; its slots are ${describeSlots(slots)}`,
+      );
+    }
     const resolvedPath = resolve(input.path);
     if (seenPaths.has(resolvedPath))
       throw new PromptBuildError(`Duplicate input file: ${input.path}`);
@@ -164,7 +175,9 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
 
   for (const [slot, required] of slots) {
     if (required && (grouped.get(slot)?.length ?? 0) === 0) {
-      throw new PromptBuildError(`Missing required input: ${slot}`);
+      throw new PromptBuildError(
+        `Missing required input: ${slot}; role ${role} takes ${describeSlots(slots)}`,
+      );
     }
   }
 
