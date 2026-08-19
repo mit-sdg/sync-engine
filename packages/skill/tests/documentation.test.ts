@@ -550,7 +550,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
     );
     expect(normalized).toContain(
-      "A product exposing HTTP installs `@mit-sdg/sync-engine-http` at that release and hosts through it; a hand-rolled server, router, or CORS is a defect",
+      "A product exposing HTTP installs `@mit-sdg/sync-engine-http` at that release and serves its JSON surface through the handler. The host owns the listener and may add routes the POST/JSON projection cannot express, such as a redirect; reimplementing the handler, its policy, or its error shaping is a defect",
     );
     expect(normalized).toContain(
       "Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application worker; it is the declaration API that role exists to use",
