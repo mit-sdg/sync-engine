@@ -213,6 +213,7 @@ export const workspaceCatalog = [
       "skills/sync-engine/prompts/roles/application-worker.md",
       "skills/sync-engine/prompts/roles/frontend-worker.md",
       "skills/sync-engine/prompts/roles/evidence-worker.md",
+      "skills/sync-engine/prompts/inputs/composition.md",
       "skills/sync-engine/prompts/inputs/http.md",
       "skills/sync-engine/prompts/templates/product-brief.md",
     ],
