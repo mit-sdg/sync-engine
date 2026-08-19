@@ -17,3 +17,11 @@ export type {
   FormedRowNode,
   FormedShowNode,
 } from "./html-rendering.ts";
+export { compileContext, resolveContextAsk } from "./context-rendering.ts";
+export type {
+  CompiledContextRendering,
+  FormedContext,
+  FormedContextAsk,
+  FormedContextAskInput,
+  FormedContextSource,
+} from "./context-rendering.ts";

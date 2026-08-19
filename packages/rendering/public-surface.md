@@ -6,7 +6,7 @@
 
 <!-- register:rendering-compiled:start -->
 
-`CompiledHtmlRendering`, `FormedAsk`, `FormedAskInput`, `FormedAskOutput`, `FormedAttributeNode`, `FormedClauseNode`, `FormedHtml`, `FormedHtmlContent`, `FormedHtmlNode`, `FormedHtmlPatch`, `FormedHtmlTree`, `FormedRead`, `FormedRendererNode`, `FormedRowNode`, `FormedShowNode`, `RenderingReader`, `compileHtml`, `diffHtml`
+`CompiledContextRendering`, `CompiledHtmlRendering`, `FormedAsk`, `FormedAskInput`, `FormedAskOutput`, `FormedAttributeNode`, `FormedClauseNode`, `FormedContext`, `FormedContextAsk`, `FormedContextAskInput`, `FormedContextSource`, `FormedHtml`, `FormedHtmlContent`, `FormedHtmlNode`, `FormedHtmlPatch`, `FormedHtmlTree`, `FormedRead`, `FormedRendererNode`, `FormedRowNode`, `FormedShowNode`, `RenderingReader`, `compileContext`, `compileHtml`, `diffHtml`, `resolveContextAsk`
 
 <!-- register:rendering-compiled:end -->
 
@@ -30,7 +30,7 @@ back to replacement of its own clause, never to positional identity.
 
 <!-- register:rendering-language:start -->
 
-`AttributeValuePart`, `HtmlNode`, `Immediate`, `ImmediateArgKind`, `ImmediateDeclaration`, `ImmediateInvocation`, `ImmediateTrigger`, `Renderer`, `RendererAsk`, `RendererBindings`, `RendererBuilder`, `RendererDeclaration`, `RendererInputs`, `RendererInvocation`, `RendererRead`, `RendererValueRef`, `RenderingNode`, `each`, `html`, `immediate`, `isImmediate`, `isImmediateInvocation`, `isRenderer`, `isRendererInvocation`, `many`, `renderer`, `where`
+`AttributeValuePart`, `ContextNode`, `HtmlNode`, `Immediate`, `ImmediateArgKind`, `ImmediateDeclaration`, `ImmediateInvocation`, `ImmediateTrigger`, `Renderer`, `RendererAsk`, `RendererBindings`, `RendererBuilder`, `RendererDeclaration`, `RendererInputs`, `RendererInvocation`, `RendererRead`, `RendererValueRef`, `RenderingNode`, `context`, `each`, `html`, `immediate`, `isImmediate`, `isImmediateInvocation`, `isRenderer`, `isRendererInvocation`, `many`, `renderer`, `where`
 
 <!-- register:rendering-language:end -->
 

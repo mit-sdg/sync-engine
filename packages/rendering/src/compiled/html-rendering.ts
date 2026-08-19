@@ -9,6 +9,7 @@ import {
   type RendererRead,
   type RendererValueRef,
 } from "../language/renderer.ts";
+import { identifyRow, samePortableValue } from "./shared.ts";
 
 export interface FormedHtmlContent {
   readonly format: "html";
@@ -134,61 +135,6 @@ export interface RenderingReader {
     read: Pick<RendererRead, "concept" | "query">,
     input: Record<string, unknown>,
   ): Promise<unknown>;
-}
-
-function samePortableValue(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
-    return false;
-  }
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((entry, index) => samePortableValue(entry, right[index]))
-    );
-  }
-  const leftRecord = left as Record<string, unknown>;
-  const rightRecord = right as Record<string, unknown>;
-  const leftKeys = Object.keys(leftRecord).sort((a, b) => a.localeCompare(b));
-  const rightKeys = Object.keys(rightRecord).sort((a, b) => a.localeCompare(b));
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && samePortableValue(leftRecord[key], rightRecord[key]),
-    )
-  );
-}
-
-function canonicalPortable(value: unknown, path = "identity"): unknown {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (Array.isArray(value)) {
-    return value.map((entry, index) => canonicalPortable(entry, `${path}[${index}]`));
-  }
-  if (typeof value !== "object" || value === null) {
-    throw new TypeError(`${path} contains a non-portable ${typeof value} value.`);
-  }
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new TypeError(`${path} contains a non-plain object.`);
-  }
-  return Object.fromEntries(
-    Object.keys(value as Record<string, unknown>)
-      .sort((left, right) => left.localeCompare(right))
-      .map((key) => [
-        key,
-        canonicalPortable((value as Record<string, unknown>)[key], `${path}.${key}`),
-      ]),
-  );
-}
-
-function hex(value: string): string {
-  return [...new TextEncoder().encode(value)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function marker(edge: "start" | "end", address: string): string {
@@ -320,6 +266,11 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
     }
     const identity = invocation.$renderer.identity;
     const declaration = canonical(identity);
+    if (declaration.body.kind !== "html") {
+      throw new TypeError(
+        `compileHtml: renderer ${JSON.stringify(identity)} at ${path} uses the ${declaration.body.kind} family.`,
+      );
+    }
     let placement = 0;
     for (const part of invocation.$renderer.body.parts) {
       if (part.kind !== "renderer") continue;
@@ -523,6 +474,11 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
         values.push(`data-rendered-on-${declared.on}="${escapeHtml(payload)}"`);
       } else if (part.kind === "renderer") {
         const declaration = canonical(part.invocation.$renderer.identity);
+        if (declaration.body.kind !== "html") {
+          throw new TypeError(
+            `compileHtml.form: renderer ${JSON.stringify(declaration.identity)} uses the ${declaration.body.kind} family.`,
+          );
+        }
         const inputs = Object.fromEntries(
           declaration.inputs.map((name) => [name, resolve(part.invocation[name], scope)]),
         );
@@ -575,28 +531,14 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
             );
           }
           const record = row as Record<string, unknown>;
-          let rowSegment: string;
-          if (part.cardinality === "each" && part.read.identity !== undefined) {
-            for (const field of part.read.identity) {
-              if (!Object.hasOwn(record, field)) {
-                throw new TypeError(
-                  `compileHtml.form: ${part.read.concept}.${part.read.query} row ${rowIndex + 1} has no identity field ${JSON.stringify(field)}.`,
-                );
-              }
-            }
-            const key = JSON.stringify(
-              canonicalPortable(part.read.identity.map((field) => record[field])),
-            );
-            if (identities.has(key)) {
-              throw new TypeError(
-                `compileHtml.form: ${part.read.concept}.${part.read.query} answered duplicate row identity.`,
-              );
-            }
-            identities.add(key);
-            rowSegment = `key-${hex(key)}`;
-          } else {
-            rowSegment = part.cardinality === "where" ? "present" : `index-${rowIndex}`;
-          }
+          const { segment: rowSegment } = identifyRow(
+            part.read,
+            part.cardinality,
+            record,
+            rowIndex,
+            identities,
+            "compileHtml.form",
+          );
           const rowAddress = `${clauseAddress}/${rowSegment}`;
           const bindings: Record<string, unknown> = { ...scope.bindings };
           for (const [field, reference] of Object.entries(part.read.output)) {
@@ -645,8 +587,10 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
   const collectImmediates = (node: HtmlNode): void => {
     for (const part of node.parts) {
       if (part.kind === "immediate") usedImmediates.add(part.invocation.$immediate.identity);
-      else if (part.kind === "read") collectImmediates(part.body);
-      else if (part.kind === "renderer") collectImmediates(part.invocation.$renderer.body);
+      else if (part.kind === "read" && part.body.kind === "html") collectImmediates(part.body);
+      else if (part.kind === "renderer" && part.invocation.$renderer.body.kind === "html") {
+        collectImmediates(part.invocation.$renderer.body);
+      }
     }
   };
   for (const identity of renderers) {
@@ -658,7 +602,7 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
       },
       `renderer ${JSON.stringify(identity)}`,
     );
-    collectImmediates(declaration.body);
+    if (declaration.body.kind === "html") collectImmediates(declaration.body);
   }
   for (const identity of usedImmediates) {
     if (!admittedImmediates.has(identity)) {
@@ -679,6 +623,11 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
       const identity = invocation.$renderer.identity;
       validateInvocation(invocation, "endpoint answer");
       const declaration = canonical(identity);
+      if (declaration.body.kind !== "html") {
+        throw new TypeError(
+          `compileHtml.form: renderer ${JSON.stringify(identity)} uses the ${declaration.body.kind} family.`,
+        );
+      }
       const formation: Formation = {
         fields: new Set(),
         asks: [],

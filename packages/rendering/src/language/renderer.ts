@@ -88,7 +88,23 @@ export interface HtmlNode {
   )[];
 }
 
-export type RenderingNode = HtmlNode;
+export interface ContextNode {
+  readonly kind: "context";
+  readonly parts: readonly (
+    | { readonly kind: "literal"; readonly value: string }
+    | { readonly kind: "show"; readonly value: RendererValueRef }
+    | { readonly kind: "ask"; readonly ask: RendererAsk }
+    | {
+        readonly kind: "read";
+        readonly cardinality: "each" | "where";
+        readonly read: RendererRead;
+        readonly body: ContextNode;
+      }
+    | { readonly kind: "renderer"; readonly invocation: RendererInvocation }
+  )[];
+}
+
+export type RenderingNode = HtmlNode | ContextNode;
 
 export interface RendererDeclaration {
   readonly format: "sync-engine.renderer";
@@ -539,10 +555,15 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
           `html: ${statement.cardinality} read at interpolation ${interpolation} must occupy a subtree place.`,
         );
       }
-      parts.push(statement);
+      if (statement.body.kind !== "html") {
+        throw new TypeError(
+          `html: ${statement.cardinality} read at interpolation ${interpolation} must use its html placement.`,
+        );
+      }
+      parts.push(statement as Extract<HtmlPart, { kind: "read" }>);
       continue;
     }
-    const ask = lowerAsk(statement);
+    const ask = lowerAsk(statement, "html");
     if (ask !== undefined) {
       if (scanner.state !== "tag") {
         throw new TypeError(
@@ -569,6 +590,13 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
           "Place a renderer invocation here; computed values and callbacks are not supported.",
       );
     }
+    if (statement.$renderer.body.kind !== "html") {
+      throw new TypeError(
+        `html: renderer ${JSON.stringify(statement.$renderer.identity)} at interpolation ` +
+          `${interpolation} uses the ${statement.$renderer.body.kind} family; cross-family ` +
+          "placement needs an explicit translator.",
+      );
+    }
     if (scanner.state !== "content") {
       throw new TypeError(
         `html: renderer ${JSON.stringify(statement.$renderer.identity)} at interpolation ${interpolation} ` +
@@ -586,6 +614,158 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
     throw new TypeError("html: an attribute value seat is never closed.");
   }
   return Object.freeze({ kind: "html", parts: Object.freeze(parts) });
+}
+
+// ── the context tag ────────────────────────────────────────────────────────
+//
+// A context projection's medium is plain text, so literal text is first-class
+// content and the family adds no placement members: shows fill text seats,
+// reads and same-family children compose as in HTML, and an ask interpolated
+// in flow position joins the unit's ask set without contributing text. The
+// common authored indentation is stripped from literal lines so the formed
+// text reads as written, not as nested in source.
+
+type ContextPart = ContextNode["parts"][number];
+
+/**
+ * Strip common literal-line indentation and trim blank leading and trailing
+ * lines. The last content line keeps its terminating newline so composed
+ * units — rows of an each clause especially — stay line-separated.
+ */
+function dedentTemplate(strings: TemplateStringsArray): string[] {
+  const chunks = [...strings];
+  const last = chunks.length - 1;
+  chunks[0] = chunks[0].replace(/^(?:[ \t]*\r?\n)+/, "");
+  chunks[last] = chunks[last].replace(/(?:\r?\n[ \t]*)+$/, "\n");
+  let indent: number | undefined;
+  chunks.forEach((chunk, position) => {
+    const starts: number[] = position === 0 ? [0] : [];
+    for (let at = chunk.indexOf("\n"); at !== -1; at = chunk.indexOf("\n", at + 1)) {
+      starts.push(at + 1);
+    }
+    for (const start of starts) {
+      let end = start;
+      while (end < chunk.length && (chunk[end] === " " || chunk[end] === "\t")) end += 1;
+      // A line that is whitespace to a newline is blank; a line that is
+      // whitespace to the chunk's end still has content when an interpolation
+      // follows the chunk.
+      if (end < chunk.length && chunk[end] === "\n") continue;
+      if (end === chunk.length && position === last) continue;
+      const width = end - start;
+      indent = indent === undefined ? width : Math.min(indent, width);
+    }
+  });
+  if (indent === undefined || indent === 0) return chunks;
+  const lineStart = new RegExp(`\n[ \t]{1,${indent}}`, "g");
+  const opening = new RegExp(`^[ \t]{1,${indent}}`);
+  return chunks.map((chunk, position) => {
+    const stripped = chunk.replace(lineStart, "\n");
+    return position === 0 ? stripped.replace(opening, "") : stripped;
+  });
+}
+
+function firstAskUnderEach(
+  node: ContextNode,
+  underEach: boolean,
+): { readonly concept: string; readonly action: string } | undefined {
+  for (const part of node.parts) {
+    if (part.kind === "ask" && underEach) return part.ask;
+    if (part.kind === "read") {
+      const found = firstAskUnderEach(part.body, underEach || part.cardinality === "each");
+      if (found !== undefined) return found;
+    }
+    if (part.kind === "renderer" && underEach) {
+      const body = part.invocation.$renderer.body;
+      if (body.kind === "context") {
+        const found = firstAskUnderEach(body, true);
+        if (found !== undefined) return found;
+      }
+    }
+  }
+  return undefined;
+}
+
+export function context(
+  strings: TemplateStringsArray,
+  ...statements: readonly unknown[]
+): ContextNode {
+  if (strings.length !== statements.length + 1) {
+    throw new TypeError("context: malformed tagged template input.");
+  }
+  const chunks = dedentTemplate(strings);
+  const parts: ContextPart[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    if (chunks[index] !== "") {
+      parts.push(Object.freeze({ kind: "literal" as const, value: chunks[index] }));
+    }
+    if (index === statements.length) continue;
+    const statement = statements[index];
+    const interpolation = index + 1;
+    if (typeof statement === "symbol") {
+      const value = currentBuildContext()?.values.get(statement);
+      if (value === undefined) {
+        throw new TypeError(
+          `context: interpolation ${interpolation} is not a renderer value from the current declaration.`,
+        );
+      }
+      if (value.scope === "field") {
+        throw new TypeError(
+          `context: blank ${JSON.stringify(value.name)} at interpolation ${interpolation} has no ` +
+            "held value before ask time; blanks belong inside asks.",
+        );
+      }
+      parts.push(Object.freeze({ kind: "show" as const, value }));
+      continue;
+    }
+    if (isReadPlacement(statement)) {
+      if (statement.body.kind !== "context") {
+        throw new TypeError(
+          `context: ${statement.cardinality} read at interpolation ${interpolation} must use its context placement.`,
+        );
+      }
+      parts.push(statement as Extract<ContextPart, { kind: "read" }>);
+      continue;
+    }
+    if (isImmediateInvocation(statement)) {
+      throw new TypeError(
+        `context: immediate ${JSON.stringify(statement.$immediate.identity)} at interpolation ` +
+          `${interpolation} arms an HTML element; a context projection has none.`,
+      );
+    }
+    const ask = lowerAsk(statement, "context");
+    if (ask !== undefined) {
+      if (Object.keys(ask.ask.output).length > 0 || ask.ask.refuses !== undefined) {
+        throw new TypeError(
+          `context: ask ${ask.ask.concept}.${ask.ask.action} at interpolation ${interpolation} ` +
+            "names display seats; a context projection returns the answer or refusal to the edge " +
+            "through the ask itself.",
+        );
+      }
+      parts.push(ask);
+      continue;
+    }
+    if (isRendererInvocation(statement)) {
+      if (statement.$renderer.body.kind !== "context") {
+        throw new TypeError(
+          `context: renderer ${JSON.stringify(statement.$renderer.identity)} at interpolation ` +
+            `${interpolation} uses the ${statement.$renderer.body.kind} family; cross-family ` +
+            "placement needs an explicit translator.",
+        );
+      }
+      parts.push(
+        Object.freeze({
+          kind: "renderer" as const,
+          invocation: lowerRendererInvocation(statement, interpolation),
+        }),
+      );
+      continue;
+    }
+    throw new TypeError(
+      `context: interpolation ${interpolation} is not a checked authored statement. ` +
+        "Place a show, read, ask, or context renderer invocation here.",
+    );
+  }
+  return Object.freeze({ kind: "context", parts: Object.freeze(parts) });
 }
 
 function bindingBag<T extends RendererBindings>(
@@ -639,7 +819,7 @@ function askSeatMapping(
   return Object.freeze(mapping);
 }
 
-function lowerAsk(value: unknown): AskPlacement | undefined {
+function lowerAsk(value: unknown, family: "html" | "context"): AskPlacement | undefined {
   if (
     typeof value !== "object" ||
     value === null ||
@@ -657,10 +837,10 @@ function lowerAsk(value: unknown): AskPlacement | undefined {
   };
   const ref = step.action?.action;
   if (typeof ref?.refConcept !== "string" || typeof ref.refAction !== "string") {
-    throw new TypeError("html: an ask needs a static concept action reference.");
+    throw new TypeError(`${family}: an ask needs a static concept action reference.`);
   }
   if (typeof step.action?.input !== "object" || step.action.input === null) {
-    throw new TypeError("html: an ask needs an action input mapping.");
+    throw new TypeError(`${family}: an ask needs an action input mapping.`);
   }
   const input = Object.freeze(
     Object.fromEntries(
@@ -677,18 +857,18 @@ function lowerAsk(value: unknown): AskPlacement | undefined {
   let refuses: Readonly<Record<string, RendererValueRef>> | undefined;
   if (step.action.output !== undefined) {
     if (typeof step.action.output !== "object" || step.action.output === null) {
-      throw new TypeError("html: an ask response needs an output mapping.");
+      throw new TypeError(`${family}: an ask response needs an output mapping.`);
     }
     if (step.linePosture === "refused") {
       refuses = askSeatMapping(step.action.output as Record<string, unknown>, "refusal");
       if (Object.keys(refuses).length === 0) {
-        throw new TypeError("html: .refuses({ ... }) needs at least one refusal seat.");
+        throw new TypeError(`${family}: .refuses({ ... }) needs at least one refusal seat.`);
       }
     } else {
       output = askSeatMapping(step.action.output as Record<string, unknown>, "response");
     }
   } else if (step.linePosture === "refused") {
-    throw new TypeError("html: .refuses({ ... }) needs at least one refusal seat.");
+    throw new TypeError(`${family}: .refuses({ ... }) needs at least one refusal seat.`);
   }
   return Object.freeze({
     kind: "ask" as const,
@@ -702,7 +882,12 @@ function lowerAsk(value: unknown): AskPlacement | undefined {
   });
 }
 
-type ReadPlacement = Extract<HtmlNode["parts"][number], { kind: "read" }>;
+interface ReadPlacement {
+  readonly kind: "read";
+  readonly cardinality: "each" | "where";
+  readonly read: RendererRead;
+  readonly body: RenderingNode;
+}
 
 const ReadPlacements = new WeakSet<object>();
 
@@ -740,7 +925,7 @@ function lowerRendererInvocation(
 function readPlacement(
   cardinality: "each" | "where",
   line: ReadLine,
-  body: HtmlNode,
+  body: RenderingNode,
 ): ReadPlacement {
   if (
     typeof line !== "object" ||
@@ -801,12 +986,16 @@ function readPlacement(
 
 interface RendererReadBuilder {
   html(strings: TemplateStringsArray, ...statements: readonly unknown[]): ReadPlacement;
+  context(strings: TemplateStringsArray, ...statements: readonly unknown[]): ReadPlacement;
 }
 
 function readBuilder(cardinality: "each" | "where", line: ReadLine): RendererReadBuilder {
   return Object.freeze({
     html(strings: TemplateStringsArray, ...statements: readonly unknown[]) {
       return readPlacement(cardinality, line, html(strings, ...statements));
+    },
+    context(strings: TemplateStringsArray, ...statements: readonly unknown[]) {
+      return readPlacement(cardinality, line, context(strings, ...statements));
     },
   });
 }
@@ -1132,8 +1321,21 @@ export function renderer<
         if (callerInputs.has("$renderer")) {
           throw new TypeError('A renderer caller input cannot be named "$renderer".');
         }
-        if (body === null || typeof body !== "object" || body.kind !== "html") {
+        if (
+          body === null ||
+          typeof body !== "object" ||
+          (body.kind !== "html" && body.kind !== "context")
+        ) {
           throw new TypeError(`Renderer ${JSON.stringify(identity)} must return a rendering node.`);
+        }
+        if (body.kind === "context") {
+          const plural = firstAskUnderEach(body, false);
+          if (plural !== undefined) {
+            throw new TypeError(
+              `Renderer ${JSON.stringify(identity)}: ask ${plural.concept}.${plural.action} under ` +
+                "an each clause has no single subject; open each row's unit at its own root invocation.",
+            );
+          }
         }
         declaration = Object.freeze({
           format: "sync-engine.renderer" as const,
@@ -1141,7 +1343,7 @@ export function renderer<
           identity,
           description,
           inputs: Object.freeze([...callerInputs].sort((left, right) => left.localeCompare(right))),
-          body: resolveRefusalSeats(identity, body),
+          body: body.kind === "html" ? resolveRefusalSeats(identity, body) : body,
         });
       }
       return declaration;
@@ -1181,9 +1383,15 @@ function isRendererInvocationValue(value: unknown, seen: Set<object>): value is 
   ) {
     return false;
   }
-  const body = candidate.body as Partial<HtmlNode>;
-  if (body.kind !== "html" || !Array.isArray(body.parts)) return false;
-  if (!isPortableHtmlNode(body as HtmlNode, candidate.inputs, seen)) return false;
+  const body = candidate.body as Partial<RenderingNode>;
+  if (!Array.isArray(body.parts)) return false;
+  if (body.kind === "html") {
+    if (!isPortableHtmlNode(body as HtmlNode, candidate.inputs, seen)) return false;
+  } else if (body.kind === "context") {
+    if (!isPortableContextNode(body as ContextNode, candidate.inputs, seen)) return false;
+  } else {
+    return false;
+  }
   const declaredInputs = [...candidate.inputs].sort((left, right) => left.localeCompare(right));
   if (new Set(declaredInputs).size !== declaredInputs.length) return false;
   if (!declaredInputs.every((input, index) => input === candidate.inputs?.[index])) return false;
@@ -1209,6 +1417,7 @@ function isPortableReadPlacement(
   value: ReadPlacement,
   inputs: readonly string[],
   seen: Set<object>,
+  family: "html" | "context",
 ): boolean {
   if (value.cardinality !== "each" && value.cardinality !== "where") return false;
   const read = value.read as Partial<RendererRead>;
@@ -1219,7 +1428,7 @@ function isPortableReadPlacement(
     read.input === null ||
     typeof read.output !== "object" ||
     read.output === null ||
-    value.body?.kind !== "html"
+    value.body?.kind !== family
   ) {
     return false;
   }
@@ -1236,7 +1445,9 @@ function isPortableReadPlacement(
   ) {
     return false;
   }
-  return isPortableHtmlNode(value.body, inputs, seen);
+  return value.body.kind === "html"
+    ? isPortableHtmlNode(value.body, inputs, seen)
+    : isPortableContextNode(value.body, inputs, seen);
 }
 
 function isPortableAsk(ask: RendererAsk, inputs: readonly string[]): boolean {
@@ -1322,17 +1533,54 @@ function isPortableHtmlNode(node: HtmlNode, inputs: readonly string[], seen: Set
     } else if (part.kind === "immediate") {
       if (!isImmediateInvocation(part.invocation)) return false;
     } else if (part.kind === "read") {
-      if (!isPortableReadPlacement(part, inputs, seen)) return false;
+      if (!isPortableReadPlacement(part, inputs, seen, "html")) return false;
     } else if (part.kind === "renderer") {
-      for (const [name, value] of Object.entries(part.invocation)) {
-        if (name === "$renderer") continue;
-        if (typeof value === "symbol") return false;
-        if (isRendererValueRef(value)) {
-          if (value.scope === "field") return false;
-          if (value.scope === "input" && !inputs.includes(value.name)) return false;
-        }
-      }
-      if (!isRendererInvocationValue(part.invocation, new Set(seen))) return false;
+      if (!isPortableChildInvocation(part.invocation, inputs, seen, "html")) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isPortableChildInvocation(
+  invocation: RendererInvocation,
+  inputs: readonly string[],
+  seen: Set<object>,
+  family: "html" | "context",
+): boolean {
+  if (invocation.$renderer?.body?.kind !== family) return false;
+  for (const [name, value] of Object.entries(invocation)) {
+    if (name === "$renderer") continue;
+    if (typeof value === "symbol") return false;
+    if (isRendererValueRef(value)) {
+      if (value.scope === "field") return false;
+      if (value.scope === "input" && !inputs.includes(value.name)) return false;
+    }
+  }
+  return isRendererInvocationValue(invocation, new Set(seen));
+}
+
+function isPortableContextNode(
+  node: ContextNode,
+  inputs: readonly string[],
+  seen: Set<object>,
+): boolean {
+  for (const part of node.parts) {
+    if (typeof part !== "object" || part === null) return false;
+    if (part.kind === "literal") {
+      if (typeof part.value !== "string") return false;
+    } else if (part.kind === "show") {
+      if (!isRendererValueRef(part.value)) return false;
+      if (part.value.scope === "field") return false;
+      if (part.value.scope === "input" && !inputs.includes(part.value.name)) return false;
+    } else if (part.kind === "ask") {
+      if (!isPortableAsk(part.ask, inputs)) return false;
+      if (Object.keys(part.ask.output).length > 0 || part.ask.refuses !== undefined) return false;
+    } else if (part.kind === "read") {
+      if (!isPortableReadPlacement(part, inputs, seen, "context")) return false;
+    } else if (part.kind === "renderer") {
+      if (!isPortableChildInvocation(part.invocation, inputs, seen, "context")) return false;
     } else {
       return false;
     }

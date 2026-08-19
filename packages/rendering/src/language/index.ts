@@ -1,4 +1,5 @@
 export {
+  context,
   each,
   html,
   immediate,
@@ -12,6 +13,7 @@ export {
 } from "./renderer.ts";
 export type {
   AttributeValuePart,
+  ContextNode,
   HtmlNode,
   Immediate,
   ImmediateArgKind,
