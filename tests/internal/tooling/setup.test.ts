@@ -66,6 +66,7 @@ describe("sync-engine setup", () => {
       expect(first.installation).toBe("completed");
       expect(observed).toEqual([root]);
       expect(first.written).toEqual([
+        ".gitignore",
         "tsconfig.json",
         "src/text.d.ts",
         "src/concepts.ts",
@@ -96,7 +97,7 @@ describe("sync-engine setup", () => {
       expect(second.manifestUpdated).toBe(false);
       expect(second.installation).toBe("not-needed");
       expect(second.written).toEqual([]);
-      expect(second.verified).toHaveLength(6);
+      expect(second.verified).toHaveLength(7);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -155,6 +156,7 @@ describe("sync-engine setup", () => {
   test("never replaces existing source, config, or tsconfig files", async () => {
     const root = await project();
     const files = [
+      ".gitignore",
       "tsconfig.json",
       "generated.config.ts",
       "src/text.d.ts",
@@ -240,7 +242,7 @@ describe("sync-engine setup", () => {
       expect(result.guidance).toContain(
         "Bun installation was explicitly skipped; run `bun install` before validation.",
       );
-      expect(result.written).toHaveLength(6);
+      expect(result.written).toHaveLength(7);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -326,6 +328,7 @@ describe("sync-engine setup", () => {
         packageManager: "bun@1.3.14",
       });
       expect(result.written).toEqual([
+        ".gitignore",
         "tsconfig.json",
         "src/text.d.ts",
         "src/concepts.ts",

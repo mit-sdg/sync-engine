@@ -28,6 +28,15 @@ const IDENTIFIERS: Readonly<Record<string, readonly string[]>> = {
   "src/concepts.ts": ["applicationConceptSet"],
   "src/assembly.ts": ["assembleApplication"],
 };
+// Shipped as a constant rather than a template file: npm renames a packed `.gitignore`
+// to `.npmignore`, so the template directory cannot carry one.
+const GITIGNORE = `node_modules/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+.DS_Store
+`;
 const STANDARD_SCRIPTS = {
   generate: "sync-engine artifacts pin",
   check: "sync-engine check && sync-engine artifacts check && tsc --noEmit",
@@ -40,7 +49,7 @@ function setupDirectory(): string {
 
 async function templates(): Promise<Map<string, string>> {
   const directory = setupDirectory();
-  const result = new Map<string, string>();
+  const result = new Map<string, string>([[".gitignore", GITIGNORE]]);
   for (const path of await filesBelow(directory)) {
     result.set(relative(directory, path).replaceAll("\\", "/"), await readFile(path, "utf8"));
   }
@@ -357,6 +366,7 @@ export async function setupProject(
   }
 
   const order = [
+    ".gitignore",
     "tsconfig.json",
     "src/text.d.ts",
     "src/concepts.ts",
