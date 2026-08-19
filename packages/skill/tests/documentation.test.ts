@@ -169,9 +169,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const internals = await text(new URL("common/internals.md", promptRoot));
     const boundaryNote = await text(new URL("inputs/boundary.md", promptRoot));
+    const composition = await text(new URL("inputs/composition.md", promptRoot));
     const limits: Record<string, number> = {
       designer: 14.75 * 1024,
-      critic: 11.75 * 1024,
+      critic: 18 * 1024,
       "concept-worker": 2.625 * 1024,
       "application-worker": 3.75 * 1024,
       "frontend-worker": 2.625 * 1024,
@@ -187,6 +188,7 @@ describe("compact sync-engine Agent Skill documents", () => {
             "../common/concept-format.md": format,
             "../common/internals.md": internals,
             "../inputs/boundary.md": boundaryNote,
+            "../inputs/composition.md": composition,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -393,7 +395,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("gives every role narrow file inputs and mutation boundaries", async () => {
     const expectedSlots: Record<string, string[]> = {
       designer: ["brief", "existing-design", "catalog"],
-      critic: ["brief", "candidate", "catalog", "blocker", "reference"],
+      critic: ["brief", "candidate", "catalog", "blocker"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
       // examples is required for the two roles that must write framework-shaped code
       "application-worker": [
