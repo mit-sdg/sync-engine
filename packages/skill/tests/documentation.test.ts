@@ -64,6 +64,11 @@ describe("compact sync-engine Agent Skill documents", () => {
     // A worker probed the typechecker for a union it had already been given, and read the
     // direct-route rule as forbidding a redirect status the handler accepts.
     expect(internals).toContain("Making the typechecker reveal an API");
+    // A run shipped an application with no endpoints and passed every check, because
+    // evidence exercised concept classes instead of the boundary.
+    expect(await text(new URL("roles/evidence-worker.md", promptRoot))).toContain(
+      "never by calling a concept class",
+    );
     expect(http).toContain('redirect: "target", status: 307');
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
@@ -162,7 +167,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "concept-worker": 2.5 * 1024,
       "application-worker": 3.375 * 1024,
       "frontend-worker": 2.625 * 1024,
-      "evidence-worker": 2.25 * 1024,
+      "evidence-worker": 2.5 * 1024,
     };
     for (const [role, limit] of Object.entries(limits)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));

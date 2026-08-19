@@ -9,6 +9,10 @@ Do not edit production source, generated output, design, or unrelated tests.
 
 <!-- include: ../common/internals.md -->
 
+Reach a brief outcome through the application's own boundary, an endpoint by way of the
+gateway, a client, or the host, never by calling a concept class; a required outcome no
+boundary call can produce is a blocker, not a gap to cover another way.
+
 Use existing evidence when it already proves every required outcome; return that
 existing evidence is sufficient and change nothing. Otherwise add the smallest
 scenarios able to disprove required visible success and applicable refusals,
