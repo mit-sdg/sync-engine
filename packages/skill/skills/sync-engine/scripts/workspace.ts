@@ -159,14 +159,22 @@ export interface LaunchRecord {
   readonly resumes?: number;
 }
 
+/** The skill's own prompt sources and compiler, which the compiler expands for a role. */
+const skillMaterial = /\/prompts\/(roles|common|inputs|templates)\/|\/skills\/[^/]+\/scripts\//;
+
 /**
  * Where a role may read: a designer or critic from supplied prompt material alone, an
  * implementation role additionally from the installed package's examples and user docs.
+ * No role reads the skill's own sources; the compiler delivers what each one needs.
  */
 export function readAudit(role: string, paths: readonly string[]): string[] {
   const offending: string[] = [];
   for (const path of paths) {
     const normalized = path.split(sep).join("/");
+    if (skillMaterial.test(normalized)) {
+      offending.push(path);
+      continue;
+    }
     const packaged = normalized.match(/(^|\/)node_modules\/(.*)$/)?.[2];
     if (packaged === undefined) continue;
     if (role === "designer" || role === "critic") {
