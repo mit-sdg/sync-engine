@@ -60,3 +60,7 @@ Return the report now; never wait for a request to emit it.
 ## Selected catalog alternatives
 
 <!-- input?: catalog -->
+
+## Outstanding implementation blocker
+
+<!-- input?: blocker -->

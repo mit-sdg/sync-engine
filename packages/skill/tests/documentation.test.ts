@@ -46,12 +46,17 @@ describe("compact sync-engine Agent Skill documents", () => {
     const internals = await text(new URL("common/internals.md", promptRoot));
     const http = await text(new URL("inputs/http.md", promptRoot));
     const composition = await text(new URL("inputs/composition.md", promptRoot));
+    const boundary = await text(new URL("inputs/boundary.md", promptRoot));
     expect(bytes(internals)).toBeLessThanOrEqual(0.8 * 1024);
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
     expect(bytes(composition)).toBeLessThanOrEqual(6 * 1024);
+    // The designer's boundary note must never grow into a second http.md: naming a
+    // transport is what put unbuildable renderings into a design.
+    expect(bytes(boundary)).toBeLessThanOrEqual(1.25 * 1024);
+    expect(boundary).not.toMatch(/HTTP|POST|\bGET\b|JSON/);
     // A skeleton with placeholder identifiers taught a worker nothing, so the declaration
     // API states a real trigger and a real export rather than their shapes.
     expect(composition).toContain(
@@ -69,6 +74,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(await text(new URL("roles/evidence-worker.md", promptRoot))).toContain(
       "never by calling a concept class",
     );
+    // Criticism cannot settle a capability gap; eight passes on one run proved it.
+    expect(await stage("implementation")).toContain("no critic can settle it");
     expect(http).toContain('redirect: "target", status: 307');
 
     const roleFiles = (await filesBelow(new URL("roles/", promptRoot))).filter((path) =>
@@ -145,7 +152,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      expect(bytes(await stage(name))).toBeLessThanOrEqual(6.5 * 1024);
+      expect(bytes(await stage(name))).toBeLessThanOrEqual(7 * 1024);
     }
 
     expect(workflow).not.toContain("## Design and criticism");
@@ -161,9 +168,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     const ssf = await text(new URL("common/ssf.md", promptRoot));
     const format = await text(new URL("common/concept-format.md", promptRoot));
     const internals = await text(new URL("common/internals.md", promptRoot));
+    const boundaryNote = await text(new URL("inputs/boundary.md", promptRoot));
     const limits: Record<string, number> = {
-      designer: 13 * 1024,
-      critic: 10.5 * 1024,
+      designer: 14 * 1024,
+      critic: 10.75 * 1024,
       "concept-worker": 2.5 * 1024,
       "application-worker": 3.375 * 1024,
       "frontend-worker": 2.625 * 1024,
@@ -178,6 +186,7 @@ describe("compact sync-engine Agent Skill documents", () => {
             "../common/ssf.md": ssf,
             "../common/concept-format.md": format,
             "../common/internals.md": internals,
+            "../inputs/boundary.md": boundaryNote,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -384,7 +393,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("gives every role narrow file inputs and mutation boundaries", async () => {
     const expectedSlots: Record<string, string[]> = {
       designer: ["brief", "existing-design", "catalog"],
-      critic: ["brief", "candidate", "catalog"],
+      critic: ["brief", "candidate", "catalog", "blocker"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
       // examples is required for the two roles that must write framework-shaped code
       "application-worker": [

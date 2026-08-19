@@ -23,7 +23,8 @@ and selected application examples, which concept and application workers require
 one per concept and one per mechanism, from the installed
 `node_modules/@mit-sdg/sync-engine/examples/` and never its `dist/`. Reactions, views,
 formers and endpoints are separate mechanisms; confirm each one the design uses appears in
-an example. A worker with no example for a mechanism
+an example. A concept depending on the current time or a generated identifier needs one
+showing that dependency injected. A worker with no example for a mechanism
 returns a context blocker rather than discovering it. Carry the brief's durability decision
 into every concept assignment as a storage guarantee, never as a claim about concept State.
 
@@ -85,8 +86,10 @@ Application workers run focused source-agreement, artifact, integration, and bou
 checks for assigned wiring; evidence workers run assigned scenarios or tests, not a
 production-wide build chain. A mismatch is material when implementation requires a new
 owner, action, refusal, lifecycle, application policy, external type binding, cross-concept
-failure rule, or visible behavior. Return it to design; never silently
-change approved Markdown.
+failure rule, or visible behavior. Return it to design; never silently change approved
+Markdown. A blocker reporting that the framework cannot express something is none of
+these and no critic can settle it: revise the design so it stops asking, or put the
+product decision to the user.
 
 ## Validate once and stop
 

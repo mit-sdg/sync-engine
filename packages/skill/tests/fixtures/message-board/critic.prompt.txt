@@ -296,3 +296,7 @@ _for(subject: Subject) : many (comment: Comment, author: Person, text: String)
 ```
 
 ## Selected catalog alternatives
+
+
+
+## Outstanding implementation blocker
