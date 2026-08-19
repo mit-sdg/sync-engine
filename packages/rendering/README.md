@@ -21,10 +21,12 @@ const invocation = Hello({ audience: "world" });
 
 The tagged template records inert authored HTML and checked statements; it does
 not execute interpolated JavaScript or perform DOM work. Inputs and values bound
-by declared reads may occupy escaped text seats; `each(...).html` and
-`where(...).html` form query-backed subtrees; and a renderer invocation may
-occupy a subtree place as one named child. Later statement forms add fields and
-asks to the same language rather than creating a callback template system.
+by declared reads may occupy escaped text seats or checked attribute seats
+(`title=${x}` value seats, `?disabled=${x}` presence seats); `each(...).html`
+and `where(...).html` form query-backed subtrees; a renderer invocation may
+occupy a subtree place as one named child; and fields, asks, and refusal seats
+arm elements in the same language rather than creating a callback template
+system.
 
 Assembly installs each canonical interface-export identity before an endpoint
 invokes the renderer. The invocation keeps the lowered declaration under

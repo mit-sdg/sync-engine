@@ -42,30 +42,70 @@ const arm = () => {
   for (const element of document.querySelectorAll("[data-rendered-ask]")) {
     if (element.dataset.renderedArmed) continue;
     element.dataset.renderedArmed = "true";
+    const form = element.form ?? element.closest("form");
+    if (form && !form.dataset.renderedArmed) {
+      form.dataset.renderedArmed = "true";
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const submitter =
+          event.submitter && event.submitter.dataset.renderedAsk
+            ? event.submitter
+            : form.querySelector("[data-rendered-ask]");
+        submitter?.click();
+      });
+    }
     element.addEventListener("click", async (event) => {
       event.preventDefault();
-      const answer = document.querySelector("[data-rendered-answer]");
-      const values = {};
-      for (const held of document.querySelectorAll("[data-rendered-field]")) {
-        values[held.dataset.renderedSeat] = held.value;
-        values[held.dataset.renderedField] ??= held.value;
+      if (element.getAttribute("aria-busy") === "true") return;
+      element.setAttribute("aria-busy", "true");
+      try {
+        const values = {};
+        for (const address of (element.dataset.renderedAskFields ?? "").split(" ")) {
+          if (address === "") continue;
+          const held = field(address);
+          if (held) values[address] = held.value;
+        }
+        const response = await fetch(location.href, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ holder: rendering.holder, ask: element.dataset.renderedAsk, fields: values }),
+        });
+        const result = await response.json();
+        const refusalSeats = (element.dataset.renderedAskRefuses ?? "")
+          .split(" ")
+          .filter((address) => address !== "")
+          .map((address) => document.querySelector('[data-rendered-refusal="' + CSS.escape(address) + '"]'))
+          .filter((seat) => seat !== null);
+        const nearestAnswer = () => {
+          for (let scope = element.parentElement; scope; scope = scope.parentElement) {
+            const answer = scope.querySelector("[data-rendered-answer]");
+            if (answer) return answer;
+          }
+          return null;
+        };
+        if (!result.ok) {
+          const detail = result.error?.detail ?? result.error?.error ?? "The ask was refused.";
+          if (refusalSeats.length > 0) {
+            for (const seat of refusalSeats) seat.textContent = detail;
+          } else {
+            const answer = nearestAnswer();
+            if (answer) answer.textContent = detail;
+          }
+          return;
+        }
+        for (const seat of refusalSeats) seat.textContent = "";
+        for (const [address, value] of Object.entries(result.seats ?? {})) {
+          const held = field(address);
+          if (held) held.value = String(value);
+          localStorage.setItem(storageKey(address), String(value));
+        }
+        if (refusalSeats.length === 0) {
+          const answer = nearestAnswer();
+          if (answer) answer.textContent = "Accepted.";
+        }
+      } finally {
+        element.removeAttribute("aria-busy");
       }
-      const response = await fetch(location.href, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ holder: rendering.holder, ask: element.dataset.renderedAsk, fields: values }),
-      });
-      const result = await response.json();
-      if (!result.ok) {
-        if (answer) answer.textContent = result.error?.detail ?? result.error?.error ?? "The ask was refused.";
-        return;
-      }
-      for (const [address, value] of Object.entries(result.seats ?? {})) {
-        const held = field(address);
-        if (held) held.value = String(value);
-        localStorage.setItem(storageKey(address), String(value));
-      }
-      if (answer) answer.textContent = "Accepted.";
     });
   }
 };
@@ -124,6 +164,11 @@ const apply = (patch) => {
     replaceInside(patch.address, "");
     const end = boundary("end", patch.address);
     end.parentNode.insertBefore(document.createTextNode(patch.value), end);
+  } else if (patch.kind === "attr") {
+    const element = root.querySelector('[data-rendered-attrs="' + CSS.escape(patch.element) + '"]');
+    if (!element) return;
+    if (patch.value === null) element.removeAttribute(patch.name);
+    else element.setAttribute(patch.name, patch.value);
   } else if (patch.kind === "clause") {
     replaceInside(patch.address, patch.html);
   } else if (patch.kind === "rows") {
@@ -174,13 +219,31 @@ void follow();
 </script>`;
 }
 
-function documentFor(holder: string, formed: FormedHtml): string {
+/** Authored head material shared by every page of one realization. */
+export interface WebHead {
+  readonly title?: string;
+  /** External stylesheet links; each must be a relative path or an https: URL. */
+  readonly stylesheets?: readonly string[];
+  /** One admitted styles renderer whose formed content lands in the head. */
+  readonly styles?: RendererInvocation;
+}
+
+function escapeHead(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function documentFor(holder: string, formed: FormedHtml, head: string): string {
   return [
     "<!doctype html>",
     '<html lang="en">',
     "<head>",
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    head,
     "</head>",
     `<body data-rendered-holder="${holder}"><div data-rendered-root>${formed.content.value}</div>${browserRuntime(holder, formed.holder)}</body>`,
     "</html>",
@@ -191,6 +254,7 @@ function documentFor(holder: string, formed: FormedHtml): string {
 export function realize(options: {
   system: AnyAssembly;
   interface: InterfaceDefinition;
+  head?: WebHead;
 }): FetchRealization {
   const selected = bindInterface(options);
   const rendering = compileHtml(selected);
@@ -203,6 +267,35 @@ export function realize(options: {
       }
       return await query.call(concept, input);
     },
+  };
+  for (const stylesheet of options.head?.stylesheets ?? []) {
+    const scheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.exec(stylesheet.trim());
+    if (
+      stylesheet.trim().startsWith("//") ||
+      (scheme !== null && scheme[0].toLowerCase() !== "https:")
+    ) {
+      throw new TypeError(
+        `Web.realize: head stylesheet ${JSON.stringify(stylesheet)} must be a relative path or an https: URL.`,
+      );
+    }
+  }
+  let formedHead: Promise<string> | undefined;
+  const headHtml = (): Promise<string> => {
+    formedHead ??= (async () => {
+      const lines: string[] = [];
+      if (options.head?.title !== undefined) {
+        lines.push(`<title>${escapeHead(options.head.title)}</title>`);
+      }
+      for (const stylesheet of options.head?.stylesheets ?? []) {
+        lines.push(`<link rel="stylesheet" href="${escapeHead(stylesheet)}">`);
+      }
+      if (options.head?.styles !== undefined) {
+        const styles = await rendering.form(options.head.styles, reader);
+        lines.push(styles.content.value);
+      }
+      return lines.join("");
+    })();
+    return formedHead;
   };
   const gateway = createGateway({ application: options.system });
   interface HeldRendering {
@@ -484,7 +577,7 @@ export function realize(options: {
         holders.delete(oldest);
         for (const stream of expired?.streams ?? []) stream.close();
       }
-      return new Response(documentFor(holder, formed), {
+      return new Response(documentFor(holder, formed, await headHtml()), {
         status: 200,
         headers: {
           "cache-control": "no-store",

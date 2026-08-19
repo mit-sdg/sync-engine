@@ -45,6 +45,8 @@ export interface FormedAsk {
   readonly action: string;
   readonly input: Readonly<Record<string, FormedAskInput>>;
   readonly output: Readonly<Record<string, FormedAskOutput>>;
+  /** Refusal display seats this ask reports into, when `.refuses({ ... })` was authored. */
+  readonly refuses?: Readonly<Record<string, FormedAskOutput>>;
 }
 
 export interface FormedHtmlTree {
@@ -84,11 +86,31 @@ export interface FormedClauseNode {
   readonly rows: readonly FormedRowNode[];
 }
 
-export type FormedHtmlNode = FormedRendererNode | FormedShowNode | FormedClauseNode;
+export interface FormedAttributeNode {
+  readonly kind: "attr";
+  readonly address: string;
+  /** Marker value carried by the owning element's `data-rendered-attrs`. */
+  readonly element: string;
+  readonly name: string;
+  /** The rendered attribute value; "" renders the bare attribute, null renders nothing. */
+  readonly value: string | null;
+}
+
+export type FormedHtmlNode =
+  | FormedRendererNode
+  | FormedShowNode
+  | FormedClauseNode
+  | FormedAttributeNode;
 
 export type FormedHtmlPatch =
   | { readonly kind: "root"; readonly html: string }
   | { readonly kind: "show"; readonly address: string; readonly value: string }
+  | {
+      readonly kind: "attr";
+      readonly element: string;
+      readonly name: string;
+      readonly value: string | null;
+    }
   | { readonly kind: "clause"; readonly address: string; readonly html: string }
   | {
       readonly kind: "rows";
@@ -174,6 +196,69 @@ interface Scope {
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly bindings: Readonly<Record<string, unknown>>;
   readonly fields: ReadonlyMap<string, string>;
+  readonly refusals: ReadonlyMap<string, string>;
+}
+
+/** Resolve one bound attribute to its rendered value: "" bare, null absent. */
+function attributeValue(
+  part: Extract<HtmlNode["parts"][number], { kind: "attribute" }>,
+  resolve: (value: unknown) => unknown,
+): string | null {
+  const where = `attribute ${JSON.stringify(part.name)}`;
+  if (part.form === "presence") {
+    const sole = part.value.find((entry) => entry.kind === "ref");
+    const resolved = sole === undefined ? undefined : resolve(sole.ref);
+    if (typeof resolved !== "boolean") {
+      throw new TypeError(
+        `compileHtml.form: presence ${where} needs a boolean; got ${typeof resolved} — ` +
+          `use ${part.name}=\${...} for a value seat.`,
+      );
+    }
+    return resolved ? "" : null;
+  }
+  const sole = part.value.length === 1 && part.value[0].kind === "ref";
+  const pieces: string[] = [];
+  for (const entry of part.value) {
+    if (entry.kind === "literal") {
+      pieces.push(entry.value);
+      continue;
+    }
+    const resolved = resolve(entry.ref);
+    if (typeof resolved === "boolean") {
+      throw new TypeError(
+        `compileHtml.form: ${where} bound a boolean; presence seats are spelled ?${part.name}=\${...}.`,
+      );
+    }
+    if (resolved === null || resolved === undefined) {
+      if (sole) return null;
+      throw new TypeError(
+        `compileHtml.form: ${where} mixes literal text with an absent value; ` +
+          "a removable attribute takes the sole bound value.",
+      );
+    }
+    if (typeof resolved !== "string" && typeof resolved !== "number") {
+      throw new TypeError(`compileHtml.form: ${where} needs a string; got ${typeof resolved}.`);
+    }
+    pieces.push(String(resolved));
+  }
+  const value = pieces.join("");
+  if (part.check !== undefined && !urlAllowed(value, part.check)) {
+    throw new TypeError(
+      `compileHtml.form: ${where} refused the value ${JSON.stringify(value)}; ` +
+        (part.check === "relative-url"
+          ? "only relative paths are allowed here."
+          : "only relative paths and https: URLs are allowed here."),
+    );
+  }
+  return value;
+}
+
+function urlAllowed(value: string, check: "url" | "relative-url"): boolean {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("//")) return false;
+  const scheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.exec(trimmed);
+  if (scheme === null) return true;
+  return check === "url" && scheme[0].toLowerCase() === "https:";
 }
 
 interface Formation {
@@ -269,13 +354,18 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
     const values: string[] = [];
     const children: FormedHtmlNode[] = [];
     const fields = new Map(scope.fields);
-    // Field seats are structural, so asks may fill a field declared later in
-    // the same node without making source order part of the interaction contract.
+    const refusals = new Map(scope.refusals);
+    const markedElements = new Set<number>();
+    // Field and refusal seats are structural, so asks may use a seat declared
+    // later in the same node without making source order part of the contract.
     for (let index = 0; index < node.parts.length; index += 1) {
       const part = node.parts[index];
-      if (part.kind !== "field") continue;
-      formation.fields.add(part.field.name);
-      fields.set(part.field.name, `${address}/${index}/field`);
+      if (part.kind === "field") {
+        formation.fields.add(part.field.name);
+        fields.set(part.field.name, `${address}/${index}/field`);
+      } else if (part.kind === "refusal") {
+        refusals.set(part.seat.name, `${address}/${index}/refusal`);
+      }
     }
     for (let index = 0; index < node.parts.length; index += 1) {
       const part = node.parts[index];
@@ -293,6 +383,31 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
         const located = `${seat}/field`;
         values.push(
           `data-rendered-field="${escapeHtml(part.field.name)}" data-rendered-seat="${located}"`,
+        );
+      } else if (part.kind === "refusal") {
+        values.push(`data-rendered-refusal="${seat}/refusal"`);
+      } else if (part.kind === "attribute") {
+        const elementAddress = `${address}/e${part.element}`;
+        const rendered = attributeValue(part, (value) => resolve(value, scope));
+        const marker = markedElements.has(part.element)
+          ? ""
+          : `data-rendered-attrs="${elementAddress}"`;
+        markedElements.add(part.element);
+        const text =
+          rendered === null
+            ? ""
+            : rendered === "" && part.form === "presence"
+              ? part.name
+              : `${part.name}="${escapeHtml(rendered)}"`;
+        values.push([marker, text].filter((piece) => piece !== "").join(" "));
+        children.push(
+          Object.freeze({
+            kind: "attr" as const,
+            address: `${elementAddress}/${part.name}`,
+            element: elementAddress,
+            name: part.name,
+            value: rendered,
+          }),
         );
       } else if (part.kind === "ask") {
         const id = `${seat}/ask`;
@@ -326,6 +441,23 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
             return [name, { name: field.name, address: located }];
           }),
         );
+        let refuses: Readonly<Record<string, FormedAskOutput>> | undefined;
+        if (part.ask.refuses !== undefined) {
+          refuses = Object.freeze(
+            Object.fromEntries(
+              Object.entries(part.ask.refuses).map(([name, seatRef]) => {
+                const located = refusals.get(seatRef.name);
+                if (located === undefined) {
+                  throw new TypeError(
+                    `compileHtml.form: ask ${part.ask.concept}.${part.ask.action} refuses into ` +
+                      `seat ${JSON.stringify(seatRef.name)} before its element is formed.`,
+                  );
+                }
+                return [name, { name: seatRef.name, address: located }];
+              }),
+            ),
+          );
+        }
         formation.asks.push(
           Object.freeze({
             id,
@@ -333,9 +465,27 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
             action: part.ask.action,
             input: Object.freeze(input),
             output: Object.freeze(output),
+            ...(refuses === undefined ? {} : { refuses }),
           }),
         );
-        values.push(`data-rendered-ask="${id}"`);
+        const askFields = [
+          ...Object.values(input as Record<string, FormedAskInput>).map((source) =>
+            source.source === "field" ? source.address : "",
+          ),
+          ...Object.values(output as Record<string, FormedAskOutput>).map((field) => field.address),
+        ].filter((located) => located !== "");
+        const askAttributes = [`data-rendered-ask="${id}"`];
+        if (askFields.length > 0) {
+          askAttributes.push(`data-rendered-ask-fields="${[...new Set(askFields)].join(" ")}"`);
+        }
+        if (refuses !== undefined) {
+          askAttributes.push(
+            `data-rendered-ask-refuses="${Object.values(refuses)
+              .map((seatOut) => seatOut.address)
+              .join(" ")}"`,
+          );
+        }
+        values.push(askAttributes.join(" "));
       } else if (part.kind === "renderer") {
         const declaration = canonical(part.invocation.$renderer.identity);
         const inputs = Object.fromEntries(
@@ -344,7 +494,7 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
         const childAddress = `${seat}/renderer`;
         const child = await formNode(
           declaration.body,
-          { inputs, bindings: {}, fields: new Map() },
+          { inputs, bindings: {}, fields: new Map(), refusals: new Map() },
           formation,
           childAddress,
           reader,
@@ -419,7 +569,7 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
           }
           const body = await formNode(
             part.body,
-            { ...scope, bindings, fields },
+            { ...scope, bindings, fields, refusals },
             formation,
             rowAddress,
             reader,
@@ -488,6 +638,7 @@ export function compileHtml(binding: InterfaceBinding): CompiledHtmlRendering {
           inputs: invocation as Readonly<Record<string, unknown>>,
           bindings: {},
           fields: new Map(),
+          refusals: new Map(),
         },
         formation,
         "root",
@@ -525,6 +676,19 @@ function diffChildren(
     if (node.kind === "show" && before.kind === "show") {
       if (node.value !== before.value) {
         patches.push(Object.freeze({ kind: "show", address: node.address, value: node.value }));
+      }
+      continue;
+    }
+    if (node.kind === "attr" && before.kind === "attr") {
+      if (node.value !== before.value) {
+        patches.push(
+          Object.freeze({
+            kind: "attr",
+            element: node.element,
+            name: node.name,
+            value: node.value,
+          }),
+        );
       }
       continue;
     }

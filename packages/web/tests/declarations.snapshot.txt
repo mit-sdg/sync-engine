@@ -7,10 +7,20 @@ export { realize } from "./realization.ts";
 import { type InterfaceDefinition } from "@mit-sdg/sync-engine/boundary";
 import type { Assembly } from "@mit-sdg/sync-engine/assembly";
 import { type FetchRealization } from "@mit-sdg/sync-engine-http/realization";
+import type { RendererInvocation } from "@mit-sdg/sync-engine-rendering/language";
 type AnyAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
+/** Authored head material shared by every page of one realization. */
+export interface WebHead {
+    readonly title?: string;
+    /** External stylesheet links; each must be a relative path or an https: URL. */
+    readonly stylesheets?: readonly string[];
+    /** One admitted styles renderer whose formed content lands in the head. */
+    readonly styles?: RendererInvocation;
+}
 /** Realize rendered endpoints in one interface as opening HTML documents. */
 export declare function realize(options: {
     system: AnyAssembly;
     interface: InterfaceDefinition;
+    head?: WebHead;
 }): FetchRealization;
 export {};

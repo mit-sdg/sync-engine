@@ -186,7 +186,9 @@ describe("renderer", () => {
     expect(formed.content.value).toContain(
       'data-rendered-field="name" data-rendered-seat="root/1/field"',
     );
-    expect(formed.content.value).toContain('<button data-rendered-ask="root/3/ask">');
+    expect(formed.content.value).toContain(
+      '<button data-rendered-ask="root/3/ask" data-rendered-ask-fields="root/1/field root/5/field">',
+    );
   });
 
   test("a repeated read binds rows and forms their shown values", async () => {
@@ -358,8 +360,10 @@ describe("renderer", () => {
       ({ audience }) => html`<p title="${audience}">Hello.</p>`,
     );
     install({ Heading, Greeting });
-    expect(() => html`<main class="${Heading({})}"></main>`).toThrow("must occupy a subtree place");
-    expect(() => Greeting.declaration).toThrow("must be shown between elements");
+    expect(() => html`<main class="${Heading({})}"></main>`).toThrow(
+      "must bind one renderer value",
+    );
+    expect(Greeting.declaration.body.parts.some((part) => part.kind === "attribute")).toBe(true);
   });
 
   test("refuses an unexported or renamed child with a repairable identity error", async () => {

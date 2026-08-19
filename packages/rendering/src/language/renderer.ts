@@ -14,6 +14,8 @@ export interface RendererAsk {
   readonly action: string;
   readonly input: Readonly<Record<string, unknown>>;
   readonly output: Readonly<Record<string, RendererValueRef>>;
+  /** Display seats that present this ask's refusal detail, from `.refuses({ ... })`. */
+  readonly refuses?: Readonly<Record<string, RendererValueRef>>;
 }
 
 export interface RendererRead {
@@ -25,12 +27,27 @@ export interface RendererRead {
   readonly output: Readonly<Record<string, RendererValueRef>>;
 }
 
+export type AttributeValuePart =
+  | { readonly kind: "literal"; readonly value: string }
+  | { readonly kind: "ref"; readonly ref: RendererValueRef };
+
 export interface HtmlNode {
   readonly kind: "html";
   readonly parts: readonly (
     | { readonly kind: "literal"; readonly value: string }
     | { readonly kind: "show"; readonly value: RendererValueRef }
     | { readonly kind: "field"; readonly field: RendererValueRef }
+    | { readonly kind: "refusal"; readonly seat: RendererValueRef }
+    | {
+        readonly kind: "attribute";
+        /** Ordinal of the owning open tag within this node, for element addressing. */
+        readonly element: number;
+        readonly name: string;
+        readonly form: "value" | "presence";
+        /** URL hygiene applied when the resolved value is formed or patched. */
+        readonly check?: "url" | "relative-url";
+        readonly value: readonly AttributeValuePart[];
+      }
     | { readonly kind: "ask"; readonly ask: RendererAsk }
     | {
         readonly kind: "read";
@@ -87,81 +104,400 @@ function currentBuildContext(): RendererBuildContext | undefined {
 // biome-ignore lint/suspicious/noExplicitAny: open proxy keys are intentionally unenumerated.
 type OpenRendererBag = Record<string, any>;
 
-type MarkupState =
-  | "content"
-  | "tag"
-  | "single-quoted-attribute"
-  | "double-quoted-attribute"
-  | "comment";
+// ── markup scanning ────────────────────────────────────────────────────────
+//
+// The scanner classifies every template hole by the markup position it lands
+// in: content, an element's tag (arming seats), an attribute-value seat, raw
+// text (script/style content), or a comment. It also tracks the open element's
+// name for the guarded-element walls and numbers open tags so attribute seats
+// can be grouped per element.
 
-function scanMarkup(initial: MarkupState, markup: string): MarkupState {
-  let state = initial;
-  for (let index = 0; index < markup.length; index += 1) {
-    const character = markup[index];
-    if (state === "comment") {
-      if (markup.startsWith("-->", index)) {
-        state = "content";
-        index += 2;
+type ScanState = "content" | "tag" | "squote" | "dquote" | "comment" | "rawtext";
+
+const GUARDED_ELEMENTS = new Set(["script", "link", "base", "meta"]);
+const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
+
+class MarkupScanner {
+  state: ScanState = "content";
+  /** Lowercased name of the tag currently being scanned, "" outside a tag. */
+  tag = "";
+  /** Raw-text element whose content we are inside, "" otherwise. */
+  rawTag = "";
+  /** Attribute name whose value seat the scan is at or inside, "" if none. */
+  attribute = "";
+  /** True exactly after `name=` while an unquoted value may still begin. */
+  valueStart = false;
+  /** Ordinal of the most recently opened tag, for attribute grouping. */
+  element = 0;
+  /** Chunk-relative index where the current attribute's name token began. */
+  attributeStart = -1;
+
+  #nameToken = "";
+  #nameStart = -1;
+  #tagNamePending = false;
+  #inUnquotedValue = false;
+
+  /** Scan one literal chunk, updating position state. */
+  scan(chunk: string): void {
+    this.attributeStart = -1;
+    for (let index = 0; index < chunk.length; index += 1) {
+      const character = chunk[index];
+      if (this.state === "comment") {
+        if (chunk.startsWith("-->", index)) {
+          this.state = "content";
+          index += 2;
+        }
+        continue;
       }
-      continue;
-    }
-    if (state === "single-quoted-attribute") {
-      if (character === "'") state = "tag";
-      continue;
-    }
-    if (state === "double-quoted-attribute") {
-      if (character === '"') state = "tag";
-      continue;
-    }
-    if (state === "tag") {
-      if (character === "'") state = "single-quoted-attribute";
-      else if (character === '"') state = "double-quoted-attribute";
-      else if (character === ">") state = "content";
-      continue;
-    }
-    if (markup.startsWith("<!--", index)) {
-      state = "comment";
-      index += 3;
-    } else if (character === "<") {
-      state = "tag";
+      if (this.state === "rawtext") {
+        if (character === "<" && chunk.startsWith(`</${this.rawTag}`, index)) {
+          const closed = this.rawTag;
+          this.state = "tag";
+          this.tag = `/${closed}`;
+          this.rawTag = "";
+          this.#tagNamePending = false;
+          index += closed.length + 1;
+        }
+        continue;
+      }
+      if (this.state === "squote") {
+        if (character === "'") this.#closeValue();
+        continue;
+      }
+      if (this.state === "dquote") {
+        if (character === '"') this.#closeValue();
+        continue;
+      }
+      if (this.state === "tag") {
+        if (this.#tagNamePending) {
+          if (/[\s/>]/.test(character)) {
+            this.#tagNamePending = false;
+          } else {
+            this.tag += character.toLowerCase();
+            continue;
+          }
+        }
+        if (character === "'") {
+          this.state = "squote";
+          this.valueStart = false;
+          continue;
+        }
+        if (character === '"') {
+          this.state = "dquote";
+          this.valueStart = false;
+          continue;
+        }
+        if (character === ">") {
+          const opened = this.tag;
+          this.state = "content";
+          if (!opened.startsWith("/") && RAW_TEXT_ELEMENTS.has(opened)) {
+            this.state = "rawtext";
+            this.rawTag = opened;
+          }
+          this.tag = "";
+          this.#resetAttribute();
+          continue;
+        }
+        if (character === "=") {
+          this.attribute = this.#nameToken;
+          this.attributeStart = this.#nameStart;
+          this.#nameToken = "";
+          this.valueStart = true;
+          this.#inUnquotedValue = false;
+          continue;
+        }
+        if (/[\s/]/.test(character)) {
+          this.#resetAttribute();
+          continue;
+        }
+        if (this.valueStart || this.#inUnquotedValue) {
+          this.valueStart = false;
+          this.#inUnquotedValue = true;
+          continue;
+        }
+        if (this.#nameToken === "") this.#nameStart = index;
+        this.#nameToken += character.toLowerCase();
+        continue;
+      }
+      if (chunk.startsWith("<!--", index)) {
+        this.state = "comment";
+        index += 3;
+      } else if (character === "<") {
+        this.state = "tag";
+        this.tag = "";
+        this.#tagNamePending = true;
+        this.#resetAttribute();
+        if (!chunk.startsWith("</", index)) this.element += 1;
+      }
     }
   }
-  return state;
+
+  #closeValue(): void {
+    this.state = "tag";
+    this.#resetAttribute();
+  }
+
+  #resetAttribute(): void {
+    this.attribute = "";
+    this.attributeStart = -1;
+    this.valueStart = false;
+    this.#inUnquotedValue = false;
+    this.#nameToken = "";
+    this.#nameStart = -1;
+  }
+}
+
+// ── attribute seat rules ───────────────────────────────────────────────────
+
+interface AttributeSeatRule {
+  readonly form: "value" | "presence";
+  readonly name: string;
+  readonly check?: "url" | "relative-url";
+}
+
+function attributeSeat(rawName: string, element: string, interpolation: number): AttributeSeatRule {
+  const form = rawName.startsWith("?") ? ("presence" as const) : ("value" as const);
+  const name = form === "presence" ? rawName.slice(1) : rawName;
+  if (name === "") {
+    throw new TypeError(`html: interpolation ${interpolation} binds an attribute without a name.`);
+  }
+  if (name.startsWith("on")) {
+    throw new TypeError(
+      `html: attribute ${JSON.stringify(name)} at interpolation ${interpolation} is an event ` +
+        "handler; bound handlers are refused — activation belongs to asks.",
+    );
+  }
+  if (name === "action" || name === "formaction") {
+    throw new TypeError(
+      `html: attribute ${JSON.stringify(name)} at interpolation ${interpolation} would route ` +
+        "around the admitted ask path; bound form destinations are refused.",
+    );
+  }
+  if (name === "style") {
+    throw new TypeError(
+      `html: a bound style attribute at interpolation ${interpolation} is refused; ` +
+        "state variation belongs to class value seats.",
+    );
+  }
+  if (name === "srcset") {
+    throw new TypeError(
+      `html: a bound srcset at interpolation ${interpolation} is not yet supported.`,
+    );
+  }
+  if (name === "src") {
+    if (element === "img") return { form, name, check: "url" };
+    if (element === "iframe") return { form, name, check: "relative-url" };
+    throw new TypeError(
+      `html: a bound src on <${element || "?"}> at interpolation ${interpolation} is refused; ` +
+        "bound sources are supported on img and iframe elements.",
+    );
+  }
+  if (name === "href") return { form, name, check: "url" };
+  return { form, name };
+}
+
+function guardElement(element: string, interpolation: number): void {
+  const opened = element.startsWith("/") ? element.slice(1) : element;
+  if (GUARDED_ELEMENTS.has(opened)) {
+    throw new TypeError(
+      `html: interpolation ${interpolation} is inside a <${opened}> element; ` +
+        "bound statements there are refused.",
+    );
+  }
+}
+
+function attributeRef(statement: unknown, interpolation: number): RendererValueRef {
+  if (typeof statement !== "symbol") {
+    throw new TypeError(
+      `html: interpolation ${interpolation} in an attribute seat must bind one renderer value.`,
+    );
+  }
+  const value = currentBuildContext()?.values.get(statement);
+  if (value === undefined) {
+    throw new TypeError(
+      `html: interpolation ${interpolation} is not a renderer value from the current declaration.`,
+    );
+  }
+  if (value.scope === "field") {
+    throw new TypeError(
+      `html: field ${JSON.stringify(value.name)} at interpolation ${interpolation} ` +
+        "must arm an element, not occupy text or an attribute value.",
+    );
+  }
+  return value;
+}
+
+// ── the html tag ───────────────────────────────────────────────────────────
+
+type HtmlPart = HtmlNode["parts"][number];
+
+interface OpenAttribute {
+  readonly rule: AttributeSeatRule;
+  readonly element: number;
+  readonly quote: '"' | "'";
+  readonly parts: AttributeValuePart[];
 }
 
 export function html(strings: TemplateStringsArray, ...statements: readonly unknown[]): HtmlNode {
   if (strings.length !== statements.length + 1) {
     throw new TypeError("html: malformed tagged template input.");
   }
-  const parts: Array<HtmlNode["parts"][number]> = [];
-  let state: MarkupState = "content";
+  const parts: HtmlPart[] = [];
+  const scanner = new MarkupScanner();
+  let openAttribute: OpenAttribute | undefined;
+  let expectDelimiter = false;
+
+  const finalizeAttribute = (open: OpenAttribute, interpolation: number): void => {
+    const refs = open.parts.filter((part) => part.kind === "ref");
+    const literals = open.parts.filter((part) => part.kind === "literal" && part.value !== "");
+    if (open.rule.form === "presence" && (refs.length !== 1 || literals.length > 0)) {
+      throw new TypeError(
+        `html: presence attribute ${JSON.stringify(open.rule.name)} at interpolation ${interpolation} ` +
+          "takes exactly one bound value and no literal text.",
+      );
+    }
+    parts.push(
+      Object.freeze({
+        kind: "attribute" as const,
+        element: open.element,
+        name: open.rule.name,
+        form: open.rule.form,
+        ...(open.rule.check === undefined ? {} : { check: open.rule.check }),
+        value: Object.freeze(
+          open.parts.map((part) => Object.freeze(part)) as readonly AttributeValuePart[],
+        ),
+      }),
+    );
+  };
+
   for (let index = 0; index < strings.length; index += 1) {
-    const literal = strings[index];
-    parts.push(Object.freeze({ kind: "literal" as const, value: literal }));
-    state = scanMarkup(state, literal);
-    if (index === statements.length) continue;
+    let literal = strings[index];
+
+    if (expectDelimiter) {
+      if (literal.length === 0 || !/[\s/>]/.test(literal[0])) {
+        throw new TypeError(
+          `html: interpolation ${index} must be the complete unquoted attribute value; ` +
+            "quote the attribute to mix literal text with a bound value.",
+        );
+      }
+      expectDelimiter = false;
+    }
+
+    if (openAttribute !== undefined) {
+      const closing = literal.indexOf(openAttribute.quote);
+      if (closing === -1) {
+        if (index === statements.length) {
+          throw new TypeError("html: an attribute value seat is never closed.");
+        }
+        if (literal !== "") openAttribute.parts.push({ kind: "literal", value: literal });
+        openAttribute.parts.push({
+          kind: "ref",
+          ref: attributeRef(statements[index], index + 1),
+        });
+        continue;
+      }
+      if (closing > 0) {
+        openAttribute.parts.push({ kind: "literal", value: literal.slice(0, closing) });
+      }
+      finalizeAttribute(openAttribute, index);
+      openAttribute = undefined;
+      literal = literal.slice(closing + 1);
+      scanner.state = "tag";
+    }
+
+    scanner.scan(literal);
+
+    if (index === statements.length) {
+      parts.push(Object.freeze({ kind: "literal" as const, value: literal }));
+      continue;
+    }
 
     const statement = statements[index];
+    const interpolation = index + 1;
+
+    // Attribute seats claim the attribute's own markup from the literal.
+    if (scanner.state === "tag" && scanner.valueStart) {
+      if (scanner.attributeStart === -1) {
+        throw new TypeError(
+          `html: interpolation ${interpolation} binds an attribute whose markup opened in an ` +
+            "earlier template chunk; keep an attribute's markup in one chunk.",
+        );
+      }
+      guardElement(scanner.tag, interpolation);
+      const rule = attributeSeat(scanner.attribute, scanner.tag, interpolation);
+      const kept = literal.slice(0, scanner.attributeStart);
+      parts.push(Object.freeze({ kind: "literal" as const, value: kept }));
+      finalizeAttribute(
+        {
+          rule,
+          element: scanner.element,
+          quote: '"',
+          parts: [{ kind: "ref", ref: attributeRef(statement, interpolation) }],
+        },
+        interpolation,
+      );
+      scanner.valueStart = false;
+      scanner.attribute = "";
+      expectDelimiter = true;
+      continue;
+    }
+    if (scanner.state === "dquote" || scanner.state === "squote") {
+      if (scanner.attributeStart === -1 || scanner.attribute === "") {
+        throw new TypeError(
+          `html: interpolation ${interpolation} sits inside a quoted attribute value that ` +
+            "opened in an earlier template chunk; keep an attribute's markup in one chunk.",
+        );
+      }
+      guardElement(scanner.tag, interpolation);
+      const rule = attributeSeat(scanner.attribute, scanner.tag, interpolation);
+      const quote = scanner.state === "dquote" ? ('"' as const) : ("'" as const);
+      const quoteIndex = literal.indexOf(quote, scanner.attributeStart);
+      const kept = literal.slice(0, scanner.attributeStart);
+      const prefix = literal.slice(quoteIndex + 1);
+      parts.push(Object.freeze({ kind: "literal" as const, value: kept }));
+      openAttribute = {
+        rule,
+        element: scanner.element,
+        quote,
+        parts: prefix === "" ? [] : [{ kind: "literal", value: prefix }],
+      };
+      openAttribute.parts.push({
+        kind: "ref",
+        ref: attributeRef(statement, interpolation),
+      });
+      continue;
+    }
+
+    parts.push(Object.freeze({ kind: "literal" as const, value: literal }));
+
+    if (scanner.state === "rawtext") {
+      throw new TypeError(
+        `html: interpolation ${interpolation} is inside a <${scanner.rawTag}> element's raw ` +
+          "text; bound statements there are refused.",
+      );
+    }
+    if (scanner.state === "tag") guardElement(scanner.tag, interpolation);
+
     if (typeof statement === "symbol") {
       const value = currentBuildContext()?.values.get(statement);
       if (value === undefined) {
         throw new TypeError(
-          `html: interpolation ${index + 1} is not a renderer value from the current declaration.`,
+          `html: interpolation ${interpolation} is not a renderer value from the current declaration.`,
         );
       }
       if (value.scope === "field") {
-        if (state !== "tag") {
+        if (scanner.state !== "tag") {
           throw new TypeError(
-            `html: field ${JSON.stringify(value.name)} at interpolation ${index + 1} ` +
+            `html: field ${JSON.stringify(value.name)} at interpolation ${interpolation} ` +
               "must arm an element, not occupy text or an attribute value.",
           );
         }
         parts.push(Object.freeze({ kind: "field" as const, field: value }));
         continue;
       }
-      if (state !== "content") {
+      if (scanner.state !== "content") {
         throw new TypeError(
-          `html: value ${JSON.stringify(value.name)} at interpolation ${index + 1} ` +
+          `html: value ${JSON.stringify(value.name)} at interpolation ${interpolation} ` +
             "must be shown between elements, not in an element or attribute seat.",
         );
       }
@@ -169,9 +505,9 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
       continue;
     }
     if (isReadPlacement(statement)) {
-      if (state !== "content") {
+      if (scanner.state !== "content") {
         throw new TypeError(
-          `html: ${statement.cardinality} read at interpolation ${index + 1} must occupy a subtree place.`,
+          `html: ${statement.cardinality} read at interpolation ${interpolation} must occupy a subtree place.`,
         );
       }
       parts.push(statement);
@@ -179,9 +515,9 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
     }
     const ask = lowerAsk(statement);
     if (ask !== undefined) {
-      if (state !== "tag") {
+      if (scanner.state !== "tag") {
         throw new TypeError(
-          `html: ask ${ask.ask.concept}.${ask.ask.action} at interpolation ${index + 1} ` +
+          `html: ask ${ask.ask.concept}.${ask.ask.action} at interpolation ${interpolation} ` +
             "must arm an element.",
         );
       }
@@ -190,22 +526,25 @@ export function html(strings: TemplateStringsArray, ...statements: readonly unkn
     }
     if (!isRendererInvocation(statement)) {
       throw new TypeError(
-        `html: interpolation ${index + 1} is not a checked authored statement. ` +
+        `html: interpolation ${interpolation} is not a checked authored statement. ` +
           "Place a renderer invocation here; computed values and callbacks are not supported.",
       );
     }
-    if (state !== "content") {
+    if (scanner.state !== "content") {
       throw new TypeError(
-        `html: renderer ${JSON.stringify(statement.$renderer.identity)} at interpolation ${index + 1} ` +
+        `html: renderer ${JSON.stringify(statement.$renderer.identity)} at interpolation ${interpolation} ` +
           "must occupy a subtree place between elements, not an element or attribute seat.",
       );
     }
     parts.push(
       Object.freeze({
         kind: "renderer" as const,
-        invocation: lowerRendererInvocation(statement, index + 1),
+        invocation: lowerRendererInvocation(statement, interpolation),
       }),
     );
+  }
+  if (openAttribute !== undefined) {
+    throw new TypeError("html: an attribute value seat is never closed.");
   }
   return Object.freeze({ kind: "html", parts: Object.freeze(parts) });
 }
@@ -243,6 +582,24 @@ function askValue(value: unknown, site: string): unknown {
   return reference;
 }
 
+function askSeatMapping(
+  entries: Record<string, unknown>,
+  role: "response" | "refusal",
+): Readonly<Record<string, RendererValueRef>> {
+  const mapping: Record<string, RendererValueRef> = {};
+  for (const [name, entry] of Object.entries(entries)) {
+    if (typeof entry !== "symbol") {
+      throw new TypeError(`ask ${role} ${JSON.stringify(name)} must fill a renderer field.`);
+    }
+    const reference = currentBuildContext()?.values.get(entry);
+    if (reference === undefined || reference.scope !== "field") {
+      throw new TypeError(`ask ${role} ${JSON.stringify(name)} must use the field bag.`);
+    }
+    mapping[name] = reference;
+  }
+  return Object.freeze(mapping);
+}
+
 function lowerAsk(value: unknown): AskPlacement | undefined {
   if (
     typeof value !== "object" ||
@@ -263,9 +620,6 @@ function lowerAsk(value: unknown): AskPlacement | undefined {
   if (typeof ref?.refConcept !== "string" || typeof ref.refAction !== "string") {
     throw new TypeError("html: an ask needs a static concept action reference.");
   }
-  if (step.linePosture === "refused") {
-    throw new TypeError("html: an ask cannot use a refused action line.");
-  }
   if (typeof step.action?.input !== "object" || step.action.input === null) {
     throw new TypeError("html: an ask needs an action input mapping.");
   }
@@ -277,21 +631,25 @@ function lowerAsk(value: unknown): AskPlacement | undefined {
       ]),
     ),
   );
-  const output: Record<string, RendererValueRef> = {};
+  // A returned-posture line (`.responds({ ... })`) routes accepted outputs into
+  // held fields. A refused-posture line (`.refuses({ ... })`) routes the
+  // refusal's detail into display seats. Both arm the same requested ask.
+  let output: Readonly<Record<string, RendererValueRef>> = Object.freeze({});
+  let refuses: Readonly<Record<string, RendererValueRef>> | undefined;
   if (step.action.output !== undefined) {
     if (typeof step.action.output !== "object" || step.action.output === null) {
       throw new TypeError("html: an ask response needs an output mapping.");
     }
-    for (const [name, entry] of Object.entries(step.action.output)) {
-      if (typeof entry !== "symbol") {
-        throw new TypeError(`ask output ${JSON.stringify(name)} must fill a renderer field.`);
+    if (step.linePosture === "refused") {
+      refuses = askSeatMapping(step.action.output as Record<string, unknown>, "refusal");
+      if (Object.keys(refuses).length === 0) {
+        throw new TypeError("html: .refuses({ ... }) needs at least one refusal seat.");
       }
-      const reference = currentBuildContext()?.values.get(entry);
-      if (reference === undefined || reference.scope !== "field") {
-        throw new TypeError(`ask output ${JSON.stringify(name)} must use the field bag.`);
-      }
-      output[name] = reference;
+    } else {
+      output = askSeatMapping(step.action.output as Record<string, unknown>, "response");
     }
+  } else if (step.linePosture === "refused") {
+    throw new TypeError("html: .refuses({ ... }) needs at least one refusal seat.");
   }
   return Object.freeze({
     kind: "ask" as const,
@@ -299,7 +657,8 @@ function lowerAsk(value: unknown): AskPlacement | undefined {
       concept: ref.refConcept,
       action: ref.refAction,
       input,
-      output: Object.freeze(output),
+      output,
+      ...(refuses === undefined ? {} : { refuses }),
     }),
   });
 }
@@ -421,6 +780,92 @@ export function where(line: ReadLine): RendererReadBuilder {
   return readBuilder("where", line);
 }
 
+// ── refusal seat resolution ────────────────────────────────────────────────
+//
+// A field-bag symbol named by an ask's `.refuses({ ... })` mapping is a display
+// seat, not a held draft. After the builder returns, its armed placements are
+// re-kinded from field to refusal, and a name may not serve both roles.
+
+interface SeatUsage {
+  readonly refusalSeats: Set<string>;
+  readonly heldFields: Set<string>;
+}
+
+function collectSeatUsage(node: HtmlNode, usage: SeatUsage): void {
+  for (const part of node.parts) {
+    if (part.kind === "ask") {
+      for (const reference of Object.values(part.ask.refuses ?? {})) {
+        usage.refusalSeats.add(reference.name);
+      }
+      for (const reference of Object.values(part.ask.output)) {
+        usage.heldFields.add(reference.name);
+      }
+      for (const value of Object.values(part.ask.input)) {
+        const reference = value as Partial<RendererValueRef>;
+        if (reference?.scope === "field" && typeof reference.name === "string") {
+          usage.heldFields.add(reference.name);
+        }
+      }
+    } else if (part.kind === "read") {
+      collectSeatUsage(part.body, usage);
+    }
+  }
+}
+
+function rekindRefusalSeats(node: HtmlNode, refusalSeats: ReadonlySet<string>): HtmlNode {
+  let changed = false;
+  const parts = node.parts.map((part) => {
+    if (part.kind === "field" && refusalSeats.has(part.field.name)) {
+      changed = true;
+      return Object.freeze({ kind: "refusal" as const, seat: part.field });
+    }
+    if (part.kind === "read") {
+      const body = rekindRefusalSeats(part.body, refusalSeats);
+      if (body !== part.body) {
+        changed = true;
+        const replaced = Object.freeze({ ...part, body });
+        ReadPlacements.add(replaced);
+        return replaced;
+      }
+    }
+    return part;
+  });
+  if (!changed) return node;
+  return Object.freeze({ kind: "html" as const, parts: Object.freeze(parts) });
+}
+
+function seatIsPlaced(node: HtmlNode, name: string): boolean {
+  return node.parts.some((part) => {
+    if (part.kind === "refusal") return part.seat.name === name;
+    if (part.kind === "read") return seatIsPlaced(part.body, name);
+    return false;
+  });
+}
+
+function resolveRefusalSeats(identity: string, body: HtmlNode): HtmlNode {
+  const usage: SeatUsage = { refusalSeats: new Set(), heldFields: new Set() };
+  collectSeatUsage(body, usage);
+  if (usage.refusalSeats.size === 0) return body;
+  for (const name of usage.refusalSeats) {
+    if (usage.heldFields.has(name)) {
+      throw new TypeError(
+        `Renderer ${JSON.stringify(identity)} refusal seat ${JSON.stringify(name)} cannot also ` +
+          "hold a draft or ask value; give the refusal its own seat name.",
+      );
+    }
+  }
+  const resolved = rekindRefusalSeats(body, usage.refusalSeats);
+  for (const name of usage.refusalSeats) {
+    if (!seatIsPlaced(resolved, name)) {
+      throw new TypeError(
+        `Renderer ${JSON.stringify(identity)} refusal seat ${JSON.stringify(name)} is never ` +
+          "placed; arm an element with it to show the refusal.",
+      );
+    }
+  }
+  return resolved;
+}
+
 export function renderer(
   description: string,
   build: RendererBuilder<OpenRendererBag, OpenRendererBag, OpenRendererBag>,
@@ -515,7 +960,7 @@ export function renderer<
           identity,
           description,
           inputs: Object.freeze([...callerInputs].sort((left, right) => left.localeCompare(right))),
-          body,
+          body: resolveRefusalSeats(identity, body),
         });
       }
       return declaration;
@@ -629,9 +1074,39 @@ function isPortableAsk(ask: RendererAsk, inputs: readonly string[]): boolean {
       return false;
     }
   }
-  return Object.values(ask.output).every(
-    (output) => isRendererValueRef(output) && output.scope === "field",
-  );
+  if (
+    !Object.values(ask.output).every(
+      (output) => isRendererValueRef(output) && output.scope === "field",
+    )
+  ) {
+    return false;
+  }
+  if (ask.refuses !== undefined) {
+    if (typeof ask.refuses !== "object" || ask.refuses === null) return false;
+    if (
+      !Object.values(ask.refuses).every(
+        (seat) => isRendererValueRef(seat) && seat.scope === "field",
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isPortableAttributeValue(
+  parts: readonly AttributeValuePart[],
+  inputs: readonly string[],
+): boolean {
+  if (!Array.isArray(parts) || parts.length === 0) return false;
+  return parts.every((part) => {
+    if (typeof part !== "object" || part === null) return false;
+    if (part.kind === "literal") return typeof part.value === "string";
+    if (part.kind !== "ref" || !isRendererValueRef(part.ref)) return false;
+    if (part.ref.scope === "field") return false;
+    if (part.ref.scope === "input" && !inputs.includes(part.ref.name)) return false;
+    return true;
+  });
 }
 
 function isPortableHtmlNode(node: HtmlNode, inputs: readonly string[], seen: Set<object>): boolean {
@@ -645,6 +1120,22 @@ function isPortableHtmlNode(node: HtmlNode, inputs: readonly string[], seen: Set
       if (part.value.scope === "input" && !inputs.includes(part.value.name)) return false;
     } else if (part.kind === "field") {
       if (!isRendererValueRef(part.field) || part.field.scope !== "field") return false;
+    } else if (part.kind === "refusal") {
+      if (!isRendererValueRef(part.seat) || part.seat.scope !== "field") return false;
+    } else if (part.kind === "attribute") {
+      if (typeof part.element !== "number" || typeof part.name !== "string") return false;
+      if (part.form !== "value" && part.form !== "presence") return false;
+      if (part.check !== undefined && part.check !== "url" && part.check !== "relative-url") {
+        return false;
+      }
+      if (!isPortableAttributeValue(part.value, inputs)) return false;
+      if (part.form === "presence") {
+        const refs = part.value.filter((entry) => entry.kind === "ref");
+        const literals = part.value.filter(
+          (entry) => entry.kind === "literal" && entry.value !== "",
+        );
+        if (refs.length !== 1 || literals.length > 0) return false;
+      }
     } else if (part.kind === "ask") {
       if (!isPortableAsk(part.ask, inputs)) return false;
     } else if (part.kind === "read") {

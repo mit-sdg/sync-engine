@@ -39,6 +39,8 @@ export interface FormedAsk {
     readonly action: string;
     readonly input: Readonly<Record<string, FormedAskInput>>;
     readonly output: Readonly<Record<string, FormedAskOutput>>;
+    /** Refusal display seats this ask reports into, when `.refuses({ ... })` was authored. */
+    readonly refuses?: Readonly<Record<string, FormedAskOutput>>;
 }
 export interface FormedHtmlTree {
     readonly kind: "root";
@@ -72,7 +74,16 @@ export interface FormedClauseNode {
     readonly html: string;
     readonly rows: readonly FormedRowNode[];
 }
-export type FormedHtmlNode = FormedRendererNode | FormedShowNode | FormedClauseNode;
+export interface FormedAttributeNode {
+    readonly kind: "attr";
+    readonly address: string;
+    /** Marker value carried by the owning element's `data-rendered-attrs`. */
+    readonly element: string;
+    readonly name: string;
+    /** The rendered attribute value; "" renders the bare attribute, null renders nothing. */
+    readonly value: string | null;
+}
+export type FormedHtmlNode = FormedRendererNode | FormedShowNode | FormedClauseNode | FormedAttributeNode;
 export type FormedHtmlPatch = {
     readonly kind: "root";
     readonly html: string;
@@ -80,6 +91,11 @@ export type FormedHtmlPatch = {
     readonly kind: "show";
     readonly address: string;
     readonly value: string;
+} | {
+    readonly kind: "attr";
+    readonly element: string;
+    readonly name: string;
+    readonly value: string | null;
 } | {
     readonly kind: "clause";
     readonly address: string;
@@ -129,6 +145,8 @@ export interface RendererAsk {
     readonly action: string;
     readonly input: Readonly<Record<string, unknown>>;
     readonly output: Readonly<Record<string, RendererValueRef>>;
+    /** Display seats that present this ask's refusal detail, from `.refuses({ ... })`. */
+    readonly refuses?: Readonly<Record<string, RendererValueRef>>;
 }
 export interface RendererRead {
     readonly concept: string;
@@ -138,6 +156,13 @@ export interface RendererRead {
     readonly input: Readonly<Record<string, unknown>>;
     readonly output: Readonly<Record<string, RendererValueRef>>;
 }
+export type AttributeValuePart = {
+    readonly kind: "literal";
+    readonly value: string;
+} | {
+    readonly kind: "ref";
+    readonly ref: RendererValueRef;
+};
 export interface HtmlNode {
     readonly kind: "html";
     readonly parts: readonly ({
@@ -149,6 +174,18 @@ export interface HtmlNode {
     } | {
         readonly kind: "field";
         readonly field: RendererValueRef;
+    } | {
+        readonly kind: "refusal";
+        readonly seat: RendererValueRef;
+    } | {
+        readonly kind: "attribute";
+        /** Ordinal of the owning open tag within this node, for element addressing. */
+        readonly element: number;
+        readonly name: string;
+        readonly form: "value" | "presence";
+        /** URL hygiene applied when the resolved value is formed or patched. */
+        readonly check?: "url" | "relative-url";
+        readonly value: readonly AttributeValuePart[];
     } | {
         readonly kind: "ask";
         readonly ask: RendererAsk;
