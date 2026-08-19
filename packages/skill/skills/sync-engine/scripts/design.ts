@@ -36,9 +36,8 @@ async function authoredMarkdown(root: string, directory: string): Promise<Author
 }
 
 /**
- * A concept file carries its concept's name. Cross-document references and every engine
- * diagnostic name the concept, so a file called `shortening.md` holding `# Shortening`
- * makes the two disagree for no benefit. Compositions carry prose titles and are exempt.
+ * A concept file carries its concept's name, so that references and diagnostics, which
+ * name the concept, lead to the file. Compositions carry prose titles and are exempt.
  */
 async function requireConceptFileNames(files: readonly AuthoredFile[]): Promise<void> {
   for (const file of files) {

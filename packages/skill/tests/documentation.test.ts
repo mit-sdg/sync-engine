@@ -48,8 +48,6 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(internals)).toBeLessThanOrEqual(0.625 * 1024);
     expect(bytes(design)).toBeLessThanOrEqual(5.125 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
-    // Raised for the RequestBoundary clarification: the old "except `RequestBoundary`"
-    // read as an exemption from the once rule, and a trial designer duly declared five.
     expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
 
@@ -125,8 +123,6 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(baseline).toBeLessThanOrEqual(13 * 1024);
     for (const name of ["design-and-criticism", "implementation"] as const) {
-      // Raised for compiler-owned follow-ups: coordinators improvised four naming
-      // conventions across three trials and invented timestamps that drifted 16 minutes.
       expect(bytes(await stage(name))).toBeLessThanOrEqual(6.25 * 1024);
     }
 
@@ -146,13 +142,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const limits: Record<string, number> = {
       designer: 13 * 1024,
       critic: 10.5 * 1024,
-      // Raised with the generated-output rule in common/internals.md: a trial worker read
-      // generated/wire.ts to infer expected shapes instead of using its references.
       "concept-worker": 2.375 * 1024,
-      // Raised for the no-reverse-engineering rule: a trial worker with no composition
-      // reference probed framework brands at runtime for ~200 tool calls instead. Raised
-      // again to name the design-defect diagnostics: trial workers rewrote one test file
-      // 35 times and hit UNRESOLVED_LINK 45 times rather than blocking on the design.
       "application-worker": 3.25 * 1024,
       "frontend-worker": 2.5 * 1024,
       "evidence-worker": 2.125 * 1024,

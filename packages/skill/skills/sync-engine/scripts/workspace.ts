@@ -143,9 +143,9 @@ export interface LaunchRecord {
 }
 
 /**
- * Where a role may read. The prompts say this already; the designer's boundary was prose
- * while the workers' was a regex, so the role with least reason to read implementation had
- * the weakest rule. A trial designer made 25 reads inside the installed package.
+ * Where a role may read. A designer or critic works from supplied prompt material alone;
+ * an implementation role may consult the installed package's examples and user docs and
+ * nothing else inside it.
  */
 export function readAudit(role: string, paths: readonly string[]): string[] {
   const offending: string[] = [];
@@ -167,8 +167,8 @@ export function readAudit(role: string, paths: readonly string[]): string[] {
 }
 
 /**
- * What a role must return. The prompts already state it; a role that ignores it costs the
- * coordinator the context the boundary exists to protect, so check it at the boundary.
+ * What a role must return. A reply that buries its verdict costs the coordinator the
+ * context the boundary exists to protect, so check the shape at the boundary.
  */
 export function responseContract(role: string, response: string): string | undefined {
   const text = response.trim();
@@ -249,9 +249,9 @@ export async function verifiedRecords(
 }
 
 /**
- * Reopening design after a role ran leaves its delivery bound to a design nobody approved.
- * A record built against another digest stops counting, so the coordinator relaunches the
- * role instead of deciding for itself that stale work still holds.
+ * A delivery is bound to the design it was built against. A record from another digest
+ * stops counting, so reopening design relaunches the roles under it rather than leaving
+ * the coordinator to judge whether stale work still holds.
  */
 export async function requireCompletedRole(
   role: string,

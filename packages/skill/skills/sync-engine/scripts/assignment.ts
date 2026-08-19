@@ -51,10 +51,7 @@ export interface CheckedAssignment {
   readonly writePaths: readonly string[];
 }
 
-/**
- * Only the write-path section grants ownership. Read paths use the same bullet form, so
- * scanning the whole document rejects a role for merely reading another role's example.
- */
+/** Only the write-path section grants ownership; read paths use the same bullet form. */
 function writePathSection(source: string): string {
   const start = source.search(/^##\s+Allowed write paths\s*$/m);
   if (start === -1) return "";
