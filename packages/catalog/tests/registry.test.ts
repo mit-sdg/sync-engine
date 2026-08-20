@@ -2,12 +2,13 @@ import { cp, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
+import curatedIndex from "../entries/index.json" with { type: "json" };
 import { CatalogRegistry } from "../src/registry.ts";
 
 describe("catalog registry", () => {
   test("loads the curated index and exposes plain asset selectors", async () => {
     const registry = await CatalogRegistry.load();
-    expect([...registry.entries.keys()]).toHaveLength(20);
+    expect([...registry.entries.keys()]).toHaveLength(curatedIndex.length);
     const concept = registry.entries.get("concept/selecting");
     expect(concept?.kind).toBe("concept");
     if (concept?.kind !== "concept") throw new Error("missing selecting concept");
@@ -19,7 +20,7 @@ describe("catalog registry", () => {
     const recipe = registry.entries.get("recipe/review-queue");
     expect(recipe?.kind).toBe("recipe");
     if (recipe?.kind !== "recipe") throw new Error("missing review-queue recipe");
-    expect(recipe.requires).toEqual(["concept/timing", "concept/approving", "concept/alerting"]);
+    expect(recipe.requires).toEqual(["concept/approving", "concept/alerting"]);
     expect(CatalogRegistry.sources(recipe).map(({ selector }) => selector)).toContain(
       "review-queue.ts",
     );

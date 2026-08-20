@@ -57,7 +57,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
     expect(bytes(format)).toBeLessThanOrEqual(4.75 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
-    expect(bytes(composition)).toBeLessThanOrEqual(6.5 * 1024);
+    expect(bytes(composition)).toBeLessThanOrEqual(6.875 * 1024);
     // The designer's boundary note must never grow into a second http.md: naming a
     // transport is what put unbuildable renderings into a design.
     expect(bytes(boundary)).toBeLessThanOrEqual(0.75 * 1024);
@@ -68,6 +68,12 @@ describe("compact sync-engine Agent Skill documents", () => {
       "when(Posting.publish({ author }).responds({ post })).then(Indexing.add({ item: post }))",
     );
     expect(composition).toContain('`when(returned({ post }, { by: "Posting.publish" }))`');
+    // A concept modelling the clock was how designs got the time; the instant is bound
+    // per flow now, and an application worker that does not know that reinvents Timing.
+    expect(composition.replace(/\s+/g, " ")).toContain(
+      "`now(variable)` binds the instant stamped on this flow's outermost occurrence",
+    );
+    expect(composition.replace(/\s+/g, " ")).toContain("never model a clock as a concept");
     expect(composition).toContain(
       "export const composition = { Publishing: { PublishPost, IndexOnPublish } };",
     );
@@ -163,12 +169,12 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Principle is archetypal rather than complete, so State it omits is a question, not a fault",
     );
     // A catalog row's genericity is already settled; the critic judging it blind told a
-    // designer to delete Timing, a shipped catalog concept.
+    // designer to delete a shipped catalog concept.
     expect(critic.replace(/\s+/g, " ")).toContain(
       "A row naming a catalog entry has had its genericity settled already",
     );
-    // A contract pass told a designer that Timing, a shipped catalog concept seven
-    // recipes depend on, should not be a concept at all.
+    // A contract pass told a designer that a shipped catalog concept several recipes
+    // depended on should not be a concept at all.
     expect(critic.replace(/\s+/g, " ")).toContain(
       "review how this product uses it, never its right to be a concept",
     );

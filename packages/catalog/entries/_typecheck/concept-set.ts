@@ -10,7 +10,6 @@ import { posting } from "../concept/posting/registry.ts";
 import { reserving } from "../concept/reserving/registry.ts";
 import { selecting } from "../concept/selecting/registry.ts";
 import { sessioning } from "../concept/sessioning/registry.ts";
-import { timing } from "../concept/timing/registry.ts";
 import { trashing } from "../concept/trashing/registry.ts";
 import { upvoting } from "../concept/upvoting/registry.ts";
 
@@ -26,7 +25,6 @@ export const applicationConceptSet = conceptSet({
   Reserving: reserving,
   Selecting: selecting,
   Sessioning: sessioning,
-  Timing: timing,
   Trashing: trashing,
   Upvoting: upvoting,
 });

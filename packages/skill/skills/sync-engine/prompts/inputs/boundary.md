@@ -9,5 +9,6 @@ exit codes, or address shapes beyond an endpoint's own name.
 
 When two refusals have to be indistinguishable to a caller, say that as behaviour.
 
-A concept that depends on the current time or on a generated identifier says so in its
-prose. The implementation injects it; the concept never reaches for a clock itself.
+A concept needing the current time or a generated identifier says so in its prose and
+takes it as an action input; it never reaches for a clock. Composition binds one instant
+per flow and passes it in, so no concept reports the time.

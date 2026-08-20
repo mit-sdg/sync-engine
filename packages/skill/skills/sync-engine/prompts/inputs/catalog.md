@@ -21,6 +21,5 @@ expected answer rather than a fault.
 - **Selecting** — Keep one current item for a shared scope, so everyone working in that scope can begin from the same choice.
 - **Sessioning** — Keep a short-lived opaque session for an external subject, so temporary access can end without changing that subject's identity.
 - **Tallying** — Keep a running total of how often something has happened to a subject, so the count can be read back without keeping a record of each separate occurrence.
-- **Timing** — Expose the host's current wall-clock time as an explicit value, so one application rule can bind an instant and pass it consistently to every effect it triggers.
 - **Trashing** — Record a reversible removal before making that removal irreversible, so an accidental removal can be restored without leaving every removal permanently reversible.
 - **Upvoting** — Record one current preference from each voter about an item, so an aggregate score reflects distinct voters rather than repeated clicks.

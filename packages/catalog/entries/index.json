@@ -1,6 +1,5 @@
 [
   "concept/selecting/manifest.json",
-  "concept/timing/manifest.json",
   "concept/upvoting/manifest.json",
   "concept/alerting/manifest.json",
   "concept/reserving/manifest.json",

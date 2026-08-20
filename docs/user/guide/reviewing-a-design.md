@@ -120,11 +120,15 @@ refusal or fault, and whether repair is automatic. If no false interval is accep
 combine ownership or use one storage transaction that can enforce both facts.
 
 Inspect host and user-interface policy explicitly. Command arguments, filesystem loading,
-clock reads, process holds, and network exchange are strong concept candidates when
-they have observable choices, state, lifecycle, or expected failure. Application
-command grammar and interface policy belong in composition, not in a generic host
-concept. A direct inert adapter is permitted when it introduces none of those
-semantics; do not manufacture a pass-through concept solely to wrap an API call.
+process holds, and network exchange are strong concept candidates when they have
+observable choices, state, lifecycle, or expected failure. Treat the current instant
+differently: reject a clock-read concept, require composition to bind it with
+`.where(now(instant))`, and pass it to concept actions that declare the instant as an
+input. A host can inject a fixed clock through `assemble({ ..., clock })` for
+deterministic tests. Application command grammar and interface policy belong in
+composition, not in a generic host concept. A direct inert adapter is permitted when it
+introduces none of those semantics; do not manufacture a pass-through concept solely
+to wrap an API call.
 
 ## 6. Check instances, application types, and external identities
 

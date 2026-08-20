@@ -11,8 +11,8 @@ Import an approved specification through the `@design` alias, which the installe
 
 ## Reactions
 
-`reaction`, `when`, `where`, `returned`, `refused`, `no`, `whether`, `earlier` and `is`
-come from `@mit-sdg/sync-engine/language`.
+`reaction`, `when`, `where`, `returned`, `refused`, `no`, `whether`, `earlier`, `now` and
+`is` come from `@mit-sdg/sync-engine/language`.
 
 ```ts
 reaction(({ author, post }) =>
@@ -28,6 +28,9 @@ reaction(({ author, post }) =>
   `when(returned({ post }, { by: "Posting.publish" }))`. `where(...)` takes conditions;
   `no(readLine)` and `whether(readLine)` test one.
 - `earlier(action, input, output?)` refers to a prior occurrence.
+- `now(variable)` binds the instant stamped on this flow's outermost occurrence, so every
+  reaction in one flow reads one time and a caller can author none. Pass that variable to
+  each action needing the instant; never model a clock as a concept.
 - `is.lt`, `is.le`, `is.gt`, `is.ge`, `is.among` compare.
 - `.afterFlowSettles()` may follow `when(trigger)` or a completed stage, then `.then(step)`
   or `.where(...).then(step)`. A chained deferred stage accepts condition lines only.

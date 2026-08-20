@@ -1,9 +1,9 @@
 import spec from "./spec.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, now, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
-const { Authenticating, Commenting, Posting, Sessioning, Timing } = concepts;
+const { Authenticating, Commenting, Posting, Sessioning } = concepts;
 
 const PostTargetExists = view("the Post target exists (post)", ({ post }, _outputs, _bindings) =>
   where(Posting._get({ post })),
@@ -95,9 +95,7 @@ const PublishMessageBoardPost = endpoint(
     receive({ session, content })
       .then(Sessioning.current({ session }).responds({ subject: author }))
       .then(
-        where(Timing._now({}).is({ time })).then(
-          Posting.publish({ author, content, at: time }).responds({ post }),
-        ),
+        where(now(time)).then(Posting.publish({ author, content, at: time }).responds({ post })),
       )
       .then(respond({ post })),
 );
@@ -108,7 +106,7 @@ const AddMessageBoardComment = endpoint(
     receive({ session, target, text })
       .then(Sessioning.current({ session }).responds({ subject: author }))
       .then(
-        where(PostTargetExists({ post: target }), Timing._now({}).is({ time }))
+        where(PostTargetExists({ post: target }), now(time))
           .then(Commenting.add({ target, author, text, at: time }).responds({ comment }))
           .then(respond({ comment }))
           .named("post-exists"),

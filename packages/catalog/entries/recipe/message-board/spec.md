@@ -5,7 +5,6 @@ A message board gives authenticated users sessions for publishing posts, comment
 ## Application types and instances
 
 ```instances
-instantiate Timing
 instantiate Authenticating
 
 instantiate Sessioning with

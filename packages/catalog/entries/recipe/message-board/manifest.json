@@ -5,7 +5,6 @@
   "summary": "Authenticate users and bind session subjects to authored posts and comments.",
   "design": "spec.md",
   "requires": [
-    "concept/timing",
     "concept/authenticating",
     "concept/sessioning",
     "concept/posting",

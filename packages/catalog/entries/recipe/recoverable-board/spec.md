@@ -13,8 +13,6 @@ concrete BoardScope
 ```
 
 ```instances
-instantiate Timing
-
 instantiate Posting with
   Author is Person
 

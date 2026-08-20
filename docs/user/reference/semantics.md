@@ -86,6 +86,21 @@ surviving binding. A binding is one row of named values matched from the
 trigger and subsequent reads. Framework reactions may instead watch the fault
 channel.
 
+Each causal flow has one framework-owned current instant. `now(variable)` in a
+reaction's `where` binds that variable to the instant stamped on the flow's
+outermost occurrence. The host clock is read once when that occurrence opens,
+not whenever `now` is evaluated, so ordinary and deferred reactions in the same
+flow observe the same instant. The outermost occurrence log uses that existing
+stamp too; the design layer does not take a second clock reading that could
+disagree with the log. `assemble({ ..., clock })` supplies the host clock, which
+allows a test to inject a fixed instant.
+
+`now` is not a standing-state read. It is rejected in views and formers, as a
+trigger or action input, and in `receive(...)`; its binding cannot be supplied by
+a caller or an earlier condition. Use it only in a reaction `where` and pass the
+bound value to any concept action that declares the instant as an input, exactly
+as the concept contract requires.
+
 The trigger form selects the posture:
 
 | Trigger                                          | Record watched                                 |

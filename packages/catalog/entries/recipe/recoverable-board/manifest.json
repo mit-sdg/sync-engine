@@ -4,12 +4,6 @@
   "kind": "recipe",
   "summary": "Publish a labeled board with reversible trash and permanent visibility purge.",
   "design": "spec.md",
-  "requires": [
-    "concept/timing",
-    "concept/posting",
-    "concept/commenting",
-    "concept/labeling",
-    "concept/trashing"
-  ],
+  "requires": ["concept/posting", "concept/commenting", "concept/labeling", "concept/trashing"],
   "sources": ["recoverable-board.ts", "recoverable-board.test.ts"]
 }

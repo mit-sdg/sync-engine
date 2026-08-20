@@ -3,7 +3,6 @@ import { describe, expect, test } from "vite-plus/test";
 import { CommentingMemoryConcept } from "../entries/concept/commenting/commenting.memory.ts";
 import { LabelingMemoryConcept } from "../entries/concept/labeling/labeling.memory.ts";
 import { PostingMemoryConcept } from "../entries/concept/posting/posting.memory.ts";
-import { TimingConcept } from "../entries/concept/timing/timing.ts";
 import { TrashingMemoryConcept } from "../entries/concept/trashing/trashing.memory.ts";
 import { applicationConceptSet } from "../entries/_typecheck/concept-set.ts";
 import { compositions as boardCompositions } from "../entries/recipe/recoverable-board/recoverable-board.ts";
@@ -15,15 +14,15 @@ function identities(prefix: string): () => string {
   return () => `${prefix}-${String(++next)}`;
 }
 
-function clock(...instants: Date[]): { concept: TimingConcept; reads: () => number } {
+function clock(...instants: Date[]): { read: () => Date; reads: () => number } {
   let index = 0;
   return {
-    concept: new TimingConcept(() => {
+    read() {
       const instant = instants[Math.min(index, instants.length - 1)];
       index += 1;
       if (instant === undefined) throw new Error("The test clock has no instant.");
       return new Date(instant.getTime());
-    }),
+    },
     reads: () => index,
   };
 }
@@ -32,7 +31,6 @@ type BoardInstances = {
   Commenting: CommentingMemoryConcept;
   Labeling: LabelingMemoryConcept;
   Posting: PostingMemoryConcept;
-  Timing: TimingConcept;
   Trashing: TrashingMemoryConcept;
 };
 
@@ -48,10 +46,9 @@ async function boardFloor() {
     Commenting: new CommentingMemoryConcept(identities("comment")),
     Labeling: new LabelingMemoryConcept(identities("label")),
     Posting: new PostingMemoryConcept(identities("post")),
-    Timing: testClock.concept,
     Trashing: new TrashingMemoryConcept(),
   };
-  return { instances, reads: testClock.reads, close: async () => {} };
+  return { instances, clock: testClock.read, reads: testClock.reads, close: async () => {} };
 }
 
 const boardComposition = {
@@ -61,12 +58,13 @@ const boardComposition = {
   ...boardCompositions.BoardPages,
 };
 
-function boardApplication(instances: BoardInstances) {
+function boardApplication(instances: BoardInstances, clock: () => Date) {
   return assemble({
     conceptSet: applicationConceptSet,
     instances: instances as never,
     composition: boardComposition,
     queryCache: "none",
+    clock,
   });
 }
 
@@ -79,7 +77,7 @@ for (const floor of ["memory"] as const) {
     test("uses disposition-only visibility while retaining Posting and Commenting records", async () => {
       const fixture = await boardFloor();
       try {
-        const application = boardApplication(fixture.instances);
+        const application = boardApplication(fixture.instances, fixture.clock);
         await expect(
           application.invoker.invoke("/recoverable-board/post", {
             author: "Ari",
@@ -186,7 +184,7 @@ for (const floor of ["memory"] as const) {
         expect(await rows(fixture.instances.Trashing._state({ item: "post-1" }))).toEqual({
           status: "purged",
         });
-        expect(fixture.reads()).toBe(5);
+        expect(fixture.reads()).toBe(14);
       } finally {
         await fixture.close();
       }
@@ -195,7 +193,7 @@ for (const floor of ["memory"] as const) {
     test("returns owner refusal codes without changing retained records", async () => {
       const fixture = await boardFloor();
       try {
-        const application = boardApplication(fixture.instances);
+        const application = boardApplication(fixture.instances, fixture.clock);
         await expect(
           application.invoker.invoke("/recoverable-board/post", {
             author: "Ari",
