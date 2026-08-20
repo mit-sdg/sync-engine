@@ -5,6 +5,265 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.14] - 2026-08-19
+
+This beta makes the skill's role launches verify themselves against the harness
+rather than against the coordinator's account, binds every delivery to the design
+digest it was built for, and lets an HTTP policy declare direct `GET` routes for
+clients that cannot post.
+
+### Compatibility
+
+- `httpPolicy` accepts `direct`, the routes an application serves outside
+  POST/JSON for a client that cannot post. A route names a `GET` path whose
+  `{name}` segments fill the endpoint inputs of those names, percent-decoded; an
+  empty segment does not match. `redirect` names a response field holding an
+  absolute URL and answers `302`; `status` alone answers that status with the
+  JSON body; a route must state one of them. Parameter names may not repeat, two
+  routes may not share a method and shape, and the endpoint keeps its `POST`
+  path. `HttpDirectRoute` is exported from `@mit-sdg/sync-engine-http`.
+- A direct route carries no cookies and skips the request-origin check, so
+  `httpPolicy` refuses one that serves an endpoint issuing or clearing a cookie.
+- `sync-engine setup` writes a `tsconfig.json` that maps `@design/*` to
+  `./design/*`, which the shipped examples already use.
+- The skill's `launch` reads the role's last message and the paths it opened from
+  the harness, so a role cannot be recorded as doing work it did not do. The
+  reply is written to `<stamp>-<role>.response.md` under `.sync-engine/` and
+  summarized in the launch record. A reply that breaks its role's contract fails
+  the launch and does not count the role as run; a critic must return
+  `No material findings.` or begin with its findings, with no preamble.
+- A role that ends in error is inspected again after a pause and then asked to
+  continue, up to twice, before its launch fails.
+- A read outside a role's boundary is recorded in the launch record and reported
+  by `handback check` rather than failing the launch. No role may read the
+  skill's own sources except `SKILL.md`, a designer or critic may read no
+  installed package, and an implementation role may read only a `@mit-sdg`
+  package's `examples/` and `docs/user/`. A harness that names its tools without
+  their arguments records `readAudit: "unavailable"` rather than attesting to a
+  boundary it never saw.
+- `prompt build` counts a predecessor launch only when that launch ran against
+  the same `--design-digest`, and it names the stale digest when design was
+  reopened after the earlier role ran.
+- Added `follow-up new --role <role>`, which names the follow-up file.
+  `follow-up check` now requires a compiler-named file that states its role.
+- `design digest` requires each concept document to be `concepts/<Concept>.md`,
+  matching the name in its heading.
+- `assignment check` reads owned paths from the `Allowed write paths` section
+  alone, so bulleted read paths elsewhere in an assignment no longer claim
+  ownership.
+- Added the packaged `prompts/inputs/composition.md` reference for the `language`
+  and `boundary` declaration API: reactions, views, formers, computations, and
+  endpoints. Every application worker receives it as a `reference` input, and an
+  HTTP product adds `prompts/inputs/http.md`.
+- An application worker treats `MISSING_COVERAGE`, `UNRESOLVED_LINK`,
+  `UNDECLARED_SELECTED_INSTANCE`, and `UNREGISTERED_COMPUTATION` as design
+  defects to block on rather than defects to repair.
+- Unknown roles and unknown input slots report the accepted values.
+
+### Migration
+
+- Replace hand-written listeners and route matching for browser-reachable `GET`
+  paths with policy `direct` routes. The endpoint itself does not change.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.14` when they
+  are used together.
+- Rename each concept document to match its heading before taking a design
+  digest, and move every owned path in a temporary assignment under
+  `## Allowed write paths`.
+- Start diagnostic follow-ups with `follow-up new --role <role>` instead of
+  naming the file yourself.
+- Rebuild prompts and relaunch roles after reopening design. A delivery recorded
+  against another digest no longer satisfies the role that follows it.
+- Pass `<skill-root>/prompts/inputs/composition.md` to every application worker.
+
+### Generated formats
+
+- The version-1 `sync-engine.skill.launch-record` gains the optional `response`,
+  `readViolations`, `readAudit`, and `resumes` members. Records written by
+  1.0.0-beta.13 remain readable; a role relaunched under this release records its
+  reply. `.sync-engine/` gains the `<stamp>-<role>.response.md` file kind.
+- Core application manifests remain at version 1 and analysis application
+  indexes, impact traces, source indexes, and project snapshots remain at
+  version 3, unchanged in shape.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.14`.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- A direct route answers before the request-origin check and emits no cookie or
+  CORS headers. Its endpoint still owns authorization, and its redirect target
+  comes from that endpoint's own response value, so an endpoint reachable by a
+  direct route must treat its path segments as untrusted input.
+- The read audit is evidence, not a sandbox. It reports what the harness observed
+  after the role ran, it does not confine a role, and an audit the harness cannot
+  supply is recorded as unavailable rather than as clean.
+
+[Release][1.0.0-beta.14] | [Changes since 1.0.0-beta.13][1.0.0-beta.14-compare]
+
+## [1.0.0-beta.13] - 2026-08-19
+
+This beta makes application designs declare their concept instances explicitly,
+parses Simple State Form instead of carrying it as opaque text, reports coded
+diagnostics with machine-readable output, and adds one gate command and a
+manifest differ.
+
+### Compatibility
+
+- Application design now declares an explicit static instance inventory.
+  `instances` fences hold `instantiate Definition [as Instance] [with ...]`
+  declarations, `bindings` fences hold detached `Instance.External is Target`
+  declarations, and `types` fences hold only `concrete Name` declarations with
+  prose. One definition may have several differently named instances. Each
+  instance places its bindings inline or detached, never both. The core-owned
+  `RequestBoundary` stays outside the authored inventory.
+- Concept-set keys and the `assemble` `instances` option name application
+  instances rather than concept definitions. Within one assembly, two names
+  cannot use the same raw implementation object, and each `implementations(...)`
+  call constructs one object per selected key.
+- Simple State Form is parsed. The bounded parser recognizes set, sequence,
+  element, subset, alias, and field declarations with their multiplicities,
+  articles, identifiers, subset graph, and name uniqueness, and it resolves
+  qualified external-binding targets against the names a concept owns. Two
+  authored spellings of one owned type join when they form an unambiguous
+  singular and plural pair, including irregular pairs; `alias Alias for Target`
+  states a synonym directly. An ambiguous pair reports advice without failing
+  the check. External type names take the uppercase type-name form and may not
+  reuse an SSF primitive.
+- Invariant prose belongs on a `Rule:` line inside the `state` fence. Every
+  other nonblank line must parse. Prose after the fence, and unparseable lines
+  that earlier passed as opaque text, are now reported.
+- `parseConceptSpecification` returns `ConceptSpecParseResult` with accumulated
+  coded diagnostics and source locations instead of throwing at the first fault;
+  the throwing entry point is gone. `ConceptSpecDiagnostic`,
+  `ConceptSpecDiagnosticCode`, and `ConceptSpecParseResult` are exported from
+  `@mit-sdg/sync-engine/tooling`. `check-design` reports every fault in every
+  supplied file rather than stopping at the first.
+- Added `sync-engine verify [--config path] [--fail-on-warnings]`. It runs the
+  configured design, application, and artifact checks, adds no checks of its
+  own, and runs each step independently so one failure cannot hide another.
+- Added `sync-engine artifacts diff <old-manifest>`, which reports what changed
+  against a saved manifest, splits the changes into breaking and non-breaking,
+  exits non-zero on a breaking change, and refuses a manifest it cannot decode.
+- Added `--format json` to `check`, `check-design`, `artifacts check`, and
+  `verify`. In JSON mode a command writes exactly one document to stdout,
+  suppresses its human-readable text, and still exits 1 on failure.
+- `sync-engine setup` writes a `.gitignore` when the application has none and
+  leaves an existing one untouched.
+- The skill launches every role through its own compiler rather than the harness
+  CLI. `launch` drives Paseo today, reusing the coordinator's provider, model,
+  and reasoning setting, and writes a launch record under `.sync-engine/`.
+  Building a role's prompt requires a settled record for the role before it, and
+  handback requires one for every required role. Independence and placement
+  rules for role-written code are now mechanical, and
+  `references/harnesses/contract.md` states what another harness must supply.
+- Fixed a manifest defect the differ exposed: an endpoint declaring no input
+  options was omitted from the copied input contracts, so the application
+  produced a manifest its own validator rejected.
+
+### Migration
+
+- Rewrite each application `types` document. Move every concept instance into an
+  `instances` fence and every external binding into that instance's `with` block
+  or a `bindings` fence. Keep `types` fences to `concrete Name` declarations.
+  Update concept-set keys and any `instances` argument to name application
+  instances.
+- Move invariant prose from below the `state` fence onto `Rule:` lines inside
+  it, and repair State lines that earlier survived as opaque text. Run
+  `sync-engine check-design <paths...>` to enumerate the remaining faults.
+- Update `parseConceptSpecification` callers to read the returned result and
+  decide for themselves whether to abort; it no longer throws.
+- Regenerate artifacts with `sync-engine artifacts pin`. Manifests saved by an
+  earlier beta are rejected rather than upconverted; keep a regenerated manifest
+  as the baseline for `artifacts diff`.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.13` when they
+  are used together. Existing skill users should regenerate prompts through the
+  packaged compiler and launch roles with `launch`, since later stages require
+  launch records.
+
+### Generated formats
+
+- Core application manifests remain at version 1, but the schema is replaced in
+  place: manifests written by earlier betas are rejected without upconversion.
+  Generated Markdown replaces its selected-instances-and-bindings section with
+  an `Instances` section that names each instance, its definition, and its
+  bindings.
+- Added the version-1 `sync-engine.diagnostic-report` document for
+  `check-design`, `check`, and `artifacts check`, and the version-1
+  `sync-engine.verification-report` document for `verify`. Unavailable facts are
+  omitted rather than encoded as `null` or synthetic coordinates.
+- Analysis application indexes, impact traces, source indexes, and project
+  snapshots remain at version 3.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.13`.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- State parsing, JSON diagnostics, `verify`, and manifest diffing are static
+  tooling. They do not add runtime schema validation, authorization,
+  persistence, transactions, or frontend trust guarantees; endpoint policies and
+  operational controls remain application responsibilities.
+- Separate implementation objects are not proof of separate durable state. A
+  persistent floor factory should use its instance-name argument to select an
+  explicit repository, collection, schema, or namespace when isolation is
+  required.
+
+[Release][1.0.0-beta.13] | [Changes since 1.0.0-beta.12][1.0.0-beta.13-compare]
+
+## [1.0.0-beta.12] - 2026-08-16
+
+This beta adds a deterministic, self-contained Agent Skill prompt workflow and
+an assembly-independent design form check, and gives frontend implementation an
+explicit endpoint-only role.
+
+### Compatibility
+
+- Added `sync-engine check-design <paths...>` for an explicit mixed corpus of
+  concept, composition, and application-types Markdown. It applies the strict
+  concept parser, application-design form checks, and limited repair-oriented
+  Simple State Form checks without loading configuration, assembly, TypeScript,
+  or Git state.
+- Removed the narrower `sync-engine check-concepts` command. `check-design`
+  checks concept documents and also accepts application-design documents.
+- Renamed the catalog executable from `catalog` to `sync-engine-catalog`; the old
+  executable name is no longer installed.
+- The skill now includes deterministic product-brief, release-set, design-digest,
+  follow-up, and prompt-compilation commands. Its embedded TypeScript sources
+  bootstrap without installing application dependencies, while the npm package
+  also exposes the `sync-engine-skill` convenience executable.
+- Added a bounded frontend worker for briefs that request a browser, command-line,
+  or other shell. The worker consumes generated endpoint wire contracts and may
+  not import concepts, composition, assembly, or storage.
+
+### Migration
+
+- Replace `sync-engine check-concepts <paths...>` with
+  `sync-engine check-design <paths...>`. Treat its Simple State Form checks as
+  repair guidance only; config-based `sync-engine check` remains responsible for
+  selected-assembly links, coverage, source agreement, and TypeScript shapes.
+- Replace invocations of the removed `catalog` executable with
+  `sync-engine-catalog`.
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.12` when they
+  are used together. Existing skill users should regenerate prompts through the
+  packaged compiler rather than carrying earlier role-reference text forward.
+
+### Generated formats
+
+- Core application manifests remain at version 1. Analysis application indexes,
+  impact traces, source indexes, and project snapshots remain at version 3.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.12`; no persisted-format version changes.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- Design form checking and skill prompt compilation are static tooling. They do
+  not add runtime schema validation, authorization, persistence, transactions,
+  or frontend trust guarantees; endpoint policies and operational controls
+  remain application responsibilities.
+
+[Release][1.0.0-beta.12] | [Changes since 1.0.0-beta.11][1.0.0-beta.12-compare]
+
 ## [1.0.0-beta.11] - 2026-08-15
 
 This beta adds a design-first Agent Skill and read-only analysis command, makes
@@ -13,12 +272,15 @@ syntax, and narrows catalog examples to the memory implementation.
 
 ### Compatibility
 
-- Added the documentation-only `@mit-sdg/sync-engine-skill` package. Its native
-  subagent workflow covers interactive or assumption-based product discovery,
-  independent design and criticism, user review of the actual Markdown,
-  path-isolated implementation, evidence, validation, and final acceptance. It
-  depends on the exact matching analysis and catalog packages and has no runtime
-  JavaScript API.
+- Added `@mit-sdg/sync-engine-skill` with a compact native-agent workflow for a
+  Markdown product brief, independent design and bounded criticism, separated concept
+  and application implementation, objective evidence, and stop-after-success
+  validation. Its skill directory embeds the TypeScript brief validator and deterministic
+  file-based prompt compiler so a new application can bootstrap before installing
+  dependencies. A release manifest pins the matching core, analysis, and catalog
+  packages, with no public JavaScript API or workflow database.
+- Renamed the catalog executable from ambiguous `catalog` to
+  `sync-engine-catalog`. The old executable name is no longer installed.
 - `@mit-sdg/sync-engine-analysis` now installs the read-only
   `sync-engine-analysis` command. It obtains the configured V1 manifest through
   core and provides bounded `summary`, `search`, `describe`, `sources`, `impact`,
@@ -962,6 +1224,12 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.14]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.14
+[1.0.0-beta.14-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.13...v1.0.0-beta.14
+[1.0.0-beta.13]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.13
+[1.0.0-beta.13-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.12...v1.0.0-beta.13
+[1.0.0-beta.12]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.12
+[1.0.0-beta.12-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.11...v1.0.0-beta.12
 [1.0.0-beta.11]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.11
 [1.0.0-beta.11-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.10...v1.0.0-beta.11
 [1.0.0-beta.10]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.10

@@ -10,7 +10,7 @@ proof of identity.
 Ari registers username `ari` with a password. `_registered` then reports `ari`
 as registered, and another registration of `ari` is refused.
 Authenticating `ari` with the wrong password is refused. The correct password
-authenticates Ari as `ari`, returning only the username.
+authenticates Ari, returning the account reference, which is the username `ari`.
 
 ## Types
 
@@ -30,7 +30,7 @@ a set of Accounts with
 ## Actions
 
 ```actions
-register (username: Username, password: Password) : return (username: Username)
+register (username: Username, password: Password) : return (account: Account)
   where username is not 3 to 32 letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
@@ -43,15 +43,17 @@ register (username: Username, password: Password) : return (username: Username)
   where username and password are accepted
   then
     add a new account with username, a fresh salt, and a verifier derived from password and that salt
-    return username
+    bind account to that account
+    return account
 
-authenticate (username: Username, password: Password) : return (username: Username)
+authenticate (username: Username, password: Password) : return (account: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
   where password verifies
   then
-    return username
+    bind account to the verified account
+    return account
 ```
 
 ## Queries

@@ -28,9 +28,9 @@ a set of Reservations with
   a claimant Claimant
   a status ReservationStatus
   a reservedAt DateTime
-  an endedAt optional DateTime
+  an optional endedAt DateTime
 
-at most one active or fulfilled Reservation has each Resource
+Rule: at most one active or fulfilled Reservation has each Resource
 ```
 
 ## Actions

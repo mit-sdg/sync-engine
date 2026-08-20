@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-web",
-  "version": "1.0.0-beta.11",
+  "version": "1.0.0-beta.14",
   "private": true,
   "description": "Rendered browser realizations for @mit-sdg/sync-engine",
   "license": "Apache-2.0",
@@ -23,9 +23,9 @@
     }
   },
   "peerDependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.11",
-    "@mit-sdg/sync-engine-http": "1.0.0-beta.11",
-    "@mit-sdg/sync-engine-rendering": "1.0.0-beta.11"
+    "@mit-sdg/sync-engine": "1.0.0-beta.14",
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.14",
+    "@mit-sdg/sync-engine-rendering": "1.0.0-beta.14"
   },
   "engines": {
     "node": ">=24 <25"

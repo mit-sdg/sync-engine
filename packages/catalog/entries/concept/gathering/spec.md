@@ -31,7 +31,7 @@ a seq of Memberships with
   a gathering Gathering
   a member Person
 
-at most one Membership has each gathering and member pair
+Rule: at most one Membership has each gathering and member pair
 ```
 
 ## Actions

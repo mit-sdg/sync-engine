@@ -177,6 +177,14 @@ function sessionPolicy(overrides: Partial<HttpPolicyInit> = {}) {
   });
 }
 
+test("refuses a direct route on a cookie endpoint", () => {
+  expect(() =>
+    sessionPolicy({
+      direct: [{ method: "GET", path: "/{session}", endpoint: "/login", status: 200 }],
+    }),
+  ).toThrow("issues or clears a cookie");
+});
+
 function setup(policy = sessionPolicy()) {
   const application = applicationWith();
   const gateway = createGateway({ application });

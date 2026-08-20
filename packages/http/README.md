@@ -12,7 +12,7 @@ on the matching core beta. Pin both packages to the same exact version and
 upgrade them together:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.11 @mit-sdg/sync-engine-http@1.0.0-beta.11
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.14 @mit-sdg/sync-engine-http@1.0.0-beta.14
 ```
 
 The current beta is ESM-only and supports Node.js 24 (`>=24 <25`). The package
@@ -41,7 +41,8 @@ const gateway = createGateway({ application });
 export const handler = createHttpHandler({ application, gateway });
 ```
 
-The handler accepts `POST` requests with JSON bodies. Endpoint paths are exposed
+The handler accepts `POST` requests with JSON bodies, and the `GET` routes a
+policy declares under [direct routes](#direct-routes). Endpoint paths are exposed
 at the origin root, request bodies are limited to 1,048,576 bytes, and private
 failures become `{ "error": "INTERNAL_ERROR" }`. The handler emits no CORS or
 cookie headers without a policy. It does not validate primitive or nested input
@@ -261,9 +262,28 @@ export async function handler(request: Request): Promise<Response> {
 A wrapper is outside the package's security boundary. It can remove CORS,
 cookie, cache, or error protections; the deployment owns the resulting behavior.
 
+### Direct routes
+
+A client that cannot post — a browser following a link — reaches an endpoint through a
+policy `direct` route. The endpoint is unchanged; the route says how its value is served.
+
+```ts
+const policy = httpPolicy({
+  direct: [{ method: "GET", path: "/{code}", endpoint: "/resolve", redirect: "target" }],
+});
+```
+
+Each `{name}` segment fills the endpoint input of that name, percent-decoded; an empty
+segment does not match. `redirect` names a response field holding an absolute URL and
+answers `302`; `status` alone answers that status with the JSON body; a route states one of
+them. `GET` only, parameter names may not repeat, and two routes may not share a method and
+shape. The endpoint keeps its `POST` path. A direct route carries no cookies and skips the
+request-origin check, so it cannot serve an endpoint that issues or clears one.
+
 ### Custom transport
 
-Use a custom transport when the deployment needs methods other than `POST`,
+Use a custom transport when the deployment needs methods other than `POST` or a declared
+direct route,
 different serialization, streaming, framework-owned routing, preprocessing, or
 response transformation that the HTTP package does not support. The supported
 core building blocks are:

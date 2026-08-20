@@ -563,8 +563,8 @@ assemble({ vocabulary: words, instances: { Storage: new FloorStorage(), ...dynam
 
   test("uses exact roots, endpoint identities, focus ranking, CRLF ranges, verified reads, and cancellation", async () => {
     const specification =
-      "# Odd\r\n\r\n## Purpose\r\n\r\nKeep an odd value.\r\n\r\n## Principle\r\n\r\nChoosing replaces it.\r\n\r\n## Types\r\n\r\n```types\r\nexternal Text\r\n```\r\n\r\n## State\r\n\r\n```state\r\none odd Text\r\n```\r\n\r\n## Actions\r\n\r\n```actions\r\nchoose(value: Text) : return (value: Text)\r\n  where true\r\n  then\r\n    replace the odd value\r\n    return value\r\n```\r\n\r\n## Queries\r\n\r\n```queries\r\n_read() : optional (value: Text)\r\n```\r\n";
-    const parsed = parseConceptSpecification(specification.replaceAll("\r\n", "\n"));
+      "# Odd\r\n\r\n## Purpose\r\n\r\nKeep an odd value.\r\n\r\n## Principle\r\n\r\nChoosing replaces it.\r\n\r\n## Types\r\n\r\n```types\r\nexternal Text\r\n```\r\n\r\n## State\r\n\r\n```state\r\nRule: one odd Text\r\n```\r\n\r\n## Actions\r\n\r\n```actions\r\nchoose(value: Text) : return (value: Text)\r\n  where true\r\n  then\r\n    replace the odd value\r\n    return value\r\n```\r\n\r\n## Queries\r\n\r\n```queries\r\n_read() : optional (value: Text)\r\n```\r\n";
+    const parsed = parseConceptSpecification(specification.replaceAll("\r\n", "\n")).specification!;
     const manifest = manifestFor({
       concepts: [
         {
@@ -1373,7 +1373,7 @@ external Text
 ## State
 
 \`\`\`state
-one logical Text
+Rule: one logical Text
 \`\`\`
 
 ## Actions
@@ -1403,7 +1403,7 @@ _read() : optional (value: Text)
           constructorName: "LogicalCanonical",
           actions: ["choose"],
           queries: ["_read"],
-          specification: parseConceptSpecification(expectedSpecification),
+          specification: parseConceptSpecification(expectedSpecification).specification!,
         },
       ],
     });

@@ -1,25 +1,28 @@
 # Catalog command reference
 
-`@mit-sdg/sync-engine-catalog` exposes only the `catalog` executable. The executable
+`@mit-sdg/sync-engine-catalog` exposes only the `sync-engine-catalog` executable. The executable
 reads assets shipped in its own package. It never writes, installs, locks, generates,
 inspects a user project, or modifies project files. The package has no runtime import
 API.
 
 An entry is an adaptable example, not a required name, destination, or contract.
 Consumers may copy, simplify, split, combine, rename, or reject its design and source.
+Recipe assets include the complete static concept-instance inventory and external
+bindings for the recipe's stated selection; consumers must adapt them to the exact
+assembled variant.
 
 ## Commands
 
 ```text
-catalog list [concept|recipe]
-catalog show <entry> [--raw]
-catalog source <entry> <selector> [--raw]
-catalog help
+sync-engine-catalog list [concept|recipe]
+sync-engine-catalog show <entry> [--raw]
+sync-engine-catalog source <entry> <selector> [--raw]
+sync-engine-catalog help
 ```
 
 No arguments, `help`, `--help`, and `-h` print usage and exit successfully. Invalid arity, filters, options, entry ids, or source selectors print one error to stderr and exit with status 1 when invoked through the executable.
 
-### `catalog list [concept|recipe]`
+### `sync-engine-catalog list [concept|recipe]`
 
 Prints one tab-separated record per entry to stdout:
 
@@ -29,13 +32,13 @@ Prints one tab-separated record per entry to stdout:
 
 The optional filter is exactly `concept` or `recipe`. Index order is preserved.
 
-### `catalog show <entry> [--raw]`
+### `sync-engine-catalog show <entry> [--raw]`
 
 Without `--raw`, prints entry metadata, the accepted source selectors, and the design asset. The design has explicit `Entry`, `Asset`, and `File` labels followed by `---` and its bytes.
 
 With `--raw`, stdout contains only the design file bytes. This form is intended for redirection and scripts.
 
-### `catalog source <entry> <selector> [--raw]`
+### `sync-engine-catalog source <entry> <selector> [--raw]`
 
 Prints exactly one source selected from the list emitted by `show`. Without `--raw`, the output has explicit `Entry`, `Asset`, and `File` labels followed by `---` and the file bytes. With `--raw`, stdout contains only the file bytes.
 

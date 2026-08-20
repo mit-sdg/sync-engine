@@ -30,10 +30,10 @@ a set of Reviews with
   a reviewer Person
   a status ReviewStatus
   a requestedAt DateTime
-  a decidedAt optional DateTime
-  a reason optional String
+  an optional decidedAt DateTime
+  an optional reason String
 
-at most one pending Review has each Subject
+Rule: at most one pending Review has each Subject
 ```
 
 ## Actions

@@ -1,7 +1,7 @@
 # Getting started
 
-This tutorial initializes and runs a concept-free sync-engine application in
-an existing Bun package. Add registrations to `src/concepts.ts`, real
+This tutorial initializes and runs a concept-free sync-engine application. Add
+registrations to `src/concepts.ts`, real
 composition modules under `src/compositions/`, and runtime options to
 `src/assembly.ts`.
 
@@ -12,24 +12,21 @@ For setup behavior in partial or already-authored projects, see the
 ## Prerequisites
 
 Use a Bun version in the [supported range](../../../SUPPORT.md#runtime-and-toolchain).
-These commands create a Bun package and pin the tutorial's core release:
+These commands create the directory, package, and application scaffold while pinning
+the tutorial's core release:
 
 ```sh
 mkdir workshop-app
 cd workshop-app
-bun init -y
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.11
+bunx --package @mit-sdg/sync-engine@1.0.0-beta.14 sync-engine setup
 ```
 
-## Initialize the application files
-
-```sh
-bunx sync-engine setup
-```
+## Inspect the initialized application
 
 `setup` completes missing supported package fields: the canonical Bun
-`packageManager`, exact compatible TypeScript and `@types/node` development
-dependencies, and the standard `generate`, `check`, and `start` scripts. It preserves
+`packageManager`, supported TypeScript, `@types/bun`, and `@types/node` development
+ranges, and the standard `generate`, `check`, and `start` scripts. Its generated
+`tsconfig.json` enables Bun and Node ambient types. It preserves
 every existing compatible declaration and every existing script, even when a script
 differs from the default. After a manifest edit it runs `bun install`.
 

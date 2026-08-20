@@ -32,7 +32,7 @@ export class AuthenticatingConcept {
     }
     const salt = this.freshSalt();
     this.accounts.set(username, { salt, verifier: verifier(password, salt) });
-    return { username };
+    return { account: username };
   }
 
   authenticate({ username, password }: { username: string; password: string }) {
@@ -45,7 +45,7 @@ export class AuthenticatingConcept {
     ) {
       throw new InvalidCredentials("The username or password is incorrect.");
     }
-    return { username };
+    return { account: username };
   }
 
   _registered({ username }: { username: string }): { registered: boolean } {

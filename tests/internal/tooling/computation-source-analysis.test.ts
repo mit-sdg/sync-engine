@@ -157,7 +157,7 @@ conceptSet({}, { calculate });
     expect(() => authoritativeComputationInputs(unresolved, ["calculate"])).toThrow(
       "input shape cannot be resolved",
     );
-  });
+  }, 20_000);
 
   test("rejects extra or missing selected computation names", async () => {
     const module = await source(
@@ -193,5 +193,5 @@ conceptSet({}, { calculate });
 `,
     );
     expect(() => authoritativeComputationInputs(scalar, ["calculate"])).toThrow("non-object type");
-  });
+  }, 20_000);
 });

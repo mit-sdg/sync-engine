@@ -42,9 +42,31 @@ and wire projection; it does not authenticate users or authorize operations.
 
 <!-- register:http-policy:start -->
 
-`HttpBrowserPolicy`, `HttpCookieBinding`, `HttpLimits`, `HttpPolicy`, `HttpPolicyBrand`, `HttpPolicyInit`, `HttpPublicErrorCategory`, `HttpRequestOriginPolicy`, `httpPolicy`
+`HttpBrowserPolicy`, `HttpCookieBinding`, `HttpDirectRoute`, `HttpLimits`, `HttpPolicy`, `HttpPolicyBrand`, `HttpPolicyInit`, `HttpPublicErrorCategory`, `HttpRequestOriginPolicy`, `httpPolicy`
 
 <!-- register:http-policy:end -->
+
+### Direct routes
+
+`direct` declares routes served outside POST/JSON, for clients that cannot post — a
+browser following a link. The endpoint is unchanged: it still declares a value, and the
+route declares how that value reaches the client.
+
+```ts
+httpPolicy({
+  direct: [
+    { method: "GET", path: "/{code}", endpoint: "/resolve", redirect: "target" },
+    { method: "GET", path: "/{code}/stats", endpoint: "/report", status: 200 },
+  ],
+});
+```
+
+Each `{name}` segment fills the endpoint input of that name, percent-decoded, and an empty
+segment does not match. `redirect` names a response field carrying an absolute URL and
+answers `302` by default; `status` alone answers that status with the JSON body. A route
+must state one of them. Only `GET` is supported, parameter names may not repeat, and two
+routes may not share a method and shape. POST/JSON remains the default for everything
+else, and a declared route does not remove its endpoint's POST path.
 
 ### `httpPolicy`
 

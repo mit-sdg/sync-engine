@@ -322,7 +322,7 @@ Touching records the note.
 ## State
 
 \`\`\`state
-notes
+Rule: notes
 \`\`\`
 
 ## Actions
@@ -346,7 +346,7 @@ Touching a note updates the feed.[touch]
 
 [touch]: reaction:Forum.notes.Touch
 `;
-  const specification = parseConceptSpecification(specificationText);
+  const specification = parseConceptSpecification(specificationText).specification!;
   const concepts = ["PrimaryNotes", "ArchiveNotes"].map((name) => ({
     name,
     purpose: specification.purpose,
@@ -447,7 +447,12 @@ Touching a note updates the feed.[touch]
           definition: "SharedNotes",
           source: "concept-1",
           specification,
-          instances: concepts.map(({ name }) => ({ name, bindings: [] })),
+          ownedTypes: [],
+          instances: concepts.map(({ name }) => ({
+            name,
+            declaration: { source: "document-1", line: 3, column: 1 },
+            bindings: [],
+          })),
         },
       ],
       computations: [],
@@ -481,7 +486,7 @@ external Item
 ## State
 
 \`\`\`state
-one current Item
+Rule: one current Item
 \`\`\`
 
 ## Actions
@@ -683,7 +688,7 @@ function projectManifest(): ApplicationManifestV1 {
     },
   ];
   const selecting = manifest.concepts.find(({ name }) => name === "Selecting")!;
-  const specification = parseConceptSpecification(selectingSpec);
+  const specification = parseConceptSpecification(selectingSpec).specification!;
   selecting.purpose = specification.purpose;
   selecting.principle = specification.principle;
   selecting.specification = specification;
@@ -899,14 +904,21 @@ describe("application impact analysis", () => {
       }),
     );
     for (const concept of ["PrimaryNotes", "ArchiveNotes"]) {
-      expect(
-        sourceIndex.entries.find(({ ref }) => ref.kind === "concept" && ref.concept === concept)
-          ?.sources,
-      ).toContainEqual(
+      const conceptSources = sourceIndex.entries.find(
+        ({ ref }) => ref.kind === "concept" && ref.concept === concept,
+      )?.sources;
+      expect(conceptSources).toContainEqual(
         expect.objectContaining({
           role: "specification",
           resolution: "manifest-provenance",
           range: expect.objectContaining({ path: "design/SharedNotes.md" }),
+        }),
+      );
+      expect(conceptSources).toContainEqual(
+        expect.objectContaining({
+          role: "design-coverage",
+          resolution: "manifest-provenance",
+          range: expect.objectContaining({ path: "design/forum.md" }),
         }),
       );
     }
@@ -1038,6 +1050,11 @@ describe("application impact analysis", () => {
     const malformed = fixture();
     malformed.digest = "stale";
     expect(() => indexApplication(malformed)).toThrow(/canonical digest/);
+
+    const forgedOwnedTypes = authoredFixture().manifest;
+    forgedOwnedTypes.design.concepts[0]!.ownedTypes = ["Invented"];
+    redigest(forgedOwnedTypes);
+    expect(() => indexApplication(forgedOwnedTypes)).toThrow(/ownedTypes.*independently derived/);
 
     const firstManifest = fixture();
     const firstIndex = indexApplication(firstManifest);
@@ -1250,7 +1267,7 @@ describe("application impact analysis", () => {
 
   test("compares specifications independent of object key insertion order", () => {
     const manifest = fixture();
-    const parsed = parseConceptSpecification(selectingSpec);
+    const parsed = parseConceptSpecification(selectingSpec).specification!;
     const reordered = {
       queries: parsed.queries,
       actions: parsed.actions,

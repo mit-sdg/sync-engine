@@ -4,31 +4,37 @@ People host and join rooms, contribute to discussions, and receive alerts under
 one shared application identity. A mitigation is an application-supplied option;
 selecting one creates the identity used by discussion and alert subjects.
 
+The bindings preserve these application decisions:
+
+- Hosts and room members are operations-room people.
+- Each room has its own current mitigation.
+- The selectable items are incident mitigations.
+- A discussion belongs to one particular mitigation selection.
+- Discussion responses are authored by operations-room people.
+- Alert recipients are operations-room people.
+- An alert identifies the mitigation selection that raised it.
+
 ```types
 concrete Person
   A responder identity supplied to the operations room.
 
 concrete Mitigation
   An incident response option that a room may select.
+```
 
-Gathering.Person is Person
-  Hosts and room members are operations-room people.
+```instances
+instantiate Gathering with
+  Person is Person
 
-Selecting.Scope is Gathering.Gathering
-  Each room has its own current mitigation.
+instantiate Selecting with
+  Scope is Gathering.Gathering
+  Item is Mitigation
 
-Selecting.Item is Mitigation
-  The selectable items are incident mitigations.
+instantiate Discussing with
+  Subject is Selecting.Selection
+  Person is Person
 
-Discussing.Subject is Selecting.Selection
-  A discussion belongs to one particular mitigation selection.
-
-Discussing.Person is Person
-  Discussion responses are authored by operations-room people.
-
-Alerting.Person is Person
-  Alert recipients are operations-room people.
-
-Alerting.Subject is Selecting.Selection
-  An alert identifies the mitigation selection that raised it.
+instantiate Alerting with
+  Person is Person
+  Subject is Selecting.Selection
 ```

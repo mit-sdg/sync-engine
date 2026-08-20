@@ -440,15 +440,15 @@ describe("input and result shapes", () => {
   });
 });
 
-describe("uninterpreted state notation", () => {
-  test("arbitrary contradictions do not participate in source checking", async () => {
+describe("uninterpreted state rules", () => {
+  test("marked contradictions do not participate in source checking", async () => {
     const where = await concept(
       "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
       "",
       "```state\n" +
-        "there is no session field and end is a query\n" +
-        "the class must use a differently shaped database table {]\n" +
+        "Rule: there is no session field and end is a query\n" +
+        "Rule: the class must use a differently shaped database table {]\n" +
         "```",
     );
 
@@ -507,9 +507,12 @@ describe("membership, checked without constructing anything", () => {
       "end (session: Session) : answer (ok: Flag)",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
     );
-    expect(conceptFailures(where)).toEqual([
-      expect.stringContaining("an action's signature resolves with `: return"),
-    ]);
+    expect(conceptFailures(where)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("an action's signature resolves with `: return"),
+        expect.stringContaining("end's successful branch must return exactly ok"),
+      ]),
+    );
   });
 
   test("a registry that registers no class says so", async () => {
@@ -824,12 +827,16 @@ describe("concept discovery", () => {
           "export const applicationConceptSet = conceptSet({ Sessioning });\n",
       );
       await writeFile(
+        join(project, "design", "instances.md"),
+        "# Application instances\n\n```instances\ninstantiate Sessioning\n```\n",
+      );
+      await writeFile(
         join(project, "generated.config.ts"),
         'import { assemble } from "@mit-sdg/sync-engine/assembly";\n' +
           'import { applicationConceptSet } from "./src/application-concepts.ts";\n' +
           "export default {\n" +
           '  title: "Session application",\n' +
-          "  design: { version: 1, documents: [] },\n" +
+          '  design: { version: 1, documents: [new URL("./design/instances.md", import.meta.url)] },\n' +
           '  conceptSet: { module: new URL("./src/application-concepts.ts", import.meta.url) },\n' +
           "  assemble: () => assemble({\n" +
           "    conceptSet: applicationConceptSet,\n" +

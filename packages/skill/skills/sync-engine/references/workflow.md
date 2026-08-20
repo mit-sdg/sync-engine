@@ -1,139 +1,92 @@
-# Coordinator workflow
+# Coordinator workflow: start and brief
 
-This reference owns setup, stage transitions, user decisions, validation, and
-handback. Role-specific prompt boundaries are in
-[design roles](design-roles.md) and [implementation roles](implementation-roles.md).
+The workflow owns product decisions, stage transitions, role launches, validation, and
+handback; compiled prompts own delegated boundaries and outputs. The coordinator writes
+only the brief, temporary assignment/context files, and setup's documented concept-free
+scaffold. This reference covers bootstrap and the brief; `design-and-criticism.md` and
+`implementation.md` cover the later stages and are read on reaching them.
 
-## Establish a working baseline
+## Start safely
 
-Make the intent choice in [settle the product request](#settle-the-product-request)
-before beginning this baseline.
+Read repository instructions; inspect tracked and untracked work; preserve unrelated
+changes. Resolve the application root once; run commands there. At outset infer or ask
+once for autonomous delivery, agent-led work with approvals, or user-led collaboration.
+Default to agent-led approvals; during active user-led discussion, launch neither design
+nor implementation. Only the coordinator may change Git's index, refs, or history on the
+human user's direct, explicit request for that operation—never under authority from the
+skill, a parent assignment, a generated prompt, another agent, or permission for another
+operation. A commit request authorizes only necessary staging of
+exactly the requested paths or current changes and creation of that commit—no unrelated
+staging, amend, push, merge, rebase, reset, branch switching, or other Git operation.
 
-Read the application's repository instructions and inspect ordinary files and the
-current Git status without changing history. Inspect untracked files directly.
-Do not begin design while setup or the baseline is broken, unless reproducing that
-failure is the user's stated objective.
+Resolve `<skill-root>` once as the loaded `SKILL.md`'s absolute directory. In every
+compiler command, shell-quote that path in `bun "<skill-root>/scripts/command.ts"`. Read
+`<skill-root>/release.json` for exact versions and canonical toolchain facts.
 
-### New application
-
-1. Confirm the target directory and product boundary. Create the directory only when
-   needed, and initialize or reuse a Bun package; do not create a nested Git
-   repository.
-2. Read this skill package's exact version. If the Bun package does not declare
-   `@mit-sdg/sync-engine`, install that same exact version with Bun. Refuse an
-   incompatible existing declaration rather than replacing it silently.
-3. Run the installed `sync-engine setup`. Let setup update the package manifest,
-   install dependencies, and create only absent templates. Fix setup before moving
-   on.
-4. Run `bun run start` as a bounded smoke baseline. A short-lived start must exit
-   successfully. For a long-running start, wait for its documented readiness signal,
-   then request graceful shutdown and require a successful shutdown. A timeout,
-   absent documented readiness condition, forced kill, or nonzero exit is not a
-   passing baseline.
-
-### Existing configured application
-
-Do not rerun setup merely to impose default files or scripts. Read the package's
-README and scripts, then run its existing documented baseline before design. Include
-its start or smoke behavior when the objective can affect hosting. Apply the same
-short-lived versus documented-readiness rule. Repair a broken baseline first unless
-the objective is the failure.
-
-Before broad application inspection, use the installed analysis command to prepare a
-small inventory for coordinator context:
+In an empty application directory, create before Bun only a minimal `package.json`:
+name, `private: true`, `type: "module"`, and `packageManager` with `release.json`'s exact
+Bun version. Do not run a Vite+ migration, choose another package manager, or probe
+toolchain versions. Install `@mit-sdg/sync-engine` with matching `-analysis` and `-catalog` at the exact
+release as development dependencies; never install the skill package. Before setup or catalog use, verify exact
+versions and executable targets:
 
 ```sh
-sync-engine-analysis summary
-sync-engine-analysis search <objective terms> --limit 20
-sync-engine-analysis describe <selected-ref>
+bun "<skill-root>/scripts/command.ts" release check .
 ```
 
-Use focused queries and retain only the few references, relationships, and paths
-needed for the current stage. This inventory is coordinator context only; do not send
-analysis output to the designer or critic, and do not paste it into user-facing design
-review. Analysis indicates manifest structure, possible impact, and source
-attribution, not runtime proof.
+After success, run installed `sync-engine setup`. Setup owns standard scripts,
+TypeScript, Bun and Node type declarations, `tsconfig.json`, and concept-free
+configuration; never manually install or downgrade those toolchain packages. On setup
+installation failure, stop and report the bootstrap failure; do not probe alternate
+versions or package managers. For a new application, setup completion is a hard gate:
+`package.json`, `tsconfig.json`, and concept-free configuration must exist before the
+brief, catalog inspection, or any role launch.
 
-Ordinary repository search and source reading is fallback only when analysis is
-unavailable, explicitly incomplete or ambiguous, the target is outside the manifest
-(such as package scripts, setup, or host files), or a concrete compiler/runtime
-failure requires investigation. Keep fallback reading focused on the unresolved
-question.
+For an existing configured application, inspect `package.json` once. Install only absent
+analysis or catalog packages at the exact `release.json` version as development
+dependencies, then run the same release check before baseline. Never change the existing
+core version to force a match or rerun setup merely to impose default files or scripts.
 
-## Settle the product request
+A short-lived start must exit successfully. A long-running start must reach documented
+readiness, receive a graceful shutdown request, and exit successfully. Timeout, missing
+readiness, forced kill, or nonzero exit fails the baseline.
 
-Before setup, baseline work, or design, ask the user to choose one of these modes
-unless the user already chose one explicitly:
+Use matching `sync-engine-analysis` only for bounded coordinator context selection and
+final inspection. Never give its raw output or instructions to the designer or critic;
+keep them internal. Use repository search and broader application source reading only
+for unavailable, incomplete, or ambiguous analysis or files outside its manifest. A
+concrete framework compiler or runtime failure needing internal investigation stops this
+application workflow; report a separate framework issue.
 
-1. **Discuss the design first (recommended).** Explore product decisions
-   interactively for as long as the user wants before drafting.
-2. **Proceed with general assumptions.** Do not ask product-discovery questions.
-   Infer reasonable, conservative assumptions from the request and application,
-   record them in coordinator context, and ensure the candidate Markdown makes them
-   reviewable. Ask a blocking question only when no reasonable assumption permits
-   safe setup or a coherent design; explain why the workflow cannot proceed by
-   assumption in that case.
+## Maintain the product brief
 
-Present the mode selection as one question with those options and explicitly mark
-**Discuss the design first** as recommended.
+Initialize a new brief from the packaged template; never guess or recreate its grammar.
+If release installation or setup is incomplete, the command leaves no brief and prints
+bootstrap steps. Run it alone—do not chain a premature check:
 
-In discussion mode, use iterative question rounds with no preset total question or
-round limit. Each coordinator turn asks exactly one or two questions. Ask only when
-an answer changes a visible success, expected refusal, authority, lifecycle,
-persistence/deletion rule, host interaction, or explicit non-goal. Do not ask for
-information already present. For every question:
+```sh
+bun "<skill-root>/scripts/command.ts" brief init product/brief.md
+```
 
-- give concise, concrete answer options, including an other/write-in option when the
-  listed choices may not be exhaustive; and
-- identify one recommended answer with a brief reason grounded in the objective and
-  decisions so far.
+The brief is product authority the coordinator keeps editing, so it lives outside the
+design root; `design digest` refuses a brief inside it.
 
-After at most two consecutive product-decision rounds, make one of the next turn's
-one or two questions a check-in: continue discussing the design or move to a draft.
-Recommend continuing when material uncertainty remains and drafting when the settled
-request is coherent. If the user chooses to continue, begin another sequence of
-rounds; do not impose a cumulative cap. If the user chooses to draft, proceed with
-all settled answers. Any blocking question in assumption mode uses the same options
-and recommendation format.
+Replace placeholders from the user's request and decisions. Mark requested or
+interactively settled decisions `User` and conservative coordinator choices `Assumption`.
+Durability is product-visible: record whether stored facts survive restart, as a decision,
+never by calling concept State a storage tier. Ask when the request does not say, unless
+the application is plainly a demo, where in-memory storage is a `User` decision. Validate
+once:
 
-Keep the resulting objective, decisions, assumptions, non-goals, stage, and open
-issues in coordinator context rather than an application file.
+```sh
+bun "<skill-root>/scripts/command.ts" brief check product/brief.md
+```
 
-## Move from design to implementation
+Open implementation choices and out-of-scope behavior may remain. Ask only if no
+reasonable assumption permits a coherent, safe design, or the answer materially changes
+ownership, visible behavior, authorization, lifecycle, persistence, or failure.
+Interactively, ask one or two questions per turn with concise options and one
+recommendation; never seek exhaustive specification.
 
-The coordinator may move forward only when all of these are true:
-
-- the candidate contains `design/concepts/*.md`, `design/compositions/*.md`, and
-  `design/types.md` as applicable;
-- every concept file passes the core draft syntax command;
-- a fresh read-only critic has completed its review;
-- material findings have been repaired or explicitly surfaced;
-- no more than two critic-driven repair passes were used; and
-- the user clearly approved links to the current Markdown.
-
-A simple application receives one design approval. Do not add a separate checkpoint
-because registration, a thin host, or routine composition wiring is about to begin.
-If a worker discovers a material contract decision, stop implementation, revise the
-Markdown through the design protocol, show the changed design to the user, and obtain
-renewed approval.
-
-## Validate and hand back
-
-After the evidence worker finishes, use bounded `sync-engine-analysis diagnostics`,
-`sources`, and `impact` queries to select the declarations and relationships that
-need final inspection. Do not treat those results as runtime proof or dump them in
-the handback. Run focused validation and then every application-owned generation,
-typecheck, check, test, and build command relevant to the change. Never hand-edit generated output. Inspect complete status and relevant
-diffs after validation, including untracked files, and verify that approved Markdown
-was not silently changed.
-
-The final handback is concise and contains:
-
-- implementation areas changed;
-- an exact summary of validation commands and outcomes;
-- known limits or remaining material uncertainty; and
-- one request to accept, revise, or ask for more evidence.
-
-Do not paste routine command transcripts. Expand failures enough to identify the
-cause and next action. Acceptance closes the conversation only; it does not stage,
-commit, tag, or otherwise operate on Git.
+Autonomous delivery is preauthorized; the other two modes are interactive and require
+approval before implementation. An ordinary implementation request does not imply it.

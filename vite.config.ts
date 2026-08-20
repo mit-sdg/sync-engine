@@ -100,12 +100,16 @@ export default defineConfig({
     coverage: {
       // Instrument project code only; V8's profiler makes TypeScript-compiler tests several times slower.
       provider: "istanbul",
-      exclude: ["packages/catalog/entries/**"],
+      exclude: [
+        "packages/catalog/entries/**",
+        // Test directories are scaffolding, not production code; they were dragging production thresholds.
+        "**/tests/**",
+      ],
       thresholds: {
-        statements: 90,
-        branches: 81,
-        functions: 94,
-        lines: 92,
+        statements: 90.3,
+        branches: 81.6,
+        functions: 94.2,
+        lines: 92.1,
       },
     },
   },

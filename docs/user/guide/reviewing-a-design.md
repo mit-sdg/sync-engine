@@ -34,16 +34,17 @@ Only explicit local `file:` URLs participate in checker coverage.
 
 A concept is not justified merely because it matches an entity, table, class, package,
 service, endpoint, or screen. Ask what useful capability would be lost if the concept
-did not exist and whether the concept can demonstrate that capability without a peer.
+did not exist and whether the concept owns a complete mechanism without depending on a
+peer.
 
-| Criterion          | Evidence required                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Purpose            | Names one useful capability and the loss or failure it prevents, without listing methods                     |
-| Principle          | Starts from understandable state and demonstrates the purpose with only this concept's actions and queries   |
-| Independence       | Names no peer API or peer-owned fact and treats external identities as opaque                                |
-| Completeness       | Can perform its own meaningful lifecycle rather than relying on reactions to reconstruct one owner operation |
-| Restraint          | Contains no behavior, customization, or lifecycle state outside the current objective                        |
-| Change containment | A likely change to this mechanism touches this concept while an unrelated change does not                    |
+| Criterion          | Evidence required                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Purpose            | Names one useful capability and the loss or failure it prevents, without listing methods                                    |
+| Principle          | Uses concise archetypal scenarios with enough setup and occurrences to demonstrate how the mechanism fulfills its purpose   |
+| Independence       | State and Actions name no peer API or peer-owned fact; external identities stay opaque and Principle marks external context |
+| Completeness       | Can perform its own meaningful lifecycle rather than relying on reactions to reconstruct one owner operation                |
+| Restraint          | Contains no behavior, customization, or lifecycle state outside the current objective                                       |
+| Change containment | A likely change to this mechanism touches this concept while an unrelated change does not                                   |
 
 Trace each purpose commitment into Principle, State, actions, queries, and refusals.
 Trace every state member and action back to the purpose. Reject a broad noun owner
@@ -125,23 +126,32 @@ command grammar and interface policy belong in composition, not in a generic hos
 concept. A direct inert adapter is permitted when it introduces none of those
 semantics; do not manufacture a pass-through concept solely to wrap an API call.
 
-## 6. Check application types and external identities
+## 6. Check instances, application types, and external identities
 
-Inventory every `ConceptInstance.ExternalType` and require one direct binding in the
-registered application `types` corpus, conventionally `design/types.md`. A right side
-must directly name either:
+Compare the configured corpus with the exact assembled variant. Require one globally
+unique authored declaration for every selected application instance and no others;
+the specification H1 must match the authored definition. Do not require the core-owned
+`RequestBoundary`. Review each config independently rather than accepting a union of
+possible variants.
+
+Inventory every `ConceptInstance.ExternalType` and require one direct binding. An
+instance supplies all bindings inline in its `instances` declaration or all through
+detached `bindings` fences. Reject a split between placements, repeated bindings even
+when equal, unknown or missing externals, and bindings on undeclared instances. An
+instance with no external parameters has no placement mode.
+
+A right side must directly name either:
 
 - an application `concrete` type with a nonempty prose definition; or
-- a type owned by a selected concept instance.
+- a type the bounded SSF parser proves is owned by another declared, selected
+  instance's definition.
 
-Reject chains, cycles, bindings to another external parameter, duplicate or missing
-bindings, unresolved names, and unused concrete declarations. A binding establishes
-identity correspondence, not transferred ownership, runtime validation, or general
-TypeScript assignability.
-
-Because version 1 retains State without parsing it, manually review whether a
-qualified target is really owned by that concept. Do not claim the checker proved the
-final State type name.
+Reject external-to-external targets, alias chains, unresolved names, and unused
+concrete declarations. Do not reject a cycle merely because instance A targets an
+owned type of B while B targets an owned type of A: direct qualified targets resolve
+independently and such dependency cycles are valid. A binding establishes identity
+correspondence, not transferred ownership, runtime validation, general TypeScript
+assignability, adapter configuration, or durable storage isolation.
 
 ## 7. Review each composition document beside its source responsibility
 
@@ -171,30 +181,38 @@ condition, and enforcement point. A request-body identifier is a claim, not
 authentication. Composition may provide early policy denial, but an owner action must
 still enforce any rule that direct calls cannot bypass.
 
-## 8. Validate the strict concept grammar
+## 8. Validate the preassembly forms
 
-Before implementation, parse the explicit draft files without loading application
-code:
+Before implementation, parse the explicit design corpus without loading application
+code or configuration:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md design/compositions/*.md design/types.md
 ```
+
+This command checks strict concept syntax and the form of composition links,
+computations, concrete types, instances, and bindings. It deliberately leaves
+resolution and coverage for config-based `sync-engine check` because the supplied corpus can be partial.
 
 For every concept, also verify manually that:
 
 - one H1 names the reusable definition rather than an application instance;
 - Purpose, Principle, Types, State, Actions, and Queries occur exactly once, in that
   order, with no subordinate headings;
-- Purpose and Principle are unfenced prose, and Principle is one concrete scenario
-  rather than a container for reference material;
+- Purpose and Principle are unfenced prose, and Principle uses one or more concise
+  archetypal scenarios rather than becoming a complete specification or a container
+  for reference material;
 - Types contains one `types` fence with only explicit `external` declarations;
   concept-owned and conventional names do not need local declarations;
-- State contains one raw `state` fence and does not claim that version 1 validates
-  SSF;
+- State contains one `state` fence and follows SSF declaration, identity, type,
+  multiplicity, naming, and indentation rules, with every invariant on a `Rule:` line;
+  `check-design` parses the bounded structural declarations and inventories owned names,
+  while the rules themselves remain a manual semantic review;
 - every action has explicit `where`/`then` branches and one terminal return or refusal
   per branch;
 - action results and query rows use parenthesized named fields;
-- query prose adds only meaning not already evident from State and signature;
+- every query has indented prose stating what it answers, its unknown or empty case,
+  and deterministic ordering for `many`;
 - concept files contain no application links or computations; and
 - each refusal sentence states the same rule as its branch condition.
 
@@ -212,14 +230,17 @@ sync-engine artifacts check
 
 Inspect failed-closed TypeScript shape diagnostics; do not waive unresolved input,
 action-result, or query-row shapes. Confirm definition-name duplicates have identical
-canonical specifications, every selected external type is bound, every typed link
-resolves, every executable computation has one declaration, and generated source
-locations point to the prose that honestly covers each declaration.
+canonical specifications, the authored instance inventory exactly matches the
+assembled variant, every selected external type is bound in one placement, every
+typed link resolves, every executable computation has one declaration, and generated
+source locations point to the prose that honestly covers each declaration.
 
 Generated read-back is evidence of the selected assembly, not a replacement for
 Markdown or behavior tests. Registration does not prove semantic type equivalence,
-State/storage agreement, natural-language effects, persistence, transactions, or
-durability.
+State/storage agreement, invariant or natural-language effects, persistence,
+transactions, or durability. Distinct instance declarations do not prove that their
+implementations use separate collections, schemas, files, caches, or remote
+resources.
 
 ## 10. Trace objective-driven scenarios
 

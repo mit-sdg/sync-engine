@@ -58,21 +58,48 @@ export { createLocalClient } from "../engine/boundary/client/local-client.ts";
 export type { Client, ClientCallOptions, ClientError, ClientOptions, ClientRequest, ClientResponseValidator, ClientTransport, ContractShape, DomainErrorValue, } from "../engine/boundary/client/client.ts";
 
 === dist/command/artifacts.d.ts ===
-export declare function artifactsCommand(args: readonly string[]): Promise<void>;
+import { type ApplicationManifestDiffReport } from "../engine/tooling/application-manifest-diff.ts";
+import { type DiagnosticReport } from "./diagnostic-report.ts";
+export declare function artifactsCommand(args: readonly string[], render?: "text" | "silent"): Promise<ApplicationManifestDiffReport | DiagnosticReport | undefined>;
 
-=== dist/command/check-concepts.d.ts ===
-export interface CheckedConceptSpecification {
+=== dist/command/check-design.d.ts ===
+import { type DiagnosticReport } from "./diagnostic-report.ts";
+export interface CheckedDesignDocument {
     readonly path: string;
-    readonly definition: string;
+    readonly kind: "concept" | "application";
 }
-/** Parse explicit draft concept files without consulting an application or writing evidence. */
-export declare function checkConceptFiles(paths: readonly string[], root?: string): Promise<readonly CheckedConceptSpecification[]>;
-export declare function checkConceptsCommand(args: readonly string[]): Promise<void>;
+/** Check explicit authored-design files without consulting an assembly or project state. */
+export declare function checkDesignFiles(paths: readonly string[], root?: string): Promise<readonly CheckedDesignDocument[]>;
+export declare function checkDesignCommand(args: readonly string[], render?: "text" | "silent"): Promise<DiagnosticReport>;
 
 === dist/command/check.d.ts ===
+import { type DiagnosticReport } from "./diagnostic-report.ts";
 export declare function conceptFailures(directory: string, projectRoot?: string): string[];
 export declare function conceptDirectories(roots: readonly string[], projectRoot?: string): Promise<string[]>;
-export declare function checkCommand(args: readonly string[]): Promise<void>;
+export declare function checkCommand(args: readonly string[], render?: "text" | "silent"): Promise<DiagnosticReport>;
+
+=== dist/command/command-options.d.ts ===
+export type OutputFormat = "text" | "json";
+type OperandRequirement = "none" | "required";
+/** The deliberately small option vocabulary shared by validation commands. */
+export interface CommandOptionSyntax {
+    readonly config?: true;
+    readonly failOnWarnings?: true;
+    readonly format?: true;
+    readonly operands: OperandRequirement;
+}
+export interface ParsedCommandOptions {
+    readonly configPath?: string;
+    readonly failOnWarnings: boolean;
+    readonly format: OutputFormat;
+    readonly operands: readonly string[];
+}
+/**
+ * Parse only the validation commands' three shared flags and their path operands.
+ * This is intentionally not a general command-line framework.
+ */
+export declare function parseCommandOptions(args: readonly string[], usage: string, syntax: CommandOptionSyntax): ParsedCommandOptions;
+export {};
 
 === dist/command/concept-discovery.d.ts ===
 import type { ConceptSpec } from "../engine/reactions/concepts/concept-spec.ts";
@@ -90,6 +117,37 @@ export declare function registeredConcepts(conceptSet: unknown): RegisteredSourc
 export declare function assembledConcepts(manifest: ApplicationManifestV1): RegisteredSourceConcept[];
 /** Import an explicitly selected concept-set module. */
 export declare function loadRegisteredConcepts(modulePath: string, exportName?: string): Promise<RegisteredSourceConcept[]>;
+
+=== dist/command/diagnostic-report.d.ts ===
+/** The complete severity vocabulary emitted by the validation commands. */
+export type DiagnosticSeverity = "advice" | "error" | "info" | "warning";
+/**
+ * One machine-readable validation finding. Unknown source coordinates and
+ * suggestions are omitted rather than represented with invented values.
+ */
+export interface DiagnosticRecord {
+    readonly code: string;
+    readonly path?: string;
+    readonly line?: number;
+    readonly column?: number;
+    readonly severity: DiagnosticSeverity;
+    readonly message: string;
+    readonly suggestion?: string;
+}
+export type DiagnosticReportCommand = "artifacts check" | "check" | "check-design";
+/** Versioned JSON contract shared by the diagnostic-producing validation commands. */
+export interface DiagnosticReport {
+    readonly format: "sync-engine.diagnostic-report";
+    readonly version: 1;
+    readonly command: DiagnosticReportCommand;
+    readonly status: "passed" | "failed";
+    readonly diagnostics: readonly DiagnosticRecord[];
+}
+export declare function failedDiagnostic(code: string, error: unknown): DiagnosticRecord;
+export declare function diagnosticReport(command: DiagnosticReportCommand, status: DiagnosticReport["status"], diagnostics: readonly DiagnosticRecord[]): DiagnosticReport;
+/** Render exactly one newline-terminated JSON document for stdout. */
+export declare function renderJsonDocument(document: object): string;
+export declare function writeJsonDocument(document: object): void;
 
 === dist/command/files-below.d.ts ===
 /** List regular files depth-first without following symlinks. */
@@ -118,6 +176,37 @@ export interface SetupResult {
 }
 /** Initialize a supported concept-free application without replacing application-owned files. */
 export declare function setupProject(directory?: string, options?: SetupOptions): Promise<SetupResult>;
+
+=== dist/command/setup/src/text.d.ts ===
+declare module "*.md" {
+  const text: string;
+  export default text;
+}
+
+=== dist/command/verify.d.ts ===
+export type VerificationStatus = "passed" | "failed" | "skipped";
+export type VerificationStepName = "check-design" | "check" | "artifacts check";
+export interface VerificationStepResult {
+    readonly name: VerificationStepName;
+    readonly status: VerificationStatus;
+    readonly detail?: string;
+}
+export interface VerificationConfiguration {
+    readonly status: "loaded" | "failed";
+    readonly documents: readonly string[];
+    readonly detail?: string;
+}
+/** The versioned plain-data result emitted directly by `verify --format json`. */
+export interface VerificationReport {
+    readonly format: "sync-engine.verification-report";
+    readonly version: 1;
+    readonly status: "passed" | "failed";
+    readonly config: string;
+    readonly configuration: VerificationConfiguration;
+    readonly steps: readonly VerificationStepResult[];
+}
+/** Run the existing configured validation commands and retain every independent result. */
+export declare function verifyCommand(args: readonly string[]): Promise<VerificationReport>;
 
 === dist/engine/boundary/assembly/assemble.d.ts ===
 /**
@@ -1609,12 +1698,32 @@ export type SpecQuery = SpecificationQueryIR;
 export type SpecExternalType = SpecificationExternalTypeIR;
 export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
+export type ConceptSpecDiagnosticCode = "CONCEPT_SPEC_INVALID_INPUT" | "CONCEPT_SPEC_APPLICATION_CONSTRUCT" | "CONCEPT_SPEC_DOCUMENT_STRUCTURE" | "CONCEPT_SPEC_PROSE_SECTION" | "CONCEPT_SPEC_FENCE" | "CONCEPT_SPEC_DECLARATION" | "CONCEPT_SPEC_SIGNATURE" | "CONCEPT_SPEC_DUPLICATE_DECLARATION" | "CONCEPT_SPEC_ACTION_BRANCH";
+interface ConceptSpecDiagnosticDetail {
+    readonly code: ConceptSpecDiagnosticCode;
+    readonly message: string;
+}
+/** A parser diagnostic anchored at the one source position the parser can establish exactly. */
+export type ConceptSpecDiagnostic = ConceptSpecDiagnosticDetail & {
+    readonly location: SpecLocation;
+};
+/** Render one parser diagnostic in the list form used by registration errors. */
+export declare function formatConceptSpecDiagnostic({ code, message, location, }: ConceptSpecDiagnostic): string;
+/** A complete specification is available only when parsing reported no diagnostics. */
+export type ConceptSpecParseResult = {
+    readonly specification: ConceptSpec;
+    readonly diagnostics: readonly [];
+} | {
+    readonly specification: undefined;
+    readonly diagnostics: readonly ConceptSpecDiagnostic[];
+};
 /** The normalized full-source digest retained for a specification parsed in this process. */
 export declare function specificationSourceDigest(specification: ConceptSpec): string | undefined;
 /** Parse imported Markdown as the strict version-1 concept-specification format. */
-export declare function parseSpec(markdown: string): ConceptSpec;
+export declare function parseSpec(markdown: string): ConceptSpecParseResult;
 /** Canonical compatibility ignores source positions but retains every authored contract value. */
 export declare function specificationsAreCompatible(left: ConceptSpec, right: ConceptSpec): boolean;
+export {};
 
 === dist/engine/reactions/concepts/introspect.d.ts ===
 /**
@@ -3959,11 +4068,11 @@ export interface SpecificationExternalTypeIR {
     explanation: string;
     location: SpecificationLocationIR;
 }
-/** Unparsed Simple State Form and the optional prose that follows its fence. */
+/** Simple State Form source retained from the State fence. */
 export interface SpecificationStateIR {
-    /** Normalized fence contents. Version 1 deliberately assigns these no grammar. */
+    /** Normalized fence contents, privately validated against the version-1 SSF grammar. */
     body: string;
-    prose: string;
+    /** Origin of `body` after surrounding blank fence lines are removed. */
     location: SpecificationLocationIR;
 }
 /** The JSON-safe authored contract parsed from one concept specification. */
@@ -4345,6 +4454,7 @@ interface RenderDesign {
         specification: ConceptSpecificationIR;
         instances: {
             name: string;
+            declaration: RenderDesignLocation;
             bindings: {
                 external: string;
                 target: {
@@ -4812,8 +4922,92 @@ export declare function compute<Fn extends ComputationFn, const Input extends In
 export declare function custom(fn: (...args: never[]) => unknown | Promise<unknown>, input: readonly symbol[], output: readonly symbol[]): CustomOp;
 export {};
 
-=== dist/engine/tooling/application-manifest-format.d.ts ===
+=== dist/engine/tooling/application-manifest-diff.d.ts ===
 import type { ApplicationManifestV1 } from "./manifest.ts";
+/** An endpoint's stable manifest identity for compatibility reporting. */
+export interface ManifestEndpointReference {
+    readonly name: string;
+    readonly path: string;
+}
+/** One refusal code declared by a named action in the manifest inventory. */
+export interface ManifestRefusalCodeReference {
+    readonly concept: string;
+    readonly action: string;
+    readonly code: string;
+}
+/** One SSF-owned type declared by a named concept definition. */
+export interface ManifestOwnedTypeReference {
+    readonly definition: string;
+    readonly type: string;
+}
+/** One compatibility-relevant change directly represented in an application manifest. */
+export type ApplicationManifestChange = {
+    readonly kind: "endpoint-added";
+    readonly endpoint: ManifestEndpointReference;
+} | {
+    readonly kind: "endpoint-removed";
+    readonly endpoint: ManifestEndpointReference;
+} | {
+    readonly kind: "input-required-added";
+    readonly path: string;
+    readonly key: string;
+} | {
+    readonly kind: "input-required-removed";
+    readonly path: string;
+    readonly key: string;
+} | {
+    readonly kind: "input-default-added";
+    readonly path: string;
+    readonly key: string;
+    readonly value: unknown;
+} | {
+    readonly kind: "input-default-removed";
+    readonly path: string;
+    readonly key: string;
+    readonly value: unknown;
+} | {
+    readonly kind: "input-default-changed";
+    readonly path: string;
+    readonly key: string;
+    readonly before: unknown;
+    readonly after: unknown;
+} | {
+    readonly kind: "refusal-code-added";
+    readonly refusal: ManifestRefusalCodeReference;
+} | {
+    readonly kind: "refusal-code-removed";
+    readonly refusal: ManifestRefusalCodeReference;
+} | {
+    readonly kind: "owned-type-added";
+    readonly ownedType: ManifestOwnedTypeReference;
+} | {
+    readonly kind: "owned-type-removed";
+    readonly ownedType: ManifestOwnedTypeReference;
+};
+/** A plain-data compatibility report suitable for a later machine-readable command format. */
+export interface ApplicationManifestDiffReport {
+    /** Whether the complete canonical manifests have matching digests. */
+    readonly status: "identical" | "changed";
+    readonly old: {
+        readonly digest: string;
+    };
+    readonly current: {
+        readonly digest: string;
+    };
+    readonly breaking: readonly ApplicationManifestChange[];
+    readonly nonBreaking: readonly ApplicationManifestChange[];
+}
+/**
+ * Compare two already-decoded version-1 manifests over the compatibility surface.
+ * Callers that receive untrusted JSON must parse it with `parseApplicationManifest` first.
+ */
+export declare function diffApplicationManifests(oldManifest: ApplicationManifestV1, currentManifest: ApplicationManifestV1): ApplicationManifestDiffReport;
+
+=== dist/engine/tooling/application-manifest-format.d.ts ===
+import type { ConceptSpecificationIR } from "../reads/ir.ts";
+import type { ApplicationManifestV1 } from "./manifest.ts";
+/** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
+export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
 /** Validate untrusted data as one complete canonical version-1 application manifest. */
@@ -4898,6 +5092,9 @@ export interface AuthoredApplicationDesignDocument {
     links: readonly AuthoredDesignLink[];
     computations: readonly AuthoredComputation[];
     concreteTypes: readonly ConcreteTypeDeclaration[];
+    /** Instance declarations authored in this document, with inline bindings attached. */
+    instances: readonly AuthoredConceptInstanceDeclaration[];
+    /** Bindings authored in detached `bindings` fences. */
     bindings: readonly ExternalTypeBinding[];
 }
 export interface ConcreteTypeDeclaration {
@@ -4905,6 +5102,7 @@ export interface ConcreteTypeDeclaration {
     definition: string;
     location: DesignSourceLocation;
 }
+export type BindingPlacement = "inline" | "detached";
 export interface ExternalTypeBinding {
     instance: string;
     external: string;
@@ -4916,8 +5114,17 @@ export interface ExternalTypeBinding {
         instance: string;
         type: string;
     };
-    explanation?: string;
+    placement: BindingPlacement;
     location: DesignSourceLocation;
+}
+export interface AuthoredConceptInstanceDeclaration {
+    definition: string;
+    instance: string;
+    bindings: readonly ExternalTypeBinding[];
+    location: DesignSourceLocation;
+}
+export interface NormalizedConceptInstance extends AuthoredConceptInstanceDeclaration {
+    bindings: readonly ExternalTypeBinding[];
 }
 /** Parse one explicitly registered application design file. */
 export declare function parseApplicationDesignDocument(markdown: string, source?: string): AuthoredApplicationDesignDocument;
@@ -4935,7 +5142,16 @@ export interface SelectedComputationDesign {
 }
 export interface SelectedConceptDesign {
     instance: string;
+    definition: string;
     externalTypes: readonly string[];
+    /**
+     * Optional integration result from the structured-SSF owner. Supply the complete
+     * normalized owned-name inventory for the selected definition (including structural,
+     * subset, safely evidenced alias, and explicit alias names). Configured application checking always supplies
+     * this inventory; omission supports isolated form/validator use and makes no ownership
+     * claim.
+     */
+    ownedTypes?: readonly string[];
 }
 export interface SelectedApplicationDesign {
     reactions: readonly string[];
@@ -4943,13 +5159,23 @@ export interface SelectedApplicationDesign {
     formers: readonly string[];
     computations: readonly SelectedComputationDesign[];
     concepts: readonly SelectedConceptDesign[];
+    /** Selected assembly names whose definitions cannot be checked without a specification. */
+    unresolvedConceptInstances?: readonly string[];
 }
-export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_TYPE_BINDING" | "UNKNOWN_EXTERNAL" | "MISSING_BINDING" | "UNRESOLVED_TYPE_TARGET" | "EXTERNAL_TARGET" | "UNUSED_CONCRETE";
+export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE" | "UNSELECTED_INSTANCE" | "UNDECLARED_SELECTED_INSTANCE" | "INSTANCE_DEFINITION_MISMATCH" | "UNKNOWN_EXTERNAL_BINDING" | "MISSING_EXTERNAL_BINDING" | "UNRESOLVED_BINDING_TARGET" | "EXTERNAL_BINDING_TARGET" | "UNUSED_CONCRETE_TYPE";
 export interface ApplicationDesignIssue {
     code: ApplicationDesignIssueCode;
     message: string;
     location?: DesignSourceLocation;
 }
+export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
+    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT";
+    location: DesignSourceLocation;
+};
+/** Merge valid distributed declarations into the canonical per-instance authored model. */
+export declare function normalizeAuthoredConceptInstances(documents: readonly AuthoredApplicationDesignDocument[]): NormalizedConceptInstance[];
+/** Check corpus-wide authored forms that do not require a selected assembly. */
+export declare function validateAuthoredApplicationDesignForm(documents: readonly AuthoredApplicationDesignDocument[]): ApplicationDesignFormIssue[];
 /**
  * Check parsed documents against the exact selected assembly inventory. The
  * validator returns all independently actionable issues and performs no I/O.
@@ -5015,8 +5241,23 @@ export interface SelectedConceptDesignFact {
     instance: string;
     definition: string;
     externalParameters: readonly string[];
+    /** Present only when the structured-SSF integration seam supplied authoritative names. */
+    ownedTypes?: readonly string[];
     specification: ConceptSpec;
 }
+export interface OwnedTypeNameContext {
+    instance: string;
+    definition: string;
+    specification: ConceptSpec;
+}
+/**
+ * SSF integration seam. The integrator supplies the complete normalized owned-name
+ * inventory for this definition, including structural, subset, safely evidenced alias, and explicit alias
+ * names. Configured application checking always installs the private SSF
+ * adapter; `undefined` exists only for isolated validator use that makes no ownership
+ * claim.
+ */
+export type ResolveOwnedTypeNames = (context: OwnedTypeNameContext) => readonly string[] | undefined | Promise<readonly string[] | undefined>;
 /** Equality is over canonical specification content with source positions removed. */
 export interface SharedDefinitionEqualityFact {
     definition: string;
@@ -5058,6 +5299,7 @@ export declare function checkAuthoredDesign(options: {
     assembly: Assembly<Record<string, new (...args: never[]) => object>>;
     design: AuthoredDesignRegistration;
     resolveComputationInputs?: ResolveComputationInputs;
+    resolveOwnedTypeNames?: ResolveOwnedTypeNames;
     conceptSources?: readonly ConceptSpecificationSourceInput[];
 }): Promise<CheckedAuthoredDesignModel>;
 
@@ -5269,8 +5511,11 @@ export interface ManifestConceptDefinitionV1 {
     definition: string;
     source?: string;
     specification: ConceptSpecificationIR;
+    /** Exact authored spellings independently derivable as definition-owned State types. */
+    ownedTypes: string[];
     instances: {
         name: string;
+        declaration: ManifestSourceLocationV1;
         bindings: {
             external: string;
             target: {
@@ -5303,22 +5548,10 @@ export interface ApplicationDesignManifestV1 {
     sources: ManifestSourceV1[];
     declarations: ManifestDeclarationV1[];
     concepts: ManifestConceptDefinitionV1[];
+    /** Concrete application types; normalized external bindings belong to instances. */
     types?: {
         concreteTypes: {
             name: string;
-            location: ManifestSourceLocationV1;
-        }[];
-        bindings: {
-            instance: string;
-            external: string;
-            target: {
-                kind: "concrete";
-                name: string;
-            } | {
-                kind: "qualified";
-                instance: string;
-                type: string;
-            };
             location: ManifestSourceLocationV1;
         }[];
     };
@@ -5410,6 +5643,328 @@ export declare function declarationGroups(fence: MarkdownFence): readonly {
     body: readonly DesignSourceLine[];
 }[];
 export declare function indentedBody(lines: readonly DesignSourceLine[]): string;
+
+=== dist/engine/tooling/simple-state-form.d.ts ===
+import { type SsfDiagnostic, type SsfDocument, type SsfParseOptions, type SsfPosition, type SsfSpan } from "./ssf-package/index.js";
+import type { SpecificationExternalTypeIR } from "../reads/ir.ts";
+import type { DesignSourceLocation, MarkdownFence } from "./markdown-design-source.ts";
+export type SimpleStateFormIssueCode = SsfDiagnostic["code"];
+export type SimpleStateFormOptions = Omit<SsfParseOptions, "externalTypes"> & {
+    readonly externalTypes?: readonly SpecificationExternalTypeIR[];
+};
+interface SimpleStateFormIssueDetail {
+    readonly severity: SsfDiagnostic["severity"];
+    readonly code: SimpleStateFormIssueCode;
+    readonly message: string;
+    readonly suggestion: string;
+    readonly location: DesignSourceLocation;
+}
+export type SimpleStateFormIssue = SimpleStateFormIssueDetail & ({
+    readonly span: SsfSpan;
+    readonly externalType?: never;
+} | {
+    readonly externalType: string;
+    readonly span?: never;
+});
+export interface ParsedSimpleStateForm {
+    readonly document: SsfDocument;
+    readonly issues: readonly SimpleStateFormIssue[];
+}
+/** Map a package-local SSF position onto its containing Markdown source. */
+export declare function simpleStateFormLocation(fence: MarkdownFence, position: SsfPosition): DesignSourceLocation;
+/** Parse structural SSF and adapt package-local diagnostic spans to Markdown locations. */
+export declare function parseSimpleStateForm(fence: MarkdownFence, options?: SimpleStateFormOptions): ParsedSimpleStateForm;
+/** Validate deterministic, mechanically repairable SSF forms through the private parser. */
+export declare function validateSimpleStateForm(fence: MarkdownFence, options?: SimpleStateFormOptions): readonly SimpleStateFormIssue[];
+export {};
+
+=== dist/engine/tooling/specification-type-evidence.d.ts ===
+import type { ConceptSpecificationIR } from "../reads/ir.ts";
+/** Exact authored action/query parameter and result type spellings for SSF resolution. */
+export declare function specificationTypeNameEvidence(specification: ConceptSpecificationIR): readonly string[];
+
+=== dist/engine/tooling/ssf-package/automatic-aliases.d.ts ===
+import type { ParsedDeclaration } from "./model.ts";
+/** Exact named State field references that can evidence an automatic alias. */
+export declare function stateFieldTypeEvidence(declarations: readonly ParsedDeclaration[]): readonly string[];
+/**
+ * Relate only exact authored evidence to one non-element structure or subset owner.
+ * The pluralizer's output is compared, never inserted into the inventory.
+ */
+export declare function automaticAliasCandidates(declarations: readonly ParsedDeclaration[], eligibleStructuralNames: ReadonlySet<string>, evidenceTypeNames: readonly string[], explicitAliasNames: ReadonlySet<string>, external: ReadonlySet<string>): {
+    readonly aliases: ReadonlyMap<string, string>;
+    readonly ambiguities: readonly {
+        readonly candidates: readonly string[];
+        readonly owners: readonly string[];
+    }[];
+};
+
+=== dist/engine/tooling/ssf-package/grammar.d.ts ===
+import { type ParsedAlias, type ParsedDeclaration, type SourceLine, type SsfDiagnostic, type SsfRuleLine } from "./model.ts";
+export interface GrammarResult {
+    readonly declarations: readonly ParsedDeclaration[];
+    readonly aliases: readonly ParsedAlias[];
+    readonly rules: readonly SsfRuleLine[];
+    readonly diagnostics: readonly SsfDiagnostic[];
+}
+export declare function parseGrammar(lines: readonly SourceLine[]): GrammarResult;
+
+=== dist/engine/tooling/ssf-package/graph-validation.d.ts ===
+import { type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic } from "./model.ts";
+export interface ResolutionFacts {
+    readonly validStructuralNames: ReadonlySet<string>;
+    readonly validAliases: ReadonlyMap<string, string>;
+}
+/** Resolve order-independent alias and subset graphs and report every invalid edge. */
+export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, evidenceTypeNames: readonly string[], diagnostics: SsfDiagnostic[]): ResolutionFacts;
+
+=== dist/engine/tooling/ssf-package/index.d.ts ===
+export { ownedTypeNameSpellings, parseSimpleStateForm, validateSimpleStateForm, } from "./simple-state-form.ts";
+export type { SsfDiagnostic, SsfDocument, SsfParseOptions, SsfPosition, SsfSpan } from "./model.ts";
+
+=== dist/engine/tooling/ssf-package/model.d.ts ===
+export interface SsfPosition {
+    /** Zero-based UTF-16 offset in the supplied State text. */
+    readonly offset: number;
+    /** One-based line in the supplied State text. */
+    readonly line: number;
+    /** One-based column in the supplied State text. */
+    readonly column: number;
+}
+export interface SsfSpan {
+    readonly start: SsfPosition;
+    readonly end: SsfPosition;
+}
+export type SsfTokenKind = "newline" | "whitespace" | "word";
+export interface SsfToken {
+    readonly kind: SsfTokenKind;
+    readonly text: string;
+    readonly span: SsfSpan;
+}
+export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_OPTIONAL" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT";
+interface SsfDiagnosticDetail {
+    readonly severity: "error" | "advice";
+    readonly code: SsfDiagnosticCode;
+    readonly message: string;
+    readonly suggestion: string;
+}
+/** State diagnostics have a span; option diagnostics name their external type instead. */
+export type SsfDiagnostic = SsfDiagnosticDetail & ({
+    readonly span: SsfSpan;
+    readonly externalType?: never;
+} | {
+    readonly externalType: string;
+    readonly span?: never;
+});
+type DiagnosticDetail<T> = T extends unknown ? Omit<T, "severity"> : never;
+export declare function error(detail: DiagnosticDetail<SsfDiagnostic>): SsfDiagnostic;
+export interface SsfTypeName {
+    /** Spelling retained from the State text. */
+    readonly text: string;
+    /** Exact owned structural name used for declaration and reference joins. */
+    readonly normalized: string;
+}
+export type SsfReferenceKind = "external" | "owned" | "primitive" | "unresolved";
+export interface SsfTypeReference extends SsfTypeName {
+    readonly referenceKind: SsfReferenceKind;
+    readonly span: SsfSpan;
+}
+export interface SsfNamedFieldType {
+    readonly kind: "named";
+    readonly reference: SsfTypeReference;
+}
+export interface SsfEnumerationFieldType {
+    readonly kind: "enumeration";
+    readonly values: readonly string[];
+    readonly span: SsfSpan;
+}
+export interface SsfCollectionFieldType {
+    readonly kind: "collection";
+    readonly multiplicity: "set" | "sequence";
+    readonly element: SsfNamedFieldType | SsfEnumerationFieldType;
+    readonly span: SsfSpan;
+}
+export type SsfFieldType = SsfNamedFieldType | SsfEnumerationFieldType | SsfCollectionFieldType;
+export interface SsfField {
+    readonly kind: "field";
+    readonly name: string;
+    readonly inferredName: boolean;
+    readonly optional: boolean;
+    readonly value: SsfFieldType;
+    readonly span: SsfSpan;
+}
+export type SsfMultiplicity = "element" | "sequence" | "set";
+export interface SsfRuleLine {
+    readonly kind: "rule";
+    readonly text: string;
+    readonly span: SsfSpan;
+}
+export interface SsfDeclaration {
+    readonly kind: "declaration";
+    readonly name: SsfTypeReference;
+    readonly declarationKind: "collection" | "subset";
+    readonly multiplicity: SsfMultiplicity;
+    readonly parent?: SsfTypeReference;
+    readonly fields: readonly SsfField[];
+    readonly rules: readonly SsfRuleLine[];
+    readonly span: SsfSpan;
+    readonly signatureSpan: SsfSpan;
+}
+/** An exact additional owned spelling for one structural declaration. */
+export interface SsfAlias {
+    readonly kind: "alias";
+    readonly name: SsfTypeReference;
+    readonly target: SsfTypeReference;
+    readonly span: SsfSpan;
+}
+export type SsfStatement = SsfDeclaration | SsfAlias | SsfRuleLine;
+export interface SsfTypeInventory {
+    readonly ownedTypeNames: readonly string[];
+    readonly external: readonly string[];
+    readonly primitives: readonly string[];
+}
+export interface SsfDocument {
+    readonly statements: readonly SsfStatement[];
+    readonly declarations: readonly SsfDeclaration[];
+    readonly aliases: readonly SsfAlias[];
+    /** Top-level rules; declaration-attached rules remain on their declaration. */
+    readonly rules: readonly SsfRuleLine[];
+    readonly inventory: SsfTypeInventory;
+}
+export interface SsfParseOptions {
+    /** External parameter names in SSF `TYPE_NAME` form. */
+    readonly externalTypes?: readonly string[];
+    /** Exact type spellings authored in action/query parameter and result expressions. */
+    readonly evidenceTypeNames?: readonly string[];
+}
+export interface SsfParseResult {
+    readonly document: SsfDocument;
+    readonly diagnostics: readonly SsfDiagnostic[];
+}
+export interface SourceLine {
+    readonly text: string;
+    readonly line: number;
+    readonly start: number;
+    readonly end: number;
+    readonly tokens: readonly SsfToken[];
+}
+export interface ParsedReference {
+    readonly text: string;
+    readonly span: SsfSpan;
+}
+export interface ParsedEnumeration {
+    readonly kind: "enumeration";
+    readonly values: readonly string[];
+    readonly valueReferences: readonly ParsedReference[];
+    readonly span: SsfSpan;
+}
+export interface ParsedNamed {
+    readonly kind: "named";
+    readonly reference: ParsedReference;
+}
+export type ParsedFieldType = ParsedNamed | ParsedEnumeration | {
+    readonly kind: "collection";
+    readonly multiplicity: "set" | "sequence";
+    readonly element: ParsedNamed | ParsedEnumeration;
+    readonly span: SsfSpan;
+};
+export interface ParsedField {
+    readonly name: string;
+    readonly nameSpan: SsfSpan;
+    readonly inferredName: boolean;
+    readonly optional: boolean;
+    readonly value: ParsedFieldType;
+    readonly span: SsfSpan;
+}
+export interface ParsedDeclaration {
+    readonly name: ParsedReference;
+    readonly declarationKind: "collection" | "subset";
+    readonly multiplicity: SsfMultiplicity;
+    readonly parent?: ParsedReference;
+    readonly fields: ParsedField[];
+    readonly rules: SsfRuleLine[];
+    span: SsfSpan;
+    readonly signatureSpan: SsfSpan;
+    readonly signature: SourceLine;
+    readonly structuralIndex: number;
+    readonly authoredStructural: string;
+    readonly hasWith: boolean;
+}
+export interface ParsedAlias {
+    readonly name: ParsedReference;
+    readonly target: ParsedReference;
+    readonly span: SsfSpan;
+}
+export {};
+
+=== dist/engine/tooling/ssf-package/names.d.ts ===
+export declare const TYPE_NAME: RegExp;
+export declare const FIELD_NAME: RegExp;
+export declare const ENUM_VALUE: RegExp;
+export declare const PRIMITIVES: readonly ["Date", "DateTime", "Flag", "Number", "String"];
+export declare const PRIMITIVE_NAMES: ReadonlySet<string>;
+export declare function inferredFieldName(type: string): string;
+
+=== dist/engine/tooling/ssf-package/resolution.d.ts ===
+import type { GrammarResult } from "./grammar.ts";
+import { type SsfDiagnostic, type SsfDocument, type SsfParseOptions } from "./model.ts";
+export declare function resolveGrammar(grammar: GrammarResult, options: SsfParseOptions): {
+    document: SsfDocument;
+    diagnostics: readonly SsfDiagnostic[];
+};
+
+=== dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
+import type { SsfParseOptions, SsfParseResult, SsfTypeInventory } from "./model.ts";
+/** Enumerate exact structural, explicit-alias, and evidenced-alias spellings. */
+export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
+/** Parse and validate the bounded structural SSF grammar. */
+export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
+/** Return deterministic, source-located SSF diagnostics. */
+export declare function validateSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult["diagnostics"];
+
+=== dist/engine/tooling/ssf-package/source.d.ts ===
+import type { SourceLine, SsfPosition, SsfRuleLine, SsfSpan, SsfToken } from "./model.ts";
+export declare function position(offset: number, line: number, column: number): SsfPosition;
+export declare function span(start: SsfPosition, end: SsfPosition): SsfSpan;
+/** Tokenize all State text without discarding whitespace or source ranges. */
+export declare function tokenizeSimpleStateForm(source: string): readonly SsfToken[];
+export declare function sourceLines(source: string, tokens: readonly SsfToken[]): readonly SourceLine[];
+export declare function lineSpan(line: SourceLine): SsfSpan;
+export declare function ruleLine(line: SourceLine): SsfRuleLine;
+export declare function words(line: SourceLine): readonly string[];
+
+=== dist/engine/tooling/ssf-package/vendor/irregular-plurals.d.ts ===
+/**
+ * Vendored from irregular-plurals@4.2.0:
+ * https://registry.npmjs.org/irregular-plurals/-/irregular-plurals-4.2.0.tgz
+ *
+ * MIT License
+ *
+ * Copyright (c) Sindre Sorhus
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+export declare const IRREGULAR_PLURAL_PAIRS: readonly (readonly [singular: string, plural: string])[];
+
+=== dist/engine/tooling/ssf-package/vendor/plur.d.ts ===
+/** Return the plur 6.0.0 plural form of one authored spelling. */
+export declare function pluralize(word: string): string;
 
 === dist/engine/tooling/typescript-shapes.d.ts ===
 import ts from "typescript";
@@ -5679,6 +6234,7 @@ export { applicationManifest, renderApplicationManifest } from "../engine/toolin
 export { applicationManifestDigest, parseApplicationManifest, validateApplicationManifest, } from "../engine/tooling/application-manifest-format.ts";
 export type { ApplicationManifestV1, ManifestEndpointV1 } from "../engine/tooling/manifest.ts";
 export { parseSpec as parseConceptSpecification } from "../engine/reactions/concepts/concept-spec.ts";
+export type { ConceptSpecDiagnostic, ConceptSpecDiagnosticCode, ConceptSpecParseResult, } from "../engine/reactions/concepts/concept-spec.ts";
 export { renderApp, renderReaction } from "../engine/reads/render.ts";
 export { wireContracts } from "../engine/boundary/wire/wire-contracts.ts";
 export { renderWireTypes } from "../engine/boundary/wire/wire-renderer.ts";

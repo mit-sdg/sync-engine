@@ -34,7 +34,7 @@ a seq of Alerts with
   a raisedAt DateTime
   an open Flag
 
-at most one Alert has each recipient and cause pair
+Rule: at most one Alert has each recipient and cause pair
 ```
 
 ## Actions

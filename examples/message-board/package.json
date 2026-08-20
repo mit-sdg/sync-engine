@@ -13,8 +13,8 @@
     "check": "vp check && bun run design:check && bun run test && bun run artifacts:check"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.11",
-    "@mit-sdg/sync-engine-http": "1.0.0-beta.11"
+    "@mit-sdg/sync-engine": "1.0.0-beta.14",
+    "@mit-sdg/sync-engine-http": "1.0.0-beta.14"
   },
   "devDependencies": {
     "@types/bun": "^1.3.0",

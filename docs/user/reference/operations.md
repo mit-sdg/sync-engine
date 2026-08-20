@@ -39,9 +39,11 @@ policy](../../../SUPPORT.md) defines the support window and generated-format rul
 ## Concurrency and atomicity
 
 One action body runs at a time per concept instance within one engine. Different
-concept instances, root flows, assemblies, and processes may overlap. Sharing one
-raw instance between assemblies creates separate queues; the engine does not
-serialize those assemblies.
+concept instances, root flows, assemblies, and processes may overlap. One
+assembly rejects the same raw implementation object under two selected names.
+Sharing one raw instance between separate assemblies remains allowed when their
+registrations carry compatible specifications, protocols, and refusal metadata. Each
+assembly creates a separate queue; the engine does not serialize those assemblies.
 
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query
@@ -53,6 +55,23 @@ earlier action. Put uniqueness, capacity, first-writer, and answer-once decision
 inside the state-owning action. Retryable operations need domain idempotency keys
 and durable deduplication where required. [Ordering and state-read
 timing](semantics.md#ordering-and-state-read-timing) defines exact ordering.
+
+## Static concept instances and persistence
+
+An authored `instances` inventory is a finite set of application identities. It
+does not create instances at runtime, create one instance per tenant, user,
+project, or workspace, discover deployments, provide aliases or replicas, or
+allocate storage. Keep unbounded domains as identities in concept State and
+action inputs; use separate assemblies when deployment-level isolation requires
+them.
+
+Within one assembly, each selected name has a distinct raw implementation object
+and its own scheduling identity. That does not prove durable isolation. Separate
+objects can still reach the same Mongo collection, SQL schema, file, cache key
+space, remote account, or endpoint. Persistent floor factories should use the
+instance-name argument to select explicit repositories or namespaces. Configure
+intentional sharing explicitly and provide any required transaction and
+coordination guarantees in the implementation and store.
 
 ## Supported multi-instance topology
 

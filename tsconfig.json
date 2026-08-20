@@ -29,6 +29,7 @@
       "@mit-sdg/sync-engine-server/*": ["./packages/server/src/*/index.ts"],
       "@root/*": ["./*"],
       "@scripts/*": ["./scripts/*"],
+      "@ssf": ["./packages/ssf/src/index.ts"],
       "@sync-engine/*": ["./src/*/index.ts"],
       "@sync-engine/internal/reactions/*": ["./src/engine/reactions/*"],
       "@sync-engine/internal/reads/*": ["./src/engine/reads/*"],

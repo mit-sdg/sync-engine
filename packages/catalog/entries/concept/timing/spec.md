@@ -20,8 +20,7 @@ reader advances to `t2`, a later uncached evaluation answers `t2`.
 ## State
 
 ```state
-a read function
-  read () -> DateTime
+Rule: each read obtains one DateTime from the configured reader
 ```
 
 ## Actions

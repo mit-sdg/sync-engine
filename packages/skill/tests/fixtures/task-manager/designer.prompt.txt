@@ -1,0 +1,391 @@
+# Independent designer
+
+# Design rules
+
+## Useful independent concepts
+
+A concept owns one coherent mechanism: purpose, state, actions, queries. Layout,
+workflow, and shared identity do not define boundaries. Purpose states one evaluable
+need, predicts behavior without methods or peers, and rules out at least one
+plausible design.
+
+Principle uses one or more short archetypal scenarios showing the mechanism's value,
+not a full specification. Include variants, errors, or refusals only when essential to
+the purpose. External context is allowed; peer behavior is never concept-owned.
+
+Every element serves purpose and brief. Concepts never call, import, or require peers.
+Split a concept that mixes distinct purposes, lifecycles, authorities, state, failures,
+or reuse; combine only when parts are useless alone, an invariant needs one atomic
+owner, or reactions would reconstruct one operation.
+
+## State and ownership
+
+State records observable identity, relations, lifecycle, order, multiplicity, and
+invariants—not storage. Give each relation one semantic owner. Runtime persistence
+belongs to implementation and evidence, not State. Write State only in Simple State
+Form.
+
+External types are generic and identities opaque; relate but never inspect peer facts.
+For a necessary copy of a peer fact, state its authority, updates, staleness,
+divergence detection, and repair; mark historical snapshots. Derive all behavior from
+owned state, inputs, and explicit non-peer environment; otherwise change ownership,
+inputs, environment, or policy. Race-sensitive and security-critical rules
+stay in the action owning changed state.
+
+## Actions and lifecycle
+
+Actions name domain occurrences or transitions, not generic writes. Declare
+preconditions and effects; avoid case flags. Owner actions and transactions enforce
+local invariants. Getters are queries; loops are not actions.
+
+Expected domain rejection is a declared refusal with a stable code; other failure is a
+fault. State the post-refusal state: a refusal never partially applies the requested
+transition, though it may atomically record a separate declared fact. Queries have no
+effects. Every query has an indented prose body stating rows, the unknown or empty
+case, and stable `many` ordering.
+
+Cover each applicable lifecycle stage—creation, completion, expiry, retention,
+reversal, compensation, deletion, or permanence—and add no CRUD symmetry the
+mechanism lacks. Repetition succeeds again, returns a prior result, or refuses.
+Deduplication atomically checks the caller's operation identity; a correlation id is
+only a trace token.
+
+## Composition and failure
+
+Only composition coordinates concepts. One reaction is one trigger-condition-effect
+decision. Stages express causality; give independent consequences separate reactions;
+named sibling reaction cases are alternatives whose order carries no priority.
+
+Composition owns cross-concept policy, workflow, context, adaptation, notification,
+compensation, and repair—not owner invariants, mutation, race decisions, or
+reconstructed operations. Pass-through reactions reveal a bad split or missing action.
+
+A reaction cannot make separate owners atomic. For each cross-concept relation, state
+its owners, violation, repair and whether it is automatic, permitted false interval,
+and failure outcome. If no false interval is safe, combine ownership or transact.
+Decide relevant cycle termination, bounded fan-out and partial effects, idempotency,
+causal order, and stale reads. Never assume rollback, cancellation, or exactly-once
+execution.
+
+## Authorization and external effects
+
+For each protected effect identify actor, authenticated identity, resource, fact
+owners, condition, and enforcement point. Request data is a claim, not authentication.
+Composition may deny early; owner actions enforce non-bypassable rules.
+
+Model a host effect as a concept only if it has observable policy, state, lifecycle, or
+failure or needs its own tests; otherwise adapt thinly.
+
+## Authored application design
+
+Inventory exact selected static instances; never declare core-owned `RequestBoundary`.
+A definition may have zero or more instances, none carrying its name. Bind each external
+once to a concrete or SSF-owned type. Reject chains between externals, alias syntax other than
+`alias Alias for Target`, external targets, inline and detached bindings mixed on one
+instance, missing, duplicate, or unresolved bindings, and unused concretes. Direct
+qualified owned-type dependency cycles are valid: edges resolve independently. Bindings
+convey identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
+storage isolation.
+
+The bounded SSF parser proves structural declarations and owned type names, not opaque
+invariants/prose, storage, or behavior.
+
+Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
+wildcards. Cover each authored endpoint and reaction tree and each named view and
+former; declare each executable computation once. A composition document reads as prose
+carrying its links, each naming module, group and declaration:
+
+```text
+Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
+about it. A circle page shows the circle, its members and that discussion
+[as one record](former:Circle.Pages.CirclePage), and only a member
+[may respond](view:Circle.Reading.MemberMayRespond).
+```
+
+An application document is not an API specification. It carries no endpoint sections and
+no input, return or refusal listings: the concept specification owns those, and a second
+copy drifts from the one the checker reads.
+
+`check-design` proves grammar and authored form only. Config checking proves shapes,
+bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
+persistence, transactions, authorization, repair, or behavior; review and test.
+
+# Simple State Form (SSF)
+
+```text
+document := (setDecl|subsetDecl|aliasDecl|ruleLine)*
+setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
+subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
+declarationBody := (INDENT (field|ruleLine))+
+aliasDecl := alias Alias for (Type|Subtype)
+field := [a|an] (requiredField|optional optionalField)
+requiredField := inferredField|fieldName (scalar|collection)
+optionalField := named|fieldName scalar
+inferredField := named|(set|seq) [of] named
+scalar := named|enum
+named := Type|Parameter|primitive
+enum := of values
+collection := (set|seq) [of] (named|values)
+values := VALUE (or VALUE)+
+primitive := Number|String|Flag|Date|DateTime
+ruleLine := Rule: TEXT
+```
+
+Start Type, Subtype, Alias, and Parameter uppercase ASCII and fieldName lowercase;
+continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
+with uppercase ASCII letters, digits, or `_` only. Omit fieldName only for `named` or an
+inferred named collection, never an enum; SSF lowercases its first character.
+
+Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
+indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
+rule ends the preceding declaration body. End a first line with `with` only when a real
+field follows; a `Rule:` line does not count.
+
+SSF owns structures, subsets, and accepted aliases. Named State fields and
+action/query signatures supply alias candidates; SSF invents none. Vendored
+`plur` must relate one candidate to one non-element owner, one-to-one, and yields no
+transitive/third spelling. Declarations win; externals, primitives, elements, and
+ambiguous candidates get no automatic alias.
+
+Declare an alias for a synonym or ambiguous pair; it overrides automatic evidence.
+Target a unique valid structure or subset, never an alias. Parent a subset on a structure,
+subset, or either alias; forward chains work. Unresolved, external, primitive, and
+invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
+rejected.
+
+Structures, aliases, externals, and primitives share one State namespace. Keep
+fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
+legal conventional/refinement reference, not an owned binding target.
+
+Collections are never `optional` (empty means absent) or nested; named-type unions are
+invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
+identity; they classify parent members, may overlap, and add relations. `element` has one
+member. Which side declares a relation implies no storage, navigation, or ownership.
+
+```state
+a set of Items with
+  a title String
+  an Item
+  an optional owner Person
+  a watchers set of Person
+  a seq of Updates
+  a status of OPEN or DONE
+
+a Completed set of Items with
+  a completedAt DateTime
+
+an element Settings with
+  a retentionDays Number
+
+alias WorkItem for Items
+
+Rule: at most one Item has each owner and title pair
+```
+
+# Authored formats
+
+Each concept has one gerund identifier H1 naming its mechanism (`# Tasking`, never
+`# Tasks` or `# Task Management`) and these H2s, in order;
+no other headings or fences:
+
+````text
+# Tasking
+
+## Purpose
+Unfenced prose.
+
+## Principle
+Unfenced prose.
+
+## Types
+```types
+external Person
+  Optional explanation.
+```
+
+## State
+```state
+<SSF declarations>
+```
+
+## Actions
+```actions
+create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
+  where title is valid
+  then
+    create the item
+    return item
+  where title is invalid
+  then
+    refuse INVALID_TITLE "A valid title is required."
+
+delete(item: Item) : return ()
+  where true
+  then
+    delete the item
+    return
+```
+
+## Queries
+```queries
+_items(owner: Person) : many (item: Item, title: String)
+  Returns the owner's items, returns no rows when none exist, and orders by Item identity.
+```
+````
+
+Types contains only `external Name` declarations or is empty. State uses supplied SSF;
+keep every State line inside its fence and prefix every invariant prose line with exact
+`Rule:`. Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
+results, and one or more `where`/`then` branches. Indent `where` and `then` equally and
+each branch body deeper. Terminal success returns exactly the declared names. Declare an
+empty result `: return ()` and end its branches with bare `return`, never `return ()` or
+a standalone `()`. Refuse with `refuse CODE "Normative sentence."`; keep codes unique
+within an action and never shared across actions. Return declared names only:
+`return account`, never prose such as `return the session account`.
+
+Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
+before the named row. Mark optional State values in the row `field?: Type`. A `one` body
+always promises one row; only `optional` may say no row.
+
+```types
+concrete Person
+  Stable application identity.
+```
+
+```instances
+instantiate Tasking with
+  Owner is Person
+instantiate Noting as Notes with
+  Task is Tasking.Task
+```
+
+Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once;
+never declare core-owned `RequestBoundary`. Bind all externals inline or all detached:
+
+```instances
+instantiate Tasking
+instantiate Noting as Notes
+```
+
+```bindings
+Tasking.Owner is Person
+Notes.Task is Tasking.Task
+```
+
+Do not mix placement. Target a concrete or SSF-owned type; external aliases are invalid,
+direct owned-type cycles valid. Concept files contain no application links, instances,
+bindings, or computations.
+
+Give each composition document a nonempty H1 and decision prose. Reference application
+declarations with Markdown links, never bare `view:` lines, routes, or concept actions:
+
+```md
+Editing [refreshes content](reaction:Forum.posts.RefreshDerivedContent).
+The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
+Visibility follows the [readability policy](view:Forum.posts.Readable).
+```
+
+Declare each computation once with an indented body where used, or in
+`design/types.md` when shared:
+
+```computations
+normalizeTitle(raw: String) : String
+  Produces the canonical task title used by endpoint adaptation.
+```
+
+Prose may use `[normalization](computation:normalizeTitle)`. Routes stay in prose; link
+targets are exact dotted source paths.
+
+# What a design says about its boundary
+
+An endpoint takes one request and produces one answer. Endpoints are the only way into
+the application, and every caller reaches them the same way, whether that caller is a
+browser, a command line, or another part of the same program.
+
+Say what a caller supplies, what comes back, and every refusal with a stable code and
+its meaning. Do not say how any of that is rendered: no methods, status codes, headers,
+exit codes, or address shapes beyond an endpoint's own name. Rendering belongs to the
+application layer and differs by transport, so naming one asks for a guarantee the
+boundary may not be able to give.
+
+When two refusals have to be indistinguishable to a caller, say that as behaviour.
+
+A concept that depends on the current time or on a generated identifier says so in its
+prose. The implementation injects it; the concept never reaches for a clock itself.
+
+## Assignment
+
+Create the smallest complete design for the brief from mechanism and ownership, not
+endpoint nouns. Resolve required behavior now. Mark only truly unspecified,
+nonblocking choices as `Open decision:` with a safe provisional choice.
+
+You are the fresh design author, independent of implementation. Do not read or change
+source, tests, generated artifacts, dependencies, framework internals, or prior agent
+history. Read only supplied files and write only the design paths below.
+
+After writing the design files, run only this read-only syntax command:
+
+```sh
+bunx --no-install sync-engine check-design design/concepts/*.md \
+  design/compositions/*.md design/types.md
+```
+
+Repair reported problems and rerun until it passes. Do not inspect CLI or package
+internals. The coordinator will rerun the same gate independently.
+
+## Files
+
+Create or revise only:
+
+- `design/concepts/<Concept>.md` for reusable concept definitions;
+- `design/compositions/*.md` for application decisions and exact intended
+  `reaction:`, `view:`, `former:`, and `computation:` links; and
+- `design/types.md` for application `concrete` declarations, the complete
+  `instances` inventory, and inline or detached external bindings.
+
+Create no index, `application.md`, memo, report, progress file, or workflow metadata.
+Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.
+
+## Return
+
+Return changed paths and at most two brief-material questions. Nothing else.
+
+## Product brief
+
+<!-- source: packages/skill/tests/fixtures/task-manager/brief.md -->
+
+# Shared task manager
+
+## Objective
+
+Build a shared task manager for assigning work with deadlines.
+
+## Product decisions
+
+- **D1 — Team scope (Assumption):** Use one shared workspace.
+
+## Visible success
+
+- A member can create and assign a task.
+
+## Expected refusals
+
+- A task cannot be assigned to an unknown member.
+
+## Assumptions
+
+- One server instance hosts the workspace.
+
+## Non-goals
+
+- Billing and attachments.
+
+## Open decisions
+
+None.
+
+## Existing design
+
+
+
+## Catalog candidates

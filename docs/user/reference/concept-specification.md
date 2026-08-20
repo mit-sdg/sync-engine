@@ -6,8 +6,9 @@ TypeScript-independent version-1 representation. The specification defines a
 concept definition; an application may instantiate that definition more than
 once under different concept-set keys.
 
-Application composition, concrete application types, typed design links, and
-computations do not belong in a concept specification. They belong in
+Application composition, concrete application types, concept instance
+inventories and bindings, typed design links, and computations do not belong in
+a concept specification. They belong in
 [registered application design](../guide/authoring.md#6-register-explicit-design-urls).
 
 For a new application, put one definition per
@@ -16,11 +17,13 @@ path restriction: registration follows the statically resolvable Markdown import
 Before implementation exists, parse explicit draft files with:
 
 ```sh
-sync-engine check-concepts design/concepts/*.md
+sync-engine check-design design/concepts/*.md
 ```
 
 This command loads no application configuration or TypeScript source, writes nothing,
-and reports only concept grammar failures. Config-based `sync-engine check` adds
+and reports authored-design form failures along with advice that does not fail the check;
+it also accepts composition and
+application-types documents in the same invocation. Config-based `sync-engine check` adds
 registration provenance and TypeScript agreement after implementation.
 
 ## Document grammar
@@ -39,17 +42,17 @@ each and in this order:
 ## Queries
 ```
 
-The H1 is the concept-definition name, not an application instance name.
+The H1 is the concept-definition name, not an application instance name. Author it as
+a gerund naming the mechanism, such as `Tasking`, `Noting`, or `Authenticating`.
 Unknown, missing, reordered, or duplicate H2 sections are rejected. Subsection
 headings are also rejected: the six H2 sections are the complete document
 outline. `Purpose` and `Principle` must contain nonempty prose and no fenced
 blocks.
 
-`Types`, `Actions`, and `Queries` contain only their one matching fence and no
-surrounding Markdown. `State` contains one `state` fence and may have concise
-prose after it for invariants that the notation cannot express. Application
-design links and `computations` fences are rejected anywhere in a concept
-specification.
+`Types`, `State`, `Actions`, and `Queries` contain only their one matching fence and
+no surrounding Markdown. Invariant prose goes inside the `state` fence on a `Rule:`
+line rather than after it. Application design links and `computations` fences are
+rejected anywhere in a concept specification.
 
 ## Complete example
 
@@ -76,9 +79,9 @@ external Person
 ## State
 
 ```state
-notes: set Note
-  author: Person
-  text: String
+a set of Notes with
+  an author Person
+  a text String
 ```
 
 ## Actions
@@ -131,7 +134,8 @@ external Name
 An external type is an opaque parameter supplied by each application that uses
 the concept. The explanation is retained as documentation. The `external`
 keyword is required; concrete types and bindings are application design,
-not concept-local declarations.
+not concept-local declarations. Give an external type the uppercase type-name form
+SSF uses for every other type, and do not reuse the name of an SSF primitive.
 
 Other names in State, action signatures, and query signatures are descriptive
 vocabulary, not declarations that must be repeated in Types. A name may identify
@@ -142,25 +146,49 @@ type universe nor requires every named type to have a declaration.
 
 ## `State`
 
-`State` contains exactly one `state` fence. The parser normalizes and retains
-the fence contents verbatim in concept-specification IR and application
-manifests. Version 1 does not parse or validate those contents.
+`State` contains exactly one `state` fence and no surrounding Markdown. The concept
+parser normalizes and retains the fence's full contents in concept-specification IR and
+application manifests. Private tooling also parses a bounded structural view for form
+checks and owned-name resolution; that view is not part of the public
+concept-specification IR.
 
-The intended notation is Simple State Form (SSF), based on the
-[conceptbox state-language proposal](https://github.com/61040-fa25/conceptbox/raw/refs/heads/main/design/background/detailed/concept-state.md).
-Its grammar remains deferred. Version 1 therefore does not implement a partial
-parser, scan type names heuristically, or define a private SSF dialect.
+Authors must use Simple State Form (SSF), defined by the canonical
+[SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
+The parser recognizes set, sequence, element, subset, alias, and field declarations
+together with their multiplicities, identifiers, articles, and subset graph. Declared
+names are taken as written.
 
-Because State is unparsed, tooling does not yet prove:
+Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
+the declaration, are joined when they form a singular and plural pair. Irregular pairs
+such as `Mouse`/`Mice` and `Person`/`People` join the same way. Both spellings have to be
+authored, and the pair has to be unambiguous on both sides; where it is not, the two
+names stay separate and the check reports advice. `alias Alias for Target` states a
+synonym directly. An alias takes precedence over a joined pair, targets a declaration or
+subset rather than another alias, and may appear before or after its target. Subset
+parents are likewise order-independent and may name a declaration, subset, or alias.
+Parents that name an external parameter or primitive, unresolved or duplicate names,
+self-parenting, and cycles fail with source-located diagnostics.
 
-- that action and query types are state-owned or external;
-- that every external type is used; or
-- that a qualified type-binding target is introduced by the target concept's
-  State.
+Declaration and alias names are unique across the fence and share that namespace with
+external parameters and SSF primitives. Field names are unique within their declaration,
+and enumeration values within their enumeration.
 
-The checker still inventories external declarations and checks every required
-application type binding. State changes affect canonical design digests
-even before SSF parsing is available.
+Invariant prose goes on a `Rule:` line, at the top level or indented under a
+declaration. The parser retains the line and makes no claim about it, while every other
+nonblank line must parse as a declaration, alias, or field. Field value names stay open,
+because they may denote conventional or concept-local refinement types: an unrecognized
+name is retained and classified as unresolved rather than rejected, and becomes owned
+only through a joined pair or an alias. Operation signature types need not appear in
+State. The parser does not prove rules, refinement meaning, action conditions or
+effects, query meaning, storage layout, State/storage agreement, or implementation
+behavior.
+
+Config-based checking uses the owned-name inventory for one proof: a
+qualified external-binding target must name a declaration or alias owned by the selected
+target instance's definition. Checked manifests persist that inventory, and validation
+rederives it independently from State and operation signatures. External, primitive, and
+unresolved names cannot be binding targets. State changes continue to affect canonical
+design digests.
 
 ## `Actions`
 
@@ -211,8 +239,9 @@ _query(input: Type) : many identified by (field) (field: Type, value: Type)
 
 Input and result fields are parenthesized and named. Bare result types are
 rejected. The optional indented body is arbitrary prose; no word such as
-`answers` or `orders` is required. Omit the body when State and the signature
-already determine the answer.
+`answers` or `orders` is required by the parser. The broader authored-design guidance
+is stricter: every query includes a body explaining its answer, unknown or empty case,
+and deterministic ordering for `many`.
 
 The cardinalities retain their runtime meaning:
 
@@ -278,12 +307,32 @@ conceptSet({
 })
 ```
 
-Both instances use the `Commenting` definition. Generated design output records
-the definition name and each instance name separately. If selected
-registrations use the same definition name, their canonical specifications must
-be identical. Different implementation classes or floors may implement that
-shared contract; incompatible specifications cannot claim the same definition
-name.
+`conceptSet` maps every selected application instance name to the registered
+concept definition it realizes. Both entries above use the `Commenting`
+definition. The configured application corpus must declare that exact static
+selection:
+
+```instances
+instantiate Commenting as PostComments with
+  User is Person
+  Target is Posting.Post
+
+instantiate Commenting as AnswerComments with
+  User is Person
+  Target is Answering.Answer
+```
+
+`instantiate Definition` means exactly `instantiate Definition as Definition`.
+A definition does not require a same-name instance. Every config is checked
+against the exact assembly it returns, and the core-owned `RequestBoundary` is
+excluded from authored completeness. Generated design output records definition
+and instance names separately.
+
+If selected registrations use the same definition name, their canonical
+specifications must be identical. Different implementation classes or floors
+may implement that shared contract; incompatible specifications cannot claim
+the same definition name. Authored instance declarations are a finite design
+inventory, not runtime instance creation or storage allocation.
 
 ## Source provenance
 
@@ -308,7 +357,7 @@ or auto-detected.
 ## Author obligations
 
 Write the concept contract before its implementation and run `sync-engine
-check-concepts` over the draft. Keep the concept independent of application
+check-design` over the draft. Keep the concept independent of application
 composition, place every local invariant in its owning action and State description,
 and test behavior and storage guarantees separately. Then register the imported text,
 select the registration in a `conceptSet`, and run `sync-engine check` against the

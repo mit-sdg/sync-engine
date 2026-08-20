@@ -29,7 +29,7 @@ describe("Authenticating memory", () => {
   test("its principle: register, authenticate, change the password, and unregister", async () => {
     const { authenticating } = fixture();
     expect(await authenticating.register({ username: "ari", password: FIRST_PASSWORD })).toEqual({
-      username: "ari",
+      account: "ari",
     });
     expect(authenticating._registered({ username: "ari" })).toEqual({ registered: true });
 
@@ -41,7 +41,7 @@ describe("Authenticating memory", () => {
     ).rejects.toThrow(InvalidCredentials);
     expect(
       await authenticating.authenticate({ username: "ari", password: FIRST_PASSWORD }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
 
     expect(
       await authenticating.changePassword({
@@ -49,16 +49,16 @@ describe("Authenticating memory", () => {
         currentPassword: FIRST_PASSWORD,
         newPassword: SECOND_PASSWORD,
       }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
     await expect(
       authenticating.authenticate({ username: "ari", password: FIRST_PASSWORD }),
     ).rejects.toThrow(InvalidCredentials);
     expect(
       await authenticating.authenticate({ username: "ari", password: SECOND_PASSWORD }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
 
     expect(await authenticating.unregister({ username: "ari", password: SECOND_PASSWORD })).toEqual(
-      { username: "ari" },
+      { account: "ari" },
     );
     expect(authenticating._registered({ username: "ari" })).toEqual({ registered: false });
     await expect(
@@ -101,7 +101,7 @@ describe("Authenticating memory", () => {
     ).rejects.toThrow(INVALID_CREDENTIALS_DETAIL);
     expect(
       await authenticating.authenticate({ username: "ari", password: FIRST_PASSWORD }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
   });
 
   test("unknown usernames perform a verifier workload and impossible passwords stay bounded", async () => {
@@ -127,11 +127,11 @@ describe("Authenticating memory", () => {
 
     expect(
       await authenticating.authenticate({ username: "ari", password: FIRST_PASSWORD }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
     expect(passwordVerifier.createdSalts).toEqual(["salt-000000000001", "salt-000000000002"]);
     expect(
       await authenticating.authenticate({ username: "ari", password: FIRST_PASSWORD }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
     expect(passwordVerifier.createdSalts).toHaveLength(2);
   });
 
@@ -157,6 +157,6 @@ describe("Authenticating memory", () => {
     const acceptedPassword = results[0]?.status === "fulfilled" ? FIRST_PASSWORD : SECOND_PASSWORD;
     expect(
       await authenticating.authenticate({ username: "ari", password: acceptedPassword }),
-    ).toEqual({ username: "ari" });
+    ).toEqual({ account: "ari" });
   });
 });

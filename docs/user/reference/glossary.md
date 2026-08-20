@@ -28,8 +28,9 @@ another runtime.
 ## Authored design
 
 Application-owned concept specifications and explicitly configured application
-documents containing prose, application types, and computations. It is distinct from executable TypeScript
-declarations and generated read-back.
+documents containing prose, complete static concept-instance declarations,
+application types and bindings, and computations. It is distinct from executable
+TypeScript declarations and generated read-back.
 
 ## Binding
 
@@ -54,10 +55,10 @@ concept APIs; composition connects them.
 ## Concept specification
 
 A strict Markdown document containing ordered Purpose, Principle, external
-Types, raw State, structured Actions, and Queries for one reusable definition.
-Only the contracts in the [concept specification
-reference](concept-specification.md) are enforced. Raw State and
-natural-language behavior are not runtime schemas.
+Types, structurally parsed SSF State, structured Actions, and Queries for one
+reusable definition. Only the contracts in the [concept specification
+reference](concept-specification.md) are enforced. Opaque invariant/prose
+semantics and natural-language behavior are not runtime schemas.
 
 ## Concept floor
 
@@ -65,13 +66,21 @@ A named complete implementation map for one concept set, with host-owned
 resources and `close()`. The host owns its lifecycle. A floor selects
 implementations without changing the concept set or specifications.
 
+## Concept instance
+
+One statically named application selection of a reusable concept definition.
+Its instance name identifies composition references, occurrences, inspection,
+and runtime scheduling within an assembly. A distinct instance name does not by
+itself allocate or isolate persistent storage.
+
 ## Concept set
 
 The registered selection of named concept instances used by one application
-variant. `conceptSet(...)` returns the complete object passed to `assemble`.
-Its `.concepts` property contains typed references for authoring composition;
-its `.implementations(...)` method constructs implementation maps. The property
-is a facet of the set, not a second set.
+variant. Each `conceptSet(...)` key is an instance name and its value is the
+registered definition that instance realizes. The function returns the complete
+object passed to `assemble`. Its `.concepts` property contains typed references
+for authoring composition; its `.implementations(...)` method constructs
+implementation maps. The property is a facet of the set, not a second set.
 
 ## Consequence
 
@@ -182,9 +191,10 @@ behavior only.
 
 ## Principle
 
-A concrete behavioral sequence in a concept specification that demonstrates the
-concept's purpose from its initial state. A principle test runs the concept
-directly, without assembly; the specification text itself is not executable.
+One or more concise archetypal scenarios in a concept specification that demonstrate
+how the concept fulfills its purpose. A principle is not the complete specification.
+A principle test runs the concept directly, without assembly; the specification text
+itself is not executable.
 
 ## Query
 
@@ -244,9 +254,18 @@ until resolved against an engine.
 
 ## Application types
 
-Concrete application types and direct bindings for selected concept-external
-parameters. They are declared in `types` fences in any registered application
-design document and are checked by tooling rather than loaded at runtime.
+Concrete application types declared in `types` fences. External bindings are
+instead declared inline in `instances` fences or detached in `bindings` fences.
+Tooling checks both against the exact configured assembly; runtime does not load
+the declarations.
+
+## External type binding
+
+One direct assignment of a selected concept instance's external parameter to a
+concrete application type or another selected instance's SSF-owned type. Every
+instance places all its bindings inline or all detached. A binding establishes
+semantic identity, not TypeScript equivalence, behavior, adapter configuration,
+or persistent storage ownership.
 
 ## Wire contract
 

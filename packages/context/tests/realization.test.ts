@@ -52,10 +52,9 @@ external Board
 an ordered set of Notes with
   a board Board
   a text Text
-\`\`\`
 
-Each Note's position is the order in which its accepted Action added it within
-that Board.
+Rule: each Note's position is the order in which its accepted Action added it within that Board
+\`\`\`
 
 ## Actions
 

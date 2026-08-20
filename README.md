@@ -7,175 +7,204 @@
 [![npm: skill](https://img.shields.io/npm/v/@mit-sdg/sync-engine-skill/beta?label=skill)](https://www.npmjs.com/package/@mit-sdg/sync-engine-skill)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
-sync-engine is an ESM-only TypeScript library for composing independently
-implemented application behaviors. Each behavior, called a **concept**, owns
-its state, actions, queries, and expected refusals. Application composition
-connects concepts without making their implementations depend on one another.
+sync-engine builds an application out of independent pieces called concepts. A
+concept owns one behavior along with its own state, actions, and queries:
+Posting, Commenting, Sessioning, Authenticating. None of them imports another,
+so each can be written and tested on its own.
 
-The main composition forms are:
+The application is a separate layer that connects them. It declares which
+concepts are present, how an outside request reaches them, and what follows
+after an action returns. Concepts can then be reused elsewhere, and anything
+specific to this application lives in the composition instead of inside a
+concept.
 
-- **reactions**, which ask for consequences after action asks or outcomes;
-- **views**, which name reusable relations and policy decisions;
-- **formers**, which build current-state result trees; and
-- **endpoints**, which connect outside requests to composed behavior.
+At runtime the engine checks the composition, installs the selected concept
+instances, and records every action occurrence. The same assembly feeds the
+tooling, which generates a TypeScript contract for callers and a record of
+everything that was assembled.
 
-The engine validates the composition, instruments the selected concept
-instances, and records action occurrences. Tooling can derive an assembled
-read-back and TypeScript boundary contract from that assembly.
-
-## Status and requirements
-
-Version 1 is in beta, and only the newest beta release is supported. Core is
-ESM-only. The built library supports Node.js 24; the CLI, setup, and examples
-require Bun 1.3; and typechecking requires TypeScript 6. Read the [support
-policy](SUPPORT.md) for the exact supported ranges, and review the [operational
-limits](docs/user/reference/operations.md) before choosing a deployment.
-
-## Install in an existing project
+## Install
 
 ```sh
 bun add @mit-sdg/sync-engine@beta
 ```
 
-## Packages
-
-| Package                                                                                                           | Role                                                                     |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [`@mit-sdg/sync-engine`](README.md)                                                                               | Concepts, composition, assembly, boundaries, clients, tooling, and CLI   |
-| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/README.md)   | Deterministic IR queries and optional TypeScript project/source evidence |
-| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)           | Maintained HTTP handler, Fetch client, and generated wire projection     |
-| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)     | CLI-only read-only browser for curated concept and recipe source         |
-| [`@mit-sdg/sync-engine-skill`](https://github.com/mit-sdg/sync-engine/blob/main/packages/skill/README.md)         | Independent design review and isolated implementation Agent Skill        |
-| [`@mit-sdg/sync-engine-rendering`](https://github.com/mit-sdg/sync-engine/blob/main/packages/rendering/README.md) | Portable renderer declarations and endpoint-returned invocation data     |
-
-## Create your first application
-
-Create a Bun package and initialize the concept-free application files:
+To start a new project:
 
 ```sh
-mkdir workshop-app
-cd workshop-app
-bun init -y
-bun add --exact @mit-sdg/sync-engine@beta
+mkdir board
+cd board
 bunx --package @mit-sdg/sync-engine@beta sync-engine setup
 ```
 
-For a reproducible evaluation, replace `@beta` with a pinned version. `setup` adds
-missing compatible development dependencies and standard scripts, runs Bun
-installation after a manifest edit, and creates only absent source/config templates.
-It never overwrites existing source, config, or tsconfig.
+`setup` completes the package manifest, adds development dependencies and
+standard scripts, and writes any application files that are missing, without
+overwriting anything that is already there. Pin an exact version in place of `@beta`
+when the result has to be reproducible.
 
-[Getting started](docs/user/guide/getting-started.md) verifies the empty application.
+[Getting started](docs/user/guide/getting-started.md) runs the empty
+application.
 
-## Documentation
+## What you write
 
-Choose the path that matches the next task:
+Each concept is a TypeScript class and a Markdown specification. The class holds
+the state and implements the actions and queries; the specification records the
+concept's purpose, its operational principle, its state, and every action and
+query with the refusals it can return. [Concept specification
+format](docs/user/reference/concept-specification.md) defines the sections.
 
-| Task                                                         | Start here                                              |
-| ------------------------------------------------------------ | ------------------------------------------------------- |
-| Understand concepts, composition, assembly, and the boundary | [Application model](docs/user/overview.md)              |
-| Decide what the concepts are and review a design             | [Designing with concepts](docs/user/design.md)          |
-| Initialize and run a concept-free application                | [Getting started](docs/user/guide/getting-started.md)   |
-| Study concepts, reactions, views, formers, and endpoints     | [Reading Circle](examples/reading-circle/README.md)     |
-| Look up exports, options, and defaults                       | [Public API](docs/user/reference/public-api.md)         |
-| Determine exact runtime behavior                             | [Execution semantics](docs/user/reference/semantics.md) |
-| Select a deployment and identify host responsibilities       | [Operational limits](docs/user/reference/operations.md) |
-| Inspect complete applications                                | [Example applications](examples/README.md)              |
+The application connects concepts through four kinds of declaration:
 
-### Coding agents
+- **Endpoints** take a request from outside and produce one answer.
+- **Reactions** ask for something after an action returns.
+- **Formers** build a result tree out of current state.
+- **Views** name a relation or a policy decision that several declarations share.
 
-Start with the installed package's [`docs/user/llms.txt`](docs/user/llms.txt).
-Its package-local links match the installed beta. Treat `docs/user/`, the shipped
-examples, and declared public entrypoints as the consumer surface. Do not infer
-contracts from `dist/engine/`, `dist/command/`, repository source, or deep
-imports; report a documentation gap when the public docs and exported
-TypeScript signatures are insufficient.
+This endpoint from Message Board resolves the session before publishing, so the
+request never gets to name its own author:
 
-## A first composition rule
+```ts
+import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
+import { concepts } from "../concepts.ts";
 
-After the empty application runs, a reaction can connect two independently
-implemented concepts. This example opens a discussion whenever Selecting
-returns a new selection:
+const { Posting, Sessioning } = concepts;
+
+const PublishPost = endpoint(
+  "/board/post",
+  ({ session, username, content, post }) =>
+    receive({ session, content })
+      .then(Sessioning.current({ session }).responds({ subject: username }))
+      .then(Posting.publish({ author: username, content }).responds({ post }))
+      .then(respond({ post })),
+  { input: { required: ["session", "content"] } },
+);
+```
+
+A reaction from Reading Circle opens a discussion whenever the circle chooses
+its next reading. Selecting and Discussing never refer to each other, and this
+reaction is the only link between them:
 
 ```ts
 import { reaction, when } from "@mit-sdg/sync-engine/language";
-import { concepts } from "./concepts.ts";
+import { concepts } from "../concepts.ts";
 
 const { Discussing, Selecting } = concepts;
 
-export const SelectedMitigationOpensDiscussion = reaction(({ selection }) =>
+const SelectedReadingOpensDiscussion = reaction(({ selection }) =>
   when(Selecting.choose({}).responds({ selection })).then(Discussing.open({ subject: selection })),
 );
 ```
 
-At runtime, a returned `Selecting.choose` occurrence binds `selection` and asks
-`Discussing.open`. Selecting and Discussing remain independently implemented.
+An assembly makes those endpoints callable, in process or over HTTP through
+`@mit-sdg/sync-engine-http`.
 
-See the [Reading Circle source map](examples/reading-circle/README.md#source-map)
-for a complete application, [application design authoring](docs/user/guide/authoring.md)
-for the authored contract around executable declarations, and [execution
-semantics](docs/user/reference/semantics.md) for ordering and failure behavior.
+## Design documents
 
-## Expose an application boundary
+Specifications and application prose are Markdown files under `design/`:
 
-An endpoint uses the same reaction model to receive an outside request and
-produce one answer. It is a declaration in the composition; an assembly makes
-that declaration callable:
-
-```ts
-import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { concepts } from "./concepts.ts";
-
-const { Selecting } = concepts;
-
-export const ChooseMitigation = endpoint(
-  "/rooms/choose-mitigation",
-  ({ room, mitigation, selection }) =>
-    receive({ room, mitigation })
-      .then(Selecting.choose({ scope: room, item: mitigation }).responds({ selection }))
-      .then(respond({ mitigation })),
-);
+```text
+design/concepts/*.md       one specification per concept
+design/compositions/*.md   what each selected declaration is for
+design/types.md            the concept instances and the types they share
 ```
 
-An assembly exposes endpoints through its direct invoker, the standard gateway,
-a local client with JSON parity, or a transport adapter. Generated TypeScript
-describes endpoint inputs, successful outputs, and errors for typed callers.
-Applications attach endpoint validators when they also need runtime value
-validation.
+`sync-engine check-design` checks these files on their own, without loading
+application code. `sync-engine check` also compares each registered
+specification against the TypeScript that implements it. Conditions and query
+meanings stay in natural language, which makes them your tests' responsibility.
 
-## Runtime boundaries to plan for
+Only the design tooling reads these files. A running application never loads
+them, so they do not have to be deployed.
 
-Actions serialize per concept instance within one assembly, not across concepts,
+## Checks and generated contracts
+
+```sh
+sync-engine check-design design/concepts/*.md   # the design alone
+sync-engine check                               # design agreement and application diagnostics
+sync-engine verify                              # design, application, and artifact checks in one report
+sync-engine artifacts pin                       # regenerate the read-back and the wire contract
+sync-engine artifacts check                     # confirm both still match the assembly
+sync-engine artifacts diff <old-manifest>       # compare a saved manifest with the current application
+```
+
+`check-design`, `check`, `verify`, and `artifacts check` accept `--format json`.
+
+## Build it with an agent
+
+[`@mit-sdg/sync-engine-skill`](https://github.com/mit-sdg/sync-engine/blob/main/packages/skill/README.md) is an Agent Skill that
+runs the whole workflow: brief, design, independent criticism, then separate
+roles for concept implementation, application implementation, and evidence.
+Every role is a fresh agent, so the critic did not write the design and the
+evidence worker did not build what it tests. The skill installs a matching
+release into the application and refuses to run against a different one.
+
+## Packages
+
+| Package                                                                                                           | Role                                                                   |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [`@mit-sdg/sync-engine`](README.md)                                                                               | Concepts, composition, assembly, boundaries, clients, tooling, and CLI |
+| [`@mit-sdg/sync-engine-http`](https://github.com/mit-sdg/sync-engine/blob/main/packages/http/README.md)           | HTTP handler, Fetch client, and generated wire projection              |
+| [`@mit-sdg/sync-engine-analysis`](https://github.com/mit-sdg/sync-engine/blob/main/packages/analysis/README.md)   | Deterministic queries over the design, with optional source evidence   |
+| [`@mit-sdg/sync-engine-catalog`](https://github.com/mit-sdg/sync-engine/blob/main/packages/catalog/README.md)     | Read-only browser for curated concept and recipe source                |
+| [`@mit-sdg/sync-engine-skill`](https://github.com/mit-sdg/sync-engine/blob/main/packages/skill/README.md)         | Agent Skill that runs the design and implementation workflow           |
+| [`@mit-sdg/sync-engine-rendering`](https://github.com/mit-sdg/sync-engine/blob/main/packages/rendering/README.md) | Portable renderer declarations and endpoint-returned invocation data   |
+
+## Documentation
+
+| Task                                        | Document                                                |
+| ------------------------------------------- | ------------------------------------------------------- |
+| Understand how an application fits together | [Application model](docs/user/overview.md)              |
+| Decide what the concepts should be          | [Designing with concepts](docs/user/design.md)          |
+| Write the design files                      | [Application authoring](docs/user/guide/authoring.md)   |
+| Look up exports, options, and defaults      | [Public API](docs/user/reference/public-api.md)         |
+| Know the exact runtime behavior             | [Execution semantics](docs/user/reference/semantics.md) |
+| Plan a deployment                           | [Operational limits](docs/user/reference/operations.md) |
+
+Three complete applications ship with the package. Reading Circle is the
+shortest one that uses all four declaration kinds, Operations Room makes its
+policy replaceable and its reaction packs selectable, and Message Board covers
+authentication, cookies, typed HTTP, and a browser client. The [example
+index](examples/README.md) lists the install and start commands for each.
+
+### Coding agents
+
+Start with the installed package's [`docs/user/llms.txt`](docs/user/llms.txt);
+its links match the installed beta. Treat `docs/user/`, the shipped examples,
+and the declared public entrypoints as the whole surface. Do not infer contracts
+from `dist/`, from repository source, or from deep imports; when the public
+docs fall short, report that as a documentation gap.
+
+## What the engine does not do
+
+Actions serialize per concept instance inside one assembly, not across concepts,
 assemblies, or processes. The engine does not provide multi-action transactions,
-accepted-work cancellation, concept-state persistence, restart replay,
-distributed serialization, or exactly-once execution. Generated contracts do
-not validate runtime values; add endpoint validators when untyped callers need
-runtime checks. See [Execution semantics](docs/user/reference/semantics.md) for
-the exact contract and [Operational limits](docs/user/reference/operations.md)
-for deployment responsibilities.
+cancellation of accepted work, persistence of concept state, replay after a
+restart, or exactly-once execution.
+Generated contracts describe types and do not check runtime values, so attach
+endpoint validators when callers are untyped.
 
-## Run the shipped examples
+[Execution semantics](docs/user/reference/semantics.md) gives the exact
+contract, and [operational limits](docs/user/reference/operations.md) covers
+what the host is responsible for.
 
-The [example index](examples/README.md) lists each standalone application's
-install, check, and start commands.
+## Versions
 
-## Work on sync-engine itself
+Version 1 is in beta, and only the newest beta is supported. A newer beta can
+break the one before it, so read the [changelog](CHANGELOG.md), regenerate the
+pinned artifacts, and typecheck consumers before moving a pin.
 
-Project contributors use these documents:
+The library is ESM-only and runs on Node.js 24. The CLI, `setup`, and the
+examples need Bun 1.3, and typechecking needs TypeScript 6. The [support
+policy](SUPPORT.md) has the exact ranges.
+
+## Working on sync-engine itself
 
 - [Contributing](https://github.com/mit-sdg/sync-engine/blob/main/CONTRIBUTING.md)
-  selects checks by change type.
+  selects the checks a change needs.
 - [Repository agent instructions](https://github.com/mit-sdg/sync-engine/blob/main/AGENTS.md)
-  define checkout mechanics and source boundaries for coding agents.
+  cover checkout mechanics and source boundaries for coding agents.
 - [Project documentation](https://github.com/mit-sdg/sync-engine/blob/main/docs/project/index.md)
-  classifies the implementation architecture and release procedure.
-
-## Upgrading beta versions
-
-A newer beta may make incompatible changes. Before changing a pinned version,
-read the [changelog](CHANGELOG.md), regenerate and review pinned artifacts, and
-typecheck consumers. Each installed package README defines its compatibility
-requirements. The [support policy](SUPPORT.md) defines the core support window.
+  describes the architecture and the release procedure.
 
 ## License
 

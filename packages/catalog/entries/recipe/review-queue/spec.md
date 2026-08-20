@@ -2,6 +2,29 @@
 
 A review queue assigns durable reviews and keeps each one in its reviewer's attention until a terminal decision.
 
+## Application types and instances
+
+```types
+concrete Subject
+  An object submitted to the application for review.
+
+concrete Person
+  A requester or reviewer identity supplied by the application.
+```
+
+```instances
+instantiate Timing
+
+instantiate Approving with
+  Subject is Subject
+  Person is Person
+
+instantiate Alerting with
+  Recipient is Person
+  Subject is Approving.Review
+  Cause is Approving.Review
+```
+
 ## Compositions
 
 ### ReviewRequests

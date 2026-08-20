@@ -5,9 +5,9 @@ describe("catalog documentation", () => {
   test("documents the complete read-only command contract", async () => {
     const reference = await readFile(new URL("../public-surface.md", import.meta.url), "utf8");
     for (const term of [
-      "catalog list",
-      "catalog show",
-      "catalog source",
+      "sync-engine-catalog list",
+      "sync-engine-catalog show",
+      "sync-engine-catalog source",
       "--raw",
       "stdout",
       "never writes",
@@ -20,7 +20,13 @@ describe("catalog documentation", () => {
       "rename",
     ])
       expect(reference).toContain(term);
-    for (const removed of ["catalog add", "catalog.lock", "generated.ts", "src/concept-set.ts"])
+    for (const removed of [
+      "`catalog` executable",
+      "sync-engine-catalog add",
+      "catalog.lock",
+      "generated.ts",
+      "src/concept-set.ts",
+    ])
       expect(reference).not.toContain(removed);
   });
 
@@ -33,6 +39,8 @@ describe("catalog documentation", () => {
       expect(source).toContain('import spec from "./spec.md" with { type: "text" };');
       expect(source).toContain("export { spec };");
       expect(source).not.toMatch(/export \{ design \}|export const (?!compositions|views|formers)/);
+      expect(spec).toContain("## Application types and instances");
+      expect(spec).toContain("```instances");
       expect(spec).toContain("## Compositions");
       expect(spec).not.toMatch(
         /^## (Purpose|Concepts|Decisions|Endpoints|Failure|Failure and repair|Host variants)$/m,

@@ -128,6 +128,16 @@ describe("application manifest", () => {
     expect(diagnosticsFail(manifest.diagnostics, "warnings")).toBe(true);
   });
 
+  test("gives every endpoint path an input contract, including an implicit empty contract", () => {
+    const Bare = endpoint("/bare", () => receive().then(respond({ ok: true })));
+    const manifest = applicationManifest(assemble({ vocabulary: words, composition: { Bare } }));
+
+    expect(manifest.inputContracts).toEqual({ "/bare": {} });
+    expect(manifest.endpoints).toMatchObject([{ name: "Bare", path: "/bare", input: {} }]);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    expect(parseApplicationManifest(renderApplicationManifest(manifest))).toEqual(manifest);
+  });
+
   test("inventories every standard and unused vocabulary computation in name order", () => {
     const complete = vocabulary({
       concepts: {},
@@ -1274,7 +1284,7 @@ One valid operation remains inspectable.
 ## State
 
 \`\`\`state
-opaque
+Rule: opaque
 \`\`\`
 
 ## Actions
@@ -1291,7 +1301,7 @@ perform(value: String) : return (result: String)
 \`\`\`queries
 _get(value: String) : optional (result: String)
 \`\`\`
-`);
+`).specification!;
     const base = applicationManifest(application());
     const seed = reseal({
       ...base,
@@ -1328,6 +1338,10 @@ _get(value: String) : optional (result: String)
     };
     const example = (manifest: ApplicationManifestV1) => manifest.concepts.at(-1)!;
 
+    rejects((manifest) => {
+      const state = example(manifest).specification!.state as unknown as Record<string, unknown>;
+      state.prose = "legacy following prose";
+    }, "$.concepts[1].specification.state.prose");
     rejects((manifest) => {
       example(manifest).specification!.actions = [];
     }, "$.concepts[1].specification.actions");

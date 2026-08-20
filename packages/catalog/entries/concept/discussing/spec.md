@@ -29,7 +29,7 @@ a set of Discussions with
   a subject Subject
   an openedAt DateTime
   an open Flag
-  a closedAt optional DateTime
+  an optional closedAt DateTime
 
 a seq of Responses with
   a discussion Discussion
@@ -37,7 +37,7 @@ a seq of Responses with
   a text String
   an addedAt DateTime
 
-at most one open Discussion has each Subject
+Rule: at most one open Discussion has each Subject
 ```
 
 ## Actions

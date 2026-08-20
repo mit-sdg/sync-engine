@@ -21,7 +21,9 @@ external Operation
 a set of Entries with
   an entryId String
   an operation Operation
-  a unique name String
+  a name String
+
+Rule: at most one Entry has each name
 ```
 
 ## Actions

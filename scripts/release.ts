@@ -30,6 +30,7 @@ export const ownedDependencyManifests = [
   ...bunFixtureManifests,
   ...nodeFixtureManifests,
 ] as const;
+const skillRuntimeReleasePath = "packages/skill/skills/sync-engine/release.json";
 const catalogEntryIndexPath = "packages/catalog/entries/index.json";
 const indexedCatalogEntries: unknown = JSON.parse(
   readFileSync(new URL("../packages/catalog/entries/index.json", import.meta.url), "utf8"),
@@ -51,6 +52,7 @@ const catalogEntryManifests = indexedCatalogEntries.map(
 );
 export const releaseManifestPaths = [
   ...workspaceReleaseManifests,
+  skillRuntimeReleasePath,
   ...ownedDependencyManifests,
   ...catalogEntryManifests,
 ] as const;
@@ -78,9 +80,32 @@ export const releaseSourcePaths = [
   "packages/catalog/CONTRIBUTING.md",
   "packages/skill/README.md",
   "packages/skill/skills/sync-engine/SKILL.md",
-  "packages/skill/skills/sync-engine/references/design-roles.md",
-  "packages/skill/skills/sync-engine/references/implementation-roles.md",
+  skillRuntimeReleasePath,
+  "packages/skill/skills/sync-engine/scripts/assignment.ts",
+  "packages/skill/skills/sync-engine/scripts/brief.ts",
+  "packages/skill/skills/sync-engine/scripts/command.ts",
+  "packages/skill/skills/sync-engine/scripts/design.ts",
+  "packages/skill/skills/sync-engine/scripts/launch.ts",
+  "packages/skill/skills/sync-engine/scripts/prompt.ts",
+  "packages/skill/skills/sync-engine/scripts/workspace.ts",
   "packages/skill/skills/sync-engine/references/workflow.md",
+  "packages/skill/skills/sync-engine/references/design-and-criticism.md",
+  "packages/skill/skills/sync-engine/references/implementation.md",
+  "packages/skill/skills/sync-engine/references/harnesses/contract.md",
+  "packages/skill/skills/sync-engine/references/harnesses/paseo.md",
+  "packages/skill/skills/sync-engine/prompts/SOURCES.md",
+  "packages/skill/skills/sync-engine/prompts/common/design.md",
+  "packages/skill/skills/sync-engine/prompts/common/ssf.md",
+  "packages/skill/skills/sync-engine/prompts/common/concept-format.md",
+  "packages/skill/skills/sync-engine/prompts/common/internals.md",
+  "packages/skill/skills/sync-engine/prompts/roles/designer.md",
+  "packages/skill/skills/sync-engine/prompts/roles/critic.md",
+  "packages/skill/skills/sync-engine/prompts/roles/concept-worker.md",
+  "packages/skill/skills/sync-engine/prompts/roles/application-worker.md",
+  "packages/skill/skills/sync-engine/prompts/roles/frontend-worker.md",
+  "packages/skill/skills/sync-engine/prompts/inputs/http.md",
+  "packages/skill/skills/sync-engine/prompts/roles/evidence-worker.md",
+  "packages/skill/skills/sync-engine/prompts/templates/product-brief.md",
   catalogEntryIndexPath,
   "README.md",
   "CHANGELOG.md",
@@ -287,6 +312,24 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     else delete manifest.peerDependencies;
     projected.set(path, `${JSON.stringify(manifest, null, 2)}\n`);
   }
+
+  const skillRelease = object(JSON.parse(sources.get(skillRuntimeReleasePath) ?? ""));
+  if (skillRelease === undefined) {
+    throw new Error(`${skillRuntimeReleasePath} must contain an object`);
+  }
+  skillRelease.skill = facts.version;
+  skillRelease.toolchain = {
+    bun: minimumBun,
+    node: facts.node,
+    typescript: facts.typescript,
+  };
+  skillRelease.packages = Object.fromEntries(
+    [coreWorkspace, workspaceById("analysis"), workspaceById("catalog")].map((workspace) => [
+      workspace.packageName,
+      facts.version,
+    ]),
+  );
+  projected.set(skillRuntimeReleasePath, `${JSON.stringify(skillRelease, null, 2)}\n`);
 
   for (const path of ownedDependencyManifests) {
     const manifest = object(JSON.parse(sources.get(path) ?? ""));

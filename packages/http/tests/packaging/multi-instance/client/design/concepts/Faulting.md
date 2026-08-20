@@ -18,7 +18,7 @@ external Operation
 ## State
 
 ```state
-no durable state
+Rule: no durable state
 ```
 
 ## Actions

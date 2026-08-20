@@ -2,6 +2,23 @@
 
 A message board gives authenticated users sessions for publishing posts, commenting, and reading attributed content.
 
+## Application types and instances
+
+```instances
+instantiate Timing
+instantiate Authenticating
+
+instantiate Sessioning with
+  Subject is Authenticating.Username
+
+instantiate Posting with
+  Author is Authenticating.Username
+
+instantiate Commenting with
+  Target is Posting.Post
+  Author is Authenticating.Username
+```
+
 ## Compositions
 
 ### Accounts

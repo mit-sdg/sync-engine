@@ -1,5 +1,5 @@
 <!-- Generated from the Reading circle assembly. Do not edit. -->
-<!-- Manifest producer: @mit-sdg/sync-engine@1.0.0-beta.11; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@1.0.0-beta.11. -->
+<!-- Manifest producer: @mit-sdg/sync-engine@1.0.0-beta.14; concept specification: sync-engine.concept-specification@1; renderer: @mit-sdg/sync-engine@1.0.0-beta.14. -->
 
 # Reading circle — assembled read-back
 
@@ -26,11 +26,11 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 - `_openFor(subject: Subject) : optional (discussion: Discussion)`
 - `_responses(discussion: Discussion) : many (response: Response, discussion: Discussion, author: Person, text: String)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Discussing`
-  - `Discussing.Subject` is `Selecting.Selection` — [Reading Circle Application Types](../design/types.md), line 23.
-  - `Discussing.Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 26.
+- `Discussing` — instance of `Discussing` — [Reading Circle Application Types](../design/types.md), line 31.
+  - `Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 33.
+  - `Subject` is `Selecting.Selection` — [Reading Circle Application Types](../design/types.md), line 32.
 
 ### Gathering
 
@@ -52,10 +52,10 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 - `_members(gathering: Gathering) : many (member: Person)`
 - `_membership(gathering: Gathering, member: Person) : one (joined: Flag)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Gathering`
-  - `Gathering.Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 14.
+- `Gathering` — instance of `Gathering` — [Reading Circle Application Types](../design/types.md), line 24.
+  - `Person` is `Person` — [Reading Circle Application Types](../design/types.md), line 25.
 
 ### Selecting
 
@@ -72,18 +72,18 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 - `_current(scope: Scope) : optional (selection: Selection, scope: Scope, item: Item)`
 - `_get(selection: Selection) : optional (selection: Selection, scope: Scope, item: Item)`
 
-#### Selected instances and bindings
+#### Instances
 
-- `Selecting`
-  - `Selecting.Scope` is `Gathering.Gathering` — [Reading Circle Application Types](../design/types.md), line 17.
-  - `Selecting.Item` is `Reading` — [Reading Circle Application Types](../design/types.md), line 20.
+- `Selecting` — instance of `Selecting` — [Reading Circle Application Types](../design/types.md), line 27.
+  - `Item` is `Reading` — [Reading Circle Application Types](../design/types.md), line 29.
+  - `Scope` is `Gathering.Gathering` — [Reading Circle Application Types](../design/types.md), line 28.
 
 ## Application types
 
 Concrete types:
 
-- `Person` — [Reading Circle Application Types](../design/types.md), line 8.
-- `Reading` — [Reading Circle Application Types](../design/types.md), line 11.
+- `Person` — [Reading Circle Application Types](../design/types.md), line 16.
+- `Reading` — [Reading Circle Application Types](../design/types.md), line 19.
 
 ## Views
 

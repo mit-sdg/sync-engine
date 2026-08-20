@@ -33,8 +33,8 @@ a set of Applications with
   a label Label
   an item Item
 
-within one Scope each Label name is unique
-at most one Application has each label and item pair
+Rule: within one Scope each Label name is unique
+Rule: at most one Application has each label and item pair
 ```
 
 ## Actions

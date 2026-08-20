@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["skills/sync-engine/scripts", "tests"],
+  "exclude": ["dist", "node_modules"]
+}

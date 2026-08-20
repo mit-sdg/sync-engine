@@ -7,6 +7,7 @@ import {
 } from "@sync-engine/assembly";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
+import { conceptMetadataOf } from "@sync-engine/internal/reactions/concepts/concept-metadata";
 import { applicationManifest, renderApp } from "@sync-engine/tooling";
 import { vocabulary } from "@sync-engine/advanced";
 import { compute, former, where } from "@sync-engine/language";
@@ -216,12 +217,80 @@ describe("external concept registration", () => {
       detail: "There is no such item.",
     });
   });
+
+  test("rejects one raw implementation object under two names before metadata attachment", () => {
+    const set = conceptSet({ PrimaryCatalog: cataloging, SecondaryCatalog: cataloging });
+    const shared = new Cataloging();
+
+    expect(() =>
+      assembleApplication({
+        conceptSet: set,
+        composition: {},
+        instances: { PrimaryCatalog: shared, SecondaryCatalog: shared },
+      }),
+    ).toThrow(
+      new Error(
+        'assemble: raw concept implementation object is selected under both "PrimaryCatalog" and "SecondaryCatalog"; ' +
+          "each selected name in one assembly requires a distinct object.",
+      ),
+    );
+    expect(conceptMetadataOf(shared)).toBeUndefined();
+
+    expect(() =>
+      assembleApplication({
+        conceptSet: set,
+        composition: {},
+        instances: { PrimaryCatalog: new Cataloging(), SecondaryCatalog: new Cataloging() },
+      }),
+    ).not.toThrow();
+  });
+
+  test("permits the same raw object as one selected name in separate assemblies", async () => {
+    const set = conceptSet({ Cataloging: cataloging });
+    const shared = new Cataloging();
+    const first = assembleApplication({
+      conceptSet: set,
+      composition: {},
+      instances: { Cataloging: shared },
+    });
+    const second = assembleApplication({
+      conceptSet: set,
+      composition: {},
+      instances: { Cataloging: shared },
+    });
+
+    expect(first.concepts.Cataloging._find).not.toBe(second.concepts.Cataloging._find);
+    await expect(first.concepts.Cataloging._find({})).resolves.toEqual([]);
+    await expect(second.concepts.Cataloging._find({})).resolves.toEqual([]);
+  });
+
+  test("permits separate assemblies to reuse one raw object through distinct compatible registrations", async () => {
+    const compatible = registerConcept({
+      class: Cataloging,
+      spec: catalogingSpec,
+      refusals: { ITEM_NOT_FOUND: MissingItem },
+    });
+    const shared = new Cataloging();
+    const first = assembleApplication({
+      conceptSet: conceptSet({ PrimaryCatalog: cataloging }),
+      composition: {},
+      instances: { PrimaryCatalog: shared },
+    });
+    const second = assembleApplication({
+      conceptSet: conceptSet({ SecondaryCatalog: compatible }),
+      composition: {},
+      instances: { SecondaryCatalog: shared },
+    });
+
+    await expect(first.concepts.PrimaryCatalog._find({})).resolves.toEqual([]);
+    await expect(second.concepts.SecondaryCatalog._find({})).resolves.toEqual([]);
+  });
 });
 
 describe("parsed declarations and class methods", () => {
   test("raw state is retained in registration and manifests but omitted from read-back", () => {
     const marker = "STATE_ONLY_SENTINEL";
-    const state = `${marker}\nthere are no methods and the database has an incompatible field {]`;
+    const state = `Rule: ${marker}\nRule: there are no methods and the database has an incompatible field {]`;
     const registration = registerConcept({
       class: Cataloging,
       spec: specFor({
@@ -614,15 +683,41 @@ describe("concept floors", () => {
     );
   });
 
-  test("a floor factory receives the name the concept is registered under", () => {
-    const set = conceptSet({
-      Warehouse: registerConcept({
-        class: Remembering,
-        spec: bare,
-        floors: { named: (_: Record<string, never>, name: string) => new Remembering(name) },
-      }),
+  test("constructs every selected floor entry once per call with its selected key", () => {
+    const factory = vi.fn(
+      (context: { store: string }, name: string) => new Remembering(`${context.store}:${name}`),
+    );
+    const registration = registerConcept({
+      class: Remembering,
+      spec: bare,
+      floors: { named: factory },
     });
-    expect(set.implementations("named", {}).Warehouse).toEqual(new Remembering("Warehouse"));
+    const set = conceptSet({ Warehouse: registration, Archive: registration });
+    const context = { store: "primary" };
+
+    const assembledByDefault = assembleApplication({ conceptSet: set, composition: {} });
+    expect(assembledByDefault.concepts.Warehouse.store).toBe("memory");
+    expect(assembledByDefault.concepts.Archive.store).toBe("memory");
+    const firstDefault = set.implementations();
+    const secondDefault = set.implementations();
+    expect(firstDefault.Warehouse).not.toBe(secondDefault.Warehouse);
+    expect(firstDefault.Archive).not.toBe(secondDefault.Archive);
+    expect(factory).not.toHaveBeenCalled();
+
+    const first = set.implementations("named", context);
+    const second = set.implementations("named", context);
+
+    expect(factory.mock.calls).toEqual([
+      [context, "Warehouse"],
+      [context, "Archive"],
+      [context, "Warehouse"],
+      [context, "Archive"],
+    ]);
+    expect(first.Warehouse).toEqual(new Remembering("primary:Warehouse"));
+    expect(first.Archive).toEqual(new Remembering("primary:Archive"));
+    expect(first).not.toBe(second);
+    expect(first.Warehouse).not.toBe(second.Warehouse);
+    expect(first.Archive).not.toBe(second.Archive);
   });
 
   test("reports every missing named-floor registration before any factory runs", () => {

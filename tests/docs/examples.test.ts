@@ -141,7 +141,11 @@ describe("executable documentation examples", () => {
             name: "workshop-app",
             packageManager: "bun@1.3.14",
             dependencies: { "@mit-sdg/sync-engine": manifest.version },
-            devDependencies: { typescript: "^6.0.0", "@types/node": "^24.0.0" },
+            devDependencies: {
+              typescript: "^6.0.0",
+              "@types/bun": "^1.3.0",
+              "@types/node": "^24.0.0",
+            },
             scripts: {
               generate: "sync-engine artifacts pin",
               check: "sync-engine check && sync-engine artifacts check && tsc --noEmit",

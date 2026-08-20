@@ -2,3 +2,5 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+tests/.sync-engine-discovery-*/
+tests/.sync-engine-diff-*/

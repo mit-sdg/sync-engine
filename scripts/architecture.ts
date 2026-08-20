@@ -720,7 +720,8 @@ export function checkArchitecture(project: ArchitectureProject): ArchitectureRes
           (workspaceRelative.endsWith(".ts") ||
             workspaceRelative.endsWith(".json") ||
             workspaceRelative.endsWith(".md") ||
-            workspaceRelative.endsWith(".mjs"))));
+            workspaceRelative.endsWith(".mjs") ||
+            workspaceRelative.endsWith(".txt"))));
     const known =
       (parts.length === 1 && allowedRootFiles.has(path)) ||
       (head === ".github" &&

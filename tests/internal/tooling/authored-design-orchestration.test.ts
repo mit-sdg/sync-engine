@@ -34,7 +34,7 @@ external User
 
 ## State
 \`\`\`state
-comments: set Comment
+Rule: comments: set Comment
 \`\`\`
 
 ## Actions
@@ -95,7 +95,14 @@ const typesDesign = `# Application types
 \`\`\`types
 concrete Person
   An application identity.
+\`\`\`
 
+\`\`\`instances
+instantiate Commenting as PostComments
+instantiate Commenting as AnswerComments
+\`\`\`
+
+\`\`\`bindings
 PostComments.User is Person
 AnswerComments.User is Person
 \`\`\`
@@ -117,6 +124,7 @@ describe("authored design orchestration", () => {
       const checked = await checkAuthoredDesign({
         assembly,
         design,
+        resolveOwnedTypeNames: () => [],
         resolveComputationInputs: ({ computations }) => {
           expect(computations).toEqual([{ name: "normalize" }]);
           return [{ name: "normalize", inputs: [{ name: "value", optional: true }] }];
@@ -143,8 +151,8 @@ describe("authored design orchestration", () => {
         formers: [],
         computations: [{ name: "normalize", inputs: [{ name: "value", optional: true }] }],
         concepts: [
-          { instance: "AnswerComments", externalTypes: ["User"] },
-          { instance: "PostComments", externalTypes: ["User"] },
+          { instance: "AnswerComments", definition: "Commenting", externalTypes: ["User"] },
+          { instance: "PostComments", definition: "Commenting", externalTypes: ["User"] },
         ],
       });
       expect(checked.sharedDefinitions).toEqual([
@@ -176,8 +184,49 @@ describe("authored design orchestration", () => {
         sources: expect.arrayContaining([
           expect.objectContaining({ kind: "concept", path: "Commenting.md" }),
         ]),
+        concepts: [
+          expect.objectContaining({
+            definition: "Commenting",
+            instances: [
+              expect.objectContaining({
+                name: "AnswerComments",
+                declaration: expect.objectContaining({ line: 10 }),
+                bindings: [
+                  expect.objectContaining({
+                    external: "User",
+                    location: { source: "document-2", line: 15, column: 1 },
+                  }),
+                ],
+              }),
+              expect.objectContaining({
+                name: "PostComments",
+                declaration: expect.objectContaining({ line: 9 }),
+              }),
+            ],
+          }),
+        ],
+        types: { concreteTypes: [expect.objectContaining({ name: "Person" })] },
         computations: [expect.objectContaining({ inputValidation: "validated" })],
       });
+      expect((manifest.design.types as Record<string, unknown>).bindings).toBeUndefined();
+
+      const oldBetaShape = structuredClone(manifest) as unknown as {
+        design: { types: Record<string, unknown> };
+      };
+      oldBetaShape.design.types.bindings = [];
+      expect(() => validateApplicationManifest(oldBetaShape)).toThrow("$.design.types.bindings");
+
+      const missingDeclaration = structuredClone(manifest);
+      delete (
+        missingDeclaration.design.concepts[0].instances[0] as unknown as Record<string, unknown>
+      ).declaration;
+      expect(() => validateApplicationManifest(missingDeclaration)).toThrow(
+        "$.design.concepts[0].instances[0].declaration",
+      );
+
+      const incomplete = structuredClone(manifest);
+      incomplete.design.concepts[0].instances[0].bindings = [];
+      expect(() => validateApplicationManifest(incomplete)).toThrow(/omits external parameter/);
     } finally {
       await assembly.beginDrain();
     }
@@ -201,6 +250,30 @@ describe("authored design orchestration", () => {
       ).rejects.toThrow(
         'traced concept source for "AnswerComments" does not exactly match its registered spec text',
       );
+    } finally {
+      await assembly.beginDrain();
+    }
+  });
+
+  test("reports a selected advanced concept without a specification only as missing its specification", async () => {
+    class Unspecified {
+      ping(_: Record<string, never>) {
+        return {};
+      }
+    }
+    const assembly = assemble({
+      vocabulary: vocabulary({ concepts: { Unspecified }, computations: {} }),
+      composition: {},
+    });
+    const design = await fixture("# Inventory\n\n```instances\ninstantiate Unspecified\n```\n");
+    try {
+      const failure = await checkAuthoredDesign({ assembly, design }).catch(
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(AuthoredDesignCheckError);
+      expect((failure as AuthoredDesignCheckError).issues.map(({ code }) => code)).toEqual([
+        "MISSING_CONCEPT_SPECIFICATION",
+      ]);
     } finally {
       await assembly.beginDrain();
     }
@@ -256,9 +329,9 @@ normalize(value: String) : String
       expect((failure as AuthoredDesignCheckError).issues.map(({ code }) => code)).toEqual([
         "UNRESOLVED_LINK",
         "COMPUTATION_INPUT_MISMATCH",
-        "MISSING_BINDING",
-        "MISSING_BINDING",
         "MISSING_COVERAGE",
+        "UNDECLARED_SELECTED_INSTANCE",
+        "UNDECLARED_SELECTED_INSTANCE",
       ]);
       expect((failure as Error).message).toContain('selected reaction "Forum.Publish"');
       expect((failure as Error).message).toContain("5 issues");

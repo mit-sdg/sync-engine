@@ -3,8 +3,8 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { parseSpec, type ConceptSpec } from "@engine/reactions/concepts/concept-spec";
-import { applicationManifest, type ApplicationManifestV1 } from "@engine/tooling/manifest";
-import { diagnosticsFail } from "@engine/tooling/diagnostics";
+import { applicationManifest } from "@engine/tooling/manifest";
+import { diagnosticsFail, type ApplicationDiagnostic } from "@engine/tooling/diagnostics";
 import {
   inspectGenerated,
   type GeneratedSourceAnalysis,
@@ -13,6 +13,14 @@ import {
 import { assembledConcepts } from "./concept-discovery.ts";
 import { filesBelow } from "./files-below.ts";
 import { loadGeneratedApplication } from "./generated-config.ts";
+import { parseCommandOptions, type OutputFormat } from "./command-options.ts";
+import {
+  diagnosticReport,
+  failedDiagnostic,
+  writeJsonDocument,
+  type DiagnosticRecord,
+  type DiagnosticReport,
+} from "./diagnostic-report.ts";
 import {
   type ShapeField,
   type ShapeResolution,
@@ -359,7 +367,14 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
   const registryPath = join(directory, "registry.ts");
   let spec: ConceptSpec;
   try {
-    spec = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
+    const parsed = parseSpec(readFileSync(join(directory, "spec.md"), "utf8"));
+    if (parsed.specification === undefined) {
+      return parsed.diagnostics.map(
+        ({ message, location }) =>
+          `${label}: spec: line ${location.line}, column ${location.column}: ${message}`,
+      );
+    }
+    spec = parsed.specification;
   } catch (error) {
     return [`${label}: ${error instanceof Error ? error.message : String(error)}.`];
   }
@@ -393,9 +408,15 @@ export async function conceptDirectories(
     .sort();
 }
 
-const usage = `sync-engine check [--config path] [--fail-on-warnings]
+const usage = `sync-engine check [--config path] [--fail-on-warnings] [--format json]
   Check the configured application, including concept TypeScript source agreement and application diagnostics.
   The configuration path defaults to generated.config.ts.`;
+
+interface ConfiguredApplicationCheck {
+  readonly conceptCount: number;
+  readonly sourceFailures: readonly string[];
+  readonly diagnostics: readonly ApplicationDiagnostic[];
+}
 
 function conceptSourceFailures(
   vocabularyModulePath: string,
@@ -433,9 +454,8 @@ function conceptSourceFailures(
   return failures;
 }
 
-function assertConceptSources(failures: readonly string[]): void {
-  if (failures.length === 0) return;
-  throw new Error(
+function sourceFailureError(failures: readonly string[]): Error {
+  return new Error(
     `Concept action/query source check failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
   );
 }
@@ -443,8 +463,7 @@ function assertConceptSources(failures: readonly string[]): void {
 async function checkConfiguredApplication(
   application: ResolvedApplication,
   root: string,
-  failOnWarnings: boolean,
-): Promise<void> {
+): Promise<ConfiguredApplicationCheck> {
   const { manifest, sourceAnalysis } = await inspectGenerated(
     application,
     (assembled, sourceAnalysis) => ({
@@ -454,54 +473,109 @@ async function checkConfiguredApplication(
   );
   const conceptSetModulePath = fileURLToPath(application.conceptSetModule);
   const concepts = assembledConcepts(manifest);
-  assertConceptSources(conceptSourceFailures(conceptSetModulePath, concepts, sourceAnalysis, root));
-  console.log(`Concept action/query source check passed for ${concepts.length} concepts.`);
-
-  // Authored-design loading and coverage belongs at this exact config/manifest boundary.
-  // Its orchestrator should be called here before the existing application diagnostics policy.
-  reportApplicationDiagnostics(manifest, failOnWarnings);
+  const sourceFailures = conceptSourceFailures(
+    conceptSetModulePath,
+    concepts,
+    sourceAnalysis,
+    root,
+  );
+  return {
+    conceptCount: concepts.length,
+    sourceFailures,
+    diagnostics: sourceFailures.length === 0 ? manifest.diagnostics : [],
+  };
 }
 
-function reportApplicationDiagnostics(
-  manifest: ApplicationManifestV1,
+function sourceFailureDiagnostics(failures: readonly string[]): DiagnosticRecord[] {
+  return failures.map(
+    (message): DiagnosticRecord => ({
+      code: "CONCEPT_SOURCE_CHECK_FAILURE",
+      severity: "error",
+      message,
+    }),
+  );
+}
+
+function applicationDiagnostics(diagnostics: readonly ApplicationDiagnostic[]): DiagnosticRecord[] {
+  return diagnostics.map(
+    ({ code, severity, message }): DiagnosticRecord => ({ code, severity, message }),
+  );
+}
+
+function applicationDiagnosticFailure(
+  diagnostics: readonly ApplicationDiagnostic[],
   failOnWarnings: boolean,
-): void {
-  const diagnostics = manifest.diagnostics;
+): Error | undefined {
+  const policy = failOnWarnings ? "warnings" : "errors";
+  return diagnosticsFail(diagnostics, policy)
+    ? new Error(`Application diagnostic check failed with policy "${policy}".`)
+    : undefined;
+}
+
+function printApplicationDiagnostics(diagnostics: readonly ApplicationDiagnostic[]): void {
   for (const diagnostic of diagnostics) {
     console.log(`${diagnostic.severity} ${diagnostic.code}: ${diagnostic.message}`);
   }
-  const policy = failOnWarnings ? "warnings" : "errors";
-  if (diagnosticsFail(diagnostics, policy)) {
-    throw new Error(`Application diagnostic check failed with policy "${policy}".`);
-  }
-  console.log(`Application diagnostic check passed with ${diagnostics.length} advisories.`);
 }
 
-export async function checkCommand(args: readonly string[]): Promise<void> {
-  let configPath = "generated.config.ts";
-  let hasConfigArgument = false;
-  let failOnWarnings = false;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === "--config" && !hasConfigArgument) {
-      const value = args[index + 1];
-      if (value === undefined || value.startsWith("-")) throw new Error(usage);
-      configPath = value;
-      hasConfigArgument = true;
-      index += 1;
-      continue;
+export async function checkCommand(
+  args: readonly string[],
+  render: "text" | "silent" = "text",
+): Promise<DiagnosticReport> {
+  const options = parseCommandOptions(args, usage, {
+    config: true,
+    failOnWarnings: true,
+    format: true,
+    operands: "none",
+  });
+  const output: OutputFormat | "silent" = render === "silent" ? "silent" : options.format;
+  const configPath = options.configPath ?? "generated.config.ts";
+
+  let checked: ConfiguredApplicationCheck;
+  try {
+    const root = process.cwd();
+    if (!existsSync(resolve(root, configPath))) {
+      throw new Error(`Configuration does not exist: ${configPath}`);
     }
-    if (argument === "--fail-on-warnings" && !failOnWarnings) {
-      failOnWarnings = true;
-      continue;
-    }
-    throw new Error(usage);
+    const application = await loadGeneratedApplication(configPath, root);
+    checked = await checkConfiguredApplication(application, root);
+  } catch (error) {
+    if (output !== "json") throw error;
+    const report = diagnosticReport("check", "failed", [failedDiagnostic("CHECK_FAILURE", error)]);
+    writeJsonDocument(report);
+    return report;
   }
 
-  const root = process.cwd();
-  if (!existsSync(resolve(root, configPath))) {
-    throw new Error(`Configuration does not exist: ${configPath}`);
+  if (checked.sourceFailures.length > 0) {
+    const report = diagnosticReport(
+      "check",
+      "failed",
+      sourceFailureDiagnostics(checked.sourceFailures),
+    );
+    if (output === "json") {
+      writeJsonDocument(report);
+      return report;
+    }
+    throw sourceFailureError(checked.sourceFailures);
   }
-  const application = await loadGeneratedApplication(configPath, root);
-  await checkConfiguredApplication(application, root, failOnWarnings);
+
+  const failure = applicationDiagnosticFailure(checked.diagnostics, options.failOnWarnings);
+  const report = diagnosticReport(
+    "check",
+    failure === undefined ? "passed" : "failed",
+    applicationDiagnostics(checked.diagnostics),
+  );
+  if (output === "json") {
+    writeJsonDocument(report);
+    return report;
+  }
+  if (output === "silent") {
+    if (failure !== undefined) throw failure;
+    return report;
+  }
+  console.log(`Concept action/query source check passed for ${checked.conceptCount} concepts.`);
+  printApplicationDiagnostics(checked.diagnostics);
+  if (failure !== undefined) throw failure;
+  console.log(`Application diagnostic check passed with ${checked.diagnostics.length} advisories.`);
+  return report;
 }

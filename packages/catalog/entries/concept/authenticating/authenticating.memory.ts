@@ -39,7 +39,7 @@ export class AuthenticatingMemoryConcept {
     const credential = await this.#createCredential(password);
     if (this.accounts.has(username)) throw new UsernameTaken(USERNAME_TAKEN_DETAIL);
     this.accounts.set(username, { username, ...credential });
-    return { username };
+    return { account: username };
   }
 
   async authenticate({ username, password }: { username: string; password: string }) {
@@ -47,7 +47,7 @@ export class AuthenticatingMemoryConcept {
     const matches = await passwordMatches(this.passwordVerifier, account, password);
     if (account === undefined || !matches) throw new InvalidCredentials(INVALID_CREDENTIALS_DETAIL);
     await this.#upgrade(account, password);
-    return { username };
+    return { account: username };
   }
 
   async changePassword({
@@ -69,7 +69,7 @@ export class AuthenticatingMemoryConcept {
       throw new InvalidCredentials(INVALID_CREDENTIALS_DETAIL);
     }
     this.accounts.set(username, { username, ...credential });
-    return { username };
+    return { account: username };
   }
 
   async unregister({ username, password }: { username: string; password: string }) {
@@ -80,7 +80,7 @@ export class AuthenticatingMemoryConcept {
       throw new InvalidCredentials(INVALID_CREDENTIALS_DETAIL);
     }
     this.accounts.delete(username);
-    return { username };
+    return { account: username };
   }
 
   _registered({ username }: { username: string }): { registered: boolean } {

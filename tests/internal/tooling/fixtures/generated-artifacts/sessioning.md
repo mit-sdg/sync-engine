@@ -17,17 +17,19 @@ Starting a session permits its current user to be read.
 ## State
 
 ```state
-sessions: set Session
+a set of Sessions with
+  a user String
+  an expiresAt Date
 ```
 
 ## Actions
 
 ```actions
-start(user: String) : return (session: String, expiresAt: Date)
+start(user: String) : return (session: Session, expiresAt: Date)
   where true
   then
     return session, expiresAt
-current(session: String) : return (user: String)
+current(session: Session) : return (user: String)
   where true
   then
     return user

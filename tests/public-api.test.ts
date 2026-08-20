@@ -75,7 +75,7 @@ A title appears once.
 ## State
 
 \`\`\`state
-a set of titles
+a set of Titles
 \`\`\`
 
 ## Actions
@@ -458,6 +458,9 @@ const register = {
     "ComputationInventoryIR",
     "ConceptImplementationProvenanceIR",
     "ConceptInventoryIR",
+    "ConceptSpecDiagnostic",
+    "ConceptSpecDiagnosticCode",
+    "ConceptSpecParseResult",
     "ConceptSpecificationIR",
     "ConsequenceIR",
     "DiagnosticCode",

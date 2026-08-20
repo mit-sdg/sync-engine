@@ -1,6 +1,16 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +23,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(resolve(tmpdir(), "sync-engine-package-"));
 const expectedAuthor = "Barish Namazov and Eagon Meng";
 const coreWorkspace = workspaceById("core");
+const ssfWorkspace = workspaceById("ssf");
 const analysisWorkspace = workspaceById("analysis");
 const multiInstanceWorkspaces = [coreWorkspace, workspaceById("http")];
 
@@ -257,6 +268,14 @@ function verifyManifestPolicy(workspace: Workspace, manifest: PackageManifest): 
     );
   }
   rejectForbiddenManifestDependencies(workspace, manifest);
+  if (
+    workspace.id === coreWorkspace.id &&
+    workspaceDependencies(manifest).some(
+      (dependencies) => ssfWorkspace.packageName in (dependencies ?? {}),
+    )
+  ) {
+    throw new Error(`${workspace.id} packed package must internalize the private SSF parser`);
+  }
 }
 
 async function verifyPackedWorkspace(
@@ -602,11 +621,19 @@ async function verifyCoreOnlyConsumer(
 
   const installed = resolve(consumer, "node_modules", ...core.workspace.packageName.split("/"));
   await verifyInstalledWorkspace(core, installed);
-  for (const forbiddenId of core.workspace.forbiddenWorkspaceIds) {
-    const forbidden = workspaceById(forbiddenId);
+  for (const forbidden of [
+    ...core.workspace.forbiddenWorkspaceIds.map(workspaceById),
+    ssfWorkspace,
+  ]) {
     if (existsSync(resolve(consumer, "node_modules", ...forbidden.packageName.split("/")))) {
       throw new Error(`core-only installation unexpectedly installed ${forbidden.packageName}`);
     }
+  }
+  for (const internal of [
+    "dist/engine/tooling/ssf-package/index.js",
+    "dist/engine/tooling/ssf-package/index.d.ts",
+  ]) {
+    requireEntry(core.entries, internal);
   }
 
   await writeFile(resolve(consumer, "all-entrypoints.ts"), entrypointImports([core]));
@@ -707,8 +734,13 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
   if (existsSync(resolve(consumer, "node_modules/@mit-sdg/sync-engine"))) {
     throw new Error("catalog-only installation unexpectedly installed core");
   }
-  const executable = catalog.manifest.bin?.catalog;
-  if (executable === undefined) throw new Error("catalog package does not provide catalog");
+  const executable = catalog.manifest.bin?.["sync-engine-catalog"];
+  if (executable === undefined) {
+    throw new Error("catalog package does not provide sync-engine-catalog");
+  }
+  if (catalog.manifest.bin?.catalog !== undefined) {
+    throw new Error("catalog package still exposes the ambiguous catalog command");
+  }
   const command = resolve(
     consumer,
     "node_modules",
@@ -732,10 +764,11 @@ async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>)
   const catalog = workspaceArtifact(artifacts, workspaceById("catalog"));
   const core = workspaceArtifact(artifacts, coreWorkspace);
   if (
+    skill.manifest.dependencies?.[core.workspace.packageName] !== core.manifest.version ||
     skill.manifest.dependencies?.[analysis.workspace.packageName] !== analysis.manifest.version ||
     skill.manifest.dependencies?.[catalog.workspace.packageName] !== catalog.manifest.version
   ) {
-    throw new Error("skill must depend on the exact matching analysis and catalog versions");
+    throw new Error("skill must depend on the exact matching core, analysis, and catalog versions");
   }
   await writePackageManifest(resolve(consumer, "package.json"), {
     name: "skill-only",
@@ -751,7 +784,12 @@ async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>)
     },
   });
   runNpm(["install", "--ignore-scripts", "--no-audit", "--no-fund"], consumer);
-  for (const required of ["sync-engine", "sync-engine-analysis", "catalog"]) {
+  for (const required of [
+    "sync-engine",
+    "sync-engine-analysis",
+    "sync-engine-catalog",
+    "sync-engine-skill",
+  ]) {
     if (!existsSync(resolve(consumer, "node_modules/.bin", required))) {
       throw new Error(`skill installation did not expose ${required}`);
     }
@@ -810,19 +848,63 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   const entry = await readFile(resolve(installed, "skills/sync-engine/SKILL.md"), "utf8");
   if (
     !entry.startsWith("---\nname: sync-engine\ndescription:") ||
-    !entry.includes("Native subagents are required")
+    !entry.includes("fresh native agents for design, criticism, and evidence")
   ) {
     throw new Error("skill package does not contain the required sync-engine Agent Skill");
   }
-  if (skill.manifest.bin !== undefined) {
-    throw new Error("documentation-only skill package unexpectedly declares an executable");
+  const skillExecutable = skill.manifest.bin?.["sync-engine-skill"];
+  if (skillExecutable === undefined) {
+    throw new Error("skill package does not provide sync-engine-skill");
   }
   const bin = resolve(
     consumer,
     "node_modules/.bin",
     process.platform === "win32" ? "sync-engine-skill.cmd" : "sync-engine-skill",
   );
-  if (existsSync(bin)) throw new Error("skill-only installation exposed an obsolete executable");
+  const brief = resolve(consumer, "product/brief.md");
+  await mkdir(dirname(brief), { recursive: true });
+  await writeFile(
+    brief,
+    `# Packed skill\n\n## Objective\n\nBuild a packed application.\n\n## Product decisions\n\nNone.\n\n## Visible success\n\n- The application starts.\n\n## Expected refusals\n\nNone.\n\n## Assumptions\n\nNone.\n\n## Non-goals\n\nNone.\n\n## Open decisions\n\nNone.\n`,
+  );
+  run(bin, ["release", "check", consumer], consumer);
+  run(bin, ["brief", "check", brief], consumer);
+  run(bin, ["prompt", "build", "--role", "designer", "--input", `brief=${brief}`], consumer);
+  const workspace = resolve(consumer, ".sync-engine");
+  const written = (await readdir(workspace)).filter((name) => name.endsWith(".prompt.md"));
+  if (written.length !== 1) {
+    throw new Error(`skill prompt build wrote ${written.length} prompts into .sync-engine`);
+  }
+  const promptSource = await readFile(resolve(workspace, written[0]!), "utf8");
+  if (
+    !promptSource.includes("# Independent designer") ||
+    !promptSource.includes("# Packed skill")
+  ) {
+    throw new Error("packed skill compiler did not produce the designer prompt");
+  }
+
+  const standalone = resolve(temporary, "standalone-skill");
+  const standaloneApplication = resolve(temporary, "standalone-skill-application");
+  await cp(resolve(installed, "skills/sync-engine"), standalone, { recursive: true });
+  await mkdir(standaloneApplication, { recursive: true });
+  const standaloneCommand = resolve(standalone, "scripts/command.ts");
+  run("bun", [standaloneCommand, "brief", "check", brief], standaloneApplication);
+  run(
+    "bun",
+    [standaloneCommand, "prompt", "build", "--role", "designer", "--input", `brief=${brief}`],
+    standaloneApplication,
+  );
+  const standaloneWorkspace = resolve(standaloneApplication, ".sync-engine");
+  const standaloneWritten = (await readdir(standaloneWorkspace)).filter((name) =>
+    name.endsWith(".prompt.md"),
+  );
+  if (standaloneWritten.length !== 1) {
+    throw new Error("standalone copied skill compiler did not write one designer prompt");
+  }
+  const standalonePrompt = resolve(standaloneWorkspace, standaloneWritten[0]!);
+  if (!(await readFile(standalonePrompt, "utf8")).includes("# Packed skill")) {
+    throw new Error("standalone copied skill compiler did not produce the designer prompt");
+  }
 }
 
 async function verifySetupAndExamples(
@@ -851,6 +933,11 @@ async function verifySetupAndExamples(
     },
     dependencies: {
       [core.workspace.packageName]: core.manifest.version,
+    },
+    // Setup requires the exact published-style declaration. Resolve that
+    // declaration to the reviewed tarball while the release is still unpublished.
+    overrides: {
+      [core.workspace.packageName]: tarballSpecifier(setup, core.tarball),
     },
     devDependencies: { "@types/node": "^24.0.0", typescript: "^6.0.0", "vite-plus": "0.2.6" },
   });
@@ -1057,7 +1144,7 @@ try {
   await verifySetupAndExamples(artifacts, coreConsumer);
   await copyVerifiedTarballs(artifacts);
   console.log(
-    "Package verification passed for core, analysis, HTTP, catalog, skill, and rendering.",
+    "Package verification passed for private SSF, core, analysis, HTTP, catalog, skill, and rendering.",
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

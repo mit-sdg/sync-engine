@@ -2,6 +2,7 @@ import type { Assembly } from "@mit-sdg/sync-engine/assembly";
 import { bindTransport, type Gateway, type InvocationResult } from "@mit-sdg/sync-engine/boundary";
 import type { ContractShape } from "@mit-sdg/sync-engine/client";
 import { validateCookieBindings, type ValidatedCookieBinding } from "../policy/cookies.ts";
+import { matchDirectRoute, type CompiledDirectRoute } from "../policy/direct.ts";
 import { requireHttpPolicy } from "../policy/normalize.ts";
 import type { HttpPolicy } from "../policy/types.ts";
 import { clearedCookie, cookieValue, issuedCookie } from "./cookie-runtime.ts";
@@ -140,6 +141,7 @@ export function createHttpHandler(
       ? options.responseHeaders
       : new Headers(options.responseHeaders);
   const basePath = policy.basePath ?? "";
+  const directRoutes = policy.direct as readonly CompiledDirectRoute[] | undefined;
   const maxBodyBytes = policy.limits?.requestBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const preflightPaths =
     policy.browser === undefined
@@ -191,8 +193,26 @@ export function createHttpHandler(
         true,
       );
     }
-    if (request.method !== "POST") return invalid();
+    const direct =
+      path === undefined ? undefined : matchDirectRoute(directRoutes, request.method, path);
+    if (direct === undefined && request.method !== "POST") return invalid();
     if (path === undefined) return finish(publicJson({ error: "NOT_FOUND" }, 404));
+    if (direct !== undefined) {
+      let served: InvocationResult;
+      try {
+        served = await binding.invoker.invoke(direct.route.endpoint, direct.input as never, {
+          signal: request.signal,
+          correlationId,
+        });
+      } catch {
+        return finish(internalErrorResponse());
+      }
+      if (!served.ok) {
+        const failure = publicFailure(served, policy);
+        return finish(publicJson({ error: failure.error }, failure.status));
+      }
+      return finish(directResponse(direct.route, served.value));
+    }
     if (originRejected(request, path, cookies, policy)) {
       return finish(publicJson({ error: "FORBIDDEN" }, 403));
     }
@@ -275,6 +295,22 @@ export function createHttpHandler(
       return finish(internalErrorResponse());
     }
   };
+}
+
+/** Render a direct route's value: a redirect when declared, otherwise its JSON body. */
+function directResponse(route: CompiledDirectRoute, value: unknown): Response {
+  if (route.redirect === undefined) return publicJson(value, route.status ?? 200);
+  if (!isPlainObject(value)) return internalErrorResponse();
+  const target = (value as Record<string, unknown>)[route.redirect];
+  if (typeof target !== "string" || target === "") return internalErrorResponse();
+  try {
+    return new Response(null, {
+      status: route.status ?? 302,
+      headers: { Location: new URL(target).toString() },
+    });
+  } catch {
+    return internalErrorResponse();
+  }
 }
 
 export type { HttpResponseHeadersContext };

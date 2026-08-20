@@ -6,12 +6,14 @@ import type { Assembly } from "@engine/boundary/assembly/assembly-facade";
 import { assemblyBehind } from "@engine/boundary/assembly/assembly-registry";
 import type { AuthoredDeclarationIdentity } from "@engine/reads/declaration-identity";
 import {
+  formatConceptSpecDiagnostic,
   parseSpec,
   specificationsAreCompatible,
   specificationSourceDigest,
   type ConceptSpec,
 } from "@engine/reactions/concepts/concept-spec";
 import { canonicalDigest } from "@engine/utils/canonical-json";
+import { isDesignIdentifier } from "@engine/utils/design-identifiers";
 import { ordinal } from "@engine/utils/ordinal";
 import {
   parseApplicationDesignDocument,
@@ -83,8 +85,27 @@ export interface SelectedConceptDesignFact {
   instance: string;
   definition: string;
   externalParameters: readonly string[];
+  /** Present only when the structured-SSF integration seam supplied authoritative names. */
+  ownedTypes?: readonly string[];
   specification: ConceptSpec;
 }
+
+export interface OwnedTypeNameContext {
+  instance: string;
+  definition: string;
+  specification: ConceptSpec;
+}
+
+/**
+ * SSF integration seam. The integrator supplies the complete normalized owned-name
+ * inventory for this definition, including structural, subset, safely evidenced alias, and explicit alias
+ * names. Configured application checking always installs the private SSF
+ * adapter; `undefined` exists only for isolated validator use that makes no ownership
+ * claim.
+ */
+export type ResolveOwnedTypeNames = (
+  context: OwnedTypeNameContext,
+) => readonly string[] | undefined | Promise<readonly string[] | undefined>;
 
 /** Equality is over canonical specification content with source positions removed. */
 export interface SharedDefinitionEqualityFact {
@@ -138,6 +159,16 @@ function issueOrder(
     if (leftLocation.column !== rightLocation.column)
       return leftLocation.column - rightLocation.column;
   }
+  const priority = (code: string): number =>
+    code === "MIXED_BINDING_PLACEMENT"
+      ? 0
+      : code === "DUPLICATE_EXTERNAL_BINDING"
+        ? 1
+        : code === "MISSING_EXTERNAL_BINDING"
+          ? 3
+          : 2;
+  const codeOrder = priority(left.code) - priority(right.code);
+  if (codeOrder !== 0) return codeOrder;
   return ordinal(`${left.code}\0${left.message}`, `${right.code}\0${right.message}`);
 }
 
@@ -260,6 +291,7 @@ export async function checkAuthoredDesign(options: {
   assembly: Assembly<Record<string, new (...args: never[]) => object>>;
   design: AuthoredDesignRegistration;
   resolveComputationInputs?: ResolveComputationInputs;
+  resolveOwnedTypeNames?: ResolveOwnedTypeNames;
   conceptSources?: readonly ConceptSpecificationSourceInput[];
 }): Promise<CheckedAuthoredDesignModel> {
   const designSources = await loadRegistration(options.design);
@@ -298,17 +330,33 @@ export async function checkAuthoredDesign(options: {
   const inputsByComputation = new Map(analyzed.map(({ name, inputs }) => [name, inputs]));
 
   const concepts: SelectedConceptDesignFact[] = [];
+  const unresolvedConceptInstances: string[] = [];
   const orchestrationIssues: AuthoredDesignOrchestrationIssue[] = [];
   for (const inventory of assembled.engine
     .exportConcepts()
     .filter(({ name }) => name !== "RequestBoundary")
     .sort((left, right) => ordinal(left.name, right.name))) {
     if (inventory.specification === undefined) {
+      unresolvedConceptInstances.push(inventory.name);
       orchestrationIssues.push({
         code: "MISSING_CONCEPT_SPECIFICATION",
         message: `selected concept instance ${JSON.stringify(inventory.name)} has no authored concept specification.`,
       });
       continue;
+    }
+    const ownedTypes = await options.resolveOwnedTypeNames?.({
+      instance: inventory.name,
+      definition: inventory.specification.definitionName,
+      specification: inventory.specification,
+    });
+    if (
+      ownedTypes !== undefined &&
+      (new Set(ownedTypes).size !== ownedTypes.length ||
+        ownedTypes.some((name) => !isDesignIdentifier(name)))
+    ) {
+      throw new Error(
+        `authored design: owned-type adapter returned duplicate or invalid names for ${JSON.stringify(inventory.name)}.`,
+      );
     }
     concepts.push({
       instance: inventory.name,
@@ -316,6 +364,7 @@ export async function checkAuthoredDesign(options: {
       externalParameters: inventory.specification.externalTypes
         .map(({ name }) => name)
         .sort(ordinal),
+      ...(ownedTypes === undefined ? {} : { ownedTypes: [...ownedTypes].sort(ordinal) }),
       specification: inventory.specification,
     });
   }
@@ -363,7 +412,12 @@ export async function checkAuthoredDesign(options: {
       }
       const path = localPath(source.url, `conceptSources[${JSON.stringify(instance)}].url`);
       const scanned = scanDesignMarkdown(source.content, path);
-      parseSpec(scanned.content);
+      const parsed = parseSpec(scanned.content);
+      if (parsed.specification === undefined) {
+        throw new Error(
+          `authored design: traced concept source for ${JSON.stringify(instance)} is invalid:\n${parsed.diagnostics.map(formatConceptSpecDiagnostic).join("\n")}`,
+        );
+      }
       if (scanned.digest !== specificationSourceDigest(specification)) {
         throw new Error(
           `authored design: traced concept source for ${JSON.stringify(instance)} does not exactly match its registered spec text.`,
@@ -406,10 +460,15 @@ export async function checkAuthoredDesign(options: {
       name,
       ...(inputsByComputation.has(name) ? { inputs: inputsByComputation.get(name) } : {}),
     })),
-    concepts: concepts.map(({ instance, externalParameters }) => ({
+    concepts: concepts.map(({ instance, definition, externalParameters, ownedTypes }) => ({
       instance,
+      definition,
       externalTypes: externalParameters,
+      ...(ownedTypes === undefined ? {} : { ownedTypes }),
     })),
+    ...(unresolvedConceptInstances.length === 0
+      ? {}
+      : { unresolvedConceptInstances: unresolvedConceptInstances.sort(ordinal) }),
   };
 
   const validationIssues = validateAuthoredApplicationDesign(documents, selected);

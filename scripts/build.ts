@@ -43,6 +43,16 @@ async function rewriteRepositoryAliases(workspace: Workspace): Promise<void> {
   )) {
     const source = await readFile(path, "utf8");
     const rewritten = source
+      .replace(/(["'])@ssf\1/g, (_match, quote: string) => {
+        let specifier = relative(
+          dirname(path),
+          resolve(dist, "engine/tooling/ssf-package/index.js"),
+        )
+          .split(sep)
+          .join("/");
+        if (!specifier.startsWith(".")) specifier = `./${specifier}`;
+        return `${quote}${specifier}${quote}`;
+      })
       .replace(/(["'])@engine\/([^"']+)\1/g, (_match, quote: string, target: string) => {
         const emittedTarget = resolve(
           dist,
@@ -58,7 +68,11 @@ async function rewriteRepositoryAliases(workspace: Workspace): Promise<void> {
         if (!specifier.startsWith(".")) specifier = `./${specifier}`;
         return `${quote}${specifier}${quote}`;
       });
-    if (rewritten.includes("@engine/") || rewritten.includes("@root/")) {
+    if (
+      rewritten.includes("@engine/") ||
+      rewritten.includes("@root/") ||
+      /["']@ssf["']/.test(rewritten)
+    ) {
       throw new Error(`build left an unresolved repository alias in ${relative(root, path)}`);
     }
     if (rewritten !== source) await writeFile(path, rewritten);

@@ -662,6 +662,10 @@ export function indexApplicationSourcesWithController<
       definition.source === undefined ? undefined : designSourceText.get(definition.source);
     for (const instance of definition.instances) {
       const concept: DesignRef = { kind: "concept", concept: instance.name };
+      add(concept, manifestAnchor(instance.declaration, "design-coverage"));
+      for (const binding of instance.bindings) {
+        add(concept, manifestAnchor(binding.location, "design-coverage"));
+      }
       if (whole !== undefined) {
         add(concept, {
           role: "specification",
@@ -1634,40 +1638,40 @@ export function indexApplicationSourcesWithController<
         digest: sha256(text),
         resolution: "manifest-location",
       });
-      try {
-        const parsed = parseConceptSpecification(text.replaceAll("\r\n", "\n"));
-        if (!sameSpecification(concept.specification, parsed)) {
-          reportFor(
-            "SPECIFICATION_MISMATCH",
-            `The current specification for ${concept.name} differs from the supplied manifest.`,
-            ref,
-            "specification",
-          );
-        }
-        for (const action of parsed.actions) {
-          add(
-            { kind: "action", concept: concept.name, action: action.name },
-            specificationBlock(
-              path,
-              text,
-              action.location.line,
-              action.location.column,
-              action.name,
-            ),
-          );
-        }
-        for (const query of parsed.queries) {
-          add(
-            { kind: "query", concept: concept.name, query: query.name },
-            specificationBlock(path, text, query.location.line, query.location.column, query.name),
-          );
-        }
-      } catch (error) {
+      const parsedResult = parseConceptSpecification(text.replaceAll("\r\n", "\n"));
+      if (parsedResult.specification === undefined) {
         reportFor(
           "SPECIFICATION_MISMATCH",
-          `The current specification for ${concept.name} cannot be parsed (${error instanceof Error ? error.message : String(error)}).`,
+          `The current specification for ${concept.name} cannot be parsed (${parsedResult.diagnostics
+            .map(
+              ({ code, message, location }) =>
+                `line ${location.line}, column ${location.column}: [${code}] ${message}`,
+            )
+            .join("; ")}).`,
           ref,
           "specification",
+        );
+        continue;
+      }
+      const parsed = parsedResult.specification;
+      if (!sameSpecification(concept.specification, parsed)) {
+        reportFor(
+          "SPECIFICATION_MISMATCH",
+          `The current specification for ${concept.name} differs from the supplied manifest.`,
+          ref,
+          "specification",
+        );
+      }
+      for (const action of parsed.actions) {
+        add(
+          { kind: "action", concept: concept.name, action: action.name },
+          specificationBlock(path, text, action.location.line, action.location.column, action.name),
+        );
+      }
+      for (const query of parsed.queries) {
+        add(
+          { kind: "query", concept: concept.name, query: query.name },
+          specificationBlock(path, text, query.location.line, query.location.column, query.name),
         );
       }
     }

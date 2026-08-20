@@ -1,61 +1,64 @@
 ---
 name: sync-engine
-description: Design and build applications using concept design and @mit-sdg/sync-engine through an independent Markdown design review, isolated implementation workers, validation, and user acceptance.
+description: Design and build an application with @mit-sdg/sync-engine and concept design, through compact independent review, bounded implementation roles, and objective evidence. Use for building an application on the framework, never for changing the framework itself.
 license: Apache-2.0
-compatibility: Requires filesystem and shell access, Bun, and native subagents that can be given isolated working directories and mutation boundaries.
+compatibility: Requires filesystem and shell access, Bun, and Paseo, which is the only harness the compiler launches roles through today; downstream roles use best-effort assigned-path discipline.
 ---
 
 # Sync-engine application workflow
 
-Use this workflow for application design and implementation, not for changing the
-sync-engine framework itself. The normal path is:
-
 ```text
-intent choice → setup or existing baseline → interactive product discussion or general
-assumptions → independent design → independent criticism and repair → user reviews
-Markdown → implementation workers
-→ integration and objective evidence → validation → final acceptance
+brief → independent design → syntax → bounded independent criticism
+→ approval or explicit preauthorization → concept implementation
+→ application implementation → requested frontend → independent evidence
+→ required validation → handback
 ```
 
 ## Non-negotiable boundaries
 
-- Native subagents are required for design, criticism, concept implementation,
-  composition implementation, integration, and evidence. If the harness cannot
-  provide them, pause and tell the user; do not imitate independence with sequential
-  self-review.
-- Use routine/normal reasoning for every routine role. Do not request maximum
-  reasoning merely because a role is delegated.
-- Keep the objective, settled decisions, current stage, and unresolved issues in
-  coordinator context. Do not create workflow metadata or treat mechanical output
-  as conversational authority.
-- Design authority is the Markdown under `design/`. Workers must not change approved
-  Markdown silently.
-- Use the installed `sync-engine-analysis` command as internal context selection for
-  coordination, integration, and evidence. Never provide it to or invoke it for the
-  independent designer or critic.
-- Preserve unrelated work. Never commit, merge, rebase, reset, switch branches, or
-  otherwise alter Git history. User acceptance performs no Git operation.
+- Authored Markdown under `design/` is product and design authority. Generated output,
+  implementation, analysis, and coordinator notes are not.
+- Use fresh native agents for design, criticism, and evidence, and separate bounded roles
+  for concept, application, and requested frontend implementation. Launch every one with
+  the compiler's `launch`; a role with no launch record did not run, and if a required
+  role cannot launch, stop. The coordinator writes only the brief and assignments, never
+  role-owned design, production source, or tests.
+- Every role inherits the coordinator's exact provider, model, and reasoning setting
+  unless the user names another; never repeat reasoning instructions in prompts.
+- Preserve unrelated work. Only the coordinator may change Git's index, refs, or history
+  on a direct, explicit human-user request; see the workflow for scope.
+- Nobody reverse-engineers the framework, the coordinator included. Inside the installed
+  package read only `examples/` and `docs/user/`, never `dist/` or a checkout's source.
+  Downstream implementation and evidence roles additionally receive narrow assigned paths
+  and explicit path discipline; supply them exact public references.
+- Build every role prompt with the self-contained compiler `scripts/command.ts` and bind
+  downstream prompts and follow-ups to the reviewed design digest. Write every generated
+  prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never
+  place generated Markdown in a shell argument.
+- Stop after required checks and objective evidence pass. Do not iterate for optional
+  polish, informational findings, or an empty critic list.
 
 ## Run the workflow
 
-1. Start with the intent choice in
-   [settle the product request](references/workflow.md#settle-the-product-request):
-   ask whether the user wants to discuss the design first (recommended) or wants the
-   agent to proceed with general assumptions.
-2. Follow [setup and baseline](references/workflow.md#establish-a-working-baseline).
-3. In discussion mode, run as many interactive rounds as the user wants. Ask one or
-   two material product questions per turn, give options and a recommended answer for
-   each, and periodically ask whether to continue discussing or move to a draft. In
-   assumption mode, proceed without product-discovery questions and record reasonable
-   assumptions. Keep the objective and settled decisions in coordinator context.
-4. Run the closed-context designer and independent critic protocol in
-   [design roles](references/design-roles.md).
-5. Link the actual candidate Markdown in one concise user review. Implementation
-   requires clear conversational approval of that reviewed design.
-6. Run the isolated build sequence in
-   [implementation roles](references/implementation-roles.md).
-7. Follow [validation and handback](references/workflow.md#validate-and-hand-back).
+1. Read repository instructions and [start the coordinator
+   workflow](references/workflow.md). Read
+   [design and criticism](references/design-and-criticism.md) and
+   [implementation](references/implementation.md) on reaching those stages, not before.
+2. Confirm the harness satisfies the
+   [contract](references/harnesses/contract.md) for the current role. When Paseo is
+   available, read the short [Paseo guide](references/harnesses/paseo.md); do not search
+   for other orchestration instructions.
+3. Initialize and maintain `product/brief.md` with the workflow's brief commands; do not
+   read or recreate the packaged template directly.
+4. Build only the current role prompt with the compiler. Do not read role templates or
+   common prompt files yourself; the compiler expands them for the delegated agent.
+5. Keep objective, decisions, current stage, critic count, and unresolved material
+   issues in active coordinator context. Do not create workflow metadata or a workflow
+   database.
 
-Read repository instructions before acting. For application semantics and authoring,
-use the exact installed core documents identified by the role protocol; do not
-replace them with orchestration prose from this package.
+The compiler validates bytes, inputs, release executables, follow-up size, reviewed
+design identity, and that the role before this one ran, then reports the exact syntax of
+the commands each one leads to and the stage reference to read. It owns generated file
+placement under `.sync-engine/`, role launches, and the handback check. It does not
+choose product decisions, workflow stages, approval, criticism, repairs, or acceptance;
+a reported `Next:` line is syntax, not permission.

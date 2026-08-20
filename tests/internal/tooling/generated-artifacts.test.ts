@@ -12,6 +12,9 @@ import { vocabulary } from "@sync-engine/advanced";
 import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
 import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
 import { vocabularyDeclaration, Sessioning } from "./fixtures/generated-artifacts/vocabulary.ts";
+import { applicationConceptSet as malformedSsfVocabulary } from "./fixtures/generated-artifacts/malformed-ssf/vocabulary.ts";
+import { applicationConceptSet as ownedTypeVocabulary } from "./fixtures/generated-artifacts/owned-types/vocabulary.ts";
+import packagingApplication from "../../packaging/application/generated.config.ts";
 import {
   checkGenerated,
   inspectGenerated,
@@ -19,7 +22,12 @@ import {
   renderGenerated,
   resolveApplication,
 } from "@engine/tooling/generated-artifacts";
+import {
+  applicationManifestDigest,
+  validateApplicationManifest,
+} from "@engine/tooling/application-manifest-format";
 import { inspectAssembly } from "@engine/tooling/inspection";
+import { applicationManifest } from "@engine/tooling/manifest";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "@engine/utils/package-version";
 import { loadGeneratedApplication } from "@command/generated-config";
 
@@ -34,6 +42,22 @@ const conceptFreeModule = new URL(
   import.meta.url,
 );
 const conceptFreeVocabulary = vocabulary({ concepts: {}, computations: {} });
+const malformedSsfModule = new URL(
+  "./fixtures/generated-artifacts/malformed-ssf/vocabulary.ts",
+  import.meta.url,
+);
+const malformedSsfDesign = {
+  version: 1 as const,
+  documents: [new URL("./fixtures/generated-artifacts/malformed-ssf/design.md", import.meta.url)],
+};
+const ownedTypeModule = new URL(
+  "./fixtures/generated-artifacts/owned-types/vocabulary.ts",
+  import.meta.url,
+);
+const ownedTypeDesign = (name: "design" | "explicit-design" | "invalid-design") => ({
+  version: 1 as const,
+  documents: [new URL(`./fixtures/generated-artifacts/owned-types/${name}.md`, import.meta.url)],
+});
 const fixtureDesign = (documents: readonly string[] = []) => ({
   version: 1 as const,
   documents: documents.map(
@@ -41,6 +65,7 @@ const fixtureDesign = (documents: readonly string[] = []) => ({
   ),
 });
 const emptyDesign = fixtureDesign();
+const instanceDesign = fixtureDesign(["instances"]);
 const loginDesign = fixtureDesign(["login"]);
 const loginCurrentDesign = fixtureDesign(["login", "current"]);
 const closureDesign = fixtureDesign(["closure"]);
@@ -104,6 +129,75 @@ describe("generated application artifacts", () => {
     expect(rendered).not.toMatch(/- `(register|cancel|respondFramework) /);
     expect(rendered).toContain("when RequestBoundary.request");
     expect(rendered).toContain("RequestBoundary.respond (");
+  }, 15_000);
+
+  test("proves qualified targets with the private SSF inventory for advanced vocabularies", async () => {
+    const application = (design: "design" | "explicit-design" | "invalid-design") =>
+      resolveApplication(
+        {
+          assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
+          title: "Owned targets",
+          design: ownedTypeDesign(design),
+          conceptSet: { module: ownedTypeModule },
+        },
+        configUrl,
+      );
+    await expect(renderGenerated(application("design"))).resolves.toMatchObject({
+      specification: expect.stringContaining("`Target` is `Targeting.Record`"),
+    });
+    await expect(renderGenerated(application("explicit-design"))).resolves.toMatchObject({
+      specification: expect.stringContaining("`Target` is `Targeting.Entry`"),
+    });
+    await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
+      'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
+    );
+  }, 15_000);
+
+  test("surfaces structural-looking SSF diagnostics during configured checking", async () => {
+    const application = resolveApplication(
+      {
+        assemble: () => assemble({ vocabulary: malformedSsfVocabulary, composition: {} }),
+        title: "Malformed SSF",
+        design: malformedSsfDesign,
+        conceptSet: { module: malformedSsfModule },
+      },
+      configUrl,
+    );
+    await expect(renderGenerated(application)).rejects.toThrow(
+      /concept definition "Malformed" has invalid structural SSF State:\n- line 22, column 1: \[SSF_MALFORMED_DECLARATION\]/,
+    );
+  }, 15_000);
+
+  test("manifest validation independently rejects stale and forged owned inventories", async () => {
+    const resolved = resolveApplication(
+      {
+        ...packagingApplication,
+        design: { ...packagingApplication.design, version: 1 as const },
+      },
+      configUrl,
+    );
+    const manifest = await inspectGenerated(resolved, (assembly) => applicationManifest(assembly));
+    const mitigating = manifest.design.concepts
+      .flatMap(({ instances }) => instances)
+      .find(({ name }) => name === "Mitigating")!;
+    const target = mitigating.bindings.find(({ external }) => external === "Room")!.target;
+    if (target.kind !== "qualified") throw new Error("fixture Room binding is not qualified");
+    expect(`${target.instance}.${target.type}`).toBe("Rooming.Room");
+    const rooming = manifest.design.concepts.find(({ definition }) => definition === "Rooming")!;
+    expect(rooming.ownedTypes).toContain("Room");
+
+    rooming.ownedTypes = rooming.ownedTypes.filter((name) => name !== "Room");
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /ownedTypes.*does not equal the inventory independently derived/,
+    );
+
+    rooming.ownedTypes = [...rooming.ownedTypes, "DefinitelyNotOwned", "Room"].sort();
+    target.type = "DefinitelyNotOwned";
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /ownedTypes.*does not equal the inventory independently derived/,
+    );
   }, 15_000);
 
   test("assembles once while checking the exact generated application", async () => {
@@ -212,20 +306,27 @@ export const vocabulary = declareVocabulary({
   sync-engine setup [directory]
     Complete a Bun package manifest and initialize missing concept-free application files.
 
-  sync-engine check-concepts <paths...>
-    Parse draft concept specifications without loading application code or configuration.
+  sync-engine check-design <paths...> [--format json]
+    Check explicit authored-design Markdown without loading application code or configuration.
 
-  sync-engine artifacts <command> [--config path]
-    check      Verify the assembled read-back and wire contract against the assembly.
+  sync-engine artifacts <command> [arguments]
+    check [--config path] [--format json]
+               Verify the assembled read-back and wire contract against the assembly.
     pin        Regenerate the assembled read-back and wire contract.
     pin-spec   Regenerate only the assembled read-back.
     pin-wire   Regenerate only the wire contract.
     manifest   Print the canonical application manifest as JSON.
+    diff <old-manifest> [--config path]
+               Compare a saved application manifest with the configured application.
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--config path] [--fail-on-warnings]
+  sync-engine check [--config path] [--fail-on-warnings] [--format json]
     Check the configured application, including concept TypeScript source agreement and application diagnostics.
+    The configuration path defaults to generated.config.ts.
+
+  sync-engine verify [--config path] [--fail-on-warnings] [--format json]
+    Run the configured design, application, and artifact checks and report every result.
     The configuration path defaults to generated.config.ts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {
       cwd: root,
@@ -262,7 +363,7 @@ export const vocabulary = declareVocabulary({
 
       const typo = run("artifacts", "pin", "--confgi", "ignored.config.ts");
       expect(typo.status).toBe(1);
-      expect(typo.stderr).toContain("sync-engine artifacts <command> [--config path]");
+      expect(typo.stderr).toContain("sync-engine artifacts <command> [arguments]");
       expect(existsSync(join(temporary, "imported"))).toBe(false);
 
       const trailing = run("new", "valid-project", "trailing");
@@ -785,7 +886,7 @@ describe("an artifact configuration's defaults", () => {
       {
         assemble: () => assemble({ vocabulary: vocabularyDeclaration, composition: {} }),
         title: "Reading circle",
-        design: emptyDesign,
+        design: instanceDesign,
         specification: "book.md",
         specificationBanner: "<!-- Project specification -->",
         wireName: "CircleContracts",

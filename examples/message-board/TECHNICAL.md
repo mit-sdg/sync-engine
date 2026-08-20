@@ -47,8 +47,8 @@ import those documents.
 
 | Endpoint                 | Ordered workflow                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------- |
-| `/auth/register`         | Register credentials, start a session for the username, respond                   |
-| `/auth/sign-in`          | Authenticate, pass the username to `Sessioning.start` as its subject, respond     |
+| `/auth/register`         | Register credentials, start a session for the returned account reference, respond |
+| `/auth/sign-in`          | Authenticate, pass the returned account reference to `Sessioning.start`, respond  |
 | `/auth/current`          | Resolve the session subject and return it as the current username                 |
 | `/auth/sign-out`         | Resolve and end the session                                                       |
 | `/board/list`            | Resolve the session, then form the current board                                  |

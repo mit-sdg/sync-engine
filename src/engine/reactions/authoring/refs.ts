@@ -33,7 +33,7 @@ import { actionLine } from "./nodes.ts";
 import { lineOf } from "@engine/reads/lines";
 import type { QueryReadLine, SlotPattern } from "@engine/reads/lines";
 import type { ExactPattern } from "@engine/reads/type-inference";
-import { parseSpec } from "../concepts/concept-spec.ts";
+import { formatConceptSpecDiagnostic, parseSpec } from "../concepts/concept-spec.ts";
 import type {
   CheckedComputationFns,
   ComputationFn,
@@ -272,7 +272,13 @@ interface VocabularyDeclaration<
  * each code, so a registration derives those separately.
  */
 function specifiedContracts(spec: string): ConceptMetadata {
-  const specification = parseSpec(spec);
+  const parsed = parseSpec(spec);
+  if (parsed.specification === undefined) {
+    throw new Error(
+      `Vocabulary: invalid concept specification:\n${parsed.diagnostics.map(formatConceptSpecDiagnostic).join("\n")}`,
+    );
+  }
+  const specification = parsed.specification;
   const { purpose, principle, queries } = specification;
   const promises: Record<string, QueryPromise> = {};
   const identities: Record<string, readonly string[]> = {};

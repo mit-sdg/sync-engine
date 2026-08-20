@@ -25,6 +25,7 @@ import {
   type RegisteredConceptSource,
 } from "./concept-source-discovery.ts";
 import { typeScriptSourceContext, type TypeScriptSourceContext } from "./typescript-shapes.ts";
+import { specificationOwnedTypeNames as authoritativeOwnedTypeNames } from "./application-manifest-format.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -137,7 +138,7 @@ function resolveDesign(value: unknown): GeneratedApplicationDesign {
   }
   if (design.vocabulary !== undefined) {
     throw new Error(
-      "generated config: design.vocabulary was removed; list documents containing `types` fences in design.documents.",
+      "generated config: design.vocabulary was removed; list application documents containing `instances`, `bindings`, `types`, or composition coverage in design.documents.",
     );
   }
   if (!Array.isArray(design.documents)) {
@@ -262,6 +263,7 @@ async function prepareConfiguredDesign(
       url: pathToFileURL(specPath),
       content: specText,
     })),
+    resolveOwnedTypeNames: ({ specification }) => authoritativeOwnedTypeNames(specification),
     resolveComputationInputs: ({ computations }) => {
       const names = computations.map(({ name }) => name);
       const key = names.join("\0");

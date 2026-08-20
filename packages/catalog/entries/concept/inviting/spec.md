@@ -30,9 +30,9 @@ a set of Invitations with
   an invitee Person
   a status InvitationStatus
   an issuedAt DateTime
-  a decidedAt optional DateTime
+  an optional decidedAt DateTime
 
-at most one pending Invitation has each target and invitee pair
+Rule: at most one pending Invitation has each target and invitee pair
 ```
 
 ## Actions

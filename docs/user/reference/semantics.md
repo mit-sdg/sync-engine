@@ -304,16 +304,18 @@ ordinary action body is released. Same-concept requested consequences use an
 internal reservation release to make progress without changing body-arrival
 order.
 
-One action body runs at a time per raw concept instance within one engine. The
+One action body runs at a time per selected concept instance within one engine.
+Ordinary assembly rejects one raw implementation object supplied under two
+instance names in the same assembly, before instrumentation. The
 queue awaits a structural `PromiseLike`: any returned object or function whose
 `then` property is callable. This includes native promises from another
 JavaScript realm and non-native thenables. The queue reads `then` once and
 invokes it in a microtask. A throwing `then` accessor, or a `then` call that
 throws before settlement, faults the action. A thenable that never settles holds
 the serial line just as a never-settling promise does. Supplying one raw instance
-to several engines creates separate queues and query caches and does not
-serialize those engines. Different concept instances and separate root flows
-can overlap.
+to separate engines is allowed and creates separate queues and query caches; it
+does not serialize those engines. Different concept instances and separate root
+flows can overlap.
 Ordinary reactions for one landed occurrence are currently evaluated
 sequentially. Their trigger and `where` stages all finish before any matching
 consequence is dispatched, so one sibling consequence cannot change another
@@ -729,14 +731,15 @@ evaluates projectors in declaration order, and a projector or validation failure
 occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
-format and package SemVer. The application-manifest schema is version 1 and has
-no decoder for previous manifest versions. A beta upgrade across this reset
-requires regenerating all manifests and generated artifacts.
+format and package SemVer. This pre-1.0 beta reset keeps schema version 1 but has
+no decoder for the earlier beta shape or any prior version. Upgrading across the
+reset requires regenerating all manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
-application instances, raw concept State, resolved application types, executable
-application identities, implementation provenance, registered design source
-locations, and normalized-source digests. It does not retain executable
+authored application instance declarations and bindings, SSF-derived definition-owned
+type inventories, full concept State text, resolved application types, executable application
+identities, implementation provenance, registered design source locations, and
+normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.
 
 Generated Markdown names its manifest producer, concept-specification format,
@@ -744,8 +747,8 @@ and renderer version. It links each selected authored reaction tree, view,
 former, computation, concept, concrete type, and binding to every applicable
 authored source location. It shows structured concept signatures,
 cardinalities, refusals, definition/instance relationships, and executable
-lowering. It does not copy application prose, Purpose, Principle, raw State,
-action/query bodies, type-binding explanations, or computation bodies. These
+lowering. It does not copy application prose, Purpose, Principle, full State text,
+action/query bodies, adjacent binding explanations, or computation bodies. These
 authored statements do not become runtime validation or executable assertions.
 
 These are TypeScript guarantees. [Runtime validation](#runtime-validation)
@@ -827,8 +830,10 @@ frontier.
 
 Action bodies run one at a time per concept instance within one engine, in
 arrival order. The queue awaits native promises and structural thenables as
-described under [Execution and concurrency](#execution-and-concurrency). Sharing
-one raw instance between engines does not share a queue or query cache. This is
+described under [Execution and concurrency](#execution-and-concurrency). One
+assembly cannot install the same raw object under two names. Separate engines may reuse
+one raw instance through semantically compatible registrations; they do not share a
+queue or query cache. Conflicting registration metadata remains invalid. This is
 an in-process guarantee. A concept's implementation and storage must supply any
 atomicity or coordination required across processes. A reaction consequence
 chain commits each action independently. Earlier actions remain committed when a
