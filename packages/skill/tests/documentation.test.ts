@@ -1,5 +1,10 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
+import { catalogListing } from "../../../scripts/catalog-listing.ts";
+import { checkDesignFiles } from "../../../src/command/check-design.ts";
 
 const packageRoot = new URL("../", import.meta.url);
 const skillRoot = new URL("skills/sync-engine/", packageRoot);
@@ -48,14 +53,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     const composition = await text(new URL("inputs/composition.md", promptRoot));
     const boundary = await text(new URL("inputs/boundary.md", promptRoot));
     expect(bytes(internals)).toBeLessThanOrEqual(0.8 * 1024);
-    expect(bytes(design)).toBeLessThanOrEqual(5.75 * 1024);
+    expect(bytes(design)).toBeLessThanOrEqual(6.5 * 1024);
     expect(bytes(ssf)).toBeLessThanOrEqual(3 * 1024);
-    expect(bytes(format)).toBeLessThanOrEqual(3.375 * 1024);
+    expect(bytes(format)).toBeLessThanOrEqual(4.75 * 1024);
     expect(bytes(http)).toBeLessThanOrEqual(4 * 1024);
     expect(bytes(composition)).toBeLessThanOrEqual(6.5 * 1024);
     // The designer's boundary note must never grow into a second http.md: naming a
     // transport is what put unbuildable renderings into a design.
-    expect(bytes(boundary)).toBeLessThanOrEqual(1.25 * 1024);
+    expect(bytes(boundary)).toBeLessThanOrEqual(0.75 * 1024);
     expect(boundary).not.toMatch(/HTTP|POST|\bGET\b|JSON/);
     // A skeleton with placeholder identifiers taught a worker nothing, so the declaration
     // API states a real trigger and a real export rather than their shapes.
@@ -94,17 +99,109 @@ describe("compact sync-engine Agent Skill documents", () => {
     const critic = await text(new URL("roles/critic.md", promptRoot));
     for (const role of [designer, critic]) {
       expect(role).toContain("<!-- include: ../common/design.md -->");
-      expect(role).toContain("<!-- include: ../common/ssf.md -->");
     }
+    // The critic reads State, it never authors it: terra's pass 3 caught a set that
+    // collapses the duplicates its action promised to refuse, which needs the semantics
+    // and none of the grammar.
+    expect(designer).toContain("<!-- include: ../common/ssf.md -->");
+    expect(critic).not.toContain("<!-- include: ../common/ssf.md -->");
+    expect(critic).toContain("<!-- include: ../common/ssf-reading.md -->");
     expect(designer).toContain("<!-- include: ../common/concept-format.md -->");
+    // Worked generic concepts beat rules a designer can satisfy lexically, and the
+    // listing is compiled in because a coordinator told in prose to attach it may not.
+    expect(designer).toContain("<!-- include: ../inputs/catalog.md -->");
+    expect(critic).not.toContain("<!-- include: ../inputs/catalog.md -->");
+    // Prose telling the coordinator not to pass a catalog is enforcement by hope; the
+    // critic template simply has no slot to pass one into.
+    expect(critic).not.toContain("input?: catalog");
     expect(designer).toContain("bunx --no-install sync-engine check-design design/concepts/*.md");
     expect(designer).toContain("coordinator will rerun the same gate independently");
+    // Two link-shortener designers read "smallest" as "fewest concepts" and never raised
+    // decomposition at all; the map is now a separate artifact settled before any
+    // concept file, and a second application is the one genericity test a reworded
+    // purpose cannot satisfy.
+    expect(designer).toContain("Smallest means least behavior, never fewest files");
+    expect(designer).toContain("`design/decomposition.md`");
+    expect(designer.replace(/\s+/g, " ")).toContain(
+      "an obligation left in the map is a decision nobody executes",
+    );
+    expect(designer.replace(/\s+/g, " ")).toContain(
+      "a second unrelated application that would use this concept unchanged",
+    );
+    expect(designer.replace(/\s+/g, " ")).toContain("the subject it acts on as an opaque external");
     expect(critic).not.toContain("<!-- include: ../common/concept-format.md -->");
+    // Nine control passes never used the declaration API and drifted into commits and
+    // storage; the critic judges boundaries and contracts, not how they are declared.
+    expect(critic).not.toContain("<!-- include: ../inputs/composition.md -->");
     expect(critic.replace(/\s+/g, " ")).toContain(
       "compensation, repair, and a declared branch for an absent input identity; verify each query's body agrees with its `one`, `optional`, or `many` cardinality and its row marks optional State values optional",
     );
     expect(critic).toContain(
       "`check-design` already accepted instance,\n   binding, and typed-link form; never restate a form it passed",
+    );
+    // Across nineteen control passes the critic reasoned about splitting a concept
+    // thirteen times and reported it never once, because by then concept files existed
+    // and a split discarded them. It now judges boundaries on the map alone, before any
+    // concept file, and never reopens them afterwards.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "judge them now while a split still costs a line",
+    );
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "Say nothing about actions, refusals, state shape, links, or syntax: none exists yet",
+    );
+    // The measured failure was silence, not blindness: a bullet-only contract makes
+    // omission free, so map mode rules on every row and cannot return the sentinel.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "Return one bullet for every row and never the clean sentinel",
+    );
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "a row passed over in silence is a row you did not judge",
+    );
+    expect(critic.replace(/\s+/g, " ")).toContain("Its boundaries are settled");
+    // A Principle is archetypal by rule, so State it omits cannot by itself convict.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "Principle is archetypal rather than complete, so State it omits is a question, not a fault",
+    );
+    // A catalog row's genericity is already settled; the critic judging it blind told a
+    // designer to delete Timing, a shipped catalog concept.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "A row naming a catalog entry has had its genericity settled already",
+    );
+    // A contract pass told a designer that Timing, a shipped catalog concept seven
+    // recipes depend on, should not be a concept at all.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "review how this product uses it, never its right to be a concept",
+    );
+    // Three models running, the concept holding the product's central noun kept a
+    // concrete subject; the map now has to declare one per row.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "A row whose subject is concrete earns `accept` only when its named mechanism is that value's format",
+    );
+    // A map critic invented a "Boundary problem:" row because per-row verdicts had no
+    // slot for a need that belongs to no single row.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "add one bullet for any need in the brief no row owns",
+    );
+    // A map critic accepted an Authenticating row listing seven needs: cohabitation must
+    // name the combine condition, not merely assert that the needs arrive together.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "earns `accept` only by naming which combine condition holds for it",
+    );
+    // A bare split verdict deferred its own cost to contract review two passes later.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "so the cost of your verdict is on the record with it",
+    );
+    // Twelve accepts and no splits cannot be read without the split each one rejected.
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "state the strongest split you considered and the one invariant that defeats it",
+    );
+    // accept/split alone is a ratchet: over-splitting had no symmetric question.
+    expect(critic.replace(/\s+/g, " ")).toContain("Rule `merge` where two rows share a lifecycle");
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "never fault a concept for recovery detail that belongs to composition",
+    );
+    expect(critic.replace(/\s+/g, " ")).toContain(
+      "Report one finding per obligation missing or unrecoverable, never one per symptom",
     );
     expect(critic).toContain("do not demand an artificial API/adapter concept");
     expect(critic).toContain("never wait for a request to emit it");
@@ -170,9 +267,14 @@ describe("compact sync-engine Agent Skill documents", () => {
     const internals = await text(new URL("common/internals.md", promptRoot));
     const boundaryNote = await text(new URL("inputs/boundary.md", promptRoot));
     const composition = await text(new URL("inputs/composition.md", promptRoot));
+    const catalog = await text(new URL("inputs/catalog.md", promptRoot));
+    const ssfReading = await text(new URL("common/ssf-reading.md", promptRoot));
+    // Budgets, not ratchets: every byte ships on every launch, so these are what the
+    // trials showed each role can afford, not whatever it currently weighs. The critic
+    // fell from 18.2 KiB to 10.6 KiB across those runs with no measured loss.
     const limits: Record<string, number> = {
-      designer: 14.75 * 1024,
-      critic: 18 * 1024,
+      designer: 20 * 1024,
+      critic: 12 * 1024,
       "concept-worker": 2.875 * 1024,
       "application-worker": 3.75 * 1024,
       "frontend-worker": 2.625 * 1024,
@@ -189,6 +291,8 @@ describe("compact sync-engine Agent Skill documents", () => {
             "../common/internals.md": internals,
             "../inputs/boundary.md": boundaryNote,
             "../inputs/composition.md": composition,
+            "../common/ssf-reading.md": ssfReading,
+            "../inputs/catalog.md": catalog,
           }),
         ),
       ).toBeLessThanOrEqual(limit);
@@ -316,10 +420,15 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Actions and lifecycle",
       "Composition and failure",
       "Authorization and external effects",
-      "Authored application design",
     ]) {
       expect(design).toContain(`## ${heading}`);
     }
+    // Authoring rules left design.md so the critic stops carrying them; they are still
+    // one copy, now designer-only.
+    // Application rules are one document with the concept format, not an offcut file.
+    expect(design).not.toContain("## Authored application design");
+    const authored = await text(new URL("common/concept-format.md", promptRoot));
+    expect(authored).toContain("## Application files");
     const normalizedDesign = design.replace(/\s+/g, " ");
     for (const rule of [
       "one semantic owner",
@@ -328,14 +437,25 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Race-sensitive and security-critical rules stay in the action",
       "Expected domain rejection is a declared refusal",
       "A reaction cannot make separate owners atomic",
+      // A designer invoked the atomic-owner clause to weld a merge to a request
+      // lifecycle; both are real lifecycles, so the clause is gone and the cost of a
+      // split is declared instead.
+      "never argues for combining: declare the obligation and keep the parts apart",
+      "Consume nothing irreversibly before the acknowledgement that completes the operation",
       "Request data is a claim, not\nauthentication",
-      "The bounded SSF parser proves structural declarations and owned type names",
-      "Direct qualified owned-type dependency cycles are valid",
+      // The permissive half read as binding, faulting a design whose owner action refused.
+      "Owner actions enforce non-bypassable rules; composition may also deny early",
       "Write State only in Simple State Form",
       "Every query has an indented prose body",
-      "Neither proves boundaries",
     ]) {
       expect(normalizedDesign).toContain(rule.replace(/\s+/g, " "));
+    }
+    const normalizedAuthored = authored.replace(/\s+/g, " ");
+    for (const rule of [
+      "[opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)",
+      "Neither proves boundaries",
+    ]) {
+      expect(normalizedAuthored).toContain(rule.replace(/\s+/g, " "));
     }
 
     const format = (await text(new URL("common/concept-format.md", promptRoot))).replace(
@@ -345,28 +465,45 @@ describe("compact sync-engine Agent Skill documents", () => {
     for (const rule of [
       "```types external Person",
       "prefix every invariant prose line with exact `Rule:`",
-      "create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
-      "delete(item: Item) : return ()",
-      "_items(owner: Person) : many (item: Item, title: String)",
+      "create (owner: Person, title: String, dueAt?: DateTime) : return (item: Item)",
+      "delete (item: Item) : return ()",
+      "_items (owner: Person) : many (item: Item, title: String)",
       "instantiate Tasking with",
       "instantiate Noting as Notes with",
-      "Tasking.Owner is Person",
-      "Notes.Task is Tasking.Task",
-      "Do not mix placement",
+      "instantiate Tasking with Owner is Person",
+      "instantiate Noting as Notes with Task is Tasking.Task",
+      "Bind every external inline on its own instance",
       "`# Tasking`, never `# Tasks` or `# Task Management`",
       "keep codes unique within an action",
       "never prose such as `return the session account`",
-      "[refreshes content](reaction:Forum.posts.RefreshDerivedContent)",
-      "[home feed](former:Forum.feed.HomeFeed)",
-      "[readability policy](view:Forum.posts.Readable)",
       "```computations normalizeTitle(raw: String) : String",
       "A `one` body always promises one row",
     ]) {
       expect(format).toContain(rule);
     }
 
-    expect(normalizedDesign).toContain("Principle uses one or more short archetypal scenarios");
-    expect(normalizedDesign).toContain("refusals only when essential to the purpose");
+    // A purpose naming four needs satisfied the old overload test trivially, and the
+    // concept the product is named after kept a validated String subject in every trial.
+    expect(normalizedDesign).toContain("one independent reason for state to change");
+    expect(normalizedDesign).toContain(
+      "A concept is generic when some second, unrelated application could use it unchanged",
+    );
+    // A link shortener passed the reuse test while still validating its own URLs, so
+    // opacity is now its own gate rather than something reuse implies.
+    expect(normalizedDesign).toContain("That test is necessary and never sufficient");
+    expect(normalizedDesign).toContain(
+      "parsing, validating or constructing one belongs to the concept whose mechanism is that format",
+    );
+    // Both counting rules are evidence, never proof: a syntactic rule is satisfied by
+    // rewording a purpose or adding an action, which is not the work.
+    expect(normalizedDesign).toContain("never from purpose wording");
+    expect(normalizedDesign).toContain("Many fields served by few actions is a warning too");
+    expect(normalizedDesign).toContain(
+      "Principle tells one or more short stories in the order events happen",
+    );
+    expect(normalizedDesign).toContain(
+      "Include a variant, error, or refusal only where the purpose needs it",
+    );
     expect(normalizedDesign).toContain("External context is allowed");
     expect(design).not.toContain("Principle is one concrete scenario");
   });
@@ -395,7 +532,7 @@ describe("compact sync-engine Agent Skill documents", () => {
   test("gives every role narrow file inputs and mutation boundaries", async () => {
     const expectedSlots: Record<string, string[]> = {
       designer: ["brief", "existing-design", "catalog"],
-      critic: ["brief", "candidate", "catalog", "blocker"],
+      critic: ["brief", "candidate", "blocker"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
       // examples is required for the two roles that must write framework-shaped code
       "application-worker": [
@@ -710,7 +847,22 @@ describe("compact sync-engine Agent Skill documents", () => {
       "If release installation or setup is incomplete, the command leaves no brief and prints bootstrap steps",
     );
     expect(workflow).toContain("Run it alone—do not chain a premature check");
-    expect(criticism).toContain("Default to no catalog context");
+    // Control runs took 4-5 passes and 18-29 minutes; passes past the second only found
+    // defects in what an earlier pass demanded, or implementation concerns. The ceiling
+    // is a budget, so reaching it must stop rather than accept.
+    expect(criticism).toContain("Two contract passes is the hard ceiling, map reviews excluded.");
+    expect(criticism).toContain("Reaching the ceiling is a\n  budget, never an acceptance");
+    expect(criticism).toContain("--input candidate=design/decomposition.md");
+    // Obligations designed at the map stage were invisible at contract review, so each
+    // pass rediscovered coordination gaps in a composition never given the answers.
+    expect(criticism).toContain("the accepted map, `types.md`, and every concept/composition file");
+    expect(criticism).toContain("the map is clean when every\nverdict is accept");
+    // The catalog is the only worked evidence of a generic concept and was off by default.
+    expect(criticism).toContain("compiled in rather than\nattached");
+    // Which full entries the designer sees was a coordinator judgement; the reviewed map
+    // names them, so the attachment is derived rather than decided.
+    expect(criticism).toContain("Attach\nfull entries by rule, never by judgement");
+    expect(criticism).toContain("The critic template takes no catalog input at all");
     expect(normalizedCriticism).toContain(
       "carrying only check output, affected paths and repair request; never rebuild or resend the full prompt",
     );
@@ -796,6 +948,53 @@ describe("compact sync-engine Agent Skill documents", () => {
       for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
         if (/^(?:reaction|view|former|computation):/.test(match[1]!)) continue;
         await expect(stat(new URL(match[1]!, url)), `${path}: ${match[1]}`).resolves.toBeDefined();
+      }
+    }
+  });
+});
+
+describe("compiled catalog listing", () => {
+  test("is the generator's output, not a hand-kept copy", async () => {
+    // A drifted listing teaches a mechanism the catalog does not ship, and the designer
+    // has no entry to check it against. Regenerate with `bun run catalog:listing`.
+    const projected = await catalogListing(fileURLToPath(new URL("../../", packageRoot)));
+    expect(await text(new URL("inputs/catalog.md", promptRoot))).toBe(projected);
+  });
+});
+
+describe("prompt examples are checker-valid", () => {
+  // A spacing change to the computations example taught agents a signature the parser
+  // rejects. Examples are what agents copy, so a checker must read them, not a reviewer.
+  test("the concept template parses as a concept document", async () => {
+    const format = await text(new URL("common/concept-format.md", promptRoot));
+    const template = format.match(/````text\n([\s\S]*?)\n````/)?.[1];
+    expect(template).toBeDefined();
+    // State is shown as a placeholder; supply one matching the template's own actions so
+    // the headings, signatures, branches and query bodies are what gets checked.
+    const document = template!.replace(
+      "<SSF declarations>",
+      [
+        "a set of Items with",
+        "  an owner Person",
+        "  a title String",
+        "  an optional dueAt DateTime",
+      ].join("\n"),
+    );
+    const directory = await mkdtemp(join(tmpdir(), "prompt-example-"));
+    const path = join(directory, "Tasking.md");
+    await writeFile(path, `${document}\n`);
+    await expect(checkDesignFiles([path], directory)).resolves.toBeDefined();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  test("every fenced computation signature matches the parser", async () => {
+    const format = await text(new URL("common/concept-format.md", promptRoot));
+    const blocks = format.match(/```computations\n([\s\S]*?)```/g) ?? [];
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const block of blocks) {
+      for (const line of block.split("\n").slice(1, -1)) {
+        if (line.startsWith("  ") || line.trim() === "") continue;
+        expect(line).toMatch(/^[A-Za-z_][A-Za-z0-9_]*\(.*\)\s*:\s*\S/);
       }
     }
   });

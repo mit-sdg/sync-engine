@@ -26,7 +26,7 @@ external Person
 
 ## Actions
 ```actions
-create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
+create (owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
   where title is valid
   then
     create the item
@@ -35,7 +35,7 @@ create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
   then
     refuse INVALID_TITLE "A valid title is required."
 
-delete(item: Item) : return ()
+delete (item: Item) : return ()
   where true
   then
     delete the item
@@ -44,24 +44,31 @@ delete(item: Item) : return ()
 
 ## Queries
 ```queries
-_items(owner: Person) : many (item: Item, title: String)
-  Returns the owner's items, returns no rows when none exist, and orders by Item identity.
+_items (owner: Person) : many (item: Item, title: String)
+  answers the owner's items with their titles
+  answers no rows when the owner has none
+  orders rows by Item identity
 ```
 ````
 
-Types contains only `external Name` declarations or is empty. State uses supplied SSF;
+A concept's Types section contains only `external Name` declarations, or is empty. State uses supplied SSF;
 keep every State line inside its fence and prefix every invariant prose line with exact
 `Rule:`. Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. Indent `where` and `then` equally and
 each branch body deeper. Terminal success returns exactly the declared names. Declare an
 empty result `: return ()` and end its branches with bare `return`, never `return ()` or
 a standalone `()`. Refuse with `refuse CODE "Normative sentence."`; keep codes unique
-within an action and never shared across actions. Return declared names only:
-`return account`, never prose such as `return the session account`.
+within an action and never shared across actions. Return declared names only: `return account`, never prose such as `return the session
+account`. A returned name is a declared parameter, the row the branch created or changed,
+or a value an earlier line in that branch binds, as in `count the Tallies with subject as
+total`. Order an action's branches with its refusals first and its terminal success last,
+and give each branch a condition the others cannot also match.
 
 Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
 before the named row. Mark optional State values in the row `field?: Type`. A `one` body
-always promises one row; only `optional` may say no row.
+always promises one row; only `optional` may say no row. Write a query body as one line
+per fact: what it answers, then the empty or unknown case, then—for `many` alone—its
+stable ordering.
 
 ```types
 concrete Person
@@ -75,39 +82,47 @@ instantiate Noting as Notes with
   Task is Tasking.Task
 ```
 
-Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once;
-never declare core-owned `RequestBoundary`. Bind all externals inline or all detached:
+Bare `instantiate D` means `instantiate D as D`, for a definition with no external to
+bind. Bind every external inline on its own instance, as above.
 
-```instances
-instantiate Tasking
-instantiate Noting as Notes
+Concept files carry no application links, instances, bindings, or computations.
+
+## Application files
+
+Inventory exact selected static instances in `design/types.md`, whose `concrete`
+declarations are application-owned; never declare core-owned `RequestBoundary`. A
+definition may have zero or more instances, none carrying its name. Write an alias only as
+`alias Alias for Target`, and leave no concrete unused; config checking rejects the rest.
+Bindings convey identity only.
+
+Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
+wildcards. Cover each authored endpoint and reaction tree and each named view and former;
+declare each executable computation once. A composition document reads as prose carrying
+its links, each naming module, group and declaration:
+
+```text
+Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
+about it. A circle page shows the circle, its members and that discussion
+[as one record](former:Circle.Pages.CirclePage), and only a member
+[may respond](view:Circle.Reading.MemberMayRespond).
 ```
 
-```bindings
-Tasking.Owner is Person
-Notes.Task is Tasking.Task
-```
-
-Do not mix placement. Target a concrete or SSF-owned type; external aliases are invalid,
-direct owned-type cycles valid. Concept files contain no application links, instances,
-bindings, or computations.
-
-Give each composition document a nonempty H1 and decision prose. Reference application
-declarations with Markdown links, never bare `view:` lines, routes, or concept actions:
-
-```md
-Editing [refreshes content](reaction:Forum.posts.RefreshDerivedContent).
-The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
-Visibility follows the [readability policy](view:Forum.posts.Readable).
-```
-
-Declare each computation once with an indented body where used, or in
-`design/types.md` when shared:
+Give each composition document a nonempty H1 and decision prose. Declare each computation
+once as `name(inputs) : Result`, no space before its inputs, with an indented body where
+it is used, or in `design/types.md` when shared, and
+reference it as `[normalization](computation:normalizeTitle)`:
 
 ```computations
 normalizeTitle(raw: String) : String
   Produces the canonical task title used by endpoint adaptation.
 ```
 
-Prose may use `[normalization](computation:normalizeTitle)`. Routes stay in prose; link
-targets are exact dotted source paths.
+Routes stay in prose; link targets are exact dotted source paths.
+
+An application document is not an API specification. It carries no endpoint sections and
+no input, return or refusal listings: the concept specification owns those, and a second
+copy drifts from the one the checker reads.
+
+`check-design` proves grammar and authored form only. Config checking proves shapes,
+bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
+persistence, transactions, authorization, repair, or behavior; review and test.

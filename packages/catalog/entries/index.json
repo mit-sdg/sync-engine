@@ -22,5 +22,7 @@
   "recipe/incident-room/manifest.json",
   "recipe/recoverable-board/manifest.json",
   "recipe/review-queue/manifest.json",
-  "recipe/message-board/manifest.json"
+  "recipe/message-board/manifest.json",
+  "concept/expiring/manifest.json",
+  "concept/tallying/manifest.json"
 ]
