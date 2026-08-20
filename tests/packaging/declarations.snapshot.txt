@@ -298,6 +298,8 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     observers?: readonly OperationalObserver[];
     /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
     rawFaultReporter?: RawFaultReporter;
+    /** Host clock used once when each causal flow opens; defaults to the system clock. */
+    clock?: () => Date;
     /** Additional sensitive field names for this assembly only. */
     redaction?: RedactionPolicy;
 }
@@ -1444,12 +1446,14 @@ import type { Vars } from "../types.ts";
 export declare const $vars: Vars;
 
 === dist/engine/reactions/authoring/words.d.ts ===
-import type { Condition, EarlierOp } from "../../reads/where-ops.ts";
+import type { Condition, EarlierOp, NowOp } from "../../reads/where-ops.ts";
 import { type CountOp, type ViewBlock } from "../../reads/views.ts";
 import type { BranchChain, UnnamedStepNode, ChannelPattern, InstrumentedAction, Mapping, StepNode, WhenBuilder } from "../types.ts";
 export { actionPattern } from "./nodes.ts";
 /** Read matching occurrences strictly before a trigger in its causal flow. */
 export declare function earlier(action: InstrumentedAction, input: Mapping, output?: Mapping): EarlierOp;
+/** Bind a fresh variable to the instant stamped on this causal flow's outermost occurrence. */
+export declare function now(variable: symbol): NowOp;
 export declare function when(channel: ChannelPattern): WhenBuilder;
 export declare function when(line: StepNode): WhenBuilder;
 interface AuthoredWhereBlock extends ViewBlock {
@@ -1829,10 +1833,11 @@ export declare class ActionConcept {
     readonly operational?: OperationalEvents | undefined;
     readonly redactor: Redactor;
     private readonly rawFaultReporter?;
+    private readonly clock;
     private readonly matchingValues;
     private readonly activeFlowValues;
     private readonly flowQuiescenceListeners;
-    constructor(store?: MemoryStore, operational?: OperationalEvents | undefined, redactor?: Redactor, rawFaultReporter?: RawFaultReporter | undefined);
+    constructor(store?: MemoryStore, operational?: OperationalEvents | undefined, redactor?: Redactor, rawFaultReporter?: RawFaultReporter | undefined, clock?: () => Date);
     _reportRawFault(report: RawFaultReport): void;
     /** Folded view: all retained records, keyed by their unique id. */
     get actions(): Map<string, ActionRecord>;
@@ -1847,8 +1852,11 @@ export declare class ActionConcept {
         flow: string;
         input: Record<string, unknown>;
     }): Record<string, unknown>;
+    private readInstant;
     /** Clear transient values and report quiescence when a flow's outermost call settles. */
     _endMatchingInput(flow: string): void;
+    /** The DateTime structurally shared by every reaction evaluating this active flow. */
+    _flowInstant(flow: string): Date | undefined;
     /** Observe fully settled causal flows before occurrence retention is applied. */
     _onFlowQuiescent(listener: (event: FlowQuiescence) => void): () => void;
     /**
@@ -2561,6 +2569,7 @@ export declare class Reacting {
     private compileReaction;
     private compileWhere;
     private applyLoweredWhere;
+    private applyNow;
     private applyEarlier;
     private assertRows;
     private consumeAction;
@@ -3547,6 +3556,9 @@ export type WhereOpIR = ({
     op: "earlier";
     when: ActionTriggerIR;
 } | {
+    op: "now";
+    out: string;
+} | {
     op: "holds";
     computation: string;
     in: PatternIR;
@@ -3568,7 +3580,7 @@ export type WhereOpIR = ({
  * one aggregate, legal only here.
  */
 export type ViewOpIR = Exclude<WhereOpIR, {
-    op: "earlier";
+    op: "earlier" | "now";
 }> | {
     op: "count";
     query: {
@@ -3611,7 +3623,7 @@ export interface QueryRefIR {
 }
 /** An op inside a former's selection: the where algebra minus `earlier` and `count`. */
 export type FormerWhereOpIR = Exclude<WhereOpIR, {
-    op: "earlier";
+    op: "earlier" | "now";
 }>;
 /** A former selection begins from one plain line, query or view backed. */
 export type FormerSourceIR = {
@@ -4644,11 +4656,16 @@ export interface EarlierOp {
     readonly op: "earlier";
     readonly pattern: ActionTriggerPattern;
 }
-/** A where op as a reaction's `.where(...)` accepts it, including `earlier`. */
-export type AnyWhereOp = WhereOp | EarlierOp;
+/** Bind one fresh variable to the instant of the current causal flow. */
+export interface NowOp {
+    readonly op: "now";
+    readonly out: symbol;
+}
+/** A where op as a reaction's `.where(...)` accepts it, including flow-owned reads. */
+export type AnyWhereOp = WhereOp | EarlierOp | NowOp;
 /** A condition accepted by `where(...)`: an operation, read line, or named computation. */
 export type Condition = AnyWhereOp | ReadLine | FusedComputation;
-/** Brand an op constructed elsewhere (`earlier`, which needs action patterns). */
+/** Brand an op constructed by the reaction authoring words. */
 export declare function brandWhereOp<T extends object>(op: T): T;
 /**
  * Accept one condition in `where(...)`, whatever its spelling: an op
@@ -5963,7 +5980,7 @@ export declare function snapshotValue(value: unknown, seen?: WeakMap<object, unk
 === dist/language/index.d.ts ===
 /** Words used to declare concepts, reactions, views, and formers. */
 export { reaction } from "../engine/reactions/authoring/refs.ts";
-export { earlier } from "../engine/reactions/authoring/words.ts";
+export { earlier, now } from "../engine/reactions/authoring/words.ts";
 export { when } from "../engine/reactions/authoring/public-words.ts";
 export { refused, returned } from "../engine/reactions/authoring/channels.ts";
 export { where } from "../engine/reactions/authoring/words.ts";

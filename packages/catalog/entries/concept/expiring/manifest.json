@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "id": "concept/expiring",
+  "kind": "concept",
+  "summary": "Give a subject a deadline after which it stops counting as current.",
+  "design": "spec.md",
+  "sources": ["expiring.shared.ts", "expiring.conformance.ts", "registry.ts"],
+  "implementations": {
+    "memory": {
+      "summary": "Process-local deadlines compared against a caller-supplied instant.",
+      "sources": ["expiring.memory.ts", "expiring.memory.test.ts"]
+    }
+  }
+}

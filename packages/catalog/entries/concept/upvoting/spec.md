@@ -74,6 +74,7 @@ unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
 
 ```queries
 _vote (item: Item, voter: Voter) : optional (direction: Direction)
+  answers the Voter's current Vote direction for the Item
   answers no row when the voter has not voted on the item
 _score (item: Item) : one (score: Integer)
   answers the number of up Votes minus the number of down Votes

@@ -22,12 +22,13 @@ const composition = {
   WithdrawQueuedReview,
 };
 
-export function assembleReviewQueue(instances: CatalogInstances) {
+export function assembleReviewQueue(instances: CatalogInstances, clock?: () => Date) {
   return assemble({
     conceptSet: applicationConceptSet,
     instances,
     composition,
     queryCache: "none",
+    ...(clock === undefined ? {} : { clock }),
   });
 }
 
@@ -50,21 +51,15 @@ async function success(
   return result.value as Record<string, unknown>;
 }
 
-function observedTiming(instances: CatalogInstances) {
-  const delegate = instances.Timing;
+function observedClock() {
   const observed: Date[] = [];
   return {
     observed,
-    timing: {
-      read(input: Record<string, never>) {
-        return delegate.read(input);
-      },
-      async _now() {
-        const answer = await delegate._now();
-        observed.push(new Date(answer.time.getTime()));
-        return answer;
-      },
-    } as CatalogInstances["Timing"],
+    clock() {
+      const instant = new Date();
+      observed.push(instant);
+      return instant;
+    },
   };
 }
 
@@ -74,8 +69,8 @@ function expectIdentity(value: unknown): string {
 }
 
 export async function exerciseReviewQueue(instances: CatalogInstances): Promise<void> {
-  const { observed, timing } = observedTiming(instances);
-  const application = assembleReviewQueue({ ...instances, Timing: timing });
+  const { observed, clock } = observedClock();
+  const application = assembleReviewQueue(instances, clock);
 
   const beforeRequest = observed.length;
   const requested = await success(application, "/review-queue/request", {
@@ -210,7 +205,7 @@ export async function exerciseReviewQueue(instances: CatalogInstances): Promise<
 }
 
 export async function exerciseReviewQueueRepair(instances: CatalogInstances): Promise<void> {
-  const { observed, timing } = observedTiming(instances);
+  const { observed, clock } = observedClock();
   const delegate = instances.Alerting;
   let failNextRaise = true;
   let failNextAcknowledge = false;
@@ -232,11 +227,13 @@ export async function exerciseReviewQueueRepair(instances: CatalogInstances): Pr
     _openFor: delegate._openFor.bind(delegate),
     _get: delegate._get.bind(delegate),
   } as CatalogInstances["Alerting"];
-  const application = assembleReviewQueue({
-    ...instances,
-    Alerting: interruptedAlerting,
-    Timing: timing,
-  });
+  const application = assembleReviewQueue(
+    {
+      ...instances,
+      Alerting: interruptedAlerting,
+    },
+    clock,
+  );
 
   await expect(
     invoke(application, "/review-queue/request", {
@@ -341,5 +338,5 @@ export async function exerciseReviewQueueRepair(instances: CatalogInstances): Pr
     open: false,
   });
 
-  expect(observed).toHaveLength(4);
+  expect(observed).toHaveLength(8);
 }

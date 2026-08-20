@@ -30,6 +30,8 @@ a set of Selections with
   an item Item
 
 a Current set of Selections
+
+Rule: at most one current Selection has each Scope
 ```
 
 ## Actions
@@ -38,7 +40,7 @@ a Current set of Selections
 choose (scope: Scope, item: Item) : return (selection: Selection)
   where true
   then
-    remove any selection with scope from current
+    delete any Selection with scope
     add a new selection with scope and item
     add selection to current
     return selection
@@ -46,7 +48,7 @@ choose (scope: Scope, item: Item) : return (selection: Selection)
 clear (scope: Scope) : return (selection: Selection)
   where some current selection has scope
   then
-    remove that selection from current
+    delete that Selection
     return selection
   where no current selection has scope
   then
@@ -57,7 +59,9 @@ clear (scope: Scope) : return (selection: Selection)
 
 ```queries
 _current (scope: Scope) : optional (selection: Selection, scope: Scope, item: Item)
+  answers the Scope's current Selection and its Item
   answers no row for a Scope with no current Selection
 _get (selection: Selection) : optional (selection: Selection, scope: Scope, item: Item)
+  answers the Selection's identity, Scope, and Item
   answers no row for an unknown Selection
 ```

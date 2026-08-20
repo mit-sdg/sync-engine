@@ -13,8 +13,6 @@ concrete Person
 ```
 
 ```instances
-instantiate Timing
-
 instantiate Approving with
   Subject is Subject
   Person is Person

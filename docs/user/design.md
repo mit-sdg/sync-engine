@@ -201,12 +201,20 @@ concepts. When a fact is missing, choose among these moves in order:
 
 1. Add it to state when the concept owns the fact.
 2. Accept it as input when the caller owns and can establish the fact.
-3. Inject an environmental dependency such as a clock or identity source.
+3. Inject another environmental dependency, such as an identity source.
 4. Move the behavior to the concept that owns the fact.
 5. Move a non-critical cross-concept policy into composition.
 
-The last move does not protect an invariant from direct action calls and creates
-a read-then-act window. A race-sensitive rule belongs in the owner action.
+The current instant does not require a concept-level clock dependency. A concept
+that needs it still declares the instant as an action input. Composition binds the
+framework-owned flow instant and passes it to that action:
+
+A reaction binds it with `now(instant)` in its `where`, then passes that variable to
+each action that declares the instant, such as `Expiring.schedule`. Every reaction in
+one causal flow observes the same instant, and no caller can author it. Do not
+introduce a clock concept for this role. The last move does not protect an
+invariant from direct action calls and creates a read-then-act window. A
+race-sensitive rule belongs in the owner action.
 
 ### State ownership
 
@@ -353,11 +361,17 @@ invariants through reactions. The useful capability and its principle—not the 
 
 ### Host and external interactions are design candidates
 
-Command-line arguments and streams, filesystems, clocks, process signals, and network
-peers can change observable application behavior. Strongly prefer representing such
-an interaction as a concept when it has semantic choices, state, lifecycle, expected
+Command-line arguments and streams, filesystems, clocks, process signals, and network peers
+can change observable application behavior. Strongly prefer representing such an
+interaction as a concept when it has semantic choices, state, lifecycle, expected
 problems, replacement value, or useful tests. The concept owns the generic interaction;
 composition owns application policy.
+
+The current instant is the exception. Bind it in composition with
+`.where(now(instant))` and pass it to actions that need it rather than representing a
+clock read as a concept. The host may inject a deterministic clock through
+`assemble({ ..., clock })`; one read stamps the causal flow and supplies every `now`
+binding in that flow.
 
 Syncpress is the primary command-line example. Generic
 [Commanding](https://github.com/mit-sdg/syncpress/blob/main/src/concepts/commanding/spec.md)

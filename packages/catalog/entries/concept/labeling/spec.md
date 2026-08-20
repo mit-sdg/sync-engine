@@ -93,10 +93,14 @@ remove (label: Label, item: Item) : return (label: Label, item: Item)
 
 ```queries
 _get (label: Label) : optional (scope: Scope, name: String)
+  answers the Label's Scope and name
   answers no row for an unknown Label
 _for (scope: Scope, item: Item) : many (label: Label, name: String)
+  answers the Item's Labels in the Scope with their names
   answers no rows when the Item has no Labels in the Scope
   orders rows by name and then Label identity
 _items (label: Label) : many (item: Item)
+  answers the Items with Applications for the Label
   answers no rows for an unknown Label or a Label with no Applications
+  orders rows by Item identity
 ```

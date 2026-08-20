@@ -747,7 +747,7 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
     executable,
   );
   run("bun", [command, "list"], consumer);
-  run("bun", [command, "show", "recipe/workshop-selection"], consumer);
+  run("bun", [command, "show", "recipe/review-queue"], consumer);
   run(
     "bun",
     [command, "source", "concept/selecting", "memory/selecting.memory.ts", "--raw"],

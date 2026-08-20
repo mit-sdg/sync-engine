@@ -32,12 +32,13 @@ const composition = {
   SignOutBoardUser,
 };
 
-export function assembleMessageBoard(instances: CatalogInstances) {
+export function assembleMessageBoard(instances: CatalogInstances, clock?: () => Date) {
   return assemble({
     conceptSet: applicationConceptSet,
     instances,
     composition,
     queryCache: "none",
+    ...(clock === undefined ? {} : { clock }),
   });
 }
 
@@ -65,27 +66,21 @@ function identity(value: unknown): string {
   return value as string;
 }
 
-function observedTiming(instances: CatalogInstances) {
-  const delegate = instances.Timing;
+function observedClock() {
   const observed: Date[] = [];
   return {
     observed,
-    timing: {
-      read(input: Record<string, never>) {
-        return delegate.read(input);
-      },
-      async _now() {
-        const answer = await delegate._now();
-        observed.push(new Date(answer.time.getTime()));
-        return answer;
-      },
-    } as CatalogInstances["Timing"],
+    clock() {
+      const instant = new Date();
+      observed.push(instant);
+      return instant;
+    },
   };
 }
 
 export async function exerciseMessageBoard(instances: CatalogInstances): Promise<void> {
-  const { observed, timing } = observedTiming(instances);
-  const application = assembleMessageBoard({ ...instances, Timing: timing });
+  const { observed, clock } = observedClock();
+  const application = assembleMessageBoard(instances, clock);
 
   const registration = await success(application, "/message-board/register", {
     username: "ari",

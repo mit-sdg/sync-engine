@@ -7,16 +7,30 @@
 A concept owns one coherent mechanism: purpose, state, actions, queries. Layout,
 workflow, and shared identity do not define boundaries. Purpose states one evaluable
 need, predicts behavior without methods or peers, and rules out at least one
-plausible design.
+plausible design. A purpose gives one independent reason for state to change; one that
+only manages, maintains, or handles its subject gives none. Read needs from state,
+actions, lifecycles, authorities and failures, never from purpose wording:
+rewording a purpose merges nothing.
 
-Principle uses one or more short archetypal scenarios showing the mechanism's value,
-not a full specification. Include variants, errors, or refusals only when essential to
-the purpose. External context is allowed; peer behavior is never concept-owned.
+A concept is generic when some second, unrelated application could use it unchanged.
+That test is necessary and never sufficient: name the mechanism rather than this product,
+and declare every foreign or application subject an opaque external. Store, compare and
+return such a value; parsing, validating or constructing one belongs to the concept whose
+mechanism is that format, or outside the concept layer. Many fields served by few actions is a
+warning too; confirm it by finding partitions changed by disjoint actions or lifecycles.
 
-Every element serves purpose and brief. Concepts never call, import, or require peers.
+Principle tells one or more short stories in the order events happen, with named
+individuals and real values—`Ari`, visit `v1`, code `gh7`—each action and what it then
+answers. Prose about a generic caller submitting and receiving has restated the actions
+and failed. Include a variant, error, or refusal only where the purpose needs it. External context is allowed.
+
+Concepts never call, import, or require peers.
 Split a concept that mixes distinct purposes, lifecycles, authorities, state, failures,
-or reuse; combine only when parts are useless alone, an invariant needs one atomic
-owner, or reactions would reconstruct one operation.
+or reuse. A part earns its own concept by owning a lifecycle that runs when its siblings
+never fire, holding sole authority over some decision, and stating its contract in opaque
+identities. Combine only when parts are useless alone, or when reactions would merely
+reassemble one authority's transition. A shared invariant, or a wish for atomic commit,
+never argues for combining: declare the obligation and keep the parts apart.
 
 ## State and ownership
 
@@ -26,8 +40,8 @@ belongs to implementation and evidence, not State. Write State only in Simple St
 Form.
 
 External types are generic and identities opaque; relate but never inspect peer facts.
-For a necessary copy of a peer fact, state its authority, updates, staleness,
-divergence detection, and repair; mark historical snapshots. Derive all behavior from
+A necessary copy of a peer fact states its authority, staleness and repair, and a
+historical snapshot says so. Derive all behavior from
 owned state, inputs, and explicit non-peer environment; otherwise change ownership,
 inputs, environment, or policy. Race-sensitive and security-critical rules
 stay in the action owning changed state.
@@ -41,74 +55,41 @@ local invariants. Getters are queries; loops are not actions.
 Expected domain rejection is a declared refusal with a stable code; other failure is a
 fault. State the post-refusal state: a refusal never partially applies the requested
 transition, though it may atomically record a separate declared fact. Queries have no
-effects. Every query has an indented prose body stating rows, the unknown or empty
-case, and stable `many` ordering.
+effects. Every query has an indented prose body stating its
+rows, then the unknown or empty case, and a stable ordering for `many` alone.
 
-Cover each applicable lifecycle stage—creation, completion, expiry, retention,
-reversal, compensation, deletion, or permanence—and add no CRUD symmetry the
-mechanism lacks. Repetition succeeds again, returns a prior result, or refuses.
+Cover every lifecycle stage the mechanism has, from creation through
+deletion or permanence, and add no CRUD symmetry it lacks. Repetition succeeds again, returns a prior result, or refuses.
 Deduplication atomically checks the caller's operation identity; a correlation id is
 only a trace token.
 
 ## Composition and failure
 
-Only composition coordinates concepts. One reaction is one trigger-condition-effect
-decision. Stages express causality; give independent consequences separate reactions;
-named sibling reaction cases are alternatives whose order carries no priority.
+Only composition coordinates concepts, one reaction per trigger-condition-effect
+decision. Stages express causality; give independent consequences separate reactions.
 
-Composition owns cross-concept policy, workflow, context, adaptation, notification,
-compensation, and repair—not owner invariants, mutation, race decisions, or
-reconstructed operations. Pass-through reactions reveal a bad split or missing action.
+Composition owns cross-concept policy, workflow and repair, never owner invariants,
+mutation, or race decisions. Pass-through reactions reveal a bad split or missing action.
 
-A reaction cannot make separate owners atomic. For each cross-concept relation, state
-its owners, violation, repair and whether it is automatic, permitted false interval,
-and failure outcome. If no false interval is safe, combine ownership or transact.
+A reaction cannot make separate owners atomic. Where one concept's action obliges
+another's, declare that obligation: the triggering action, the closing reaction, the
+interval in which the joint condition may be observed false, and the recovery that closes
+it—an idempotent retry identity, or a compensating action. Consume nothing irreversibly
+before the acknowledgement that completes the operation. A declared, recoverable interval
+is sound; an undeclared cross-concept dependency, or one with no recovery, is the defect.
 Decide relevant cycle termination, bounded fan-out and partial effects, idempotency,
 causal order, and stale reads. Never assume rollback, cancellation, or exactly-once
 execution.
 
 ## Authorization and external effects
 
-For each protected effect identify actor, authenticated identity, resource, fact
-owners, condition, and enforcement point. Request data is a claim, not authentication.
-Composition may deny early; owner actions enforce non-bypassable rules.
+For each protected effect identify its actor, resource, condition and enforcement point.
+Request data is a claim, not authentication.
+Owner actions enforce non-bypassable rules; composition may also deny early, and need
+not when the owner already refuses.
 
 Model a host effect as a concept only if it has observable policy, state, lifecycle, or
 failure or needs its own tests; otherwise adapt thinly.
-
-## Authored application design
-
-Inventory exact selected static instances; never declare core-owned `RequestBoundary`.
-A definition may have zero or more instances, none carrying its name. Bind each external
-once to a concrete or SSF-owned type. Reject chains between externals, alias syntax other than
-`alias Alias for Target`, external targets, inline and detached bindings mixed on one
-instance, missing, duplicate, or unresolved bindings, and unused concretes. Direct
-qualified owned-type dependency cycles are valid: edges resolve independently. Bindings
-convey identity—not ownership, validation, TypeScript equivalence, dynamic creation, or
-storage isolation.
-
-The bounded SSF parser proves structural declarations and owned type names, not opaque
-invariants/prose, storage, or behavior.
-
-Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
-wildcards. Cover each authored endpoint and reaction tree and each named view and
-former; declare each executable computation once. A composition document reads as prose
-carrying its links, each naming module, group and declaration:
-
-```text
-Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
-about it. A circle page shows the circle, its members and that discussion
-[as one record](former:Circle.Pages.CirclePage), and only a member
-[may respond](view:Circle.Reading.MemberMayRespond).
-```
-
-An application document is not an API specification. It carries no endpoint sections and
-no input, return or refusal listings: the concept specification owns those, and a second
-copy drifts from the one the checker reads.
-
-`check-design` proves grammar and authored form only. Config checking proves shapes,
-bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
-persistence, transactions, authorization, repair, or behavior; review and test.
 
 # Simple State Form (SSF)
 
@@ -210,7 +191,7 @@ external Person
 
 ## Actions
 ```actions
-create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
+create (owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
   where title is valid
   then
     create the item
@@ -219,7 +200,7 @@ create(owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
   then
     refuse INVALID_TITLE "A valid title is required."
 
-delete(item: Item) : return ()
+delete (item: Item) : return ()
   where true
   then
     delete the item
@@ -228,24 +209,31 @@ delete(item: Item) : return ()
 
 ## Queries
 ```queries
-_items(owner: Person) : many (item: Item, title: String)
-  Returns the owner's items, returns no rows when none exist, and orders by Item identity.
+_items (owner: Person) : many (item: Item, title: String)
+  answers the owner's items with their titles
+  answers no rows when the owner has none
+  orders rows by Item identity
 ```
 ````
 
-Types contains only `external Name` declarations or is empty. State uses supplied SSF;
+A concept's Types section contains only `external Name` declarations, or is empty. State uses supplied SSF;
 keep every State line inside its fence and prefix every invariant prose line with exact
 `Rule:`. Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
 results, and one or more `where`/`then` branches. Indent `where` and `then` equally and
 each branch body deeper. Terminal success returns exactly the declared names. Declare an
 empty result `: return ()` and end its branches with bare `return`, never `return ()` or
 a standalone `()`. Refuse with `refuse CODE "Normative sentence."`; keep codes unique
-within an action and never shared across actions. Return declared names only:
-`return account`, never prose such as `return the session account`.
+within an action and never shared across actions. Return declared names only: `return account`, never prose such as `return the session
+account`. A returned name is a declared parameter, the row the branch created or changed,
+or a value an earlier line in that branch binds, as in `count the Tallies with subject as
+total`. Order an action's branches with its refusals first and its terminal success last,
+and give each branch a condition the others cannot also match.
 
 Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
 before the named row. Mark optional State values in the row `field?: Type`. A `one` body
-always promises one row; only `optional` may say no row.
+always promises one row; only `optional` may say no row. Write a query body as one line
+per fact: what it answers, then the empty or unknown case, then—for `many` alone—its
+stable ordering.
 
 ```types
 concrete Person
@@ -259,71 +247,110 @@ instantiate Noting as Notes with
   Task is Tasking.Task
 ```
 
-Bare `instantiate D` means `instantiate D as D`. Declare each selected instance once;
-never declare core-owned `RequestBoundary`. Bind all externals inline or all detached:
+Bare `instantiate D` means `instantiate D as D`, for a definition with no external to
+bind. Bind every external inline on its own instance, as above.
 
-```instances
-instantiate Tasking
-instantiate Noting as Notes
+Concept files carry no application links, instances, bindings, or computations.
+
+## Application files
+
+Inventory exact selected static instances in `design/types.md`, whose `concrete`
+declarations are application-owned; never declare core-owned `RequestBoundary`. A
+definition may have zero or more instances, none carrying its name. Write an alias only as
+`alias Alias for Target`, and leave no concrete unused; config checking rejects the rest.
+Bindings convey identity only.
+
+Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
+wildcards. Cover each authored endpoint and reaction tree and each named view and former;
+declare each executable computation once. A composition document reads as prose carrying
+its links, each naming module, group and declaration:
+
+```text
+Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
+about it. A circle page shows the circle, its members and that discussion
+[as one record](former:Circle.Pages.CirclePage), and only a member
+[may respond](view:Circle.Reading.MemberMayRespond).
 ```
 
-```bindings
-Tasking.Owner is Person
-Notes.Task is Tasking.Task
-```
-
-Do not mix placement. Target a concrete or SSF-owned type; external aliases are invalid,
-direct owned-type cycles valid. Concept files contain no application links, instances,
-bindings, or computations.
-
-Give each composition document a nonempty H1 and decision prose. Reference application
-declarations with Markdown links, never bare `view:` lines, routes, or concept actions:
-
-```md
-Editing [refreshes content](reaction:Forum.posts.RefreshDerivedContent).
-The [home feed](former:Forum.feed.HomeFeed) presents selected posts.
-Visibility follows the [readability policy](view:Forum.posts.Readable).
-```
-
-Declare each computation once with an indented body where used, or in
-`design/types.md` when shared:
+Give each composition document a nonempty H1 and decision prose. Declare each computation
+once as `name(inputs) : Result`, no space before its inputs, with an indented body where
+it is used, or in `design/types.md` when shared, and
+reference it as `[normalization](computation:normalizeTitle)`:
 
 ```computations
 normalizeTitle(raw: String) : String
   Produces the canonical task title used by endpoint adaptation.
 ```
 
-Prose may use `[normalization](computation:normalizeTitle)`. Routes stay in prose; link
-targets are exact dotted source paths.
+Routes stay in prose; link targets are exact dotted source paths.
+
+An application document is not an API specification. It carries no endpoint sections and
+no input, return or refusal listings: the concept specification owns those, and a second
+copy drifts from the one the checker reads.
+
+`check-design` proves grammar and authored form only. Config checking proves shapes,
+bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
+persistence, transactions, authorization, repair, or behavior; review and test.
 
 # What a design says about its boundary
 
 An endpoint takes one request and produces one answer. Endpoints are the only way into
-the application, and every caller reaches them the same way, whether that caller is a
-browser, a command line, or another part of the same program.
+the application, and every caller reaches them the same way, regardless of caller.
 
 Say what a caller supplies, what comes back, and every refusal with a stable code and
 its meaning. Do not say how any of that is rendered: no methods, status codes, headers,
-exit codes, or address shapes beyond an endpoint's own name. Rendering belongs to the
-application layer and differs by transport, so naming one asks for a guarantee the
-boundary may not be able to give.
+exit codes, or address shapes beyond an endpoint's own name.
 
 When two refusals have to be indistinguishable to a caller, say that as behaviour.
 
-A concept that depends on the current time or on a generated identifier says so in its
-prose. The implementation injects it; the concept never reaches for a clock itself.
+A concept needing the current time or a generated identifier says so in its prose and
+takes it as an action input; it never reaches for a clock. Composition binds one instant
+per flow and passes it in, so no concept reports the time.
+
+# Catalog concepts
+
+These concepts are already generic: each names a mechanism rather than a product, and
+takes what it acts on as an opaque parameter. Cover a need by instantiating one where it
+fits, adapt one where it nearly fits, and invent only where none does. They are
+alternatives, never mandatory names or contracts, and these are all there are. Most
+briefs need a mechanism none of them covers, so "no entry fits, because ..." is an
+expected answer rather than a fault.
+
+- **Alerting** — Keep an addressed matter visible until its recipient acknowledges it, so pending attention survives retries and does not depend on memory.
+- **Approving** — Separate a request from an assigned reviewer's durable decision, so pending work is not mistaken for accepted work and a requester cannot approve the request alone.
+- **Auditing** — Keep a permanent numbered record of who did what to which target, so past activity can be attributed and read back afterwards instead of being reconstructed from state that shows only its current values.
+- **Authenticating** — Establish a username from a password, so a username claim alone cannot act as proof of identity and a compromised password can be replaced or removed.
+- **Commenting** — Attach authored comments to an external target and let only the author retract each comment, so discussion can accumulate without allowing one author to erase another's contribution.
+- **Expiring** — Record a deadline for a subject and answer whether it has lapsed at a given instant, so lapsing happens by the passing of time alone and needs no action from anyone.
+- **Inviting** — Record a directed offer that only its intended recipient may accept or decline, so participation requires consent from both the inviter and invitee.
+- **Labeling** — Classify an item under several stable names in one scope, so the item can be found through overlapping categories instead of being placed in one exclusive container.
+- **Posting** — Publish immutable authored messages in chronological order, so a contribution remains visible and attributed without depending on an external content store.
+- **Registering** — Accept each identified occurrence once against a subject, so a report that arrives twice is recognised as the same one and only genuinely new occurrences reach whatever acts on them.
+- **Reserving** — Give one claimant an exclusive claim on a reservable unit, so the same unit is not promised to competing claimants.
+- **Selecting** — Keep one current item for a shared scope, so everyone working in that scope can begin from the same choice.
+- **Sessioning** — Issue an opaque session for an external subject with a caller-chosen lifetime, so temporary access ends without changing that subject's identity.
+- **Tallying** — Keep a running total of how often something has happened to a subject, so the count can be read back without keeping a record of each separate occurrence.
+- **Trashing** — Record a reversible removal before making that removal irreversible, so an accidental removal can be restored without leaving every removal permanently reversible.
+- **Upvoting** — Record one current preference from each voter about an item, so an aggregate score reflects distinct voters rather than repeated clicks.
 
 ## Assignment
 
 Create the smallest complete design for the brief from mechanism and ownership, not
-endpoint nouns. Resolve required behavior now. Mark only truly unspecified,
-nonblocking choices as `Open decision:` with a safe provisional choice.
+endpoint nouns. Smallest means least behavior, never fewest files: never merge
+mechanisms to save a concept, and merge only on this prompt's combine conditions.
+Resolve required behavior now. Mark only truly unspecified, nonblocking choices as
+`Open decision:` with a safe provisional choice.
+
+Work in two steps and stop between them. First write `design/decomposition.md` alone and
+return; boundaries are settled there, while changing one still costs a line. Write no
+concept, composition, or types file until the coordinator returns a reviewed map.
 
 You are the fresh design author, independent of implementation. Do not read or change
 source, tests, generated artifacts, dependencies, framework internals, or prior agent
 history. Read only supplied files and write only the design paths below.
 
-After writing the design files, run only this read-only syntax command:
+In step two only, after writing the concept, composition, and types files, run this
+read-only syntax command:
 
 ```sh
 bunx --no-install sync-engine check-design design/concepts/*.md \
@@ -337,6 +364,18 @@ internals. The coordinator will rerun the same gate independently.
 
 Create or revise only:
 
+- `design/decomposition.md`, whose whole content is the needs you read from the brief,
+  then one Markdown table row per concept: the needs it serves, the catalog entry it
+  instantiates or one clause saying why none fits, the subject it acts on as an opaque
+  external, and a second unrelated application that would use this concept unchanged. Name a concrete subject only
+  where your mechanism is that value's format, and say which rule reads it. Name that application concretely; a concept you
+  cannot place in one is this product's shape rather than a mechanism, and belongs split
+  or renamed before it earns a file. Close the file with one line per obligation your
+  split creates, each opening with a stable `O1`-style id: the triggering action, the
+  closing reaction, the interval the joint condition may be false, and the recovery that
+  closes it. Carry every one into a composition document under the same id when you write
+  the design, since composition is what implementation reads and an obligation left in the
+  map is a decision nobody executes;
 - `design/concepts/<Concept>.md` for reusable concept definitions;
 - `design/compositions/*.md` for application decisions and exact intended
   `reaction:`, `view:`, `former:`, and `computation:` links; and
@@ -344,7 +383,6 @@ Create or revise only:
   `instances` inventory, and inline or detached external bindings.
 
 Create no index, `application.md`, memo, report, progress file, or workflow metadata.
-Catalog entries are alternatives: copy, simplify, split, combine, rename, or reject.
 
 ## Return
 

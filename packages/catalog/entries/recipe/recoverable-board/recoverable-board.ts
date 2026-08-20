@@ -1,9 +1,9 @@
 import spec from "./spec.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, view, where } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, now, view, where } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
-const { Commenting, Labeling, Posting, Timing, Trashing } = concepts;
+const { Commenting, Labeling, Posting, Trashing } = concepts;
 const BOARD_SCOPE = "recoverable-board";
 
 const PostExists = view("recoverable board Post (post) exists", ({ post }, _outputs, _bindings) =>
@@ -55,7 +55,7 @@ const RecoverableBoard = former(
 
 const PublishBoardPost = endpoint("/recoverable-board/post", ({ author, content, at, post }) =>
   receive({ author, content })
-    .where(Timing._now({}).is({ time: at }))
+    .where(now(at))
     .then(Posting.publish({ author, content, at }).responds({ post }))
     .then(respond({ post })),
 );
@@ -64,7 +64,7 @@ const AddBoardComment = endpoint(
   "/recoverable-board/comment",
   ({ post, author, text, at, comment }) =>
     receive({ post, author, text }).then(
-      where(PostIsVisible({ post }), Timing._now({}).is({ time: at }))
+      where(PostIsVisible({ post }), now(at))
         .then(Commenting.add({ target: post, author, text, at }).responds({ comment }))
         .then(respond({ comment }))
         .named("visible-post"),
@@ -118,7 +118,7 @@ const UnlabelBoardPost = endpoint("/recoverable-board/unlabel", ({ post, label }
 
 const TrashBoardPost = endpoint("/recoverable-board/trash", ({ post, at }) =>
   receive({ post }).then(
-    where(PostExists({ post }), Timing._now({}).is({ time: at }))
+    where(PostExists({ post }), now(at))
       .then(Trashing.trash({ item: post, at }).responds({ item: post }))
       .then(respond({ post }))
       .named("post-exists"),
@@ -142,7 +142,7 @@ const RestoreBoardPost = endpoint("/recoverable-board/restore", ({ post }) =>
 
 const PurgeBoardPost = endpoint("/recoverable-board/purge", ({ post, at }) =>
   receive({ post }).then(
-    where(PostExists({ post }), Timing._now({}).is({ time: at }))
+    where(PostExists({ post }), now(at))
       .then(Trashing.purge({ item: post, at }).responds({ item: post }))
       .then(respond({ post }))
       .named("post-exists"),

@@ -21,7 +21,7 @@ generated-assembly compatibility, and format-version rules. The
 
 <!-- register:language:start -->
 
-`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `when`, `where`, `whether`
+`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `now`, `reaction`, `refused`, `returned`, `view`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -35,6 +35,7 @@ generated-assembly compatibility, and format-version rules. The
 | `where`                | `where(...conditions)`                                                                          |
 | `no` / `whether`       | `(readLine)`                                                                                    |
 | `earlier`              | `earlier(action, input, output?)`                                                               |
+| `now`                  | `now(variable)`                                                                                 |
 | `view`                 | `view(name, (input, output, free) => where(...))`                                               |
 | `count`                | `count(query, input, outputVariable)`                                                           |
 | `compute`              | `compute(namedComputation, input, output)`                                                      |
@@ -43,6 +44,21 @@ generated-assembly compatibility, and format-version rules. The
 | `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                                   |
 | `.splicing`            | `form({ ...shape }).splicing(...formerUses)`                                                    |
 | `is`                   | `is.lt`, `is.le`, `is.gt`, `is.ge`, and `is.among` comparisons                                  |
+
+`now(variable)` is available only in a reaction's `where` stage, including an
+endpoint stage's `.where(...)`. It opens one logic variable and binds it to the
+instant stamped on the current causal flow's outermost occurrence. The clock is
+read once when that flow opens, not once per use, so every reaction in the flow
+observes the same instant. The outermost occurrence log and the reaction binding
+use that one stamp rather than taking separate clock readings.
+
+A caller cannot author this value. Registration rejects `now` in views and
+standing-state formers, as a trigger or action input, and in `receive(...)`, just
+as the boundary prevents a caller from authoring `requestId`. A concept that
+needs the instant still declares it as an action input; composition supplies it:
+
+A reaction writes `.where(now(instant))` and then passes `instant` to each action
+declaring it, as `Expiring.schedule({ subject, expiresAt, now: instant })` does.
 
 `.afterFlowSettles()` may follow `when(trigger)` or a completed stage. It may be
 followed directly by `.then(step)` or by `.where(...conditions).then(step)`. On
@@ -110,6 +126,7 @@ assemble(options: ConceptSetAssemblyOptions): Assembly
 | `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
 | `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
 | `queryCache`                      | no          | `"memoize"`; `"none"` disables query-result memoization                                                      |
+| `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`     |
 | `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
 | `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
 | `observers`                       | no          | No operational observers                                                                                     |

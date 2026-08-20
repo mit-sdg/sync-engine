@@ -92,8 +92,14 @@ export interface EarlierOp {
   readonly pattern: ActionTriggerPattern;
 }
 
-/** A where op as a reaction's `.where(...)` accepts it, including `earlier`. */
-export type AnyWhereOp = WhereOp | EarlierOp;
+/** Bind one fresh variable to the instant of the current causal flow. */
+export interface NowOp {
+  readonly op: "now";
+  readonly out: symbol;
+}
+
+/** A where op as a reaction's `.where(...)` accepts it, including flow-owned reads. */
+export type AnyWhereOp = WhereOp | EarlierOp | NowOp;
 
 /** A condition accepted by `where(...)`: an operation, read line, or named computation. */
 export type Condition = AnyWhereOp | ReadLine | FusedComputation;
@@ -102,12 +108,12 @@ function brandOp<T extends object>(op: T): T {
   return brand(op, WhereOpBrand);
 }
 
-/** Whether a value is a where op built by this module (or `earlier`). */
+/** Whether a value is a where op built by this module (or a reaction-owned flow read). */
 function isWhereOp(value: unknown): value is AnyWhereOp {
   return hasBrand(value, WhereOpBrand);
 }
 
-/** Brand an op constructed elsewhere (`earlier`, which needs action patterns). */
+/** Brand an op constructed by the reaction authoring words. */
 export function brandWhereOp<T extends object>(op: T): T {
   return brandOp(op);
 }
@@ -139,7 +145,7 @@ export function conditionOp(value: Condition, site: string): AnyWhereOp {
   if (isFusedComputation(value)) return brandOp({ op: "holds" as const, fused: value });
   throw new Error(
     `${site}: each condition is a line (a called query or view, is.lt(...), ` +
-      "no(...), whether(...)) or a condition operation (compute/custom/earlier).",
+      "no(...), whether(...)) or a condition operation (compute/custom/earlier/now).",
   );
 }
 

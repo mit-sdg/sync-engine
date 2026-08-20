@@ -289,6 +289,7 @@ const register = {
     "former",
     "is",
     "no",
+    "now",
     "reaction",
     "refused",
     "returned",

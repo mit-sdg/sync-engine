@@ -62,6 +62,7 @@ inferring an answer from implementation source.
 - Put every instance's external bindings all inline or all detached. Direct qualified owned-type dependency cycles are valid; external-to-external targets and alias chains are invalid.
 - Treat instances as finite static semantic identities, not dynamic tenants or storage allocation. Configure persistent repositories or namespaces explicitly.
 - Give every query an indented body explaining its answers, empty or unknown case, and deterministic ordering for `many`.
+- Bind the current instant only in a reaction `where` with `now(variable)` and pass it to concept action inputs. One host-clock read stamps the flow for every reaction, and callers cannot author it; do not model a clock-read concept.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.

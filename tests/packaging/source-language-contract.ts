@@ -1,5 +1,5 @@
 import { vocabulary } from "@sync-engine/advanced";
-import { count, reaction, returned, when, where } from "@sync-engine/language";
+import { count, now, reaction, returned, when, where } from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -119,6 +119,13 @@ Answering.choose({ kind: "text" }).responds({ text: "one" });
 Answering.choose({ kind: "number" }).responds({ number: "one" });
 // @ts-expect-error Output patterns reject fields absent from every return variant.
 Answering.choose({ kind: "number" }).responds({ number: 1, unknown: true });
+
+reaction(({ value }) =>
+  when(Answering.start({}).responds()).where(now(value)).then(Answering.record({ value })),
+);
+
+// @ts-expect-error now binds exactly one logic variable.
+now("value");
 
 reaction(({ value }) =>
   when(Answering.start({}).responds()).then(

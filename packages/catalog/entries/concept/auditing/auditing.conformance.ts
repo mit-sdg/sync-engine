@@ -205,9 +205,9 @@ export function auditingConformance(
           trail,
           event,
           actor,
-          action: "gathering.join",
+          action: "reserving.reserve",
           detail: "",
-          target: "gathering-3",
+          target: "unit-3",
           at: HOLD,
         });
 
@@ -248,9 +248,7 @@ export function auditingConformance(
           entries: 1,
           last: 1,
         });
-        expect(await auditing._forTarget({ trail: "workspace-3", target: "gathering-3" })).toEqual(
-          [],
-        );
+        expect(await auditing._forTarget({ trail: "workspace-3", target: "unit-3" })).toEqual([]);
         expect(await auditing._get({ entry: "missing" })).toEqual([]);
       });
     });

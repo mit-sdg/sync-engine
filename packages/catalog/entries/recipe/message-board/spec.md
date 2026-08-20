@@ -5,7 +5,6 @@ A message board gives authenticated users sessions for publishing posts, comment
 ## Application types and instances
 
 ```instances
-instantiate Timing
 instantiate Authenticating
 
 instantiate Sessioning with
@@ -23,7 +22,7 @@ instantiate Commenting with
 
 ### Accounts
 
-A user may register, sign in, inspect the current account, change its password, sign out, or delete it. Registration can persist before session creation faults, after which the user can sign in. Deleting an account does not revoke separately owned sessions; they remain usable until ended or expired.
+A user may register, sign in, inspect the current account, change its password, sign out, or delete it. Registration and sign-in start a 30-minute session using the causal flow's instant; every later session check receives that same kind of composition-supplied instant. Registration can persist before session creation faults, after which the user can sign in. Deleting an account does not revoke separately owned sessions; they remain usable until ended or expired.
 
 ### BoardPublishing
 

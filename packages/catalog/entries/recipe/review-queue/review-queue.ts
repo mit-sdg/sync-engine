@@ -1,9 +1,9 @@
 import spec from "./spec.md" with { type: "text" };
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
-import { each, form, former, no, view, where, whether } from "@mit-sdg/sync-engine/language";
+import { each, form, former, no, now, view, where, whether } from "@mit-sdg/sync-engine/language";
 import { concepts } from "@catalog/concepts";
 
-const { Alerting, Approving, Timing } = concepts;
+const { Alerting, Approving } = concepts;
 
 const OpenReviewAlert = view(
   "the open alert for (review) and (reviewer)",
@@ -60,7 +60,7 @@ const RequestQueuedReview = endpoint(
   "/review-queue/request",
   ({ subject, requester, reviewer, time, review, alert }) =>
     receive({ subject, requester, reviewer })
-      .where(Timing._now({}).is({ time }))
+      .where(now(time))
       .then(Approving.request({ subject, requester, reviewer, at: time }).responds({ review }))
       .then(
         Alerting.raise({
@@ -75,7 +75,7 @@ const RequestQueuedReview = endpoint(
 
 const ApproveQueuedReview = endpoint("/review-queue/approve", ({ review, reviewer, time, alert }) =>
   receive({ review, reviewer })
-    .where(Timing._now({}).is({ time }))
+    .where(now(time))
     .then(Approving.approve({ review, reviewer, at: time }).responds({ review }))
     .then(
       where(OpenReviewAlert({ review, reviewer }).is({ alert }))
@@ -92,7 +92,7 @@ const RejectQueuedReview = endpoint(
   "/review-queue/reject",
   ({ review, reviewer, reason, time, alert }) =>
     receive({ review, reviewer, reason })
-      .where(Timing._now({}).is({ time }))
+      .where(now(time))
       .then(Approving.reject({ review, reviewer, reason, at: time }).responds({ review }))
       .then(
         where(OpenReviewAlert({ review, reviewer }).is({ alert }))
@@ -109,7 +109,7 @@ const WithdrawQueuedReview = endpoint(
   "/review-queue/withdraw",
   ({ review, requester, reviewer, time, alert }) =>
     receive({ review, requester })
-      .where(Timing._now({}).is({ time }))
+      .where(now(time))
       .then(Approving.withdraw({ review, requester, at: time }).responds({ review }))
       .then(
         where(

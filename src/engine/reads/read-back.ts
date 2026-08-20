@@ -103,6 +103,9 @@ function construeOp(op: WhereOpIR | ViewOpIR, opens: readonly string[], env: Rea
     case "earlier":
       parts.push("reads the flow's record, once per matching occurrence");
       break;
+    case "now":
+      parts.push(`opens (${op.out}) from the flow's outermost occurrence`);
+      break;
   }
   return parts.join("; ");
 }

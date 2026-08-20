@@ -84,5 +84,6 @@ unregister (username: Username, password: Password) : return (account: Account)
 
 ```queries
 _registered (username: Username) : one (registered: Flag)
+  answers true when an Account has the Username
   answers false for an unknown Username
 ```

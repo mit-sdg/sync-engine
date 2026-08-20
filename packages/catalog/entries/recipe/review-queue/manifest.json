@@ -4,6 +4,6 @@
   "kind": "recipe",
   "summary": "Assign durable reviews and keep reviewer alerts convergent through repair.",
   "design": "spec.md",
-  "requires": ["concept/timing", "concept/approving", "concept/alerting"],
+  "requires": ["concept/approving", "concept/alerting"],
   "sources": ["review-queue.ts", "review-queue.behavior.ts", "review-queue.test.ts"]
 }

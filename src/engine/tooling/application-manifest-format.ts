@@ -283,6 +283,12 @@ function assertWhereOperation(
       }
       return;
     }
+    case "now": {
+      if (!options.earlier) fail(`${path}.op`, '"now" is not allowed in this location');
+      const data = shape(value, path, ["op", "out"]);
+      nonemptyString(data.out, `${path}.out`);
+      return;
+    }
     case "holds": {
       const data = shape(value, path, ["op", "computation", "in"]);
       nonemptyString(data.computation, `${path}.computation`);

@@ -59,7 +59,7 @@ describe("catalog documentation", () => {
     }
   });
 
-  test.each(["gathering", "selecting"])(
+  test.each(["selecting"])(
     "keeps the %s concept design byte-identical in both tutorial examples",
     async (concept) => {
       const catalog = await readFile(

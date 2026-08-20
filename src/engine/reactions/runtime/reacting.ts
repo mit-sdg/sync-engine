@@ -452,12 +452,14 @@ export class Reacting {
       current =
         op.op === "earlier"
           ? this.applyEarlier(current, op.pattern)
-          : await applyWhereOps(current, [op], this.registry.readEnv(), (count) =>
-              this.assertRows(
-                typeof current[0]?.[flow] === "string" ? current[0][flow] : "",
-                count,
-              ),
-            );
+          : op.op === "now"
+            ? this.applyNow(current, op.out)
+            : await applyWhereOps(current, [op], this.registry.readEnv(), (count) =>
+                this.assertRows(
+                  typeof current[0]?.[flow] === "string" ? current[0][flow] : "",
+                  count,
+                ),
+              );
       if (current.length === 0) break;
     }
     if (optionalBindings.size === 0) return current;
@@ -467,6 +469,18 @@ export class Reacting {
         if (!Object.hasOwn(filled, key)) setOwn(filled, key, null);
       }
       return filled;
+    });
+  }
+
+  private applyNow(frames: Frames, variable: string | symbol): Frames {
+    return frames.map((frame) => {
+      const flowToken = frame[flow];
+      const instant =
+        typeof flowToken === "string" ? this.Action._flowInstant(flowToken) : undefined;
+      if (instant === undefined) {
+        throw new Error("now(...) can only evaluate inside an active causal flow.");
+      }
+      return { ...frame, [variable]: instant };
     });
   }
 

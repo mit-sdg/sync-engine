@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "id": "concept/tallying",
+  "kind": "concept",
+  "summary": "Keep a running total of how often something has happened to a subject.",
+  "design": "spec.md",
+  "sources": ["tallying.shared.ts", "tallying.conformance.ts", "registry.ts"],
+  "implementations": {
+    "memory": {
+      "summary": "Process-local totals per subject.",
+      "sources": ["tallying.memory.ts", "tallying.memory.test.ts"]
+    }
+  }
+}

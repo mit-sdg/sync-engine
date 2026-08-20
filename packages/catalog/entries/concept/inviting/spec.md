@@ -79,7 +79,10 @@ revoke (invitation: Invitation, inviter: Person, at: DateTime) : return (invitat
 
 ```queries
 _get (invitation: Invitation) : optional (target: Target, inviter: Person, invitee: Person, status: InvitationStatus, issuedAt: DateTime, decidedAt?: DateTime)
+  answers the Invitation's target, inviter, invitee, status, and issue and decision times
   answers no row for an unknown Invitation
 _pendingFor (invitee: Person) : many (invitation: Invitation, target: Target, inviter: Person, issuedAt: DateTime)
+  answers the Invitee's pending Invitations with their targets, inviters, and issue times
+  answers no rows when the Invitee has no pending Invitations
   orders rows by issuedAt and then Invitation identity
 ```

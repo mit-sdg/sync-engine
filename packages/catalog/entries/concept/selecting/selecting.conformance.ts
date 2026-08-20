@@ -53,7 +53,7 @@ export function selectingConformance(
 ): void {
   describe(`Selecting ${floor}`, () => {
     test.skipIf(skip)(
-      "replaces and clears current selections while retaining complete history",
+      "replaces and clears current selections while deleting superseded selections",
       async () => {
         await withSelecting(create, ["first", "other", "second"], async (selecting) => {
           expect(await selecting.choose({ scope: "workshop", item: "Essay A" })).toEqual({
@@ -78,17 +78,13 @@ export function selectingConformance(
           expect(await selecting._current({ scope: "other-workshop" })).toEqual([
             { selection: "other", scope: "other-workshop", item: "Essay C" },
           ]);
-          expect(await selecting._get({ selection: "first" })).toEqual([
-            { selection: "first", scope: "workshop", item: "Essay A" },
-          ]);
+          expect(await selecting._get({ selection: "first" })).toEqual([]);
 
           expect(await selecting.clear({ scope: "workshop" })).toEqual({
             selection: "second",
           });
           expect(await selecting._current({ scope: "workshop" })).toEqual([]);
-          expect(await selecting._get({ selection: "second" })).toEqual([
-            { selection: "second", scope: "workshop", item: "Essay B" },
-          ]);
+          expect(await selecting._get({ selection: "second" })).toEqual([]);
 
           const secondClear = await capture(() => selecting.clear({ scope: "workshop" }));
           if (secondClear.returned)
@@ -106,7 +102,7 @@ export function selectingConformance(
     );
 
     test.skipIf(skip)(
-      "does not create history when identity allocation is interrupted",
+      "does not create a Selection when identity allocation is interrupted",
       async () => {
         await withSelecting(create, [], async (selecting) => {
           const interrupted = await capture(() =>
@@ -120,7 +116,7 @@ export function selectingConformance(
     );
 
     test.skipIf(skip)(
-      "keeps every concurrent choice readable and points current at one complete Selection",
+      "keeps only the current concurrent choice readable as one complete Selection",
       async () => {
         const identities = ["selection-z", "selection-a", "selection-m", "selection-b"];
         await withSelecting(create, identities, async (selecting) => {
@@ -132,10 +128,6 @@ export function selectingConformance(
             })),
           );
           expect(new Set(choices.map(({ selection }) => selection))).toEqual(new Set(identities));
-          for (const { item, selection } of choices)
-            expect(await selecting._get({ selection })).toEqual([
-              { selection, scope: "workshop", item },
-            ]);
 
           const current = await selecting._current({ scope: "workshop" });
           expect(current).toHaveLength(1);
@@ -145,14 +137,18 @@ export function selectingConformance(
             item: currentSelection.item,
             selection: currentSelection.selection,
           });
+          for (const { item, selection } of choices)
+            expect(await selecting._get({ selection })).toEqual(
+              selection === currentSelection.selection
+                ? [{ selection, scope: "workshop", item }]
+                : [],
+            );
           expect(await selecting.clear({ scope: "workshop" })).toEqual({
             selection: currentSelection.selection,
           });
           expect(await selecting._current({ scope: "workshop" })).toEqual([]);
-          for (const { item, selection } of choices)
-            expect(await selecting._get({ selection })).toEqual([
-              { selection, scope: "workshop", item },
-            ]);
+          for (const { selection } of choices)
+            expect(await selecting._get({ selection })).toEqual([]);
         });
       },
     );

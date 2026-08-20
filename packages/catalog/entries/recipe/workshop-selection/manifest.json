@@ -1,9 +1,0 @@
-{
-  "schema": 2,
-  "id": "recipe/workshop-selection",
-  "kind": "recipe",
-  "summary": "Create a workshop, join it, and choose its current item.",
-  "design": "spec.md",
-  "requires": ["concept/gathering", "concept/selecting"],
-  "sources": ["workshop-selection.ts", "workshop-selection.test.ts"]
-}

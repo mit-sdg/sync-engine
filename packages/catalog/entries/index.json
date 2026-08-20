@@ -1,11 +1,8 @@
 [
-  "concept/gathering/manifest.json",
   "concept/selecting/manifest.json",
-  "concept/timing/manifest.json",
   "concept/upvoting/manifest.json",
   "concept/alerting/manifest.json",
   "concept/reserving/manifest.json",
-  "concept/discussing/manifest.json",
   "concept/inviting/manifest.json",
   "concept/posting/manifest.json",
   "concept/commenting/manifest.json",
@@ -15,12 +12,10 @@
   "concept/sessioning/manifest.json",
   "concept/authenticating/manifest.json",
   "concept/auditing/manifest.json",
-  "recipe/workshop-selection/manifest.json",
-  "recipe/member-reservations/manifest.json",
-  "recipe/ranked-discussion/manifest.json",
-  "recipe/invite-only-workshop/manifest.json",
-  "recipe/incident-room/manifest.json",
   "recipe/recoverable-board/manifest.json",
   "recipe/review-queue/manifest.json",
-  "recipe/message-board/manifest.json"
+  "recipe/message-board/manifest.json",
+  "concept/expiring/manifest.json",
+  "concept/tallying/manifest.json",
+  "concept/registering/manifest.json"
 ]

@@ -91,6 +91,8 @@ export function operationFootprint(
     case "compute":
     case "count":
       return footprint(names(op.in), [op.out]);
+    case "now":
+      return footprint([], [op.out]);
     case "custom":
       return footprint([...op.in], [...op.out]);
     case "earlier": {
