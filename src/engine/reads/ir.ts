@@ -138,6 +138,7 @@ export type WhereOpIR =
   | ({ op: "find" | "whether"; in: PatternIR; out: PatternIR; not?: PatternIR } & LineRefIR)
   | ({ op: "no"; in: PatternIR; out: PatternIR } & LineRefIR)
   | { op: "earlier"; when: ActionTriggerIR }
+  | { op: "now"; out: string }
   | { op: "holds"; computation: string; in: PatternIR }
   | { op: "compute"; computation: string; in: PatternIR; out: string }
   | { op: "custom"; fnRef: string; opaque: true; in: string[]; out: string[] };
@@ -148,7 +149,7 @@ export type WhereOpIR =
  * one aggregate, legal only here.
  */
 export type ViewOpIR =
-  | Exclude<WhereOpIR, { op: "earlier" }>
+  | Exclude<WhereOpIR, { op: "earlier" | "now" }>
   | { op: "count"; query: { concept: string; query: string }; in: PatternIR; out: string };
 
 /**
@@ -183,7 +184,7 @@ export interface QueryRefIR {
 }
 
 /** An op inside a former's selection: the where algebra minus `earlier` and `count`. */
-export type FormerWhereOpIR = Exclude<WhereOpIR, { op: "earlier" }>;
+export type FormerWhereOpIR = Exclude<WhereOpIR, { op: "earlier" | "now" }>;
 
 /** A former selection begins from one plain line, query or view backed. */
 export type FormerSourceIR = {

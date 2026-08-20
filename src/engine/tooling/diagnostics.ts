@@ -117,6 +117,7 @@ function operationsMayDrop(trigger: ActionTriggerIR, operations: readonly WhereO
         for (const value of Object.values(operation.out)) addVariables(value, bound);
         break;
       case "compute":
+      case "now":
         if (bound.has(operation.out)) return true;
         bound.add(operation.out);
         break;

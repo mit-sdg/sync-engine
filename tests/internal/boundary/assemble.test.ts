@@ -12,7 +12,7 @@ import { Logging } from "@sync-engine/assembly";
 import { MemoryStore } from "@sync-engine/internal/reactions/runtime/log-store.ts";
 import { endpoint, receive, respond } from "@sync-engine/boundary";
 import { vocabulary } from "@sync-engine/advanced";
-import { former, no, reaction, view, when, where } from "@sync-engine/language";
+import { former, no, now, reaction, view, when, where } from "@sync-engine/language";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 import { wireContracts } from "@sync-engine/tooling";
@@ -62,6 +62,110 @@ const Increment = endpoint("/counter/increment", ({ count }) =>
 );
 
 describe("assemble", () => {
+  test("binds one injected instant across a flow and reads a later flow once", async () => {
+    class Starting {
+      start(input: { supplied?: Date }) {
+        return input;
+      }
+    }
+    class Observing {
+      instants: Array<{ observer: string; instant: Date }> = [];
+      observe(input: { observer: string; instant: Date }) {
+        this.instants.push(input);
+        return {};
+      }
+    }
+    const clockWords = vocabulary({
+      concepts: { Starting, Observing },
+      computations: {},
+    });
+    const { Starting: Start, Observing: Observe } = clockWords.concepts;
+    const First = reaction(({ instant }) =>
+      when(Start.start({}).responds())
+        .where(now(instant))
+        .then(Observe.observe({ observer: "first", instant })),
+    );
+    const Second = reaction(({ instant }) =>
+      when(Start.start({}).responds())
+        .where(now(instant))
+        .then(Observe.observe({ observer: "second", instant })),
+    );
+    const supplied = [new Date("2026-01-01T00:00:00.000Z"), new Date("2026-01-02T00:00:00.000Z")];
+    let reads = 0;
+    const app = assemble({
+      vocabulary: clockWords,
+      composition: { First, Second },
+      clock: () => new Date(supplied[reads++] as Date),
+    });
+
+    await app.concepts.Starting.start({});
+    await app.concepts.Starting.start({});
+
+    expect(reads).toBe(2);
+    expect((app.concepts.Observing as unknown as Observing).instants).toEqual([
+      { observer: "first", instant: supplied[0] },
+      { observer: "second", instant: supplied[0] },
+      { observer: "first", instant: supplied[1] },
+      { observer: "second", instant: supplied[1] },
+    ]);
+  });
+
+  test("a fixed assembly clock makes now deterministic", async () => {
+    class Starting {
+      start(_: Record<string, never>) {
+        return {};
+      }
+    }
+    class Observing {
+      instant: Date | undefined;
+      observe({ instant }: { instant: Date }) {
+        this.instant = instant;
+        return {};
+      }
+    }
+    const clockWords = vocabulary({ concepts: { Starting, Observing }, computations: {} });
+    const { Starting: Start, Observing: Observe } = clockWords.concepts;
+    const Bind = reaction(({ instant }) =>
+      when(Start.start({}).responds()).where(now(instant)).then(Observe.observe({ instant })),
+    );
+    const fixed = new Date("2030-06-01T12:34:56.789Z");
+    const app = assemble({ vocabulary: clockWords, composition: { Bind }, clock: () => fixed });
+
+    await app.concepts.Starting.start({});
+
+    expect((app.concepts.Observing as unknown as Observing).instant).toEqual(fixed);
+  });
+
+  test("rejects an action input or receive(...) authoring a now binding", () => {
+    class Starting {
+      start(input: { instant?: Date }) {
+        return input;
+      }
+    }
+    class Observing {
+      observe(_: { instant: Date }) {
+        return {};
+      }
+    }
+    const clockWords = vocabulary({ concepts: { Starting, Observing }, computations: {} });
+    const { Starting: Start, Observing: Observe } = clockWords.concepts;
+    const ForgedAction = reaction(({ instant }) =>
+      when(Start.start({ instant }).responds())
+        .where(now(instant))
+        .then(Observe.observe({ instant })),
+    );
+    const ForgedReceive = endpoint("/forged-now", ({ instant }) =>
+      receive({ instant }).where(now(instant)).then(Observe.observe({ instant })),
+    );
+
+    expect(() => assemble({ vocabulary: clockWords, composition: { ForgedAction } })).toThrow(
+      "cannot bind a value authored by an action input or receive(...)",
+    );
+    expect(() => assemble({ vocabulary: clockWords, composition: { ForgedReceive } })).toThrow(
+      "cannot bind a value authored by an action input or receive(...)",
+    );
+  });
+
   test("rejects an unknown query cache mode", () => {
     expect(() =>
       assemble({ vocabulary: vocab, composition: { Increment }, queryCache: "ttl" as never }),

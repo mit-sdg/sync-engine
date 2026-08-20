@@ -47,6 +47,8 @@ interface ActiveFlowValues {
   depth: number;
   ids: Set<string>;
   interpreterFailed: boolean;
+  /** Milliseconds from the one clock read that opened this causal flow. */
+  instant: number;
 }
 
 interface FlowQuiescence {
@@ -82,6 +84,7 @@ export class ActionConcept {
     readonly operational?: OperationalEvents,
     readonly redactor: Redactor = { redact },
     private readonly rawFaultReporter?: RawFaultReporter,
+    private readonly clock: () => Date = () => new Date(),
   ) {}
 
   _reportRawFault(report: RawFaultReport): void {
@@ -104,7 +107,7 @@ export class ActionConcept {
   invoke(record: ActionRecord): void {
     this.store.append({
       kind: "invocation",
-      at: Date.now(),
+      at: this.activeFlowValues.get(record.flow)?.instant ?? Date.now(),
       record: {
         ...record,
         input: this.redactor.redact(record.input) as Record<string, unknown>,
@@ -127,12 +130,21 @@ export class ActionConcept {
       depth: 0,
       ids: new Set<string>(),
       interpreterFailed: false,
+      instant: this.readInstant(),
     };
     active.depth++;
     active.ids.add(id);
     this.activeFlowValues.set(flow, active);
     this.matchingValues.set(id, { input: snapshot });
     return snapshot;
+  }
+
+  private readInstant(): number {
+    const value = this.clock();
+    if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+      throw new TypeError("The assembly clock must return a valid Date.");
+    }
+    return value.getTime();
   }
 
   /** Clear transient values and report quiescence when a flow's outermost call settles. */
@@ -153,6 +165,12 @@ export class ActionConcept {
         }),
     );
     this.store.flowSettled(flow);
+  }
+
+  /** The DateTime structurally shared by every reaction evaluating this active flow. */
+  _flowInstant(flow: string): Date | undefined {
+    const instant = this.activeFlowValues.get(flow)?.instant;
+    return instant === undefined ? undefined : new Date(instant);
   }
 
   /** Observe fully settled causal flows before occurrence retention is applied. */

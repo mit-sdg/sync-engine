@@ -56,6 +56,8 @@ function describeOp(op: AnyOpIR): string {
       return `count ${op.query.concept}.${op.query.query}`;
     case "custom":
       return `custom ${op.fnRef}`;
+    case "now":
+      return `now ${op.out}`;
     case "earlier":
       return `earlier ${op.when.concept}.${op.when.action}`;
   }
@@ -107,6 +109,11 @@ export function scheduleBlock<Op extends AnyOpIR>(
       throw new Error(`${site}: the conditions cannot be ordered — ${blocked.join("; ")}.`);
     }
     const [op] = remaining.splice(index, 1);
+    if (op.op === "now" && bound.has(op.out)) {
+      throw new Error(
+        `${site}: now(${JSON.stringify(op.out)}) cannot bind a value authored by a trigger or prior condition; current time is framework-owned.`,
+      );
+    }
     const opened = opOpensIR(op, bound);
     opens.set(op, opened);
     for (const name of opened) bound.add(name);
@@ -132,7 +139,7 @@ export function assertNoOrphanedOpens<Op extends AnyOpIR>(
   for (const op of scheduled.ordered) for (const name of opNamesIR(op)) add(name);
   for (const name of extras) add(name);
   for (const op of scheduled.ordered) {
-    if (op.op === "earlier") continue;
+    if (op.op === "earlier" || op.op === "now") continue;
     for (const name of scheduled.opens.get(op) ?? []) {
       if ((counts.get(name) ?? 0) <= 1) {
         throw new Error(`${site}: "${name}" is opened and never used — omit the key instead.`);

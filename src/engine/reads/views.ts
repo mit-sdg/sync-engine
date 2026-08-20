@@ -148,10 +148,11 @@ function assertViewOps(name: string, alternatives: readonly (readonly ViewOp[])[
     }
     for (const op of block) {
       const kind = (op as { op?: unknown })?.op;
-      if (kind === "earlier") {
+      if (kind === "earlier" || kind === "now") {
+        const word = kind === "earlier" ? "earlier" : "now";
         throw new Error(
           `View "${name}": a view answers from standing state, not from the ` +
-            "flow's record — earlier(...) belongs to a reaction's own where.",
+            `current flow — ${word}(...) belongs to a reaction's own where.`,
         );
       }
       if (typeof kind !== "string" || !VIEW_OPS.has(kind)) {

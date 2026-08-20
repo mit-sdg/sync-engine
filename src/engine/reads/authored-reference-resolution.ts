@@ -97,6 +97,7 @@ export class AuthoredReferenceResolver {
       case "earlier":
         this.resolveActionPattern(op.pattern, site);
         return op;
+      case "now":
       case "custom":
         return op;
     }

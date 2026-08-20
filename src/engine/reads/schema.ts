@@ -47,6 +47,7 @@ const OP_FIELDS: Readonly<Record<string, FieldTable>> = {
   holds: { computation: "computationName", in: "pattern" },
   custom: { in: "varNames", out: "varNames" },
   earlier: { when: "trigger" },
+  now: { out: "varName" },
 };
 
 /** The former-node vocabulary: every reference-carrying field, per variant. */

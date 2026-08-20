@@ -11,9 +11,32 @@ function countSymbols(value: unknown, counts: Map<symbol, number>): void {
   });
 }
 
+function collectSymbols(value: unknown, symbols: Set<symbol>): void {
+  walkValueTree(value, (node) => {
+    if (typeof node === "symbol") symbols.add(node);
+  });
+}
+
 export function lintReactionOpens(name: string, decl: ReactionDeclaration): void {
   const ops = [...(decl.whereOps ?? []), ...decl.then.flatMap((node) => node.whereOps ?? [])];
   if (ops.length === 0) return;
+
+  const triggerBindings = new Set<symbol>();
+  for (const clause of decl.when) {
+    if ("channel" in clause) collectSymbols(clause.pattern, triggerBindings);
+    else {
+      collectSymbols(clause.input, triggerBindings);
+      collectSymbols(clause.output, triggerBindings);
+    }
+  }
+  for (const op of ops) {
+    if (op.op === "now" && triggerBindings.has(op.out)) {
+      const variable = String(op.out.description ?? op.out.toString());
+      throw new Error(
+        `Reaction "${name}": now(${JSON.stringify(variable)}) cannot bind a value authored by an action input or receive(...); current time is framework-owned.`,
+      );
+    }
+  }
   const counts = new Map<symbol, number>();
   for (const clause of decl.when) {
     if ("channel" in clause) countSymbols(clause.pattern, counts);

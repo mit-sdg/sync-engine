@@ -107,7 +107,7 @@ export class ImportedIrBinder {
             pattern: this.bindActionTrigger(op.when, reaction.name),
           };
         }
-        this.definitions.assertOpUsable(op, reaction.name, "Reaction");
+        if (op.op !== "now") this.definitions.assertOpUsable(op, reaction.name, "Reaction");
         return op;
       });
     }

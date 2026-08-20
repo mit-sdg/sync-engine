@@ -52,9 +52,10 @@ function assertSelectionWhere(
           "End the selection with .count(), or put count(...) in a view.",
       );
     }
-    if (kind === "earlier") {
+    if (kind === "earlier" || kind === "now") {
+      const word = kind === "earlier" ? "earlier" : "now";
       throw new Error(
-        `${op}(...): a former answers from standing state, not the flow's record — earlier(...) belongs to a reaction's own where.`,
+        `${op}(...): a former answers from standing state, not the current flow — ${word}(...) belongs to a reaction's own where.`,
       );
     }
     ops.push(conditionOp(item, `${op}(...)`) as WhereOp);

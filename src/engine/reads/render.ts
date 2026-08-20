@@ -182,6 +182,8 @@ export function renderWhereOp(op: WhereOpIR | ViewOpIR): string {
       return renderLine(op, "whether ");
     case "earlier":
       return `earlier, ${renderActionOccurrence(op.when)}`;
+    case "now":
+      return `${op.out} is the current flow's instant`;
     case "count":
       return `${op.out} is the count of ${op.query.concept}.${op.query.query} (${renderRoles(op.in)})`;
     case "holds": {

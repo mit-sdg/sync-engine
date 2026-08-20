@@ -1,5 +1,5 @@
 import { brandWhereOp } from "@engine/reads/where-ops";
-import type { AnyWhereOp, Condition, EarlierOp } from "@engine/reads/where-ops";
+import type { AnyWhereOp, Condition, EarlierOp, NowOp } from "@engine/reads/where-ops";
 import { isCountOp, where as viewWhere, type CountOp, type ViewBlock } from "@engine/reads/views";
 import { normalizeWhere } from "./conditions.ts";
 import { assertReactionNodes } from "./nodes.ts";
@@ -31,6 +31,14 @@ export function earlier(action: InstrumentedAction, input: Mapping, output?: Map
     op: "earlier",
     pattern: { ...actionPattern(action, input, output ?? {}), output: output ?? {} },
   }) as EarlierOp;
+}
+
+/** Bind a fresh variable to the instant stamped on this causal flow's outermost occurrence. */
+export function now(variable: symbol): NowOp {
+  if (typeof variable !== "symbol") {
+    throw new Error("now(variable) binds one logic variable to the current flow's instant.");
+  }
+  return brandWhereOp({ op: "now", out: variable }) as NowOp;
 }
 
 export function when(channel: ChannelPattern): WhenBuilder;

@@ -266,6 +266,7 @@ export function applyOpsProvenance(
         }
         break;
       case "earlier":
+      case "now":
       case "holds":
         break;
       case "count": {

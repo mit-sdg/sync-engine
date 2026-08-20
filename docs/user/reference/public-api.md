@@ -21,7 +21,7 @@ generated-assembly compatibility, and format-version rules. The
 
 <!-- register:language:start -->
 
-`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `reaction`, `refused`, `returned`, `view`, `when`, `where`, `whether`
+`Condition`, `QueryPromise`, `ReadLine`, `RelationView`, `count`, `compute`, `each`, `earlier`, `form`, `former`, `is`, `no`, `now`, `reaction`, `refused`, `returned`, `view`, `when`, `where`, `whether`
 
 <!-- register:language:end -->
 
@@ -35,6 +35,7 @@ generated-assembly compatibility, and format-version rules. The
 | `where`                | `where(...conditions)`                                                                          |
 | `no` / `whether`       | `(readLine)`                                                                                    |
 | `earlier`              | `earlier(action, input, output?)`                                                               |
+| `now`                  | `now(variable)`                                                                                 |
 | `view`                 | `view(name, (input, output, free) => where(...))`                                               |
 | `count`                | `count(query, input, outputVariable)`                                                           |
 | `compute`              | `compute(namedComputation, input, output)`                                                      |

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   actionPattern,
   earlier,
+  now,
   when as rawWhen,
 } from "@sync-engine/internal/reactions/authoring/words.ts";
 import { declarationsOf } from "@sync-engine/internal/reactions/authoring/partitions.ts";
@@ -34,6 +35,12 @@ describe("reaction words", () => {
       op: "earlier",
       pattern: { action: opened, input: { id: "a" }, output: {} },
     });
+  });
+
+  test("now is a branded binding of one logic variable", () => {
+    const instant = Symbol("instant");
+    expect(now(instant)).toMatchObject({ op: "now", out: instant });
+    expect(() => now("instant" as never)).toThrow("binds one logic variable");
   });
 
   test("when rejects arguments that are not step nodes", () => {

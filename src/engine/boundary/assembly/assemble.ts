@@ -238,6 +238,8 @@ export interface AssembleBaseOptions<
   observers?: readonly OperationalObserver[];
   /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
   rawFaultReporter?: RawFaultReporter;
+  /** Host clock used once when each causal flow opens; defaults to the system clock. */
+  clock?: () => Date;
   /** Additional sensitive field names for this assembly only. */
   redaction?: RedactionPolicy;
 }
@@ -464,7 +466,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   const store = new MemoryStore(options.retention ?? { window: 100 }, options.logSink);
   const redactor = createRedactor(options.redaction);
   const engine = new Reacting(
-    new ActionConcept(store, operational, redactor, options.rawFaultReporter),
+    new ActionConcept(store, operational, redactor, options.rawFaultReporter, options.clock),
     lifecycle,
     true,
     options.queryCache,

@@ -135,6 +135,8 @@ export function encodeWhereOp(op: AnyWhereOp, vars: PatternVariables): WhereOpIR
   switch (op.op) {
     case "earlier":
       return { op: "earlier", when: encodeActionTrigger(op.pattern, vars) };
+    case "now":
+      return { op: "now", out: vars.nameOf(op.out) };
     case "find":
     case "whether":
     case "no": {

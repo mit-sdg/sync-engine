@@ -49,9 +49,10 @@ export class ViewFormerValidator {
         }
       },
       op: (op) => {
-        if (op.op === "earlier") {
+        if (op.op === "earlier" || op.op === "now") {
+          const word = op.op === "earlier" ? "earlier" : "now";
           throw new Error(
-            `Former "${site}": a former answers from standing state — earlier(...) cannot appear in its selections.`,
+            `Former "${site}": a former answers from standing state — ${word}(...) cannot appear in its selections.`,
           );
         }
         this.assertOpUsable(op, site, "Former");
@@ -86,10 +87,12 @@ export class ViewFormerValidator {
       }
       assertNoOrphanedOpens(scheduled, [...ins, ...outs], `View "${site}"`);
       for (const op of block) {
-        if ((op as { op: string }).op === "earlier") {
+        const kind = (op as { op: string }).op;
+        if (kind === "earlier" || kind === "now") {
+          const word = kind === "earlier" ? "earlier" : "now";
           throw new Error(
             `View "${site}": a view answers from standing state, not from the ` +
-              "flow's record — earlier(...) belongs to a reaction's own where.",
+              `current flow — ${word}(...) belongs to a reaction's own where.`,
           );
         }
         this.assertOpUsable(op, site, "View");
