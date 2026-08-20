@@ -868,7 +868,11 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   );
   run(bin, ["release", "check", consumer], consumer);
   run(bin, ["brief", "check", brief], consumer);
-  run(bin, ["prompt", "build", "--role", "designer", "--input", `brief=${brief}`], consumer);
+  run(
+    bin,
+    ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${brief}`],
+    consumer,
+  );
   const workspace = resolve(consumer, ".sync-engine");
   const written = (await readdir(workspace)).filter((name) => name.endsWith(".prompt.md"));
   if (written.length !== 1) {
@@ -876,7 +880,7 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   }
   const promptSource = await readFile(resolve(workspace, written[0]!), "utf8");
   if (
-    !promptSource.includes("# Independent designer") ||
+    !promptSource.includes("# Independent decomposition designer") ||
     !promptSource.includes("# Packed skill")
   ) {
     throw new Error("packed skill compiler did not produce the designer prompt");
@@ -890,7 +894,17 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   run("bun", [standaloneCommand, "brief", "check", brief], standaloneApplication);
   run(
     "bun",
-    [standaloneCommand, "prompt", "build", "--role", "designer", "--input", `brief=${brief}`],
+    [
+      standaloneCommand,
+      "prompt",
+      "build",
+      "--role",
+      "designer",
+      "--mode",
+      "map",
+      "--input",
+      `brief=${brief}`,
+    ],
     standaloneApplication,
   );
   const standaloneWorkspace = resolve(standaloneApplication, ".sync-engine");

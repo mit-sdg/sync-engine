@@ -1,33 +1,24 @@
-# Run roles with Paseo
+# Paseo managed-launch adapter
 
-Paseo `--cwd` and assignment prose are not enforcement. Use provider or harness read and
-write denial outside assigned application paths when available. The contract's path
-discipline still binds every assignment.
-
-The compiler owns every role launch:
+Run the compiler-owned launch:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" launch --role <role> --prompt <prompt-file>
 ```
 
-It inspects the coordinator through `$PASEO_AGENT_ID`, reuses that exact provider, model
-and reasoning setting, places the child in the application root, delivers the prompt as a
-file, waits until the agent settles, attests what Paseo reports, and writes the launch
-record that later prompt builds and the handback check require. Pass `--thinking` only
-when the user names a setting. Never hand-roll `paseo run`: a role with no launch record
-did not run.
+The adapter reads the coordinator from `$PASEO_AGENT_ID`, reuses its provider and model,
+and applies its supported reasoning setting. Pass `--thinking` or `--model` only when the
+user names an override. It places the child in the application root, sends the prompt
+with `--prompt-file`, waits, captures the final response and tool log, and writes the
+harness-attested record. Never substitute a hand-written `paseo run`.
 
-Delegation is the default and every role is launched. Only an explicit repository
-instruction forbidding subagents overrides it, and then stop and report; never take a
-role yourself because launching looked unavailable.
-
-Deliver a diagnostic follow-up to a role that already ran, using its record's `agentId`:
+For a checked diagnostic follow-up, use the record's `agentId`:
 
 ```sh
 paseo send "$agent_id" --prompt-file "$follow_up_file" --no-wait
 paseo wait "$agent_id" --timeout <seconds>
 ```
 
-Delivery and synchronization are separate: every send uses `--no-wait`, followed by one
-bounded wait for that follow-up. On timeout, collect one inspect/log snapshot and stop;
-do not enter an inspect, log, permission, or wait polling loop.
+Paseo `--cwd` and assignment prose do not enforce path confinement. Use provider or
+workspace denial when available; the record's tool audit reports observed reads and
+repeated writes.

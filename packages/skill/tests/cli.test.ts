@@ -119,7 +119,9 @@ describe("sync-engine-skill command", () => {
     expect(checked.stdout).toContain("1 decisions, open decisions none");
     expect(checked.stdout).toContain("Next: read ");
     expect(posixPaths(checked.stdout)).toContain("references/design-and-criticism.md\n");
-    expect(checked.stdout).toContain(`prompt build --role designer --input brief=${path}`);
+    expect(checked.stdout).toContain(
+      `prompt build --role designer --mode map --input brief=${path}`,
+    );
   });
 
   test("validates a brief before an application release set is installed", async () => {
@@ -136,12 +138,21 @@ describe("sync-engine-skill command", () => {
   test("writes prompt bytes into the workspace and reports sources separately", async () => {
     const directory = await temporaryDirectory("sync-engine-skill-cli-");
     temporary.push(directory);
-    const build = ["prompt", "build", "--role", "designer", "--input", `brief=${taskBrief}`];
+    const build = [
+      "prompt",
+      "build",
+      "--role",
+      "designer",
+      "--mode",
+      "map",
+      "--input",
+      `brief=${taskBrief}`,
+    ];
     const first = run(build, directory);
     expect(first.status).toBe(0);
     expect(first.stderr).toBe("");
     expect(first.stdout).toMatch(
-      /Prompt built: role designer; \d+ bytes; budget 32768; sha256 [a-f0-9]{64}/,
+      /Prompt built: role designer; mode map; tools decomposition-write-only; \d+ bytes; budget 32768; sha256 [a-f0-9]{64}/,
     );
 
     const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
@@ -153,6 +164,8 @@ describe("sync-engine-skill command", () => {
       await readFile(resolve(directory, ".sync-engine", contextName), "utf8"),
     );
     expect(recorded.role).toBe("designer");
+    expect(recorded.mode).toBe("map");
+    expect(recorded.toolPolicy).toBe("decomposition-write-only");
     expect(recorded.sha256).toBe(first.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1]);
     expect(recorded.briefSha256).toMatch(/^[a-f0-9]{64}$/);
     const output = resolve(directory, ".sync-engine", promptName);
@@ -218,12 +231,14 @@ describe("sync-engine-skill command", () => {
       "build",
       "--role",
       "designer",
+      "--mode",
+      "map",
       "--input",
       `brief=${taskBrief}`,
       "--stdout",
     ]);
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("# Independent designer");
+    expect(result.stdout).toContain("# Independent decomposition designer");
     expect(result.stdout).toContain("# Shared task manager");
     expect(result.stdout).not.toContain("Prompt built:");
     expect(result.stdout).not.toContain("Next:");
@@ -347,14 +362,14 @@ describe("sync-engine-skill command", () => {
     await cp(resolve("packages/skill/skills/sync-engine"), copiedSkill, { recursive: true });
     const copiedCommand = resolve(copiedSkill, "scripts/command.ts");
     const result = run(
-      ["prompt", "build", "--role", "designer", "--input", `brief=${taskBrief}`],
+      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${taskBrief}`],
       directory,
       copiedCommand,
     );
     expect(result.status).toBe(0);
     const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
     const output = resolve(directory, ".sync-engine", written[1]!);
-    expect(await readFile(output, "utf8")).toContain("# Independent designer");
+    expect(await readFile(output, "utf8")).toContain("# Independent decomposition designer");
     expect(result.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
     expect(result.stdout).toContain(copiedSkill);
   });
@@ -412,6 +427,8 @@ describe("sync-engine-skill command", () => {
       "build",
       "--role",
       "critic",
+      "--mode",
+      "contract",
       "--input",
       `brief=${resolve(product, "brief.md")}`,
       "--input",
@@ -488,6 +505,8 @@ describe("sync-engine-skill command", () => {
         "build",
         "--role",
         "critic",
+        "--mode",
+        "contract",
         "--input",
         `brief=${resolve(product, "brief.md")}`,
         "--input",
@@ -520,6 +539,8 @@ describe("sync-engine-skill command", () => {
         "build",
         "--role",
         "critic",
+        "--mode",
+        "contract",
         "--input",
         `brief=${resolve(product, "brief.md")}`,
         "--input",
@@ -585,9 +606,20 @@ In-memory only; nothing survives restart, per the brief's demo decision.
 
 - \`bun test tests/concepts/\`
 - \`tsc --noEmit\`
+
+## Execution budget
+
+- Max tool calls: 24
+- Max runs per command: 2
+- Repairs per diagnostic signature: 1
 `;
     await writeFile(path!, complete);
     expect(run(["assignment", "check", path!], directory).status).toBe(0);
+
+    await writeFile(path!, complete.replace("Max tool calls: 24", "Max tool calls: 40"));
+    const unbounded = run(["assignment", "check", path!], directory);
+    expect(unbounded.status).toBe(1);
+    expect(unbounded.stderr).toContain("must state Max tool calls: 24");
 
     await writeFile(
       path!,
@@ -652,7 +684,7 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     await mkdir(dirname(brief), { recursive: true });
     await cp(taskBrief, brief);
     const wrongSlot = run(
-      ["prompt", "build", "--role", "designer", "--input", `outline=${brief}`],
+      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `outline=${brief}`],
       directory,
     );
     expect(wrongSlot.status).toBe(1);
@@ -703,6 +735,83 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     const unknownRole = run(["launch", "--role", "reviewer", "--prompt", inside], directory);
     expect(unknownRole.status).toBe(1);
     expect(unknownRole.stderr).toContain("Unknown role: reviewer");
+  });
+
+  test("records a coordinator-mediated native launch without Paseo", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-native-launch-");
+    temporary.push(directory);
+    const built = run(
+      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${taskBrief}`],
+      directory,
+    );
+    expect(built.status).toBe(0);
+    const prompt = built.stdout.match(/Next: deliver (\S+) to a fresh designer/)?.[1];
+    expect(prompt).toBeDefined();
+
+    const prepared = run(
+      ["launch", "prepare", "--harness", "codex", "--role", "designer", "--prompt", prompt!],
+      directory,
+    );
+    expect(prepared.status).toBe(0);
+    expect(prepared.stdout).toContain("Native launch prepared: role designer; harness codex");
+    expect(prepared.stdout).toContain("Read ");
+    expect(posixPaths(prepared.stdout)).toContain("references/harnesses/codex.md");
+    const ticket = prepared.stdout.match(/ticket (\S+); response/)?.[1];
+    const response = prepared.stdout.match(/response (\S+)\./)?.[1];
+    expect(ticket).toBeDefined();
+    expect(response).toBeDefined();
+    await writeFile(response!, "design/decomposition.md\n");
+
+    const completed = run(
+      ["launch", "complete", "--ticket", ticket!, "--agent-id", "codex-agent-1"],
+      directory,
+    );
+    expect(completed.status).toBe(0);
+    expect(completed.stdout).toContain(
+      "Completed designer through codex: agent codex-agent-1; native model inheritance recorded but not machine-attested; tools decomposition-write-only",
+    );
+    const launchPath = completed.stdout.match(/record (\S+)\./)?.[1];
+    const record = JSON.parse(await readFile(launchPath!, "utf8"));
+    expect(record).toMatchObject({
+      role: "designer",
+      mode: "map",
+      toolPolicy: "decomposition-write-only",
+      agentId: "codex-agent-1",
+      harness: "codex",
+      attestation: "coordinator",
+      status: "settled",
+      readAudit: "unavailable",
+    });
+    expect(record.provider).toBeUndefined();
+    expect(record.model).toBeUndefined();
+
+    const repeated = run(
+      ["launch", "complete", "--ticket", ticket!, "--agent-id", "codex-agent-1"],
+      directory,
+    );
+    expect(repeated.status).toBe(1);
+    expect(repeated.stderr).toContain("Launch ticket was already completed");
+  });
+
+  test("rejects malformed native launch preparation and returns", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-native-invalid-");
+    temporary.push(directory);
+    await mkdir(resolve(directory, ".sync-engine"));
+    const prompt = resolve(directory, ".sync-engine/designer.prompt.md");
+    await writeFile(prompt, "# designer\n");
+    const unbuilt = run(
+      ["launch", "prepare", "--harness", "claude-code", "--role", "designer", "--prompt", prompt],
+      directory,
+    );
+    expect(unbuilt.status).toBe(1);
+    expect(unbuilt.stderr).toContain("requires a prompt written by prompt build");
+
+    const unknown = run(
+      ["launch", "prepare", "--harness", "unknown", "--role", "designer", "--prompt", prompt],
+      directory,
+    );
+    expect(unknown.status).toBe(1);
+    expect(unknown.stderr).toContain("Unknown native harness");
   });
 
   test("reports concise usage and argument failures", () => {

@@ -2,29 +2,18 @@
 
 ## Assignment
 
-Implement composition and shared integration only in exact assignment paths. Do not read,
-write, inspect, search, or traverse other repository paths. You may read the installed package's `examples/` and `docs/user/` freely; the assignment governs this repository. Approved Markdown and concept
-public surfaces are read-only; do not edit unrelated tests or generated output by hand.
+Implement composition and shared integration only. Approved Markdown and concept public
+surfaces are read-only; do not edit unrelated tests or generated output by hand.
+
+<!-- include: ../common/worker-boundary.md -->
 
 <!-- include: ../common/internals.md -->
 
 Own assigned composition, types, registration, assembly, config, host, and artifact
-wiring. Import public subpaths only. Routine construction:
-
-- `registerConcept({ class, spec, refusals? })` binds imported concept Markdown to its
-  implementation and stable refusal classes. Register the class the concept worker wrote,
-  imported from its module; a wrapper, adapter or subclass that narrows what the checker
-  sees is a defect to return, not a way to pass.
-- `conceptSet({ ...registrations }, computations?)` maps each instance key to its
-  registered definition and creates typed refs. Shared definition names require equal
-  canonical specs; the authored inventory matches the assembly.
-- `reaction`, `view`, `former`, and endpoint declarations implement exact adjacent
-  authored links and decisions.
-- `assemble({ conceptSet, composition, ... })` selects implementations. Never reuse one
-  raw object under two names. Persistent factories use the instance name to choose
-  explicit resources; authored instances allocate no storage.
-
-Follow supplied types and patterns; add no framework layer. Keep invariants out of
+wiring. Import public subpaths only and follow the supplied composition reference. Use the
+concept worker's imported class directly—never a wrapper, adapter, or subclass. Implement
+exact authored links, never reuse one raw instance under two names, and never invent
+storage for an authored instance. Add no framework layer. Keep invariants out of
 composition and hosts thin; approved design owns observable policy.
 
 Run only assigned focused source-agreement, artifact, type, integration, and bounded host

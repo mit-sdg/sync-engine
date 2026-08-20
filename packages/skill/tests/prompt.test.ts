@@ -60,6 +60,46 @@ describe("deterministic prompt construction", () => {
     expect(first.content).not.toContain("\r");
   });
 
+  test("selects phase-specific designer and critic templates", async () => {
+    const setup = await fixture("# Map designer\n<!-- input: brief -->\n");
+    await writeFile(
+      resolve(setup.root, "roles/designer-contract.md"),
+      "# Contract designer\n<!-- input: brief -->\n",
+    );
+    await writeFile(resolve(setup.root, "roles/critic.md"), "# Contract critic\n");
+    await writeFile(resolve(setup.root, "roles/critic-map.md"), "# Map critic\n");
+    const brief = await setup.file("brief.md", "# Brief");
+
+    const map = await buildPrompt({
+      role: "designer",
+      mode: "map",
+      inputs: [{ slot: "brief", path: brief }],
+      promptRoot: setup.root,
+    });
+    const contract = await buildPrompt({
+      role: "designer",
+      mode: "contract",
+      inputs: [{ slot: "brief", path: brief }],
+      promptRoot: setup.root,
+    });
+    const mapCritic = await buildPrompt({
+      role: "critic",
+      mode: "map",
+      inputs: [],
+      promptRoot: setup.root,
+    });
+
+    expect(map.mode).toBe("map");
+    expect(map.toolPolicy).toBe("decomposition-write-only");
+    expect(map.content).toContain("# Map designer");
+    expect(contract.mode).toBe("contract");
+    expect(contract.toolPolicy).toBe("design-and-syntax-only");
+    expect(contract.content).toContain("# Contract designer");
+    expect(mapCritic.mode).toBe("map");
+    expect(mapCritic.toolPolicy).toBe("no-tools");
+    expect(mapCritic.content).toBe("# Map critic\n");
+  });
+
   test("orders repeated input files by display name", async () => {
     const setup = await fixture("# Role\n\n<!-- input: brief -->\n");
     const z = await setup.file("z.md", "Z");

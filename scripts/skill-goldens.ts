@@ -9,11 +9,13 @@ export const hashManifestPath = `${fixtures}/prompt-hashes.json`;
 export const goldens = [
   {
     role: "designer",
+    mode: "map",
     path: `${fixtures}/task-manager/designer.prompt.txt`,
     inputs: [{ slot: "brief", path: `${fixtures}/task-manager/brief.md` }],
   },
   {
     role: "critic",
+    mode: "contract",
     path: `${fixtures}/message-board/critic.prompt.txt`,
     inputs: [
       { slot: "brief", path: `${fixtures}/message-board/brief.md` },
@@ -23,5 +25,10 @@ export const goldens = [
 ] as const;
 
 export async function buildGolden(golden: (typeof goldens)[number]) {
-  return buildPrompt({ role: golden.role, promptRoot, inputs: [...golden.inputs] });
+  return buildPrompt({
+    role: golden.role,
+    mode: golden.mode,
+    promptRoot,
+    inputs: [...golden.inputs],
+  });
 }

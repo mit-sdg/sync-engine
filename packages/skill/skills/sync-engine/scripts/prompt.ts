@@ -13,6 +13,25 @@ export const promptRoles = [
 ] as const;
 
 export type PromptRole = (typeof promptRoles)[number];
+export type PromptMode = "map" | "contract";
+export type ToolPolicy =
+  | "no-tools"
+  | "decomposition-write-only"
+  | "design-and-syntax-only"
+  | "assignment-only";
+
+export function toolPolicy(role: PromptRole, mode?: PromptMode): ToolPolicy {
+  if (role === "critic") return "no-tools";
+  if (role === "designer") {
+    return mode === "contract" ? "design-and-syntax-only" : "decomposition-write-only";
+  }
+  return "assignment-only";
+}
+
+const defaultModes: Partial<Record<PromptRole, PromptMode>> = {
+  designer: "map",
+  critic: "contract",
+};
 
 const roleBudgets: Readonly<Record<PromptRole, number>> = {
   designer: 32 * 1024,
@@ -40,6 +59,8 @@ export interface PromptSource {
 
 export interface BuiltPrompt {
   readonly role: PromptRole;
+  readonly mode?: PromptMode;
+  readonly toolPolicy: ToolPolicy;
   readonly content: string;
   readonly bytes: number;
   readonly sha256: string;
@@ -103,6 +124,7 @@ function rejectNestedDirectives(source: string, path: string): void {
 
 export interface BuildPromptOptions {
   readonly role: string;
+  readonly mode?: PromptMode;
   readonly inputs: readonly PromptInput[];
   readonly promptRoot: string;
   readonly maxBytes?: number;
@@ -117,6 +139,11 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     );
   }
   const role = options.role as PromptRole;
+  const defaultMode = defaultModes[role];
+  if (defaultMode === undefined && options.mode !== undefined) {
+    throw new PromptBuildError(`Role ${role} has no prompt modes`);
+  }
+  const mode = options.mode ?? defaultMode;
   const downstream = [
     "concept-worker",
     "application-worker",
@@ -145,7 +172,8 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     );
   }
   const root = resolve(options.promptRoot);
-  const templatePath = resolve(root, "roles", `${role}.md`);
+  const templateName = mode === undefined || mode === defaultMode ? role : `${role}-${mode}`;
+  const templatePath = resolve(root, "roles", `${templateName}.md`);
   if (!inside(root, templatePath)) throw new PromptBuildError(`Role template escapes prompt root`);
 
   const rawTemplate = await readFile(templatePath, "utf8");
@@ -189,7 +217,7 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     {
       kind: "template",
       path: templatePath,
-      displayName: `roles/${role}.md`,
+      displayName: `roles/${templateName}.md`,
       bytes: byteLength(template),
     },
   ];
@@ -260,6 +288,8 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
 
   return {
     role,
+    ...(mode === undefined ? {} : { mode }),
+    toolPolicy: toolPolicy(role, mode),
     content,
     bytes,
     sha256: createHash("sha256").update(content).digest("hex"),

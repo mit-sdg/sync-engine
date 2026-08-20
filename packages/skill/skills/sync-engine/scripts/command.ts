@@ -8,16 +8,28 @@ import { fileURLToPath } from "node:url";
 import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
 import { checkBriefFile } from "./brief.ts";
 import { designScope, digestDesign, requireDesignDigest } from "./design.ts";
-import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
+import {
+  buildPrompt,
+  promptRoles,
+  type PromptInput,
+  type PromptMode,
+  type PromptRole,
+} from "./prompt.ts";
 import { agentExists, harness, launchRole } from "./launch.ts";
 import {
+  completeNativeLaunch,
+  nativeHarnesses,
+  prepareNativeLaunch,
+  type NativeHarness,
+} from "./native-launch.ts";
+import {
+  isSettledStatus,
   previousRole,
   requireCompletedRole,
   workspaceFileRole,
   requireInsideWorkspace,
   requiredRoles,
   reserveWorkspacePath,
-  settledStatus,
   registrationWrappers,
   verifiedRecords,
   workspaceDirectory,
@@ -206,15 +218,22 @@ function usage(): string {
   sync-engine-skill assignment new --role <role> --design-digest <sha256>
   sync-engine-skill assignment check <file>
   sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
-    [--model <model>] only when the user names one for roles
+    [--model <model>] only when the user names one for Paseo roles
     [--thinking <id>]
+  sync-engine-skill launch prepare --harness <harness> --role <role> --prompt <path>
+  sync-engine-skill launch complete --ticket <path> --agent-id <id>
+    [--provider <provider>] [--model <model>] [--thinking <setting>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
     [--brief <path>]
 
 Roles:
   designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker
 
+Native harnesses:
+  codex, claude-code, antigravity
+
 Prompt options:
+  --mode <map|contract>           Designer and critic prompt phase
   --design-root <directory>       Required for implementation and evidence roles
   --design-digest <sha256>        Closed reviewed design digest for that directory
   --max-bytes <positive integer>  Override the role's default byte budget
@@ -236,6 +255,7 @@ interface PromptArguments {
   readonly inputs: readonly PromptInput[];
   readonly stdout: boolean;
   readonly maxBytes?: number;
+  readonly mode?: PromptMode;
   readonly designRoot?: string;
   readonly designDigest?: string;
 }
@@ -244,6 +264,7 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   let role: string | undefined;
   let stdout = false;
   let maxBytes: number | undefined;
+  let mode: PromptMode | undefined;
   let designRoot: string | undefined;
   let designDigest: string | undefined;
   const inputs: PromptInput[] = [];
@@ -263,6 +284,13 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
       inputs.push({ slot: value.slice(0, separator), path: value.slice(separator + 1) });
     } else if (argument === "--stdout") {
       stdout = true;
+    } else if (argument === "--mode") {
+      const value = takeValue(args, index, argument);
+      index += 1;
+      if (value !== "map" && value !== "contract") {
+        throw new Error(`--mode must be map or contract`);
+      }
+      mode = value;
     } else if (argument === "--design-root") {
       designRoot = takeValue(args, index, argument);
       index += 1;
@@ -282,10 +310,13 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   }
 
   if (role === undefined) throw new Error(`prompt build requires --role`);
+  if ((role === "designer" || role === "critic") && mode === undefined) {
+    throw new Error(`prompt build for ${role} requires --mode map or contract`);
+  }
   for (const input of inputs) {
     if (input.slot === "assignment") requireInsideWorkspace(input.path);
   }
-  return { role, inputs, stdout, maxBytes, designRoot, designDigest };
+  return { role, inputs, stdout, maxBytes, mode, designRoot, designDigest };
 }
 
 async function run(args: readonly string[]): Promise<void> {
@@ -329,7 +360,7 @@ async function run(args: readonly string[]): Promise<void> {
     );
     next(process.stdout, [
       `read ${reference("design-and-criticism.md")}`,
-      `${compiler} prompt build --role designer --input brief=${args[2]} --output <prompt-file>`,
+      `${compiler} prompt build --role designer --mode map --input brief=${args[2]}`,
     ]);
     return;
   }
@@ -394,6 +425,7 @@ async function run(args: readonly string[]): Promise<void> {
     }
     const result = await buildPrompt({
       role: options.role,
+      ...(options.mode === undefined ? {} : { mode: options.mode }),
       inputs: options.inputs,
       promptRoot: resolve(skillRoot, "prompts"),
       maxBytes: options.maxBytes,
@@ -411,6 +443,8 @@ async function run(args: readonly string[]): Promise<void> {
         format: "sync-engine.skill.prompt-context",
         version: 1,
         role: result.role,
+        ...(result.mode === undefined ? {} : { mode: result.mode }),
+        toolPolicy: result.toolPolicy,
         sha256: result.sha256,
         ...(brief === undefined
           ? {}
@@ -424,7 +458,7 @@ async function run(args: readonly string[]): Promise<void> {
     }
 
     const report = [
-      `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
+      `Prompt built: role ${result.role}${result.mode === undefined ? "" : `; mode ${result.mode}`}; tools ${result.toolPolicy}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
       ...result.sources.map(
         (source) =>
           `  ${source.kind} ${source.displayName}: ${source.bytes} bytes (${source.path})`,
@@ -433,8 +467,12 @@ async function run(args: readonly string[]): Promise<void> {
     const stream = options.stdout ? process.stderr : process.stdout;
     stream.write(`${report}\n`);
     const delivered = promptPath ?? "the built prompt";
+    const recipient =
+      result.role === "designer" && result.mode === "contract"
+        ? "the original designer as a phase file"
+        : `a fresh ${result.role} as a file`;
     next(stream, [
-      `deliver ${delivered} to a fresh ${result.role} as a file`,
+      `deliver ${delivered} to ${recipient}`,
       ...(options.designRoot === undefined
         ? []
         : [
@@ -466,6 +504,87 @@ async function run(args: readonly string[]): Promise<void> {
     process.stdout.write(
       `Assignment valid: role ${checked.role}; ${checked.bytes} bytes; ${checked.writePaths.length} listed paths.\n`,
     );
+    return;
+  }
+
+  if (args[0] === "launch" && args[1] === "prepare") {
+    let role: string | undefined;
+    let prompt: string | undefined;
+    let nativeHarness: string | undefined;
+    for (let index = 2; index < args.length; index += 1) {
+      const argument = args[index]!;
+      if (argument === "--role") role = takeValue(args, index, argument);
+      else if (argument === "--prompt") prompt = takeValue(args, index, argument);
+      else if (argument === "--harness") nativeHarness = takeValue(args, index, argument);
+      else throw new Error(`Unknown launch prepare option: ${argument}`);
+      index += 1;
+    }
+    if (role === undefined || prompt === undefined || nativeHarness === undefined) {
+      throw new Error(`launch prepare requires --harness, --role, and --prompt`);
+    }
+    if (!promptRoles.includes(role as PromptRole)) {
+      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
+    }
+    if (!nativeHarnesses.includes(nativeHarness as NativeHarness)) {
+      throw new Error(
+        `Unknown native harness: ${nativeHarness}; harnesses are ${nativeHarnesses.join(", ")}`,
+      );
+    }
+    await requireCompletedRole(role);
+    const prepared = await prepareNativeLaunch({
+      role,
+      harness: nativeHarness as NativeHarness,
+      promptPath: prompt,
+      applicationRoot: process.cwd(),
+    });
+    process.stdout.write(
+      `Native launch prepared: role ${role}; harness ${nativeHarness}; ticket ${prepared.ticketPath}; response ${prepared.responsePath}.\n`,
+    );
+    next(process.stdout, [
+      `read ${reference(`harnesses/${nativeHarness}.md`)}`,
+      `apply native tool policy ${prepared.ticket.toolPolicy ?? "assignment-only"}`,
+      `launch one fresh native ${role} with only: Read ${prepared.ticket.prompt.path} as your complete assignment and follow it; return exactly what it requests`,
+      `copy that agent's final response verbatim into ${prepared.responsePath}`,
+      `${compiler} launch complete --ticket ${prepared.ticketPath} --agent-id <native-agent-id>`,
+    ]);
+    return;
+  }
+
+  if (args[0] === "launch" && args[1] === "complete") {
+    let ticket: string | undefined;
+    let agentId: string | undefined;
+    let provider: string | undefined;
+    let model: string | undefined;
+    let thinking: string | undefined;
+    for (let index = 2; index < args.length; index += 1) {
+      const argument = args[index]!;
+      if (argument === "--ticket") ticket = takeValue(args, index, argument);
+      else if (argument === "--agent-id") agentId = takeValue(args, index, argument);
+      else if (argument === "--provider") provider = takeValue(args, index, argument);
+      else if (argument === "--model") model = takeValue(args, index, argument);
+      else if (argument === "--thinking") thinking = takeValue(args, index, argument);
+      else throw new Error(`Unknown launch complete option: ${argument}`);
+      index += 1;
+    }
+    if (ticket === undefined || agentId === undefined) {
+      throw new Error(`launch complete requires --ticket and --agent-id`);
+    }
+    const completed = await completeNativeLaunch({
+      ticketPath: ticket,
+      agentId,
+      applicationRoot: process.cwd(),
+      ...(provider === undefined ? {} : { provider }),
+      ...(model === undefined ? {} : { model }),
+      ...(thinking === undefined ? {} : { thinking }),
+    });
+    const configuration =
+      completed.record.model === undefined
+        ? "native model inheritance recorded but not machine-attested"
+        : `${completed.record.provider ?? "provider unreported"} ${completed.record.model}${completed.record.thinking === undefined ? "" : ` at ${completed.record.thinking}`}`;
+    process.stdout.write(
+      `Completed ${completed.record.role} through ${completed.record.harness}: agent ${completed.record.agentId}; ${configuration}; tools ${completed.record.toolPolicy ?? "unreported"}; record ${completed.recordPath}.\n`,
+    );
+    next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
     return;
   }
 
@@ -507,7 +626,7 @@ async function run(args: readonly string[]): Promise<void> {
     });
     const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
     process.stdout.write(
-      `Launched ${role} through ${harness}: agent ${launched.record.agentId}; ${attested}; settled ${launched.record.status}; record ${launched.recordPath}.\n`,
+      `Launched ${role} through ${harness}: agent ${launched.record.agentId}; ${attested}; tools ${launched.record.toolPolicy ?? "unreported"}; settled ${launched.record.status}; response ${launched.record.response?.path ?? "unavailable"}; record ${launched.recordPath}.\n`,
     );
     next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
     return;
@@ -537,6 +656,7 @@ async function run(args: readonly string[]): Promise<void> {
     const missing: string[] = [];
     const unknown: string[] = [];
     const unsettled: string[] = [];
+    const coordinatorAttested: string[] = [];
     const wrapped = await registrationWrappers();
     const lines: string[] = [];
     for (const role of requiredRoles) {
@@ -546,9 +666,19 @@ async function run(args: readonly string[]): Promise<void> {
         continue;
       }
       for (const entry of records) {
-        const known = agentExists(entry.record.agentId);
-        if (!known) unknown.push(`${role} ${entry.record.agentId}`);
-        if (entry.record.status !== settledStatus) {
+        const recordHarness = entry.record.harness ?? harness;
+        const attestation = entry.record.attestation ?? "harness";
+        const known =
+          attestation === "harness" && recordHarness === harness
+            ? agentExists(entry.record.agentId)
+            : true;
+        if (attestation === "harness" && recordHarness === harness && !known) {
+          unknown.push(`${role} ${entry.record.agentId}`);
+        }
+        if (attestation === "coordinator") {
+          coordinatorAttested.push(`${role} ${entry.record.agentId} through ${recordHarness}`);
+        }
+        if (!isSettledStatus(entry.record.status)) {
           unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
         }
         for (const path of entry.record.readViolations ?? []) {
@@ -570,8 +700,14 @@ async function run(args: readonly string[]): Promise<void> {
         ) {
           drifted.push(`${role} ran against an earlier brief`);
         }
+        const configuration =
+          entry.record.model === undefined
+            ? "native model inheritance unverified"
+            : `${entry.record.provider ?? "provider unreported"} ${entry.record.model}`;
         lines.push(
-          `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${harness}; ${entry.record.provider} ${entry.record.model}; settled ${entry.record.status}`,
+          attestation === "harness"
+            ? `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${recordHarness}; ${configuration}; settled ${entry.record.status}`
+            : `  ${role}: agent ${entry.record.agentId} coordinator-attested through ${recordHarness}; ${configuration}; settled ${entry.record.status}`,
         );
       }
     }
@@ -586,6 +722,11 @@ async function run(args: readonly string[]): Promise<void> {
         : [`registered a class beside its registry: ${wrapped.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
+    if (coordinatorAttested.length > 0) {
+      process.stdout.write(
+        `Native launches recorded by the coordinator; this compiler cannot query those harness sessions:\n  ${coordinatorAttested.join("\n  ")}\n`,
+      );
+    }
     if (strayed.length > 0) {
       process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
     }
@@ -594,7 +735,7 @@ async function run(args: readonly string[]): Promise<void> {
         `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
       );
     }
-    process.stdout.write(`Every required role ran independently.\n`);
+    process.stdout.write(`Every required role has a settled launch record.\n`);
     return;
   }
 

@@ -2,7 +2,7 @@
 
 `@mit-sdg/sync-engine-skill` is an Agent Skill for building applications on the sync-engine framework. A coding agent loads the skill and becomes the run coordinator. The coordinator writes only the product brief and a short assignment for each role. It launches a separate agent to do every other task.
 
-This split provides independence. The designer has not seen an implementation. The critic did not write the design. The evidence worker did not build the application it tests. Package checks reject a run that skips this structure.
+This split provides independence. The designer has not seen an implementation. The critic did not write the design. The evidence worker did not build the application it tests. Package checks require a launch record for every role; outside Paseo, the active harness's agent UI remains the evidence that the coordinator actually delegated it.
 
 ## Install
 
@@ -48,9 +48,9 @@ The coordinator maintains `product/brief.md`. It records what the product does a
 
 The designer authors everything under `design/`, including concept specifications, compositions, and the types document. Every downstream role treats that directory as read-only.
 
-Criticism repeats until a pass reports nothing material. A repair goes back to the agent that produced the work through a short follow-up file, never through a new copy of the full prompt.
+The designer first writes only the decomposition map. A tool-free map critic settles every row before the same designer receives the contract phase. Authored-contract criticism gets at most two fresh tool-free passes; remaining blockers stop rather than extending the loop.
 
-By default, one concept worker implements all concepts and one application worker wires them together. Either role splits only when its prompt exceeds the byte budget or the user asks for parallel work.
+By default, one concept worker implements all concepts and one application worker wires them together. Only compiler-proven disjoint concept batches may run in parallel, and only when the harness enforces their paths.
 
 ## Roles
 
@@ -71,11 +71,11 @@ The compiler writes prompts, assignments, follow-ups, launch records, and captur
 
 ### Launch records
 
-Every role starts through the skill's `launch` command, not through the harness CLI. The command reads the coordinator's provider, model, and reasoning setting and gives the child the same settings. It places the child in the application root, delivers the prompt as a file, and waits for the child to settle.
+Every role is recorded through the skill's `launch` commands. In Paseo, `launch` starts and inspects the child directly. In Codex, Claude Code, and Antigravity, `launch prepare` binds the prompt to a ticket, the coordinator uses the harness's native subagent tool, and `launch complete` validates the captured return and writes the record.
 
-After settlement, `launch` writes a record with the agent ID, parent ID, prompt hash and size, brief hash, design digest, start time, and settle time.
+Managed records contain the harness-observed agent identity, configuration, prompt hash and size, brief hash, design digest, timing, response, and available tool audit. Native records contain the native agent ID and the same compiler-verifiable hashes, but are marked coordinator-attested because the compiler cannot query another harness's in-session agent UI.
 
-Building a role prompt requires a settled record for the preceding role. Handback requires a record for every required role. Each record must still hash to its prompt and refer to an agent known to the harness. Work done directly by the coordinator has no record and cannot pass handback.
+Building a role prompt requires a settled record for the preceding role. Handback requires a record for every required role. Each record must still hash to its prompt and captured response. A managed record must also refer to an agent still known to Paseo. Native handback reports that independent harness attestation was unavailable; the harness's own agent UI or transcript remains inspectable. Work done directly by the coordinator has no valid native delegation and is forbidden even though portable records cannot prove that boundary cryptographically.
 
 ### Reply and path audits
 
@@ -85,7 +85,7 @@ The reply check compares the final message with the role's return contract. A cr
 
 The path check records every path the role opened, and handback reports any that fall
 outside where that role may read. It does not fail the launch: the role has already
-finished, and only whoever maintains the prompts can act on it. A designer or critic works from its prompt alone. An implementation worker may also read the installed engine's `examples/` and `docs/user/`, but no other location inside the installed package. No role may read the skill's own sources.
+finished, and only whoever maintains the prompts can act on it. Designers and critics use only compiled prompt material. Workers use only compiled material and assignment-listed read paths, write paths, and commands. No role may read the skill's sources or discover extra framework context.
 
 If harness tool records omit file paths, the launch record marks the audit unavailable rather than marking the role clean.
 
@@ -93,7 +93,7 @@ If harness tool records omit file paths, the launch record marks the audit unava
 
 `design digest` hashes the authored design. Downstream prompts carry that digest, and a role launched against another digest does not count. Reopening the design after implementation requires relaunching the roles below it.
 
-`assignment check` reads the assignment's write-path section. It rejects assignments that give a role another role's files. It also rejects a concept assignment with application-wide commands, no focused type check, or no storage guarantee for the data held by the concepts.
+`assignment check` validates role-owned paths and fixed execution budgets. It also rejects a concept assignment with application-wide commands, no focused type check, or no storage guarantee.
 
 ### Transient failures
 
@@ -108,12 +108,14 @@ release check [<application-directory>]
 brief init <brief.md>
 brief check <brief.md>
 design digest <design-directory>
-prompt build --role <role> --input <slot>=<path>...
+prompt build --role <role> [--mode map|contract] --input <slot>=<path>...
 assignment new --role <role> --design-digest <sha256>
 assignment check <file>
 follow-up new --role <role>
 follow-up check <file> --design-root <directory> --design-digest <sha256>
 launch --role <role> --prompt <path> [--timeout <seconds>]
+launch prepare --harness <harness> --role <role> --prompt <path>
+launch complete --ticket <path> --agent-id <id>
 handback check --design-root <directory> --design-digest <sha256>
 ```
 
@@ -128,22 +130,24 @@ The coordinator decides what a role needs. The compiler puts it in the prompt.
 Each role template declares named slots, and the coordinator fills them with
 `--input <slot>=<path>`, repeating a slot for several files:
 
-- `designer`: the brief, and optional catalog entries.
-- `critic`: the brief, every candidate design file, and optional catalog entries.
+- map `designer`: the brief and compiled catalog listing.
+- contract `designer`: the brief, accepted map, map review, and exactly its named catalog entries.
+- map `critic`: the brief and decomposition map.
+- contract `critic`: the brief, accepted map, and every candidate contract file.
 - `concept-worker`: its assignment, the approved specifications, implementation examples,
   and an optional reference.
 - `application-worker`: its assignment, the brief, the approved design, the public concept
-  surfaces rather than their internals, existing shared wiring, examples, and an optional
-  reference.
+  surfaces rather than their internals, relevant types/composition/obligation closure,
+  existing shared wiring, examples, and an optional reference.
 - `frontend-worker`: its assignment, the brief, and the assembled public interface.
 - `evidence-worker`: its assignment, the brief, the contracts for its scenario, and the
   assembled public interface.
 
 Three sources fill those slots. `sync-engine-catalog` lists and shows existing concepts,
-which a designer can reuse or reject and a critic can cite to argue for a better boundary.
-The installed engine ships implementation examples; an assignment names at most one per
-concept and one per mechanism. The skill carries two references of its own, for composition
-declarations and for HTTP, and they go to the workers that need them.
+which a map designer can reuse or reject. The installed engine ships implementation
+examples; the coordinator compiles at most one per concept and mechanism into worker
+prompts. The skill carries composition, HTTP-host, and HTTP-client references and sends
+only the relevant one to each worker.
 
 `sync-engine-analysis` is for the coordinator alone. It helps decide what to select, and
 its output never reaches a designer or critic.
@@ -156,7 +160,7 @@ named on the command line, and the prompt record lists all of them.
 
 Prompt templates use three directives: `include` adds shared text, `input` requires a file, and `input?` accepts an optional file.
 
-The compiler applies a byte budget to each role: 32 KiB for the designer, 48 KiB for the critic, 24 KiB for a concept worker, 48 KiB for an application or frontend worker, and 32 KiB for the evidence worker.
+The compiler applies byte budgets of 32 KiB for designer prompts, 48 KiB for critics, 24 KiB for concept workers, 48 KiB for application and frontend workers, and 32 KiB for evidence. Checked assignments cap worker tool calls at 24, 28, 20, and 20 respectively, with two runs per command and one informed repair per diagnostic signature.
 
 Inputs have the same order on every build. The compiler reports sources, byte count, and SHA-256 separately from the prompt.
 
@@ -164,7 +168,7 @@ Generated Markdown is delivered as a file. It is never placed in a shell argumen
 
 ## Harness support
 
-The `launch` command currently drives [Paseo](https://paseo.dev). The compiler, checks, and design digest are harness independent. Another harness needs its own launch module, following `references/harnesses/contract.md`.
+The compiler directly drives [Paseo](https://paseo.dev). Codex, Claude Code, and Antigravity use their native in-session delegation tools through the portable prepare/complete protocol. This preserves fresh role contexts and compiler-owned records without nested headless CLI sessions. Paseo records are harness-attested; portable records are coordinator-attested and say which audits were unavailable. See `references/harnesses/contract.md` and the matching harness guide.
 
 ## Read next
 

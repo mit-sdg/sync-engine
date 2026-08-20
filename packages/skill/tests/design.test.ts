@@ -111,7 +111,7 @@ describe("role read boundary", () => {
   test("keeps every role out of the skill's own sources", () => {
     const skill = resolve("packages/skill/skills/sync-engine");
     for (const role of ["designer", "critic", "application-worker"]) {
-      expect(readAudit(role, [`${skill}/prompts/inputs/http.md`], skill)).toHaveLength(1);
+      expect(readAudit(role, [`${skill}/prompts/inputs/http-host.md`], skill)).toHaveLength(1);
       expect(readAudit(role, [`${skill}/scripts/command.ts`], skill)).toHaveLength(1);
       // A harness tells its agents to read installed skills.
       expect(readAudit(role, [`${skill}/SKILL.md`], skill)).toEqual([]);

@@ -139,6 +139,38 @@ describe("launch records", () => {
     expect((await verifiedRecords("designer", rude)).length).toBe(0);
   });
 
+  test("stops counting a record when its captured response or launch ticket changes", async () => {
+    const root = await applicationRoot();
+    const responsePath = await reserveWorkspacePath("response", "designer", root);
+    const response = "design/decomposition.md\n";
+    await writeFile(responsePath, response);
+    const ticketPath = await reserveWorkspacePath("ticket", "designer", root);
+    const ticket = '{"format":"sync-engine.skill.launch-ticket"}\n';
+    await writeFile(ticketPath, ticket);
+    await record(root, "designer", {
+      harness: "codex",
+      attestation: "coordinator",
+      status: "settled",
+      launchTicket: {
+        path: ticketPath,
+        sha256: createHash("sha256").update(ticket).digest("hex"),
+      },
+      response: {
+        path: responsePath,
+        sha256: createHash("sha256").update(response).digest("hex"),
+        bytes: Buffer.byteLength(response),
+        contract: "met",
+      },
+    });
+    expect((await verifiedRecords("designer", root)).length).toBe(1);
+
+    await writeFile(responsePath, "changed\n");
+    expect((await verifiedRecords("designer", root)).length).toBe(0);
+    await writeFile(responsePath, response);
+    await writeFile(ticketPath, "changed\n");
+    expect((await verifiedRecords("designer", root)).length).toBe(0);
+  });
+
   test("records a read outside the boundary without holding it against the role", async () => {
     const nosy = await applicationRoot();
     await record(nosy, "designer", {

@@ -10,13 +10,13 @@ routine role prompts.
 The compact rules were checked against Canon `daniel` at
 `d907e027e70158d78d564b1a0fa961c06b1f76d3`.
 
-| Canon source                                                                                                                                        | Destination                                                                                                            |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `background/behavior-description-generally.md`; `background/behavior-structuring-with-concepts.md`; `background/concept-as-behavior-and-service.md` | `common/design.md#useful-independent-concepts`; `#state-and-ownership`; `#actions-and-lifecycle`                       |
-| `background/concept-design-method.md`; `background/Negative purposes.md`                                                                            | purpose, boundaries, restraint, and coordination under common design rules                                             |
-| `background/concept-specifications.md`; `background/concept-design-rubric.md`                                                                       | purpose and Principle under useful independent concepts; state and action rules                                        |
-| `background/concept-design-types.md`; `background/concept-state-notation.md`; `packages/ssf/README.md`                                              | generic opaque identities in `common/design.md`; complete compact authoring grammar and constraints in `common/ssf.md` |
-| `background/concept-synchronizations.md`                                                                                                            | `common/design.md#composition-and-failure`                                                                             |
+| Canon source                                                                                                                                        | Destination                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `background/behavior-description-generally.md`; `background/behavior-structuring-with-concepts.md`; `background/concept-as-behavior-and-service.md` | `common/design-map.md`; `common/design-contract.md`                        |
+| `background/concept-design-method.md`; `background/Negative purposes.md`                                                                            | decomposition boundaries and restraint                                     |
+| `background/concept-specifications.md`; `background/concept-design-rubric.md`                                                                       | contract purpose, Principle, state, and actions                            |
+| `background/concept-design-types.md`; `background/concept-state-notation.md`; `packages/ssf/README.md`                                              | opaque identities in `design-map.md`; authoring grammar in `common/ssf.md` |
+| `background/concept-synchronizations.md`                                                                                                            | `common/design-contract.md#composition-authorization-and-failure`          |
 
 Canon treats Principle as an explanation of essential behavior, not the complete
 contract: it may use more than one archetypal scenario, and variants, refusals, and
@@ -36,9 +36,9 @@ requires nonempty unfenced prose without imposing a scenario count.
 | design approval and renewed approval                           | `design-and-criticism.md`; `implementation.md#implement-in-bounded-phases`      |
 | final checks and acceptance                                    | `implementation.md#validate-once-and-stop`                                      |
 | `references/design-roles.md` closed context and catalog bounds | `design-and-criticism.md#select-compact-context`; designer and critic templates |
-| designer read/write/output contract                            | `prompts/roles/designer.md#assignment`; `#return`                               |
+| designer read/write/output contract                            | map and contract designer templates                                             |
 | draft parser protocol                                          | designer self-check; `design-and-criticism.md` gate                             |
-| critic read/output contract                                    | `prompts/roles/critic.md#assignment`                                            |
+| critic read/output contract                                    | map and contract critic templates                                               |
 | criticism and repair                                           | `design-and-criticism.md`                                                       |
 | `references/implementation-roles.md` concept isolation         | `implementation.md#implement-in-bounded-phases`; concept-worker template        |
 | composition and integration isolation                          | application-worker template                                                     |
@@ -54,10 +54,9 @@ endpoints. Every application worker receives it as a `reference` input.
 
 ## HTTP reference
 
-`prompts/inputs/http.md` compacts the `@mit-sdg/sync-engine-http` README, its public
-surface, and the message-board example's host, edge policy, and web client. Only the
-application and frontend workers receive it, as a `reference` input for web
-applications.
+`prompts/inputs/http-host.md` compacts HTTP projection, policy, and hosting for the
+application worker. `http-client.md` carries generated-wire client construction and
+result handling for the frontend worker.
 
 ## Core concept-design guidance
 

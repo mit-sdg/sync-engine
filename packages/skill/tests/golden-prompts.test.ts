@@ -15,6 +15,7 @@ describe("representative prompt bytes", () => {
   test("matches the task-manager designer golden prompt", async () => {
     const built = await buildPrompt({
       role: "designer",
+      mode: "map",
       promptRoot,
       inputs: [{ slot: "brief", path: "packages/skill/tests/fixtures/task-manager/brief.md" }],
     });
@@ -27,6 +28,7 @@ describe("representative prompt bytes", () => {
   test("matches the message-board critic golden prompt", async () => {
     const built = await buildPrompt({
       role: "critic",
+      mode: "contract",
       promptRoot,
       inputs: [
         { slot: "brief", path: "packages/skill/tests/fixtures/message-board/brief.md" },

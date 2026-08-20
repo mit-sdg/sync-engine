@@ -3,8 +3,15 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
-/** The agent status that means a launched role finished; anything else is unsettled. */
+/** Paseo's status for a role that finished and can receive a follow-up. */
 export const settledStatus = "idle";
+
+/** Native harness records use one portable terminal status instead of a harness spelling. */
+export const portableSettledStatus = "settled";
+
+export function isSettledStatus(status: string): boolean {
+  return status === settledStatus || status === portableSettledStatus;
+}
 
 /** Statuses a role never leaves on its own. Waiting past one only burns the deadline. */
 export const finishedStatuses: readonly string[] = [settledStatus, "error", "failed", "closed"];
@@ -15,12 +22,13 @@ export const resumableStatus = "error";
 /** Compiler-owned directory for generated prompts, follow-ups, assignments, and launch records. */
 export const workspaceDirectory = ".sync-engine";
 
-export type WorkspaceKind = "prompt" | "followup" | "assignment" | "launch" | "response";
+export type WorkspaceKind = "prompt" | "followup" | "assignment" | "ticket" | "launch" | "response";
 
 const extensions: Readonly<Record<WorkspaceKind, string>> = {
   prompt: "prompt.md",
   followup: "followup.md",
   assignment: "assignment.md",
+  ticket: "ticket.json",
   launch: "launch.json",
   response: "response.md",
 };
@@ -30,6 +38,12 @@ export interface PromptContext {
   readonly format: "sync-engine.skill.prompt-context";
   readonly version: 1;
   readonly role: string;
+  readonly mode?: "map" | "contract";
+  readonly toolPolicy?:
+    | "no-tools"
+    | "decomposition-write-only"
+    | "design-and-syntax-only"
+    | "assignment-only";
   readonly sha256: string;
   readonly briefSha256?: string;
   readonly designDigest?: string;
@@ -131,14 +145,22 @@ export function workspaceFileRole(name: string, kind: WorkspaceKind): string | u
   )?.[1];
 }
 
+export type LaunchAttestation = "harness" | "coordinator";
+
 export interface LaunchRecord {
   readonly format: "sync-engine.skill.launch-record";
   readonly version: 1;
   readonly role: string;
+  readonly mode?: "map" | "contract";
+  readonly toolPolicy?: string;
   readonly agentId: string;
   readonly parentAgentId?: string;
-  readonly provider: string;
-  readonly model: string;
+  /** Absent only on records written before harness identity became explicit. */
+  readonly harness?: string;
+  /** Harness means machine-observed; coordinator means the native delegation was recorded. */
+  readonly attestation?: LaunchAttestation;
+  readonly provider?: string;
+  readonly model?: string;
   readonly thinking?: string;
   readonly cwd: string;
   readonly prompt: { readonly path: string; readonly sha256: string; readonly bytes: number };
@@ -147,6 +169,8 @@ export interface LaunchRecord {
   readonly startedAt: string;
   readonly settledAt: string;
   readonly status: string;
+  /** Present on coordinator-mediated native launches and bound to this record by hash. */
+  readonly launchTicket?: { readonly path: string; readonly sha256: string };
   readonly response?: {
     readonly path: string;
     readonly sha256: string;
@@ -222,9 +246,15 @@ export function isLaunchRecord(value: unknown): value is LaunchRecord {
     record.format === "sync-engine.skill.launch-record" &&
     record.version === 1 &&
     typeof record.role === "string" &&
+    (record.mode === undefined || record.mode === "map" || record.mode === "contract") &&
+    (record.toolPolicy === undefined || typeof record.toolPolicy === "string") &&
     typeof record.agentId === "string" &&
-    typeof record.provider === "string" &&
-    typeof record.model === "string" &&
+    (record.harness === undefined || typeof record.harness === "string") &&
+    (record.attestation === undefined ||
+      record.attestation === "harness" ||
+      record.attestation === "coordinator") &&
+    (record.provider === undefined || typeof record.provider === "string") &&
+    (record.model === undefined || typeof record.model === "string") &&
     typeof record.prompt?.sha256 === "string" &&
     typeof record.prompt.path === "string"
   );
@@ -270,8 +300,30 @@ export async function verifiedRecords(
     } catch {
       continue;
     }
-    if (entry.record.status !== settledStatus) continue;
+    if (!isSettledStatus(entry.record.status)) continue;
     if (entry.record.response?.contract === "violated") continue;
+    if (entry.record.response !== undefined) {
+      try {
+        const response = await readFile(entry.record.response.path, "utf8");
+        if (createHash("sha256").update(response).digest("hex") !== entry.record.response.sha256) {
+          continue;
+        }
+      } catch {
+        continue;
+      }
+    }
+    if (entry.record.launchTicket !== undefined) {
+      try {
+        const ticket = await readFile(entry.record.launchTicket.path, "utf8");
+        if (
+          createHash("sha256").update(ticket).digest("hex") !== entry.record.launchTicket.sha256
+        ) {
+          continue;
+        }
+      } catch {
+        continue;
+      }
+    }
     if (
       designDigest !== undefined &&
       entry.record.designDigest !== undefined &&

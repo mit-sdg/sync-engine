@@ -44,6 +44,12 @@ const applicationWideCommands = [
 
 const typeCheckPattern = /tsc\s+--noEmit|bun run typecheck/;
 const storagePattern = /storage|persist|durab|in-memory|memory-only|restart/i;
+const executionBudgets: Readonly<Record<string, number>> = {
+  "concept-worker": 24,
+  "application-worker": 28,
+  "frontend-worker": 20,
+  "evidence-worker": 20,
+};
 
 export interface CheckedAssignment {
   readonly role: string;
@@ -80,6 +86,21 @@ export function checkAssignment(role: string, source: string): CheckedAssignment
     const match = forbidden.find((entry) => entry.pattern.test(path));
     if (match !== undefined) {
       throw new AssignmentError(`Assignment gives ${role} a path owned by ${match.owner}: ${path}`);
+    }
+  }
+
+  const toolBudget = executionBudgets[role];
+  if (toolBudget !== undefined) {
+    if (!source.includes(`Max tool calls: ${toolBudget}`)) {
+      throw new AssignmentError(`Assignment for ${role} must state Max tool calls: ${toolBudget}`);
+    }
+    if (!source.includes("Max runs per command: 2")) {
+      throw new AssignmentError(`Assignment for ${role} must state Max runs per command: 2`);
+    }
+    if (!source.includes("Repairs per diagnostic signature: 1")) {
+      throw new AssignmentError(
+        `Assignment for ${role} must state Repairs per diagnostic signature: 1`,
+      );
     }
   }
 
@@ -142,6 +163,13 @@ implementation must do.>
 ## Commands
 
 - \`<focused command this role runs itself>\`
+
+## Execution budget
+
+- Max tool calls: ${executionBudgets[role] ?? 20}
+- Max runs per command: 2
+- Repairs per diagnostic signature: 1
+- Turns: one initial turn and at most one diagnostic follow-up
 
 ## Return
 

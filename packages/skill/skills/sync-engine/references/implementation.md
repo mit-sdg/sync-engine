@@ -7,8 +7,8 @@ captured.
 
 Start each assignment with the compiler, fill it, and check it before building the
 prompt. Only `Allowed write paths` grants ownership, so a read path costs a role nothing.
-`assignment check` refuses one role's paths going to another, a concept worker with
-application-wide commands or no focused type check, and a missing storage guarantee:
+`assignment check` refuses cross-role paths, unbounded execution budgets, and a concept
+worker with application-wide commands, no focused type check, or no storage guarantee:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" assignment new --role <role> \
@@ -34,9 +34,9 @@ Compiler slots are:
 
 - `concept-worker`: required `assignment`, `specifications`, `examples`; optional
   `reference`;
-- `application-worker`: required `assignment`, `brief`, approved `design`, completed
-  public `concept-surfaces` rather than internals, existing `shared-wiring`, `examples`;
-  optional `reference`;
+- `application-worker`: required `assignment`, `brief`, relevant `types.md`, composition
+  and obligation closure as `design`, completed public `concept-surfaces`, existing
+  `shared-wiring`, and selected `examples`; optional `reference`;
 - `frontend-worker`: required `assignment`, `brief`, assembled `public-interface`;
   optional `examples`, `reference`; and
 - `evidence-worker`: required `assignment`, `brief`, scenario-relevant approved
@@ -44,27 +44,26 @@ Compiler slots are:
 
 Use `--input <slot>=<path>`; repeat slots for multiple files.
 
-Prompt budgets: designer 32, critic 48, concept 24, application 48, frontend 48, evidence
-32 KiB. Split a worker into explicit batches only on budget overflow or user-requested
-parallelism.
+Prompt budgets are designer 32, critic 48, concept 24, application 48, frontend 48, and
+evidence 32 KiB. Assignments additionally cap tool calls at 24, 28, 20, and 20 for the
+four workers, with two runs per command, one informed repair per diagnostic signature,
+and at most one follow-up. Split work before launch if it cannot fit. Only concept batches
+with compiler-proven disjoint paths may run in parallel, and only where the harness
+enforces those boundaries; otherwise every stage is sequential.
 
 A concept worker is gated on `design/concepts/` alone, so take its digest with
 `design digest design --role concept-worker`; every other role uses the whole design. A
 role relaunched only because a digest moved gets an assignment saying so, to confirm its
 implementation still matches and change nothing otherwise.
 
-Launch each worker with `launch --role <role> --prompt <prompt-file>`, never by hand. Add
-`--model <model>` only when the user named a model for roles; the launch record attests
-whichever model ran.
-Start one concept worker for all approved concepts, owning only assigned
-concept and focused test paths.
+Launch through the matching harness guide with a compiler-owned record. Start one concept
+worker unless a checked budget requires disjoint concept batches. Each batch owns only
+assigned concept and focused test paths.
 
-After concept validation passes, start one application worker owning assigned
-compositions, types, registrations, concept set, assembly, configuration, host wiring,
-and generated integration paths. An HTTP product installs `@mit-sdg/sync-engine-http` at
-that release and serves every route through the handler:
-POST/JSON by default, and a policy `direct` route where a client cannot post. A
-hand-rolled router, redirect, or error shaping is a defect.
+After concept validation, start one application worker owning assigned compositions,
+types, registrations, concept set, assembly, configuration, host wiring, and generated
+integration paths. HTTP behavior comes only from the supplied host reference; a
+hand-rolled router, redirect, or error shape is a defect.
 
 If the brief requests a frontend, start one frontend worker after application validation
 passes, owning only assigned frontend paths. It implements the requested browser,
@@ -73,17 +72,16 @@ web-application assignment names the projected HTTP wire and base path; the fron
 its `createHttpClient` construction.
 
 Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application
-worker; it is the declaration API that role exists to use. Add
-`<skill-root>/prompts/inputs/http.md` for an HTTP product and any frontend worker. Never
-read either yourself.
+worker. For HTTP, add `<skill-root>/prompts/inputs/http-host.md` to the application worker
+and `<skill-root>/prompts/inputs/http-client.md` to the frontend worker. Never read these
+worker references yourself.
 
 Finally start one fresh evidence worker. Supply focused commands, not the whole
 application. It may report existing evidence sufficient and edit only assigned
 scenario/test paths.
 
-Return an ordinary implementation defect to the original worker, not a replacement, in
-a compiler-named file holding only the new diagnostic, affected paths, and
-command. Quote the failing check verbatim, including every name it lists, and name the
+Return an ordinary implementation defect to the original worker in a compiler-named
+file holding only the new diagnostic, affected paths, and command. Quote the failing check verbatim, including every name it lists, and name the
 command that produced it: a paraphrase drops declarations, and a narrower check that
 cannot reproduce the failure proves nothing by passing. Never resend its full prompt or
 name a follow-up:

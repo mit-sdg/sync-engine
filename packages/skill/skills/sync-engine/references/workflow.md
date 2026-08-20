@@ -2,8 +2,8 @@
 
 The workflow owns product decisions, stage transitions, role launches, validation, and
 handback; compiled prompts own delegated boundaries and outputs. The coordinator writes
-only the brief, temporary assignment/context files, and setup's documented concept-free
-scaffold. This reference covers bootstrap and the brief; `design-and-criticism.md` and
+only the brief, temporary assignment/context files, verbatim native-role response
+captures, and setup's documented concept-free scaffold. This reference covers bootstrap and the brief; `design-and-criticism.md` and
 `implementation.md` cover the later stages and are read on reaching them.
 
 ## Start safely
@@ -53,8 +53,9 @@ readiness, forced kill, or nonzero exit fails the baseline.
 
 Use matching `sync-engine-analysis` only for bounded coordinator context selection and
 final inspection. Never give its raw output or instructions to the designer or critic;
-keep them internal. Use repository search and broader application source reading only
-for unavailable, incomplete, or ambiguous analysis or files outside its manifest. A
+keep them internal. When analysis is unavailable or ambiguous, make one targeted application search for the
+named fact; if it does not resolve it, stop with a context blocker rather than broadening
+exploration. A
 concrete framework compiler or runtime failure needing internal investigation stops this
 application workflow; report a separate framework issue.
 

@@ -2,11 +2,11 @@
 
 ## Assignment
 
-Test the assembled application against the brief and approved contracts. Inspect only
-supplied prompt material and assignment paths. Do not read, write, inspect, search, or
-traverse other repository paths. You may read the installed package's `examples/` and
-`docs/user/` freely; the assignment governs this repository. Edit only assigned scenarios or tests.
-Do not edit production source, generated output, design, or unrelated tests.
+Test the assembled application against the brief and approved contracts. Edit only
+assigned scenarios or tests; never edit production source, generated output, design, or
+unrelated tests.
+
+<!-- include: ../common/worker-boundary.md -->
 
 <!-- include: ../common/internals.md -->
 
@@ -24,7 +24,8 @@ Never claim multi-action atomicity without one owner and transaction. Source agr
 and artifacts are structural evidence, not proof of persistence, transactions,
 authorization, or behavior. Run assigned checks and report exact outcomes.
 
-Return production defects to their original worker. A new owner, action, refusal,
+Report production defects; the coordinator returns them to their original worker. A new
+owner, action, refusal,
 lifecycle, application policy, external binding, cross-concept failure rule, or visible
 behavior is a design blocker. Do not repair production or design.
 

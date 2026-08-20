@@ -2,10 +2,10 @@
 
 ## Assignment
 
-Implement the requested frontend only in exact assignment paths. Do not read, write,
-inspect, search, or traverse other repository paths. The brief and assignment decide its
-form: a browser app, command-line interface, or another shell. Approved Markdown and the
-assembled contract are read-only.
+Implement the requested browser, command-line, or other frontend. Approved Markdown and
+the assembled contract are read-only.
+
+<!-- include: ../common/worker-boundary.md -->
 
 <!-- include: ../common/internals.md -->
 

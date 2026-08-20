@@ -1,21 +1,50 @@
 # Native-agent harness contract
 
-The compiler launches roles through Paseo, the only harness it drives today; running
-under another harness needs a launch module beside it, so treat this contract as what a
-future one must provide. The workflow requires a harness that can:
+Read this before the matching harness guide. Paseo is the one harness the compiler
+launches and inspects directly; other supported harnesses use coordinator-mediated
+native delegation.
 
-- create fresh native agents for independent roles;
-- expose the coordinator's exact provider, model, and reasoning setting, and attest
-  those values on every role launch;
-- give implementation and evidence roles narrow assigned application paths and, when
-  available, enforce read and write denial outside them;
-- deliver initial and follow-up prompts from files without shell reinterpretation;
-- run independent batches concurrently when requested; and
-- wait for a specific agent with a bounded timeout.
+Every harness must create a fresh agent independent of the coordinator and earlier
+roles, let it read the compiler-reported prompt file, route follow-ups to that same
+agent, wait with a bounded timeout, and expose a stable agent or conversation ID. With
+no override, it must preserve the coordinator's provider, model and reasoning setting
+unless the user explicitly requested another.
 
-Filesystem confinement is best effort and is not a launch prerequisite. Regardless of
-enforcement, role prompts must require agents to work only within their assigned
-application paths and not read, write, inspect, search, or traverse outside them. Do not
-transfer a role to the coordinator when enforcement is unavailable. Stop and name any
-other missing required capability. Do not simulate independent criticism with coordinator
-self-review or silently give a role a different reasoning setting.
+Give every role only the tools its compiled prompt permits. Give implementation and
+evidence roles narrow assigned application paths and, when available, enforce read and
+write denial outside them. Filesystem confinement is best
+effort and is not a launch prerequisite: role prompts must require agents not to read,
+write, inspect, search or traverse outside assigned paths. Do not transfer a role to the
+coordinator when enforcement is unavailable.
+
+Delegation is the default. Only an explicit repository instruction forbidding subagents
+overrides it; then stop instead of taking the role yourself. If fresh agents, identity,
+follow-up routing or bounded waiting is missing, stop and name that capability. Never
+substitute coordinator self-review for independent criticism.
+
+## Managed launch
+
+Paseo's guide uses one compiler command. The compiler launches and waits, observes the
+effective configuration and state, captures the return and tool log, and writes a
+harness-attested record.
+
+## Native launch
+
+Codex, Claude Code and Antigravity use this sequence:
+
+1. Run `launch prepare --harness <harness> --role <role> --prompt <prompt-file>`.
+2. Delegate with the harness tool as its guide specifies. Never run a nested headless
+   CLI. Give only the reported instruction pointing to the prompt file, set no model or
+   reasoning override, and wait.
+3. Copy the final response verbatim into the reserved response file. This is
+   administrative capture, not coordinator-authored role work.
+4. Run `launch complete --ticket <ticket> --agent-id <native-agent-id>`.
+
+Completion verifies ticket, prompt and response hashes and the response contract before
+writing a coordinator-attested record. The compiler cannot query another harness's
+in-session agent UI, so handback reports unavailable machine attestation; that UI or its
+transcript remains the delegation evidence.
+
+Send a compiler-built designer phase file or checked diagnostic follow-up by path to the
+original agent and wait within the remaining deadline. A replacement lacks that role's context. On timeout, capture one
+native status and stop; do not enter a status, permission, log or wait polling loop.
