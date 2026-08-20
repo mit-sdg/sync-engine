@@ -37,6 +37,15 @@ async function record(
   const promptPath = await reserveWorkspacePath("prompt", role, root);
   const content = `# ${role}\n`;
   await writeFile(promptPath, content, "utf8");
+  const criticResponse =
+    role !== "critic" || overrides.response !== undefined
+      ? undefined
+      : overrides.mode === "map"
+        ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n"
+        : "No material findings.\n";
+  const responsePath =
+    criticResponse === undefined ? undefined : await reserveWorkspacePath("response", role, root);
+  if (responsePath !== undefined) await writeFile(responsePath, criticResponse!, "utf8");
   const built: LaunchRecord = {
     format: "sync-engine.skill.launch-record",
     version: 1,
@@ -53,6 +62,16 @@ async function record(
     startedAt: "2026-01-01T00:00:00.000Z",
     settledAt: "2026-01-01T00:05:00.000Z",
     status: "idle",
+    ...(responsePath === undefined
+      ? {}
+      : {
+          response: {
+            path: responsePath,
+            sha256: createHash("sha256").update(criticResponse!).digest("hex"),
+            bytes: Buffer.byteLength(criticResponse!),
+            contract: "met" as const,
+          },
+        }),
     ...overrides,
   };
   await writeLaunchRecord(await reserveWorkspacePath("launch", role, root), built);
@@ -202,19 +221,67 @@ describe("launch records", () => {
     expect((await verifiedRecords("designer", root)).length).toBe(1);
   });
 
-  test("gates each role on the one before it", async () => {
+  test("gates each phase on the one before it", async () => {
     const root = await applicationRoot();
-    await expect(requireCompletedRole("critic", root)).rejects.toThrow(
-      "requires a settled designer launch",
+    await expect(requireCompletedRole("critic", root, undefined, "map")).rejects.toThrow(
+      "requires a settled designer map launch",
     );
-    await record(root, "designer");
-    await expect(requireCompletedRole("critic", root)).resolves.toBeUndefined();
-    await expect(requireCompletedRole("designer", root)).resolves.toBeUndefined();
+    await record(root, "designer", { mode: "map" });
+    await expect(requireCompletedRole("critic", root, undefined, "map")).resolves.toBeUndefined();
+    await record(root, "critic", { mode: "map" });
+    await expect(
+      requireCompletedRole("designer", root, undefined, "contract"),
+    ).resolves.toBeUndefined();
+    await record(root, "designer", { mode: "contract" });
+    await expect(
+      requireCompletedRole("critic", root, undefined, "contract"),
+    ).resolves.toBeUndefined();
+  });
+
+  test("does not treat map findings as map acceptance", async () => {
+    const root = await applicationRoot();
+    const responsePath = await reserveWorkspacePath("response", "critic", root);
+    const response = "- ROW `design/decomposition.md` — Tasking — split — separate owners.\n";
+    await writeFile(responsePath, response);
+    await record(root, "critic", {
+      mode: "map",
+      response: {
+        path: responsePath,
+        sha256: createHash("sha256").update(response).digest("hex"),
+        bytes: Buffer.byteLength(response),
+        contract: "met",
+      },
+    });
+    await expect(requireCompletedRole("designer", root, undefined, "contract")).rejects.toThrow(
+      "requires an accepted map review",
+    );
+  });
+
+  test("requires two contract passes before carrying nonblockers", async () => {
+    const root = await applicationRoot();
+    const response = "- `MATERIAL-NONBLOCKER` — `design/types.md` — Clarify an optional label.\n";
+    for (let pass = 1; pass <= 2; pass += 1) {
+      const responsePath = await reserveWorkspacePath("response", "critic", root);
+      await writeFile(responsePath, response);
+      await record(root, "critic", {
+        mode: "contract",
+        designDigest: "b".repeat(64),
+        response: {
+          path: responsePath,
+          sha256: createHash("sha256").update(response).digest("hex"),
+          bytes: Buffer.byteLength(response),
+          contract: "met",
+        },
+      });
+      const check = requireCompletedRole("concept-worker", root, "b".repeat(64));
+      if (pass === 1) await expect(check).rejects.toThrow("requires a clean contract review");
+      else await expect(check).resolves.toBeUndefined();
+    }
   });
 
   test("stops counting a predecessor built against another design", async () => {
     const root = await applicationRoot();
-    await record(root, "critic", { designDigest: "b".repeat(64) });
+    await record(root, "critic", { mode: "contract", designDigest: "b".repeat(64) });
     await expect(
       requireCompletedRole("concept-worker", root, "b".repeat(64)),
     ).resolves.toBeUndefined();

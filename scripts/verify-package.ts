@@ -847,7 +847,7 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   const entry = await readFile(resolve(installed, "skills/sync-engine/SKILL.md"), "utf8");
   if (
     !entry.startsWith("---\nname: sync-engine\ndescription:") ||
-    !entry.includes("fresh native agents for design, criticism, and evidence")
+    !entry.includes("Use fresh agents for design, criticism, and evidence")
   ) {
     throw new Error("skill package does not contain the required sync-engine Agent Skill");
   }

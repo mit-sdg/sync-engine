@@ -40,7 +40,7 @@ export interface PromptContext {
   readonly role: string;
   readonly mode?: "map" | "contract";
   readonly toolPolicy?:
-    | "no-tools"
+    | "prompt-read-only"
     | "decomposition-write-only"
     | "design-and-syntax-only"
     | "assignment-only";
@@ -229,13 +229,62 @@ function unfenced(text: string): string {
   return fenced === null ? text : fenced[1]!.trim();
 }
 
-export function responseContract(role: string, response: string): string | undefined {
+export function responseContract(
+  role: string,
+  response: string,
+  mode?: "map" | "contract",
+): string | undefined {
   const text = unfenced(response.trim());
   if (text === "") return `${role} returned nothing`;
+  if (role === "designer") {
+    if (mode === "map" && text.startsWith("Changed: design/decomposition.md\nQuestions: ")) {
+      return undefined;
+    }
+    if (
+      mode === "contract" &&
+      text.startsWith("Changed:\n") &&
+      text.includes("\nCheck: ") &&
+      text.includes("\nBlocker: ")
+    ) {
+      return undefined;
+    }
+    return `designer must return the exact ${mode ?? "current"} phase envelope`;
+  }
+  if (role.endsWith("-worker")) {
+    if (
+      text.startsWith("Changed:\n") &&
+      text.includes("\nChecks:\n") &&
+      text.includes("\nBlocker: ") &&
+      text.includes("\nBudget: ")
+    ) {
+      return undefined;
+    }
+    return `${role} must return its Changed, Checks, Blocker, and Budget envelope`;
+  }
   if (role !== "critic") return undefined;
+  if (mode === "map") {
+    const lines = text.split("\n").filter((line) => line.trim() !== "");
+    const allowed =
+      /^- (?:ROW `design\/decomposition\.md` — |COVERAGE — |AUTHORITY — |OBLIGATION — )/;
+    if (
+      lines.some((line) => line.startsWith("- ROW ")) &&
+      lines.every((line) => allowed.test(line))
+    ) {
+      return undefined;
+    }
+    return `map critic must include a ROW verdict and use only its exact blocker forms`;
+  }
   if (text === "No material findings.") return undefined;
-  if (text.startsWith("- `")) return undefined;
-  return `critic must return "No material findings." or begin with its findings, with no preamble`;
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  if (
+    lines.every(
+      (line) =>
+        line.startsWith("- `BLOCKER` — `") || line.startsWith("- `MATERIAL-NONBLOCKER` — `"),
+    )
+  ) {
+    return undefined;
+  }
+  return `contract critic must return "No material findings." or begin with a classified finding, with no preamble`;
 }
 
 export function isLaunchRecord(value: unknown): value is LaunchRecord {
@@ -264,36 +313,44 @@ export async function writeLaunchRecord(path: string, record: LaunchRecord): Pro
   await writeFile(path, `${JSON.stringify(record, undefined, 2)}\n`, "utf8");
 }
 
-/** The role that must already have run and settled before each later role is built. */
-export const roleAfter: Readonly<Record<string, string>> = {
-  critic: "designer",
-  "concept-worker": "critic",
-  "application-worker": "concept-worker",
-  "frontend-worker": "application-worker",
-  "evidence-worker": "application-worker",
-};
-
-export function previousRole(role: string): string | undefined {
-  return roleAfter[role];
+export interface RolePhase {
+  readonly role: string;
+  readonly mode?: "map" | "contract";
 }
 
-export const requiredRoles = [
-  "designer",
-  "critic",
-  "concept-worker",
-  "application-worker",
-  "evidence-worker",
-] as const;
+/** The exact independently recorded phase that must precede a prompt or launch. */
+export function previousPhase(role: string, mode?: "map" | "contract"): RolePhase | undefined {
+  if (role === "designer" && mode === "contract") return { role: "critic", mode: "map" };
+  if (role === "critic" && mode === "map") return { role: "designer", mode: "map" };
+  if (role === "critic") return { role: "designer", mode: "contract" };
+  if (role === "concept-worker") return { role: "critic", mode: "contract" };
+  if (role === "application-worker") return { role: "concept-worker" };
+  if (role === "frontend-worker" || role === "evidence-worker") {
+    return { role: "application-worker" };
+  }
+  return undefined;
+}
+
+export const requiredPhases: readonly RolePhase[] = [
+  { role: "designer", mode: "map" },
+  { role: "critic", mode: "map" },
+  { role: "designer", mode: "contract" },
+  { role: "critic", mode: "contract" },
+  { role: "concept-worker" },
+  { role: "application-worker" },
+  { role: "evidence-worker" },
+];
 
 /** A record counts only when its prompt file still exists and still hashes to the record. */
 export async function verifiedRecords(
   role: string,
   applicationRoot?: string,
   designDigest?: string,
+  mode?: "map" | "contract",
 ): Promise<Array<{ path: string; record: LaunchRecord }>> {
   const found: Array<{ path: string; record: LaunchRecord }> = [];
   for (const entry of await readLaunchRecords(applicationRoot)) {
-    if (entry.record.role !== role) continue;
+    if (entry.record.role !== role || (mode !== undefined && entry.record.mode !== mode)) continue;
     let content: string;
     try {
       content = await readFile(entry.record.prompt.path, "utf8");
@@ -324,18 +381,47 @@ export async function verifiedRecords(
         continue;
       }
     }
-    if (
-      designDigest !== undefined &&
-      entry.record.designDigest !== undefined &&
-      entry.record.designDigest !== designDigest
-    ) {
-      continue;
-    }
+    if (designDigest !== undefined && entry.record.designDigest !== designDigest) continue;
     if (createHash("sha256").update(content).digest("hex") === entry.record.prompt.sha256) {
       found.push(entry);
     }
   }
   return found;
+}
+
+async function capturedResponse(record: LaunchRecord): Promise<string | undefined> {
+  if (record.response === undefined) return undefined;
+  try {
+    return unfenced((await readFile(record.response.path, "utf8")).trim());
+  } catch {
+    return undefined;
+  }
+}
+
+async function acceptedCriticPhase(
+  records: readonly { readonly record: LaunchRecord }[],
+  mode: "map" | "contract",
+): Promise<boolean> {
+  const latest = records[records.length - 1];
+  if (latest === undefined) return false;
+  const response = await capturedResponse(latest.record);
+  if (response === undefined) return false;
+  if (mode === "map") {
+    const lines = response.split("\n").filter((line) => line.trim() !== "");
+    return (
+      lines.some((line) => line.startsWith("- ROW ")) &&
+      lines.every((line) => line.startsWith("- ROW ") && line.includes(" — accept — "))
+    );
+  }
+  if (response === "No material findings.") return true;
+  return (
+    records.length >= 2 &&
+    !response.includes("- `BLOCKER` —") &&
+    response
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .every((line) => line.startsWith("- `MATERIAL-NONBLOCKER` —"))
+  );
 }
 
 /**
@@ -347,23 +433,54 @@ export async function requireCompletedRole(
   role: string,
   applicationRoot?: string,
   designDigest?: string,
+  mode?: "map" | "contract",
 ): Promise<void> {
-  const predecessor = roleAfter[role];
+  const predecessor = previousPhase(role, mode);
   if (predecessor === undefined) return;
-  if ((await verifiedRecords(predecessor, applicationRoot, designDigest)).length > 0) return;
+  const requiredDigest = predecessor.role === "designer" ? undefined : designDigest;
+  const completed = await verifiedRecords(
+    predecessor.role,
+    applicationRoot,
+    requiredDigest,
+    predecessor.mode,
+  );
+  if (completed.length > 0) {
+    const reviewRecords =
+      predecessor.role === "critic" && predecessor.mode === "contract"
+        ? (await verifiedRecords("critic", applicationRoot, undefined, "contract")).filter(
+            (entry) =>
+              entry.record.briefSha256 === completed[completed.length - 1]!.record.briefSha256,
+          )
+        : completed;
+    if (
+      predecessor.role === "critic" &&
+      predecessor.mode !== undefined &&
+      ((predecessor.mode === "contract" &&
+        reviewRecords[reviewRecords.length - 1]?.record.designDigest !== requiredDigest) ||
+        !(await acceptedCriticPhase(reviewRecords, predecessor.mode)))
+    ) {
+      throw new WorkspaceError(
+        predecessor.mode === "map"
+          ? `Designer contract phase requires an accepted map review with no coverage, authority, or obligation blockers`
+          : `Implementation requires a clean contract review or a second pass containing only MATERIAL-NONBLOCKER findings`,
+      );
+    }
+    return;
+  }
   const stale =
-    designDigest === undefined
+    requiredDigest === undefined
       ? []
-      : (await verifiedRecords(predecessor, applicationRoot)).filter(
-          (entry) => entry.record.designDigest !== undefined,
-        );
+      : (
+          await verifiedRecords(predecessor.role, applicationRoot, undefined, predecessor.mode)
+        ).filter((entry) => entry.record.designDigest !== undefined);
+  const phase = `${predecessor.role}${predecessor.mode === undefined ? "" : ` ${predecessor.mode}`}`;
   if (stale.length > 0) {
     throw new WorkspaceError(
-      `Role ${role} requires a ${predecessor} launched against design ${designDigest}; the settled one used ${stale[stale.length - 1]!.record.designDigest}. Design reopened after that role ran, so relaunch it`,
+      `Role ${role} requires a ${phase} launch against design ${requiredDigest}; the settled one used ${stale[stale.length - 1]!.record.designDigest}. Design reopened after that role ran, so relaunch it`,
     );
   }
   throw new WorkspaceError(
-    `Role ${role} requires a settled ${predecessor} launch in ${workspaceDirectory}/; launch that role first`,
+    `Role ${role}${mode === undefined ? "" : ` ${mode}`} requires a settled ${phase} launch in ${workspaceDirectory}/; launch that phase first`,
   );
 }
 

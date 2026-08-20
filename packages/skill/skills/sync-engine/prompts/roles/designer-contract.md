@@ -35,8 +35,8 @@ bunx --no-install sync-engine check-design design/concepts/*.md \
 ```
 
 After one informed repair, if the same diagnostic signature recurs, stop and report it.
-Return changed paths and check outcome, plus any material blocker. Use at most twenty tool
-calls.
+Return exactly `Changed:` with path bullets, `Check:` with the command outcome, and
+`Blocker: none` or one material blocker. Use at most twenty tool calls.
 
 ## Product brief
 

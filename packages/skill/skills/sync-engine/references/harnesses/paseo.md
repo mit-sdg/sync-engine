@@ -12,6 +12,14 @@ user names an override. It places the child in the application root, sends the p
 with `--prompt-file`, waits, captures the final response and tool log, and writes the
 harness-attested record. Never substitute a hand-written `paseo run`.
 
+Route the compiled contract phase through the adapter so it receives a separate audited
+record while preserving designer identity:
+
+```sh
+bun "<skill-root>/scripts/command.ts" launch --role designer \
+  --prompt <contract-prompt> --continue-agent <map-designer-id>
+```
+
 For a checked diagnostic follow-up, use the record's `agentId`:
 
 ```sh

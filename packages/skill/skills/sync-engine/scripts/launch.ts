@@ -14,6 +14,7 @@ import {
   reserveWorkspacePath,
   responseContract,
   settledStatus,
+  verifiedRecords,
   writeLaunchRecord,
 } from "./workspace.ts";
 
@@ -164,6 +165,8 @@ export interface LaunchOptions {
   /** Set only when the user names a model for roles; otherwise a role inherits. */
   readonly model?: string;
   readonly coordinatorId?: string;
+  /** Route a later compiled phase to this already-recorded role agent. */
+  readonly continueAgentId?: string;
 }
 
 export interface LaunchResult {
@@ -230,6 +233,34 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
   const promptPath = requireInsideWorkspace(options.promptPath, options.applicationRoot);
   const content = await readFile(promptPath, "utf8");
   const sha256 = createHash("sha256").update(content).digest("hex");
+  const context = await readPromptContext(promptPath);
+  if (context === undefined || context.role !== options.role || context.sha256 !== sha256) {
+    throw new LaunchError(
+      `Launch prompt changed or does not belong to ${options.role}: ${promptPath}`,
+    );
+  }
+  const needsContinuation = options.role === "designer" && context.mode === "contract";
+  if (needsContinuation !== (options.continueAgentId !== undefined)) {
+    throw new LaunchError(
+      needsContinuation
+        ? `Designer contract launch requires its map designer agent ID`
+        : `Only the designer contract phase may continue an existing agent`,
+    );
+  }
+  if (options.continueAgentId !== undefined) {
+    const originals = await verifiedRecords("designer", options.applicationRoot, undefined, "map");
+    if (
+      !originals.some(
+        (entry) =>
+          entry.record.agentId === options.continueAgentId &&
+          entry.record.briefSha256 === context.briefSha256,
+      )
+    ) {
+      throw new LaunchError(
+        `Agent ${options.continueAgentId} has no settled map-designer record for this brief`,
+      );
+    }
+  }
 
   const coordinatorId = options.coordinatorId ?? process.env["PASEO_AGENT_ID"];
   if (coordinatorId === undefined || coordinatorId === "") {
@@ -238,55 +269,64 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     );
   }
   const coordinator = inspectAgent(coordinatorId);
-  const model = options.model ?? coordinator.Model;
+  const existingChild =
+    options.continueAgentId === undefined ? undefined : inspectAgent(options.continueAgentId);
+  const model = options.model ?? existingChild?.Model ?? coordinator.Model;
   const applicationRoot = canonical(options.applicationRoot);
   const thinking = childThinking(
     coordinator.Provider,
-    coordinator.Model,
-    coordinator.Thinking,
+    model,
+    existingChild?.Thinking ?? coordinator.Thinking,
     options.thinking,
   );
 
-  const placement =
-    canonical(coordinator.Cwd) === applicationRoot
-      ? ["--cwd", applicationRoot]
-      : [
-          "--workspace",
-          parse<{ workspaceId: string }>(
-            paseo([
-              "workspace",
-              "create",
-              "--isolation",
-              "local",
-              "--path",
-              applicationRoot,
-              "--json",
-            ]),
-            "workspace",
-          ).workspaceId,
-        ];
-
   const startedAt = new Date().toISOString();
-  const started = parse<{ agentId: string }>(
-    paseo([
-      "run",
-      "--provider",
-      coordinator.Provider,
-      "--model",
-      model,
-      ...(thinking === undefined ? [] : ["--thinking", thinking]),
-      ...placement,
-      "--background",
-      "--json",
-      "--title",
-      options.role,
-      standby,
-    ]),
-    "launched agent",
-  );
-  if (typeof started.agentId !== "string") throw new LaunchError(`paseo run returned no agent id`);
+  let agentId: string;
+  if (options.continueAgentId === undefined) {
+    const placement =
+      canonical(coordinator.Cwd) === applicationRoot
+        ? ["--cwd", applicationRoot]
+        : [
+            "--workspace",
+            parse<{ workspaceId: string }>(
+              paseo([
+                "workspace",
+                "create",
+                "--isolation",
+                "local",
+                "--path",
+                applicationRoot,
+                "--json",
+              ]),
+              "workspace",
+            ).workspaceId,
+          ];
+    const started = parse<{ agentId: string }>(
+      paseo([
+        "run",
+        "--provider",
+        coordinator.Provider,
+        "--model",
+        model,
+        ...(thinking === undefined ? [] : ["--thinking", thinking]),
+        ...placement,
+        "--background",
+        "--json",
+        "--title",
+        options.role,
+        standby,
+      ]),
+      "launched agent",
+    );
+    if (typeof started.agentId !== "string") {
+      throw new LaunchError(`paseo run returned no agent id`);
+    }
+    agentId = started.agentId;
+  } else {
+    agentId = options.continueAgentId;
+  }
 
-  const child = inspectAgent(started.agentId);
+  const child = existingChild ?? inspectAgent(agentId);
   const mismatches = [
     ...(child.Provider === coordinator.Provider ? [] : [`provider ${child.Provider}`]),
     ...(child.Model === model ? [] : [`model ${child.Model}`]),
@@ -296,56 +336,54 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     ...(canonical(child.Cwd) === applicationRoot ? [] : [`working directory ${child.Cwd}`]),
   ];
   if (mismatches.length > 0) {
-    paseo(["stop", started.agentId]);
+    if (options.continueAgentId === undefined) paseo(["stop", agentId]);
     throw new LaunchError(
       `Launched ${options.role} does not match the coordinator: ${mismatches.join(", ")}`,
     );
   }
 
-  paseo(["send", started.agentId, "--prompt-file", promptPath, "--no-wait"]);
+  paseo(["send", agentId, "--prompt-file", promptPath, "--no-wait"]);
   const deadline = Date.now() + options.timeoutSeconds * 1000;
-  let settled = await waitUntilSettled(started.agentId, options.timeoutSeconds);
+  let settled = await waitUntilSettled(agentId, options.timeoutSeconds);
   let resumes = 0;
   while (settled.Status === resumableStatus && resumes < maxResumes) {
     if (Date.now() >= deadline) break;
     // A reported error can clear itself; look again before speaking to the role.
     await pause(gracePauseMilliseconds);
-    settled = inspectAgent(started.agentId);
+    settled = inspectAgent(agentId);
     let remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (settled.Status !== resumableStatus) {
       // Clearing on its own puts the role back to work, so wait for it rather than
       // recording a status it is still moving through.
       if (finishedStatuses.includes(settled.Status) || remaining <= 0) break;
-      settled = await waitUntilSettled(started.agentId, remaining);
+      settled = await waitUntilSettled(agentId, remaining);
       continue;
     }
     remaining = Math.ceil((deadline - Date.now()) / 1000);
     if (remaining <= 0) break;
     resumes += 1;
-    paseo(["send", started.agentId, resumeRequest, "--no-wait"]);
-    settled = await waitUntilSettled(started.agentId, remaining);
+    paseo(["send", agentId, resumeRequest, "--no-wait"]);
+    settled = await waitUntilSettled(agentId, remaining);
   }
 
-  const response = finalResponse(started.agentId);
+  const response = finalResponse(agentId);
   const responsePath = await reserveWorkspacePath(
     "response",
     options.role,
     options.applicationRoot,
   );
   await writeFile(responsePath, response, "utf8");
-  const violation = responseContract(options.role, response);
-  const opened = readPaths(started.agentId);
-  const rewrites = rewriteCounts(started.agentId);
+  const violation = responseContract(options.role, response, context?.mode);
+  const opened = readPaths(agentId);
+  const rewrites = rewriteCounts(agentId);
   const readViolations = readAudit(options.role, opened.paths, skillRoot);
-
-  const context = await readPromptContext(promptPath);
   const record: LaunchRecord = {
     format: "sync-engine.skill.launch-record",
     version: 1,
     role: options.role,
     ...(context?.mode === undefined ? {} : { mode: context.mode }),
     ...(context?.toolPolicy === undefined ? {} : { toolPolicy: context.toolPolicy }),
-    agentId: started.agentId,
+    agentId,
     ...(typeof child.ParentAgentId === "string" ? { parentAgentId: child.ParentAgentId } : {}),
     harness,
     attestation: "harness",

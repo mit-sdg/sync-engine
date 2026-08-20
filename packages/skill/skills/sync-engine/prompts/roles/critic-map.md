@@ -4,8 +4,8 @@
 
 ## Assignment
 
-Review the map against the complete brief below. Everything you may consult is in this
-prompt: make no tool calls, inspect nothing else, and return one report immediately.
+Review the map against the complete brief below. The delegated prompt file is your one
+bootstrap read; after it, make no tool calls, inspect nothing else, and return one report.
 
 Read the brief's needs yourself. Rule on every concept row with exactly one verdict:
 
@@ -16,16 +16,21 @@ Read the brief's needs yourself. Rule on every concept row with exactly one verd
 - `merge with <row>`: name the shared lifecycle and authority and why neither owns a
   decision the other lacks.
 
-For a row instantiating a catalog entry, its genericity is settled: judge only whether
-this product needs that mechanism and mark its second application `catalog-settled`.
-Reject a concrete subject unless the mechanism is that value's format. Feature cohesion,
-interaction, a shared invariant, and desired atomicity do not justify combining.
+Only `catalog-unchanged` settles genericity: judge whether this product needs that exact
+mechanism and mark its second application `catalog-settled`. Review `catalog-adapted`
+rows normally. Reject a concrete subject unless the mechanism is that value's format.
+Feature cohesion, interaction, a shared invariant, and desired atomicity do not justify
+combining.
 
-After all rows, add one bullet for any brief need no row owns and one for authority spread
-across rows with no owner. Never return the clean sentinel. Use exactly:
+Every cross-concept consequence must have an obligation ID and complete closure fields.
+After the row verdicts, report every missing brief owner, spread authority, and missing or
+incomplete obligation. Never return the clean sentinel. Use only these forms:
 
 ```text
-- `design/decomposition.md` — Concept: accept|split|merge with Concept — judgment and required evidence.
+- ROW `design/decomposition.md` — Concept — accept|split|merge with Concept — judgment and required evidence.
+- COVERAGE — brief need — no owning row.
+- AUTHORITY — decision — rows claiming it and required owner.
+- OBLIGATION — consequence — missing ID or closure field.
 ```
 
 ## Product brief

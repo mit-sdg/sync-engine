@@ -18,7 +18,10 @@ catalog input. A missing executable fails release check; never replace it.
 
 Build prompts only with `bun "<skill-root>/scripts/command.ts" prompt build`. The compiler
 writes them under `.sync-engine/`; pass the reported path without listing that directory.
-A budget failure reports source contributions. Tighten context before overriding it.
+A budget failure reports source contributions. Never omit required brief or candidate
+inputs. If complete contract review cannot fit 48 KiB, stop before authoring contracts
+and simplify the accepted map; use a byte override only when the user explicitly accepts
+the larger independent review.
 
 ## Settle decomposition before contracts
 
@@ -29,28 +32,37 @@ bun "<skill-root>/scripts/command.ts" prompt build --role designer --mode map \
   --input brief=product/brief.md
 ```
 
-It returns only `design/decomposition.md`. Build a fresh tool-free map critic:
+It returns only `design/decomposition.md`. Build a fresh prompt-read-only map critic:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role critic --mode map \
   --input brief=product/brief.md --input candidate=design/decomposition.md
 ```
 
-Every row gets `accept`, `split`, or `merge with <row>`; the map is accepted only when
-every verdict is `accept`. Return other verdicts verbatim to the original designer. Two
+Every row gets `accept`, `split`, or `merge with <row>` plus exact coverage, authority,
+and obligation blockers. The map is accepted only when every row is `accept` and no
+blocker is present. Return every non-accept verdict and blocker verbatim to the original
+designer. Two
 map reviews are the hard ceiling: after one repair, unresolved boundaries are a product
 question. Settle them in the brief and stop rather than launching a third review. Never
 write or review concept contracts before map acceptance.
 
-After acceptance, build a contract-phase file and send it to that same designer, never a
-fresh one. Include the captured map-critic response and exactly the full catalog entries
+After acceptance, build a contract-phase file and continue the same recorded designer,
+never a fresh one. Include the captured map-critic response and exactly the full catalog entries
 named by the map:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" prompt build --role designer --mode contract \
   --input brief=product/brief.md --input map=design/decomposition.md \
   --input review=<map-review-response> --input catalog=<named-entry> ...
+
+bun "<skill-root>/scripts/command.ts" launch --role designer \
+  --prompt <contract-prompt> --continue-agent <map-designer-id>
 ```
+
+For a native harness, pass the same `--continue-agent` to `launch prepare`; `launch
+complete` rejects another ID. This contract response gets its own prompt, response,
+ticket where applicable, and settled record.
 
 The designer writes concept, composition, and types documents and runs its bounded syntax
 check. Independently enumerate those files and rerun from application root:
@@ -76,8 +88,9 @@ bun "<skill-root>/scripts/command.ts" prompt build --role critic --mode contract
   --input candidate=design/compositions/<name>.md
 ```
 
-Add `--input blocker=<file>` only when implementation sent the design back. Launch a
-fresh tool-free critic for each pass. It sees no earlier report, so the coordinator
+Add `--input blocker=<file>` only when implementation sent the design back. The compiler
+binds each contract-critic record to the complete candidate design digest. Launch a fresh
+prompt-read-only critic for each pass. It sees no earlier report, so the coordinator
 recognizes an unchanged finding as the same finding.
 
 Two contract passes are the hard ceiling in every authorization mode:
@@ -85,8 +98,9 @@ Two contract passes are the hard ceiling in every authorization mode:
 1. Pass 1 reviews the candidate. `No material findings.` closes criticism.
 2. Otherwise send its bullets verbatim plus a neutral repair request to the original
    designer, rerun syntax, and launch fresh pass 2.
-3. After pass 2, record all remaining findings in the brief's Open decisions. A blocker
-   stops for the user; a nonblocker may proceed only without calling the design clean.
+3. After pass 2, record all remaining classified findings in the brief's Open decisions.
+   A `BLOCKER` stops for the user; a `MATERIAL-NONBLOCKER` may proceed only without
+   calling the design clean. The coordinator never reclassifies a critic finding.
 
 A contract pass never reopens an accepted boundary unless no contract can be written
 without moving it; then reopen the map and restart its review sequence. Never defer
@@ -98,7 +112,8 @@ when no blocking finding remains; reaching a pass ceiling is never approval.
 
 ## Close design identity
 
-After criticism and authorization close, digest authored Markdown once:
+After criticism and authorization close, digest authored Markdown once; it must equal
+the accepted contract critic's candidate digest:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" design digest design

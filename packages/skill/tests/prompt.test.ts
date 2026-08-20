@@ -96,7 +96,7 @@ describe("deterministic prompt construction", () => {
     expect(contract.toolPolicy).toBe("design-and-syntax-only");
     expect(contract.content).toContain("# Contract designer");
     expect(mapCritic.mode).toBe("map");
-    expect(mapCritic.toolPolicy).toBe("no-tools");
+    expect(mapCritic.toolPolicy).toBe("prompt-read-only");
     expect(mapCritic.content).toBe("# Map critic\n");
   });
 

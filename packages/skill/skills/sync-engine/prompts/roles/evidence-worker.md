@@ -10,8 +10,9 @@ unrelated tests.
 
 <!-- include: ../common/internals.md -->
 
-Reach a brief outcome through the application's own boundary, an endpoint by way of the
-gateway, a client, or the host, never by calling a concept class; a required outcome no
+Reach a brief outcome through the requested frontend when present, otherwise through the
+application's own boundary, an endpoint by way of the gateway, a client, or the host,
+never by calling a concept class; a required outcome no
 boundary call can produce is a blocker, not a gap to cover another way.
 
 Use existing evidence when it already proves every required outcome; return that
@@ -46,6 +47,10 @@ Return changed paths, covered brief outcomes, check outcomes, and any blocker.
 ## Assembled public interface
 
 <!-- input: public-interface -->
+
+## Requested frontend surface
+
+<!-- input?: frontend -->
 
 ## Existing relevant tests
 

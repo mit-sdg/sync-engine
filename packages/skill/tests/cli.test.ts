@@ -382,17 +382,31 @@ describe("sync-engine-skill command", () => {
       promptBytes?: string;
       status?: string;
       designDigest?: string;
+      mode?: "map" | "contract";
     } = {},
   ): Promise<string> {
     const workspace = resolve(directory, ".sync-engine");
     await mkdir(workspace, { recursive: true });
-    const promptPath = resolve(workspace, `2026-01-01T00-00-00Z-${role}.prompt.md`);
+    const label = `${role}${options.mode === undefined ? "" : `-${options.mode}`}`;
+    const promptPath = resolve(workspace, `2026-01-01T00-00-00Z-${label}.prompt.md`);
     const content = options.promptBytes ?? `# ${role}\n`;
     await writeFile(promptPath, content);
+    const criticResponse =
+      role !== "critic"
+        ? undefined
+        : options.mode === "map"
+          ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n"
+          : "No material findings.\n";
+    const responsePath =
+      criticResponse === undefined
+        ? undefined
+        : resolve(workspace, `2026-01-01T00-04-00Z-${label}.response.md`);
+    if (responsePath !== undefined) await writeFile(responsePath, criticResponse!);
     const record = {
       format: "sync-engine.skill.launch-record",
       version: 1,
       role,
+      ...(options.mode === undefined ? {} : { mode: options.mode }),
       agentId: options.agentId ?? `agent-${role}`,
       provider: "paseo-test",
       model: "test-model",
@@ -406,8 +420,18 @@ describe("sync-engine-skill command", () => {
       startedAt: "2026-01-01T00:00:00.000Z",
       settledAt: "2026-01-01T00:05:00.000Z",
       status: options.status ?? "idle",
+      ...(responsePath === undefined
+        ? {}
+        : {
+            response: {
+              path: responsePath,
+              sha256: createHash("sha256").update(criticResponse!).digest("hex"),
+              bytes: Buffer.byteLength(criticResponse!),
+              contract: "met",
+            },
+          }),
     };
-    const recordPath = resolve(workspace, `2026-01-01T00-05-00Z-${role}.launch.json`);
+    const recordPath = resolve(workspace, `2026-01-01T00-05-00Z-${label}.launch.json`);
     await writeFile(recordPath, `${JSON.stringify(record, undefined, 2)}\n`);
     return recordPath;
   }
@@ -421,6 +445,7 @@ describe("sync-engine-skill command", () => {
     await mkdir(product, { recursive: true });
     await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
+    await writeFile(resolve(design, "decomposition.md"), "# Decomposition\n");
 
     const criticArguments = [
       "prompt",
@@ -432,13 +457,17 @@ describe("sync-engine-skill command", () => {
       "--input",
       `brief=${resolve(product, "brief.md")}`,
       "--input",
+      `candidate=${resolve(design, "decomposition.md")}`,
+      "--input",
       `candidate=${resolve(design, "types.md")}`,
     ];
     const ungated = run(criticArguments, directory);
     expect(ungated.status).toBe(1);
-    expect(ungated.stderr).toContain("Role critic requires a settled designer launch");
+    expect(ungated.stderr).toContain(
+      "Role critic contract requires a settled designer contract launch",
+    );
 
-    await launchRecord(directory, "designer");
+    await launchRecord(directory, "designer", { mode: "contract" });
     const gated = run(criticArguments, directory);
     expect(gated.status).toBe(0);
     expect(gated.stdout).toContain("Prompt built: role critic");
@@ -454,7 +483,7 @@ describe("sync-engine-skill command", () => {
     await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
     const reviewed = "b".repeat(64);
-    await launchRecord(directory, "critic", { designDigest: reviewed });
+    await launchRecord(directory, "critic", { mode: "contract", designDigest: reviewed });
     const assignment = resolve(
       directory,
       ".sync-engine",
@@ -497,7 +526,8 @@ describe("sync-engine-skill command", () => {
     await mkdir(product, { recursive: true });
     await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
-    await launchRecord(directory, "designer", { status: "running" });
+    await writeFile(resolve(design, "decomposition.md"), "# Decomposition\n");
+    await launchRecord(directory, "designer", { status: "running", mode: "contract" });
 
     const result = run(
       [
@@ -510,12 +540,16 @@ describe("sync-engine-skill command", () => {
         "--input",
         `brief=${resolve(product, "brief.md")}`,
         "--input",
+        `candidate=${resolve(design, "decomposition.md")}`,
+        "--input",
         `candidate=${resolve(design, "types.md")}`,
       ],
       directory,
     );
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("Role critic requires a settled designer launch");
+    expect(result.stderr).toContain(
+      "Role critic contract requires a settled designer contract launch",
+    );
   });
 
   test("refuses a launch record whose prompt no longer matches", async () => {
@@ -527,9 +561,10 @@ describe("sync-engine-skill command", () => {
     await mkdir(product, { recursive: true });
     await cp(taskBrief, resolve(product, "brief.md"));
     await writeFile(resolve(design, "types.md"), "# Types\n");
-    await launchRecord(directory, "designer");
+    await writeFile(resolve(design, "decomposition.md"), "# Decomposition\n");
+    await launchRecord(directory, "designer", { mode: "contract" });
     await writeFile(
-      resolve(directory, ".sync-engine", "2026-01-01T00-00-00Z-designer.prompt.md"),
+      resolve(directory, ".sync-engine", "2026-01-01T00-00-00Z-designer-contract.prompt.md"),
       "# replaced after the fact\n",
     );
 
@@ -544,12 +579,16 @@ describe("sync-engine-skill command", () => {
         "--input",
         `brief=${resolve(product, "brief.md")}`,
         "--input",
+        `candidate=${resolve(design, "decomposition.md")}`,
+        "--input",
         `candidate=${resolve(design, "types.md")}`,
       ],
       directory,
     );
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("Role critic requires a settled designer launch");
+    expect(result.stderr).toContain(
+      "Role critic contract requires a settled designer contract launch",
+    );
   });
 
   test("handback names every role that has no independent evidence", async () => {
@@ -566,17 +605,20 @@ describe("sync-engine-skill command", () => {
     );
     expect(empty.status).toBe(1);
     expect(empty.stderr).toContain(
-      "no settled launch for: designer, critic, concept-worker, application-worker, evidence-worker",
+      "no settled launch for: designer map, critic map, designer contract, critic contract, concept-worker, application-worker, evidence-worker",
     );
 
-    await launchRecord(directory, "designer", { agentId: "invented-agent-id" });
+    await launchRecord(directory, "designer", {
+      agentId: "invented-agent-id",
+      mode: "map",
+    });
     const invented = run(
       ["handback", "check", "--design-root", design, "--design-digest", digest!],
       directory,
     );
     expect(invented.status).toBe(1);
     expect(invented.stdout).toContain("agent invented-agent-id UNKNOWN to paseo");
-    expect(invented.stderr).toContain("paseo does not know: designer invented-agent-id");
+    expect(invented.stderr).toContain("paseo does not know: designer map invented-agent-id");
   });
 
   test("refuses an assignment that crosses role ownership", async () => {
@@ -717,12 +759,16 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     expect(outside.status).toBe(1);
     expect(outside.stderr).toContain("Generated workflow files belong in .sync-engine/");
 
-    await mkdir(resolve(directory, ".sync-engine"), { recursive: true });
-    const inside = resolve(directory, ".sync-engine", "designer.prompt.md");
-    await writeFile(inside, "# designer\n");
+    const built = run(
+      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${taskBrief}`],
+      directory,
+    );
+    expect(built.status).toBe(0);
+    const inside = built.stdout.match(/Next: deliver (\S+) to a fresh designer/)?.[1];
+    expect(inside).toBeDefined();
     const unparented = spawnSync(
       "bun",
-      [command, "launch", "--role", "designer", "--prompt", inside],
+      [command, "launch", "--role", "designer", "--prompt", inside!],
       {
         cwd: directory,
         encoding: "utf8",
@@ -732,7 +778,7 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     expect(unparented.status).toBe(1);
     expect(unparented.stderr).toContain("PASEO_AGENT_ID is unset");
 
-    const unknownRole = run(["launch", "--role", "reviewer", "--prompt", inside], directory);
+    const unknownRole = run(["launch", "--role", "reviewer", "--prompt", inside!], directory);
     expect(unknownRole.status).toBe(1);
     expect(unknownRole.stderr).toContain("Unknown role: reviewer");
   });
@@ -760,7 +806,7 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     const response = prepared.stdout.match(/response (\S+)\./)?.[1];
     expect(ticket).toBeDefined();
     expect(response).toBeDefined();
-    await writeFile(response!, "design/decomposition.md\n");
+    await writeFile(response!, "Changed: design/decomposition.md\nQuestions: none\n");
 
     const completed = run(
       ["launch", "complete", "--ticket", ticket!, "--agent-id", "codex-agent-1"],
@@ -784,6 +830,75 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     });
     expect(record.provider).toBeUndefined();
     expect(record.model).toBeUndefined();
+
+    await launchRecord(directory, "critic", { mode: "map" });
+    const map = resolve(directory, "design/decomposition.md");
+    const review = resolve(directory, "map-review.md");
+    await mkdir(dirname(map), { recursive: true });
+    await writeFile(map, "# Decomposition\n");
+    await writeFile(review, "- ROW accepted\n");
+    const contractBuilt = run(
+      [
+        "prompt",
+        "build",
+        "--role",
+        "designer",
+        "--mode",
+        "contract",
+        "--input",
+        `brief=${taskBrief}`,
+        "--input",
+        `map=${map}`,
+        "--input",
+        `review=${review}`,
+      ],
+      directory,
+    );
+    expect(contractBuilt.status).toBe(0);
+    const contractPrompt = contractBuilt.stdout.match(
+      /Next: deliver (\S+) to the original designer/,
+    )?.[1];
+    const continuation = run(
+      [
+        "launch",
+        "prepare",
+        "--harness",
+        "codex",
+        "--role",
+        "designer",
+        "--prompt",
+        contractPrompt!,
+        "--continue-agent",
+        "codex-agent-1",
+      ],
+      directory,
+    );
+    expect(continuation.status).toBe(0);
+    expect(continuation.stdout).toContain("send ");
+    expect(continuation.stdout).toContain("to native agent codex-agent-1");
+    const continuationTicket = continuation.stdout.match(/ticket (\S+); response/)?.[1];
+    const continuationResponse = continuation.stdout.match(/response (\S+)\./)?.[1];
+    await writeFile(
+      continuationResponse!,
+      "Changed:\n- design/concepts/Tasking.md\nCheck: passed\nBlocker: none\n",
+    );
+    const wrongAgent = run(
+      ["launch", "complete", "--ticket", continuationTicket!, "--agent-id", "replacement-agent"],
+      directory,
+    );
+    expect(wrongAgent.status).toBe(1);
+    expect(wrongAgent.stderr).toContain("Continuation ticket requires agent codex-agent-1");
+    const continued = run(
+      ["launch", "complete", "--ticket", continuationTicket!, "--agent-id", "codex-agent-1"],
+      directory,
+    );
+    expect(continued.status).toBe(0);
+    const continuationRecordPath = continued.stdout.match(/record (\S+)\./)?.[1];
+    expect(JSON.parse(await readFile(continuationRecordPath!, "utf8"))).toMatchObject({
+      role: "designer",
+      mode: "contract",
+      agentId: "codex-agent-1",
+    });
 
     const repeated = run(
       ["launch", "complete", "--ticket", ticket!, "--agent-id", "codex-agent-1"],

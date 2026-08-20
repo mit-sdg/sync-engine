@@ -9,6 +9,7 @@ import {
   requireInsideWorkspace,
   reserveWorkspacePath,
   responseContract,
+  verifiedRecords,
   writeLaunchRecord,
 } from "./workspace.ts";
 
@@ -21,6 +22,7 @@ export interface LaunchTicket {
   readonly role: string;
   readonly mode?: "map" | "contract";
   readonly toolPolicy?: string;
+  readonly continuationAgentId?: string;
   readonly harness: NativeHarness;
   readonly cwd: string;
   readonly prompt: { readonly path: string; readonly sha256: string; readonly bytes: number };
@@ -44,6 +46,8 @@ function isLaunchTicket(value: unknown): value is LaunchTicket {
     typeof ticket.role === "string" &&
     (ticket.mode === undefined || ticket.mode === "map" || ticket.mode === "contract") &&
     (ticket.toolPolicy === undefined || typeof ticket.toolPolicy === "string") &&
+    (ticket.continuationAgentId === undefined ||
+      (typeof ticket.continuationAgentId === "string" && ticket.continuationAgentId !== "")) &&
     nativeHarnesses.includes(ticket.harness) &&
     typeof ticket.cwd === "string" &&
     typeof ticket.prompt?.path === "string" &&
@@ -64,6 +68,7 @@ export interface PrepareNativeLaunchOptions {
   readonly harness: NativeHarness;
   readonly promptPath: string;
   readonly applicationRoot: string;
+  readonly continuationAgentId?: string;
 }
 
 export interface PreparedNativeLaunch {
@@ -97,6 +102,28 @@ export async function prepareNativeLaunch(
   }
 
   const applicationRoot = canonical(options.applicationRoot);
+  const needsContinuation = options.role === "designer" && context.mode === "contract";
+  if (needsContinuation !== (options.continuationAgentId !== undefined)) {
+    throw new NativeLaunchError(
+      needsContinuation
+        ? `Designer contract launch requires its map designer agent ID`
+        : `Only the designer contract phase may continue an existing agent`,
+    );
+  }
+  if (options.continuationAgentId !== undefined) {
+    const originals = await verifiedRecords("designer", applicationRoot, undefined, "map");
+    if (
+      !originals.some(
+        (entry) =>
+          entry.record.agentId === options.continuationAgentId &&
+          entry.record.briefSha256 === context.briefSha256,
+      )
+    ) {
+      throw new NativeLaunchError(
+        `Agent ${options.continuationAgentId} has no settled map-designer record for this brief`,
+      );
+    }
+  }
   const responsePath = await reserveWorkspacePath("response", options.role, applicationRoot);
   await writeFile(responsePath, "", { encoding: "utf8", flag: "wx" });
   const ticket: LaunchTicket = {
@@ -105,6 +132,9 @@ export async function prepareNativeLaunch(
     role: options.role,
     ...(context.mode === undefined ? {} : { mode: context.mode }),
     ...(context.toolPolicy === undefined ? {} : { toolPolicy: context.toolPolicy }),
+    ...(options.continuationAgentId === undefined
+      ? {}
+      : { continuationAgentId: options.continuationAgentId }),
     harness: options.harness,
     cwd: applicationRoot,
     prompt: {
@@ -158,6 +188,11 @@ export async function completeNativeLaunch(
     throw new NativeLaunchError(`Launch ticket belongs to another application: ${ticket.cwd}`);
   }
   if (options.agentId.trim() === "") throw new NativeLaunchError(`--agent-id cannot be empty`);
+  if (ticket.continuationAgentId !== undefined && ticket.continuationAgentId !== options.agentId) {
+    throw new NativeLaunchError(
+      `Continuation ticket requires agent ${ticket.continuationAgentId}, not ${options.agentId}`,
+    );
+  }
 
   for (const entry of await readLaunchRecords(options.applicationRoot)) {
     if (entry.record.launchTicket?.path === ticketPath) {
@@ -184,7 +219,7 @@ export async function completeNativeLaunch(
       `Native agent return is empty; copy its final response verbatim into ${responsePath}`,
     );
   }
-  const violation = responseContract(ticket.role, response);
+  const violation = responseContract(ticket.role, response, ticket.mode);
   const record: LaunchRecord = {
     format: "sync-engine.skill.launch-record",
     version: 1,

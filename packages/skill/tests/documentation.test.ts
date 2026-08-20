@@ -472,7 +472,14 @@ describe("compact sync-engine Agent Skill documents", () => {
         "reference",
       ],
       "frontend-worker": ["assignment", "brief", "public-interface", "examples", "reference"],
-      "evidence-worker": ["assignment", "brief", "contracts", "public-interface", "existing-tests"],
+      "evidence-worker": [
+        "assignment",
+        "brief",
+        "contracts",
+        "public-interface",
+        "frontend",
+        "existing-tests",
+      ],
     };
 
     for (const [role, expected] of Object.entries(expectedSlots)) {
@@ -506,14 +513,14 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Nobody reverse-engineers the framework, the coordinator included. Inside the installed package read only `examples/` and `docs/user/`, never `dist/` or a checkout's source",
     );
     expect(implementation.replace(/\s+/g, " ")).toContain(
-      "Never include framework checkout source, installed package contents, build output, source maps, or paths reached by following framework imports",
+      "Exclude framework source, installed contents, build output, source maps, and paths reached through imports",
     );
     expect(implementation.replace(/\s+/g, " ")).toContain(
-      "A worker with no example for a mechanism returns a context blocker rather than discovering it",
+      "Missing context is a blocker, not permission to discover more",
     );
     expect(contract).toContain("role prompts must require agents");
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "Write every generated prompt, assignment, and follow-up through filesystem APIs and deliver it by path; never place generated Markdown in a shell argument",
+      "Deliver generated files by path, never through shell arguments",
     );
   });
 
@@ -523,7 +530,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const normalizedContract = contract.replace(/\s+/g, " ");
 
     expect(normalizedContract).toContain(
-      "Give every role only the tools its compiled prompt permits. Give implementation and evidence roles narrow assigned application paths",
+      "Apply the compiled tool policy when the native launcher exposes tool selection; otherwise it is prompt-enforced and the record must not claim tool attestation. A critic may read its prompt file, then uses no tools",
     );
     expect(normalizedContract).toContain(
       "Filesystem confinement is best effort and is not a launch prerequisite",
@@ -533,7 +540,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "write only `design/decomposition.md`. Use no shell and read no repository file",
     );
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "[contract](references/harnesses/contract.md) for the current role",
+      "[contract](references/harnesses/contract.md) and exactly one adapter",
     );
   });
 
@@ -587,11 +594,11 @@ describe("compact sync-engine Agent Skill documents", () => {
     const criticism = await stage("design-and-criticism");
     const handback = await stage("implementation");
     const normalized = criticism.replace(/\s+/g, " ");
-    expect(normalized).toContain("Build a fresh tool-free map critic");
+    expect(normalized).toContain("Build a fresh prompt-read-only map critic");
     expect(normalized).toContain("Every row gets `accept`, `split`, or `merge with <row>`");
     expect(normalized).toContain("Two map reviews are the hard ceiling");
     expect(normalized).toContain(
-      "build a contract-phase file and send it to that same designer, never a fresh one",
+      "build a contract-phase file and continue the same recorded designer, never a fresh one",
     );
     expect(normalized).toContain(
       "Two contract passes are the hard ceiling in every authorization mode",
@@ -601,7 +608,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "send its bullets verbatim plus a neutral repair request to the original designer",
     );
     expect(normalized).toContain(
-      "After pass 2, record all remaining findings in the brief's Open decisions",
+      "After pass 2, record all remaining classified findings in the brief's Open decisions",
     );
     expect(normalized).toContain("Never defer missing authority, non-bypassable authorization");
     expect(normalized).toContain("every concept and composition file as repeated candidate inputs");
@@ -615,15 +622,15 @@ describe("compact sync-engine Agent Skill documents", () => {
     const workflow = await stage("implementation");
     const normalized = workflow.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "Carry the brief's durability decision into every concept assignment as a storage guarantee, never as a claim about concept State",
+      "Every concept assignment states the brief's exact durability decision as a storage guarantee, never as concept State",
     );
     expect(normalized).toContain(
       "Launch through the matching harness guide with a compiler-owned record",
     );
     expect(normalized).toContain("Start one concept worker unless a checked budget");
-    expect(normalized).toContain("start one application worker");
-    expect(normalized).toContain("start one frontend worker");
-    expect(workflow).toContain("as a client of the assembled");
+    expect(normalized).toContain("one application worker owns assigned");
+    expect(normalized).toContain("one frontend worker follows application validation");
+    expect(workflow).toContain("strictly a client of assembled endpoints");
     expect(workflow).toContain("one fresh evidence worker");
 
     const frontend = await text(new URL("roles/frontend-worker.md", promptRoot));
@@ -631,14 +638,12 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(frontend).toContain("`createHttpClient<GeneratedHttpWire>`");
     expect(frontend).toContain("Never call an\napplication endpoint with `fetch`");
     expect(normalized).toContain(
-      "A web-application assignment names the projected HTTP wire and base path; the frontend owns its `createHttpClient` construction",
+      "Web assignments name the HTTP wire and base path; the frontend owns `createHttpClient` construction",
     );
     expect(normalized).toContain(
-      "HTTP behavior comes only from the supplied host reference; a hand-rolled router, redirect, or error shape is a defect",
+      "HTTP comes only from the host reference; hand-rolled routing, redirects, or error shapes are defects",
     );
-    expect(normalized).toContain(
-      "Reactions, views, formers and endpoints are separate mechanisms; confirm each one the design uses appears in an example",
-    );
+    expect(normalized).toContain("Reactions, views, formers, and endpoints each need an example");
     expect(normalized).toContain(
       "Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application worker",
     );
@@ -647,10 +652,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(frontend).toContain("never reimplement or bypass");
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Assignments additionally cap tool calls at 24, 28, 20, and 20 for the four workers, with two runs per command, one informed repair per diagnostic signature, and at most one follow-up",
+      "Worker tool-call ceilings are 24, 28, 20, and 20, with two runs per command, one repair per diagnostic signature, and one follow-up",
     );
     expect(workflow.replace(/\s+/g, " ")).toContain(
-      "Return an ordinary implementation defect to the original worker in a compiler-named file",
+      "Return an implementation defect to the original worker in a compiler-named file",
     );
     expect(await stage("design-and-criticism")).toContain("design digest design");
     expect(workflow).toContain("follow-up check <file>");
@@ -732,24 +737,24 @@ describe("compact sync-engine Agent Skill documents", () => {
     expect(entry).toContain(
       "Use for building an application on the framework, never for changing the framework itself.",
     );
-    expect(entry).toContain("matching short guide");
+    expect(entry).toContain("exactly one adapter");
     for (const name of ["Paseo", "Codex", "Claude Code", "Antigravity"])
       expect(entry).toContain(`[${name}]`);
-    expect(entry).toContain("self-contained compiler");
+    expect(entry).toContain("self-contained `scripts/command.ts`");
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "writes only the brief and assignments, never role-owned design, production source, or tests",
+      "writes only the brief and assignments, never role-owned design, source, or tests",
     );
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "Every role inherits the coordinator's exact provider, model, and reasoning setting unless the user names another",
+      "Roles inherit provider, model, and reasoning unless the user names another",
     );
     expect(entry).toContain("Do not read role templates or\n   common prompt files yourself");
     expect(entry).toContain("do not\n   read or recreate the packaged template directly");
-    expect(entry).toContain("coordinator's exact provider, model, and reasoning setting");
+    expect(entry).toContain("Roles inherit provider, model, and reasoning");
     expect(entry.replace(/\s+/g, " ")).toContain(
       "a reported `Next:` line is syntax, not permission",
     );
     expect(entry.replace(/\s+/g, " ")).toContain(
-      "Record every one with the compiler's `launch`; a role with no launch record did not run, and if a required role cannot launch, stop",
+      "Record every compiled phase with `launch`; an unrecorded required phase did not run",
     );
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" release check .');
     expect(workflow).toContain('bun "<skill-root>/scripts/command.ts" brief init product/brief.md');
@@ -775,11 +780,11 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(workflow).toContain("Run it alone—do not chain a premature check");
     expect(normalizedCriticism).toContain(
-      "Every row gets `accept`, `split`, or `merge with <row>`; the map is accepted only when every verdict is `accept`",
+      "The map is accepted only when every row is `accept` and no blocker is present",
     );
     expect(normalizedCriticism).toContain("Two map reviews are the hard ceiling");
     expect(normalizedCriticism).toContain(
-      "build a contract-phase file and send it to that same designer, never a fresh one",
+      "build a contract-phase file and continue the same recorded designer, never a fresh one",
     );
     expect(criticism).toContain("--mode map");
     expect(criticism).toContain("--mode contract");

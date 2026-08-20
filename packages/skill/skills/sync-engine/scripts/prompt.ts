@@ -15,13 +15,13 @@ export const promptRoles = [
 export type PromptRole = (typeof promptRoles)[number];
 export type PromptMode = "map" | "contract";
 export type ToolPolicy =
-  | "no-tools"
+  | "prompt-read-only"
   | "decomposition-write-only"
   | "design-and-syntax-only"
   | "assignment-only";
 
 export function toolPolicy(role: PromptRole, mode?: PromptMode): ToolPolicy {
-  if (role === "critic") return "no-tools";
+  if (role === "critic") return "prompt-read-only";
   if (role === "designer") {
     return mode === "contract" ? "design-and-syntax-only" : "decomposition-write-only";
   }

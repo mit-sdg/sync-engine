@@ -60,9 +60,9 @@ Which side declares a relation implies no storage, navigation, or ownership.
 
 ## Assignment
 
-Review every candidate against the complete brief. Everything you may consult is in this
-prompt: make no tool calls, inspect nothing else, edit nothing, and return one report
-immediately. Form has already passed and typed links are not yet source-resolved.
+Review every candidate against the complete brief. The delegated prompt file is your one
+bootstrap read; after it, make no tool calls, inspect nothing else, edit nothing, and
+return one report. Form has already passed and typed links are not yet source-resolved.
 
 The accepted map fixes boundaries. Do not reopen one unless no contract can be written
 without moving it; then name the two mechanisms. For each map obligation ID, find its
@@ -84,12 +84,15 @@ Check only material mismatches, in this order:
    value has its matching typed link.
 
 Ignore formatting, naming polish, redundant explanation, parser-enforced mechanics,
-informational advisories, and merely conceivable unspecified behavior. Do not create a
-report file. If clean, return exactly `No material findings.` Otherwise return one bullet
-per finding with no preamble:
+informational advisories, and merely conceivable unspecified behavior. Classify missing
+authority, bypassable authorization, ownership conflict, unrecoverable obligation, and
+behavior required for visible success or refusal as `BLOCKER`; classify another material
+contract mismatch as `MATERIAL-NONBLOCKER`. Do not create a report file. If clean, return
+exactly `No material findings.` Otherwise return one bullet per finding with no preamble:
 
 ```text
-- `design/path.md` — Contract problem and consequence for the brief.
+- `BLOCKER` — `design/path.md` — Contract problem and consequence for the brief.
+- `MATERIAL-NONBLOCKER` — `design/path.md` — Contract problem and consequence for the brief.
 ```
 
 ## Product brief

@@ -33,22 +33,22 @@ tests/             Application tests and evidence checks
 A run follows this order:
 
 1. Brief.
-2. Design.
-3. Design syntax check.
-4. Criticism.
-5. Approval.
-6. Concept implementation.
-7. Application implementation.
-8. Frontend implementation, when the brief requests a frontend.
-9. Evidence.
-10. Required validation.
-11. Handback.
+2. Decomposition map.
+3. Independent map review.
+4. Authored contracts by the same designer.
+5. Design syntax check.
+6. Independent contract review and approval.
+7. Concept implementation.
+8. Application implementation.
+9. Frontend implementation, when requested.
+10. Evidence.
+11. Required validation and handback.
 
 The coordinator maintains `product/brief.md`. It records what the product does and the decisions behind it. Each decision is marked as the user's choice or the coordinator's assumption. The file stays outside `design/` because the coordinator continues to edit it.
 
 The designer authors everything under `design/`, including concept specifications, compositions, and the types document. Every downstream role treats that directory as read-only.
 
-The designer first writes only the decomposition map. A tool-free map critic settles every row before the same designer receives the contract phase. Authored-contract criticism gets at most two fresh tool-free passes; remaining blockers stop rather than extending the loop.
+The designer first writes only the decomposition map. A prompt-read-only map critic settles every row and every coverage, authority, and obligation blocker before the same recorded designer receives the contract phase. Authored-contract criticism gets at most two fresh prompt-read-only passes; the critic classifies findings, and remaining blockers stop rather than extending the loop.
 
 By default, one concept worker implements all concepts and one application worker wires them together. Only compiler-proven disjoint concept batches may run in parallel, and only when the harness enforces their paths.
 
@@ -75,13 +75,13 @@ Every role is recorded through the skill's `launch` commands. In Paseo, `launch`
 
 Managed records contain the harness-observed agent identity, configuration, prompt hash and size, brief hash, design digest, timing, response, and available tool audit. Native records contain the native agent ID and the same compiler-verifiable hashes, but are marked coordinator-attested because the compiler cannot query another harness's in-session agent UI.
 
-Building a role prompt requires a settled record for the preceding role. Handback requires a record for every required role. Each record must still hash to its prompt and captured response. A managed record must also refer to an agent still known to Paseo. Native handback reports that independent harness attestation was unavailable; the harness's own agent UI or transcript remains inspectable. Work done directly by the coordinator has no valid native delegation and is forbidden even though portable records cannot prove that boundary cryptographically.
+Building a role prompt requires a settled record for the preceding phase. The continuing designer contract phase gets its own record tied to the map designer's agent ID. Handback requires records for both designer and critic phases and every required implementation role. Each record must still hash to its prompt and captured response. A managed record must also refer to an agent still known to Paseo. Native handback reports that independent harness attestation was unavailable; the harness's own agent UI or transcript remains inspectable. Work done directly by the coordinator has no valid native delegation and is forbidden even though portable records cannot prove that boundary cryptographically.
 
 ### Reply and path audits
 
 After a role settles, two checks read from the harness instead of trusting the role's account of its work.
 
-The reply check compares the final message with the role's return contract. A critic returns either the required clean sentence or its findings, optionally inside a code fence, and nothing else. A worker reports changed paths and check outcomes. A response that does not match means the role does not count.
+The reply check enforces the exact critic grammar and worker `Changed`/`Checks`/`Blocker`/`Budget` envelope and rejects empty responses. Portable harnesses treat execution counts as self-reported rather than machine-attested.
 
 The path check records every path the role opened, and handback reports any that fall
 outside where that role may read. It does not fail the launch: the role has already
@@ -107,14 +107,14 @@ Run every command as `bun "<skill-root>/scripts/command.ts" <command>`, where `<
 release check [<application-directory>]
 brief init <brief.md>
 brief check <brief.md>
-design digest <design-directory>
+design digest <design-directory> [--role <role>]
 prompt build --role <role> [--mode map|contract] --input <slot>=<path>...
 assignment new --role <role> --design-digest <sha256>
 assignment check <file>
 follow-up new --role <role>
 follow-up check <file> --design-root <directory> --design-digest <sha256>
-launch --role <role> --prompt <path> [--timeout <seconds>]
-launch prepare --harness <harness> --role <role> --prompt <path>
+launch --role <role> --prompt <path> [--continue-agent <id>] [--timeout <seconds>]
+launch prepare --harness <harness> --role <role> --prompt <path> [--continue-agent <id>]
 launch complete --ticket <path> --agent-id <id>
 handback check --design-root <directory> --design-digest <sha256>
 ```
@@ -140,8 +140,8 @@ Each role template declares named slots, and the coordinator fills them with
   surfaces rather than their internals, relevant types/composition/obligation closure,
   existing shared wiring, examples, and an optional reference.
 - `frontend-worker`: its assignment, the brief, and the assembled public interface.
-- `evidence-worker`: its assignment, the brief, the contracts for its scenario, and the
-  assembled public interface.
+- `evidence-worker`: its assignment, the brief, scenario contracts, the assembled public
+  interface, and, when requested, the frontend surface; existing tests are optional.
 
 Three sources fill those slots. `sync-engine-catalog` lists and shows existing concepts,
 which a map designer can reuse or reject. The installed engine ships implementation
@@ -160,7 +160,7 @@ named on the command line, and the prompt record lists all of them.
 
 Prompt templates use three directives: `include` adds shared text, `input` requires a file, and `input?` accepts an optional file.
 
-The compiler applies byte budgets of 32 KiB for designer prompts, 48 KiB for critics, 24 KiB for concept workers, 48 KiB for application and frontend workers, and 32 KiB for evidence. Checked assignments cap worker tool calls at 24, 28, 20, and 20 respectively, with two runs per command and one informed repair per diagnostic signature.
+The compiler applies byte budgets of 32 KiB for designer prompts, 48 KiB for critics, 24 KiB for concept workers, 48 KiB for application and frontend workers, and 32 KiB for evidence. Checked assignments reject declared tool ceilings above 24, 28, 20, and 20 respectively, with two runs per command and one informed repair per diagnostic signature. Paseo audits observable logs; portable harnesses record that these limits are prompt-enforced.
 
 Inputs have the same order on every build. The compiler reports sources, byte count, and SHA-256 separately from the prompt.
 

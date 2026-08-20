@@ -70,18 +70,39 @@ describe("closed design digest", () => {
 });
 
 describe("role return contract", () => {
-  test("accepts the clean sentinel and a bare findings list from a critic", () => {
-    expect(responseContract("critic", "No material findings.\n")).toBeUndefined();
+  test("accepts the clean sentinel and a classified contract finding", () => {
+    expect(responseContract("critic", "No material findings.\n", "contract")).toBeUndefined();
     expect(
-      responseContract("critic", "- `design/concepts/Shortening.md` — Undeclared branch.\n"),
+      responseContract(
+        "critic",
+        "- `BLOCKER` — `design/concepts/Shortening.md` — Undeclared branch.\n",
+        "contract",
+      ),
     ).toBeUndefined();
   });
 
   test("accepts the fenced form its own prompt shows", () => {
-    expect(responseContract("critic", "```text\nNo material findings.\n```")).toBeUndefined();
     expect(
-      responseContract("critic", "```\n- `design/types.md` — Undeclared branch.\n```\n"),
+      responseContract("critic", "```text\nNo material findings.\n```", "contract"),
     ).toBeUndefined();
+    expect(
+      responseContract(
+        "critic",
+        "```\n- `MATERIAL-NONBLOCKER` — `design/types.md` — Undeclared branch.\n```\n",
+        "contract",
+      ),
+    ).toBeUndefined();
+  });
+
+  test("accepts exact map rows and refuses a clean sentinel", () => {
+    expect(
+      responseContract(
+        "critic",
+        "- ROW `design/decomposition.md` — Posting — accept — one owner.\n",
+        "map",
+      ),
+    ).toBeUndefined();
+    expect(responseContract("critic", "No material findings.", "map")).toContain("ROW verdict");
   });
 
   test("refuses a critic that buries its verdict under a preamble", () => {
@@ -90,11 +111,31 @@ describe("role return contract", () => {
     ).toContain("no preamble");
   });
 
+  test("checks both designer phase envelopes", () => {
+    expect(
+      responseContract("designer", "Changed: design/decomposition.md\nQuestions: none", "map"),
+    ).toBeUndefined();
+    expect(
+      responseContract(
+        "designer",
+        "Changed:\n- design/types.md\nCheck: passed\nBlocker: none",
+        "contract",
+      ),
+    ).toBeUndefined();
+    expect(responseContract("designer", "done", "contract")).toContain("phase envelope");
+  });
+
   test("refuses any role that returns nothing", () => {
     expect(responseContract("application-worker", "   \n")).toContain("returned nothing");
     expect(
-      responseContract("application-worker", "Changed src/assembly.ts; check passed."),
+      responseContract(
+        "application-worker",
+        "Changed:\n- src/assembly.ts\nChecks:\n- check passed\nBlocker: none\nBudget: 4/28; commands 1; repairs none; follow-ups 0/1",
+      ),
     ).toBeUndefined();
+    expect(
+      responseContract("application-worker", "Changed src/assembly.ts; check passed."),
+    ).toContain("envelope");
   });
 });
 

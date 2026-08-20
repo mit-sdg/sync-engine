@@ -16,40 +16,36 @@ bun "<skill-root>/scripts/command.ts" assignment new --role <role> \
 bun "<skill-root>/scripts/command.ts" assignment check <assignment-file>
 ```
 
-List every allowed path as a backticked bullet. Never include framework checkout source,
-installed package contents, build output, source maps, or paths reached by following
-framework imports. Supply framework information only through exact public API references
-and selected application examples, which concept and application workers require: at most
-one per concept and one per mechanism, from the installed
-`node_modules/@mit-sdg/sync-engine/examples/` and never its `dist/`. Reactions, views,
-formers and endpoints are separate mechanisms; confirm each one the design uses appears in
-an example. A concept depending on the current time or a generated identifier needs one
-showing that dependency injected. A worker with no example for a mechanism
-returns a context blocker rather than discovering it. Carry the brief's durability decision
-into every concept assignment as a storage guarantee, never as a claim about concept State.
-A brief that asks for nothing to survive restart gets that as the guarantee; never assume a
-stronger one.
+List allowed paths as backticked bullets. Exclude framework source, installed contents,
+build output, source maps, and paths reached through imports. Concept and application
+workers require selected installed `examples/`, never `dist/`: at most one per concept
+and mechanism. Reactions, views, formers, and endpoints each need an example; time or ID
+dependencies need one showing injection. Missing context is a blocker, not permission to
+discover more. Every concept assignment states the brief's exact durability decision as
+a storage guarantee, never as concept State.
 
 Compiler slots are:
 
 - `concept-worker`: required `assignment`, `specifications`, `examples`; optional
   `reference`;
-- `application-worker`: required `assignment`, `brief`, relevant `types.md`, composition
-  and obligation closure as `design`, completed public `concept-surfaces`, existing
-  `shared-wiring`, and selected `examples`; optional `reference`;
+- `application-worker`: required `assignment`, `brief`, relevant types, composition and
+  obligation closure as `design`, public `concept-surfaces` (exports, constructor
+  dependencies, and registries—not implementation), `shared-wiring`, and `examples`;
+  optional `reference`;
 - `frontend-worker`: required `assignment`, `brief`, assembled `public-interface`;
   optional `examples`, `reference`; and
 - `evidence-worker`: required `assignment`, `brief`, scenario-relevant approved
-  `contracts`, assembled `public-interface`; optional selected relevant `existing-tests`.
+  `contracts`, assembled `public-interface`; optional requested `frontend` surface and
+  selected relevant `existing-tests`.
 
 Use `--input <slot>=<path>`; repeat slots for multiple files.
 
-Prompt budgets are designer 32, critic 48, concept 24, application 48, frontend 48, and
-evidence 32 KiB. Assignments additionally cap tool calls at 24, 28, 20, and 20 for the
-four workers, with two runs per command, one informed repair per diagnostic signature,
-and at most one follow-up. Split work before launch if it cannot fit. Only concept batches
-with compiler-proven disjoint paths may run in parallel, and only where the harness
-enforces those boundaries; otherwise every stage is sequential.
+Prompt budgets are 32 KiB designer, 48 critic, 24 concept, 48 application/frontend,
+and 32 evidence. Worker tool-call ceilings are 24, 28, 20, and 20, with two runs per
+command, one repair per diagnostic signature, and one follow-up. The compiler rejects
+inflated declarations. Paseo audits observable logs; native limits are prompt-enforced
+and self-reported. Split before launch only into compiler-proven disjoint concept batches
+whose harness enforces paths; otherwise work sequentially.
 
 A concept worker is gated on `design/concepts/` alone, so take its digest with
 `design digest design --role concept-worker`; every other role uses the whole design. A
@@ -60,31 +56,27 @@ Launch through the matching harness guide with a compiler-owned record. Start on
 worker unless a checked budget requires disjoint concept batches. Each batch owns only
 assigned concept and focused test paths.
 
-After concept validation, start one application worker owning assigned compositions,
-types, registrations, concept set, assembly, configuration, host wiring, and generated
-integration paths. HTTP behavior comes only from the supplied host reference; a
-hand-rolled router, redirect, or error shape is a defect.
+After concept validation, one application worker owns assigned composition, registration,
+assembly, configuration, host, and generated-integration paths. HTTP comes only from the
+host reference; hand-rolled routing, redirects, or error shapes are defects.
 
-If the brief requests a frontend, start one frontend worker after application validation
-passes, owning only assigned frontend paths. It implements the requested browser,
-command-line, or other shell strictly as a client of the assembled endpoints. A
-web-application assignment names the projected HTTP wire and base path; the frontend owns
-its `createHttpClient` construction.
+When requested, one frontend worker follows application validation and owns only frontend
+paths. It is strictly a client of assembled endpoints. Web assignments name the HTTP
+wire and base path; the frontend owns `createHttpClient` construction.
 
 Pass `<skill-root>/prompts/inputs/composition.md` as `reference` to every application
 worker. For HTTP, add `<skill-root>/prompts/inputs/http-host.md` to the application worker
 and `<skill-root>/prompts/inputs/http-client.md` to the frontend worker. Never read these
 worker references yourself.
 
-Finally start one fresh evidence worker. Supply focused commands, not the whole
-application. It may report existing evidence sufficient and edit only assigned
-scenario/test paths.
+Finally start one fresh evidence worker. For a frontend, supply its public entry and
+focused tests so evidence exercises the visible boundary. Supply focused commands; it
+may accept existing evidence and edits only assigned scenario/test paths.
 
-Return an ordinary implementation defect to the original worker in a compiler-named
-file holding only the new diagnostic, affected paths, and command. Quote the failing check verbatim, including every name it lists, and name the
-command that produced it: a paraphrase drops declarations, and a narrower check that
-cannot reproduce the failure proves nothing by passing. Never resend its full prompt or
-name a follow-up:
+Return an implementation defect to the original worker in a compiler-named file with
+only the verbatim diagnostic, affected paths, and reproducing command. Its one follow-up
+and same-signature repair ceilings span relaunches and digest changes; a worker-reported
+repair counts, and recurrence blocks. Never resend the full prompt:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" follow-up new --role <role>
@@ -92,17 +84,14 @@ bun "<skill-root>/scripts/command.ts" follow-up check <file> \
   --design-root design --design-digest <sha256>
 ```
 
-Application workers run focused source-agreement, artifact, integration, and bounded host
-checks for assigned wiring; evidence workers run assigned scenarios or tests, not a
-production-wide build chain. A mismatch is material when implementation requires a new
-owner, action, refusal, lifecycle, application policy, external type binding, cross-concept
-failure rule, or visible behavior. Return it to design as a follow-up to the designer that
-wrote it, naming the missing declaration; a fresh designer instead takes the current design
-as `existing-design` so it revises rather than restarts. Never silently change approved
-Markdown. A blocker reporting that the framework cannot express something is none of
-these and no critic can settle it: revise the design so it stops asking, or put the
-product decision to the user; under preauthorized delivery decide it yourself, record it in
-the brief as your assumption, and revise the design.
+Application workers run focused source-agreement, artifact, integration, and host checks;
+evidence workers run assigned scenarios. A new owner, action, refusal, lifecycle, policy,
+external binding, cross-concept failure rule, or visible behavior is a design mismatch.
+Return it to the original designer naming the missing declaration; a replacement receives
+`existing-design`. Never silently edit approved Markdown. If the framework cannot express
+the design, no critic can settle it: revise what it asks or put the decision to the user;
+preauthorization records
+the coordinator's assumption. One implementation-driven design reopening is the ceiling.
 
 ## Validate once and stop
 
@@ -126,7 +115,7 @@ failure, return that focused diagnostic to the original worker, rerun the affect
 focused command, then every check invalidated by the changed paths regardless of chain
 position. Do not repeat unaffected checks.
 
-Confirm every required role ran independently before reporting anything:
+Confirm every required role phase ran independently before reporting anything:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" handback check \

@@ -13,18 +13,19 @@ most five tool calls, all writing or revising that one file, then return.
 Start with the needs from the brief. Then write one Markdown table row per concept with:
 
 - the needs it serves;
-- the catalog entry it instantiates, or one clause saying why none fits;
+- `catalog-unchanged: <entry>`, `catalog-adapted: <entry>`, or one clause saying why
+  none fits;
 - its subject as an opaque external, naming a concrete subject only when its mechanism is
   that value's format and saying which rule reads it; and
 - a concrete second unrelated application that takes this concept unchanged.
 
-Close with one line per obligation created by the split. Give each a stable `O1`-style ID
-and state its triggering action, closing reaction, observable false interval, retry
-identity, and recovery.
+Close with one line per cross-concept consequence created by the split. Give each a
+stable `O1`-style ID and state its triggering action, closing reaction, observable false
+interval, retry identity, and recovery.
 
 Do not write concept, composition, types, source, test, configuration, generated, report,
-progress, or workflow files. Return the changed path and at most two brief-material
-questions, nothing else. The coordinator will have a fresh critic review this map before
+progress, or workflow files. Return exactly `Changed: design/decomposition.md` then
+`Questions: none` or at most two brief-material questions. The coordinator will have a fresh critic review this map before
 returning to this same agent for contract authoring.
 
 ## Product brief

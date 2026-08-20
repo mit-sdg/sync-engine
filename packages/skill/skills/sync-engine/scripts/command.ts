@@ -24,11 +24,12 @@ import {
 } from "./native-launch.ts";
 import {
   isSettledStatus,
-  previousRole,
+  previousPhase,
+  readPromptContext,
   requireCompletedRole,
   workspaceFileRole,
   requireInsideWorkspace,
-  requiredRoles,
+  requiredPhases,
   reserveWorkspacePath,
   registrationWrappers,
   verifiedRecords,
@@ -218,9 +219,11 @@ function usage(): string {
   sync-engine-skill assignment new --role <role> --design-digest <sha256>
   sync-engine-skill assignment check <file>
   sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
+    [--continue-agent <id>] for a later phase of the same role
     [--model <model>] only when the user names one for Paseo roles
     [--thinking <id>]
   sync-engine-skill launch prepare --harness <harness> --role <role> --prompt <path>
+    [--continue-agent <id>]
   sync-engine-skill launch complete --ticket <path> --agent-id <id>
     [--provider <provider>] [--model <model>] [--thinking <setting>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
@@ -319,6 +322,72 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   return { role, inputs, stdout, maxBytes, mode, designRoot, designDigest };
 }
 
+async function reviewedContractDigest(options: PromptArguments): Promise<string | undefined> {
+  if (options.role !== "critic" || options.mode !== "contract") return options.designDigest;
+  const map = options.inputs.find(
+    (input) => input.slot === "candidate" && basename(input.path) === "decomposition.md",
+  );
+  if (map === undefined) {
+    throw new Error(`Contract critic requires design/decomposition.md as a candidate`);
+  }
+  const designRoot = dirname(resolve(map.path));
+  const candidateInputs = options.inputs.filter((candidate) => candidate.slot === "candidate");
+  const candidatePaths = new Set<string>();
+  for (const input of candidateInputs) {
+    const candidate = resolve(input.path);
+    const within = relative(designRoot, candidate);
+    if (within.startsWith("..") || isAbsolute(within)) {
+      throw new Error(`Contract critic candidates must all belong to ${designRoot}`);
+    }
+    candidatePaths.add(candidate);
+  }
+  const digest = await digestDesign(designRoot);
+  if (candidatePaths.size !== digest.files || candidateInputs.length !== digest.files) {
+    throw new Error(
+      `Contract critic requires every authored design Markdown file exactly once; received ${candidatePaths.size} of ${digest.files}`,
+    );
+  }
+  return digest.digest;
+}
+
+async function launchPromptContext(prompt: string, role: string) {
+  const promptPath = requireInsideWorkspace(prompt);
+  const context = await readPromptContext(promptPath);
+  if (context === undefined) {
+    throw new Error(`Launch requires a prompt written by prompt build: ${prompt}`);
+  }
+  if (context.role !== role) {
+    throw new Error(`Prompt belongs to role ${context.role}, not requested role ${role}`);
+  }
+  return context;
+}
+
+async function requireContinuation(
+  role: string,
+  mode: PromptMode | undefined,
+  agentId: string | undefined,
+  briefSha256?: string,
+): Promise<void> {
+  const needsContinuation = role === "designer" && mode === "contract";
+  if (!needsContinuation && agentId !== undefined) {
+    throw new Error(`--continue-agent is only valid for the designer contract phase`);
+  }
+  if (!needsContinuation) return;
+  if (agentId === undefined) {
+    throw new Error(`Designer contract launch requires --continue-agent <map-designer-id>`);
+  }
+  const originals = await verifiedRecords("designer", undefined, undefined, "map");
+  if (
+    !originals.some(
+      (entry) =>
+        entry.record.agentId === agentId &&
+        (briefSha256 === undefined || entry.record.briefSha256 === briefSha256),
+    )
+  ) {
+    throw new Error(`Agent ${agentId} has no settled designer map record`);
+  }
+}
+
 async function run(args: readonly string[]): Promise<void> {
   if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
     process.stdout.write(usage());
@@ -414,12 +483,13 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
-    const predecessor = previousRole(options.role);
+    const reviewedDigest = await reviewedContractDigest(options);
+    const predecessor = previousPhase(options.role, options.mode);
     const predecessorDigest =
       options.designRoot === undefined || predecessor === undefined
-        ? options.designDigest
-        : (await digestDesign(options.designRoot, designScope(predecessor))).digest;
-    await requireCompletedRole(options.role, undefined, predecessorDigest);
+        ? reviewedDigest
+        : (await digestDesign(options.designRoot, designScope(predecessor.role))).digest;
+    await requireCompletedRole(options.role, undefined, predecessorDigest, options.mode);
     for (const input of options.inputs) {
       if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
     }
@@ -453,7 +523,7 @@ async function run(args: readonly string[]): Promise<void> {
                 .update(await readFile(resolve(brief.path), "utf8"))
                 .digest("hex"),
             }),
-        ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
+        ...(reviewedDigest === undefined ? {} : { designDigest: reviewedDigest }),
       });
     }
 
@@ -511,12 +581,15 @@ async function run(args: readonly string[]): Promise<void> {
     let role: string | undefined;
     let prompt: string | undefined;
     let nativeHarness: string | undefined;
+    let continuationAgentId: string | undefined;
     for (let index = 2; index < args.length; index += 1) {
       const argument = args[index]!;
       if (argument === "--role") role = takeValue(args, index, argument);
       else if (argument === "--prompt") prompt = takeValue(args, index, argument);
       else if (argument === "--harness") nativeHarness = takeValue(args, index, argument);
-      else throw new Error(`Unknown launch prepare option: ${argument}`);
+      else if (argument === "--continue-agent") {
+        continuationAgentId = takeValue(args, index, argument);
+      } else throw new Error(`Unknown launch prepare option: ${argument}`);
       index += 1;
     }
     if (role === undefined || prompt === undefined || nativeHarness === undefined) {
@@ -530,12 +603,15 @@ async function run(args: readonly string[]): Promise<void> {
         `Unknown native harness: ${nativeHarness}; harnesses are ${nativeHarnesses.join(", ")}`,
       );
     }
-    await requireCompletedRole(role);
+    const context = await launchPromptContext(prompt, role);
+    await requireCompletedRole(role, undefined, context.designDigest, context.mode);
+    await requireContinuation(role, context.mode, continuationAgentId, context.briefSha256);
     const prepared = await prepareNativeLaunch({
       role,
       harness: nativeHarness as NativeHarness,
       promptPath: prompt,
       applicationRoot: process.cwd(),
+      ...(continuationAgentId === undefined ? {} : { continuationAgentId }),
     });
     process.stdout.write(
       `Native launch prepared: role ${role}; harness ${nativeHarness}; ticket ${prepared.ticketPath}; response ${prepared.responsePath}.\n`,
@@ -543,7 +619,9 @@ async function run(args: readonly string[]): Promise<void> {
     next(process.stdout, [
       `read ${reference(`harnesses/${nativeHarness}.md`)}`,
       `apply native tool policy ${prepared.ticket.toolPolicy ?? "assignment-only"}`,
-      `launch one fresh native ${role} with only: Read ${prepared.ticket.prompt.path} as your complete assignment and follow it; return exactly what it requests`,
+      prepared.ticket.continuationAgentId === undefined
+        ? `launch one fresh native ${role} with only: Read ${prepared.ticket.prompt.path} as your complete assignment and follow it; return exactly what it requests`
+        : `send ${prepared.ticket.prompt.path} to native agent ${prepared.ticket.continuationAgentId} as its next complete phase and wait`,
       `copy that agent's final response verbatim into ${prepared.responsePath}`,
       `${compiler} launch complete --ticket ${prepared.ticketPath} --agent-id <native-agent-id>`,
     ]);
@@ -594,13 +672,16 @@ async function run(args: readonly string[]): Promise<void> {
     let timeoutSeconds = 1800;
     let thinking: string | undefined;
     let model: string | undefined;
+    let continuationAgentId: string | undefined;
     for (let index = 1; index < args.length; index += 1) {
       const argument = args[index]!;
       if (argument === "--role") role = takeValue(args, index, argument);
       else if (argument === "--prompt") prompt = takeValue(args, index, argument);
       else if (argument === "--thinking") thinking = takeValue(args, index, argument);
       else if (argument === "--model") model = takeValue(args, index, argument);
-      else if (argument === "--timeout") {
+      else if (argument === "--continue-agent") {
+        continuationAgentId = takeValue(args, index, argument);
+      } else if (argument === "--timeout") {
         timeoutSeconds = Number(takeValue(args, index, argument));
         if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
           throw new Error(`--timeout must be a positive whole number of seconds`);
@@ -615,7 +696,9 @@ async function run(args: readonly string[]): Promise<void> {
     }
     if (!promptRoles.includes(role as PromptRole))
       throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    await requireCompletedRole(role);
+    const context = await launchPromptContext(prompt, role);
+    await requireCompletedRole(role, undefined, context.designDigest, context.mode);
+    await requireContinuation(role, context.mode, continuationAgentId, context.briefSha256);
     const launched = await launchRole({
       role,
       promptPath: prompt,
@@ -623,6 +706,7 @@ async function run(args: readonly string[]): Promise<void> {
       timeoutSeconds,
       ...(thinking === undefined ? {} : { thinking }),
       ...(model === undefined ? {} : { model }),
+      ...(continuationAgentId === undefined ? {} : { continueAgentId: continuationAgentId }),
     });
     const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
     process.stdout.write(
@@ -641,8 +725,13 @@ async function run(args: readonly string[]): Promise<void> {
     }
     await requireDesignDigest(args[3]!, args[5]!);
     const scopedDigests = new Map<string, string>();
-    for (const role of requiredRoles) {
-      scopedDigests.set(role, (await digestDesign(args[3]!, designScope(role))).digest);
+    for (const phase of requiredPhases) {
+      if (!scopedDigests.has(phase.role)) {
+        scopedDigests.set(
+          phase.role,
+          (await digestDesign(args[3]!, designScope(phase.role))).digest,
+        );
+      }
     }
     const briefSha256 =
       args.length === 8
@@ -659,13 +748,15 @@ async function run(args: readonly string[]): Promise<void> {
     const coordinatorAttested: string[] = [];
     const wrapped = await registrationWrappers();
     const lines: string[] = [];
-    for (const role of requiredRoles) {
-      const records = await verifiedRecords(role);
+    for (const phase of requiredPhases) {
+      const label = `${phase.role}${phase.mode === undefined ? "" : ` ${phase.mode}`}`;
+      const records = await verifiedRecords(phase.role, undefined, undefined, phase.mode);
       if (records.length === 0) {
-        missing.push(role);
+        missing.push(label);
         continue;
       }
-      for (const entry of records) {
+      const latest = records[records.length - 1]!;
+      for (const entry of [latest]) {
         const recordHarness = entry.record.harness ?? harness;
         const attestation = entry.record.attestation ?? "harness";
         const known =
@@ -673,32 +764,32 @@ async function run(args: readonly string[]): Promise<void> {
             ? agentExists(entry.record.agentId)
             : true;
         if (attestation === "harness" && recordHarness === harness && !known) {
-          unknown.push(`${role} ${entry.record.agentId}`);
+          unknown.push(`${label} ${entry.record.agentId}`);
         }
         if (attestation === "coordinator") {
-          coordinatorAttested.push(`${role} ${entry.record.agentId} through ${recordHarness}`);
+          coordinatorAttested.push(`${label} ${entry.record.agentId} through ${recordHarness}`);
         }
         if (!isSettledStatus(entry.record.status)) {
-          unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
+          unsettled.push(`${label} ${entry.record.agentId} (${entry.record.status})`);
         }
         for (const path of entry.record.readViolations ?? []) {
-          strayed.push(`${role} read ${path}`);
+          strayed.push(`${label} read ${path}`);
         }
         for (const churn of entry.record.rewrites ?? []) {
-          churned.push(`${role} wrote ${churn.path} ${churn.writes} times`);
+          churned.push(`${label} wrote ${churn.path} ${churn.writes} times`);
         }
         if (
           entry.record.designDigest !== undefined &&
-          entry.record.designDigest !== scopedDigests.get(role)
+          entry.record.designDigest !== scopedDigests.get(phase.role)
         ) {
-          drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
+          drifted.push(`${label} ran against design ${entry.record.designDigest.slice(0, 12)}`);
         }
         if (
           briefSha256 !== undefined &&
           entry.record.briefSha256 !== undefined &&
           entry.record.briefSha256 !== briefSha256
         ) {
-          drifted.push(`${role} ran against an earlier brief`);
+          drifted.push(`${label} ran against an earlier brief`);
         }
         const configuration =
           entry.record.model === undefined
@@ -706,16 +797,33 @@ async function run(args: readonly string[]): Promise<void> {
             : `${entry.record.provider ?? "provider unreported"} ${entry.record.model}`;
         lines.push(
           attestation === "harness"
-            ? `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${recordHarness}; ${configuration}; settled ${entry.record.status}`
-            : `  ${role}: agent ${entry.record.agentId} coordinator-attested through ${recordHarness}; ${configuration}; settled ${entry.record.status}`,
+            ? `  ${label}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${recordHarness}; ${configuration}; settled ${entry.record.status}`
+            : `  ${label}: agent ${entry.record.agentId} coordinator-attested through ${recordHarness}; ${configuration}; settled ${entry.record.status}`,
         );
       }
     }
+    const mapDesignerRecords = await verifiedRecords("designer", undefined, undefined, "map");
+    const contractDesignerRecords = await verifiedRecords(
+      "designer",
+      undefined,
+      undefined,
+      "contract",
+    );
+    const mapDesignerIds = new Set(
+      mapDesignerRecords.slice(-1).map((entry) => entry.record.agentId),
+    );
+    const contractDesignerIds = new Set(
+      contractDesignerRecords.slice(-1).map((entry) => entry.record.agentId),
+    );
+    const continuedDesigner = [...contractDesignerIds].some((id) => mapDesignerIds.has(id));
     process.stdout.write(`Handback check for design ${args[5]}:\n${lines.join("\n")}\n`);
     const failures = [
       ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
       ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
       ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
+      ...(mapDesignerIds.size === 0 || contractDesignerIds.size === 0 || continuedDesigner
+        ? []
+        : [`designer contract phase used a different agent from the map phase`]),
       ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
       ...(wrapped.length === 0
         ? []
@@ -735,7 +843,7 @@ async function run(args: readonly string[]): Promise<void> {
         `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
       );
     }
-    process.stdout.write(`Every required role has a settled launch record.\n`);
+    process.stdout.write(`Every required role phase has a settled launch record.\n`);
     return;
   }
 
