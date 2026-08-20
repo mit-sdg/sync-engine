@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "id": "concept/registering",
+  "kind": "concept",
+  "summary": "Accept each identified occurrence once, so a repeat report is recognised.",
+  "design": "spec.md",
+  "sources": ["registering.shared.ts", "registering.conformance.ts", "registry.ts"],
+  "implementations": {
+    "memory": {
+      "summary": "Process-local occurrence identities claimed on first registration.",
+      "sources": ["registering.memory.ts", "registering.memory.test.ts"]
+    }
+  }
+}

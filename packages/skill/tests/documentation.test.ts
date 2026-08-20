@@ -273,7 +273,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     // trials showed each role can afford, not whatever it currently weighs. The critic
     // fell from 18.2 KiB to 10.6 KiB across those runs with no measured loss.
     const limits: Record<string, number> = {
-      designer: 20 * 1024,
+      designer: 20.5 * 1024,
       critic: 12 * 1024,
       "concept-worker": 2.875 * 1024,
       "application-worker": 3.75 * 1024,

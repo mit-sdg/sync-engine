@@ -326,6 +326,7 @@ expected answer rather than a fault.
 - **Inviting** — Record a directed offer that only its intended recipient may accept or decline, so participation requires consent from both the inviter and invitee.
 - **Labeling** — Classify an item under several stable names in one scope, so the item can be found through overlapping categories instead of being placed in one exclusive container.
 - **Posting** — Publish immutable authored messages in chronological order, so a contribution remains visible and attributed without depending on an external content store.
+- **Registering** — Accept each identified occurrence once against a subject, so a report that arrives twice is recognised as the same one and only genuinely new occurrences reach whatever acts on them.
 - **Reserving** — Give one claimant an exclusive claim on a reservable unit, so the same unit is not promised to competing claimants.
 - **Selecting** — Keep one current item for a shared scope, so everyone working in that scope can begin from the same choice.
 - **Sessioning** — Keep a short-lived opaque session for an external subject, so temporary access can end without changing that subject's identity.

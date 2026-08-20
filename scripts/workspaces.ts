@@ -220,7 +220,7 @@ export const workspaceCatalog = [
       "skills/sync-engine/prompts/inputs/http.md",
       "skills/sync-engine/prompts/templates/product-brief.md",
     ],
-    packageBudget: { files: 40, packedBytes: 75_000, unpackedBytes: 250_000 },
+    packageBudget: { files: 43, packedBytes: 75_000, unpackedBytes: 270_000 },
     assets: [],
     bins: ["dist/command.js"],
   },

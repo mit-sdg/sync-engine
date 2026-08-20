@@ -24,5 +24,6 @@
   "recipe/review-queue/manifest.json",
   "recipe/message-board/manifest.json",
   "concept/expiring/manifest.json",
-  "concept/tallying/manifest.json"
+  "concept/tallying/manifest.json",
+  "concept/registering/manifest.json"
 ]
