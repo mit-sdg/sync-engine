@@ -328,7 +328,7 @@ expected answer rather than a fault.
 - **Registering** — Accept each identified occurrence once against a subject, so a report that arrives twice is recognised as the same one and only genuinely new occurrences reach whatever acts on them.
 - **Reserving** — Give one claimant an exclusive claim on a reservable unit, so the same unit is not promised to competing claimants.
 - **Selecting** — Keep one current item for a shared scope, so everyone working in that scope can begin from the same choice.
-- **Sessioning** — Keep a short-lived opaque session for an external subject, so temporary access can end without changing that subject's identity.
+- **Sessioning** — Issue an opaque session for an external subject with a caller-chosen lifetime, so temporary access ends without changing that subject's identity.
 - **Tallying** — Keep a running total of how often something has happened to a subject, so the count can be read back without keeping a record of each separate occurrence.
 - **Trashing** — Record a reversible removal before making that removal irreversible, so an accidental removal can be restored without leaving every removal permanently reversible.
 - **Upvoting** — Record one current preference from each voter about an item, so an aggregate score reflects distinct voters rather than repeated clicks.

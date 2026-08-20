@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Keep a short-lived opaque session for an external subject, so temporary access can end
-without changing that subject's identity.
+Issue an opaque session for an external subject with a caller-chosen lifetime, so temporary
+access ends without changing that subject's identity.
 
 ## Principle
 
-Ari starts a session for subject `ari`. Before the session expires, `_active` reports
-its subject and expiry and `current` resolves it to `ari`. Ending the session makes it
-unknown. An invented, ended, or expired session is refused in the same way. A session
-expires 30 minutes after it starts and does not extend when used.
+At noon Ari starts session `v1` for subject `ari` with a 20-minute lifetime, so it expires
+at 12:20. Asked at 12:10, `_active` answers `ari` and 12:20, and `current` answers `ari`.
+Ari ends `v1` at 12:11, after which `current` refuses it. At 12:12 Ari starts `v2` with an
+eight-minute lifetime; at 12:20 it is expired and is refused just like an invented session.
 
 ## Types
 
@@ -30,28 +30,31 @@ a set of Sessions with
 ## Actions
 
 ```actions
-start (subject: Subject) : return (session: Session, expiresAt: DateTime)
-  where true
+start (subject: Subject, lifetime: Number, now: DateTime) : return (session: Session, expiresAt: DateTime)
+  where lifetime is not a positive finite number of milliseconds
   then
-    add a new opaque Session for subject expiring 30 minutes after the trusted current time
+    refuse INVALID_SESSION_LIFETIME "A session lifetime must be a positive number of milliseconds."
+  where lifetime is a positive finite number of milliseconds
+  then
+    add a new opaque Session for subject with expiresAt lifetime milliseconds after now
     return session, expiresAt
 
-current (session: Session) : return (subject: Subject)
-  where session is unknown, ended, or expired at the trusted current time
+current (session: Session, now: DateTime) : return (subject: Subject)
+  where session is unknown or ended, or its expiresAt is at or before now
   then
     refuse UNKNOWN_SESSION "This session is not active."
-  where session is active at the trusted current time
+  where session is known and its expiresAt is after now
   then
     bind subject to the Session's subject
     return subject
 
-end (session: Session) : return (ended: Flag)
-  where session is unknown, ended, or expired at the trusted current time
+end (session: Session, now: DateTime) : return (ended: Flag)
+  where session is unknown or ended, or its expiresAt is at or before now
   then
     refuse UNKNOWN_SESSION "This session is not active."
-  where session is active at the trusted current time
+  where session is known and its expiresAt is after now
   then
-    remove the Session from active use
+    delete the Session
     set ended to true
     return ended
 ```
@@ -59,7 +62,7 @@ end (session: Session) : return (ended: Flag)
 ## Queries
 
 ```queries
-_active (session: Session) : optional (subject: Subject, expiresAt: DateTime)
-  answers the active Session's Subject and expiry time
-  answers no row for an unknown, ended, or expired Session
+_active (session: Session, now: DateTime) : optional (subject: Subject, expiresAt: DateTime)
+  answers the active Session's subject and expiresAt when expiresAt is after now
+  answers no row for an unknown or ended Session, or when expiresAt is at or before now
 ```

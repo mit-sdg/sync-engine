@@ -2,12 +2,12 @@
   "schema": 2,
   "id": "concept/sessioning",
   "kind": "concept",
-  "summary": "Issue fixed-lifetime opaque sessions for external subjects.",
+  "summary": "Issue opaque sessions with a caller-chosen lifetime for external subjects.",
   "design": "spec.md",
-  "sources": ["sessioning.shared.ts", "registry.ts"],
+  "sources": ["sessioning.shared.ts", "sessioning.conformance.ts", "registry.ts"],
   "implementations": {
     "memory": {
-      "summary": "Process-local state with an injected trusted clock and secure bearer source.",
+      "summary": "Process-local sessions compared against caller-supplied instants.",
       "sources": ["sessioning.memory.ts", "sessioning.memory.test.ts"]
     }
   }

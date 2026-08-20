@@ -5,6 +5,8 @@ import { concepts } from "@catalog/concepts";
 
 const { Authenticating, Commenting, Posting, Sessioning } = concepts;
 
+const SESSION_LIFETIME_MS = 30 * 60 * 1000;
+
 const PostTargetExists = view("the Post target exists (post)", ({ post }, _outputs, _bindings) =>
   where(Posting._get({ post })),
 ).holds();
@@ -37,39 +39,67 @@ const MessageBoard = former(
 
 const RegisterBoardUser = endpoint(
   "/message-board/register",
-  ({ username, password, account, session, expiresAt }) =>
+  ({ username, password, account, session, expiresAt, time }) =>
     receive({ username, password })
       .then(Authenticating.register({ username, password }).responds({ account }))
-      .then(Sessioning.start({ subject: account }).responds({ session, expiresAt }))
+      .then(
+        where(now(time)).then(
+          Sessioning.start({ subject: account, lifetime: SESSION_LIFETIME_MS, now: time }).responds(
+            {
+              session,
+              expiresAt,
+            },
+          ),
+        ),
+      )
       .then(respond({ account, session, expiresAt })),
 );
 
 const SignInBoardUser = endpoint(
   "/message-board/sign-in",
-  ({ username, password, account, session, expiresAt }) =>
+  ({ username, password, account, session, expiresAt, time }) =>
     receive({ username, password })
       .then(Authenticating.authenticate({ username, password }).responds({ account }))
-      .then(Sessioning.start({ subject: account }).responds({ session, expiresAt }))
+      .then(
+        where(now(time)).then(
+          Sessioning.start({ subject: account, lifetime: SESSION_LIFETIME_MS, now: time }).responds(
+            {
+              session,
+              expiresAt,
+            },
+          ),
+        ),
+      )
       .then(respond({ account, session, expiresAt })),
 );
 
-const CurrentBoardUser = endpoint("/message-board/current-user", ({ session, username }) =>
+const CurrentBoardUser = endpoint("/message-board/current-user", ({ session, username, time }) =>
   receive({ session })
-    .then(Sessioning.current({ session }).responds({ subject: username }))
+    .then(
+      where(now(time)).then(
+        Sessioning.current({ session, now: time }).responds({ subject: username }),
+      ),
+    )
     .then(respond({ username })),
 );
 
-const SignOutBoardUser = endpoint("/message-board/sign-out", ({ session, signedOut }) =>
+const SignOutBoardUser = endpoint("/message-board/sign-out", ({ session, signedOut, time }) =>
   receive({ session })
-    .then(Sessioning.end({ session }).responds({ ended: signedOut }))
+    .then(
+      where(now(time)).then(Sessioning.end({ session, now: time }).responds({ ended: signedOut })),
+    )
     .then(respond({ signedOut })),
 );
 
 const ChangeBoardPassword = endpoint(
   "/message-board/change-password",
-  ({ session, username, currentPassword, newPassword, account }) =>
+  ({ session, username, currentPassword, newPassword, account, time }) =>
     receive({ session, currentPassword, newPassword })
-      .then(Sessioning.current({ session }).responds({ subject: username }))
+      .then(
+        where(now(time)).then(
+          Sessioning.current({ session, now: time }).responds({ subject: username }),
+        ),
+      )
       .then(
         Authenticating.changePassword({
           username,
@@ -82,9 +112,13 @@ const ChangeBoardPassword = endpoint(
 
 const DeleteBoardAccount = endpoint(
   "/message-board/delete-account",
-  ({ session, username, password, account }) =>
+  ({ session, username, password, account, time }) =>
     receive({ session, password })
-      .then(Sessioning.current({ session }).responds({ subject: username }))
+      .then(
+        where(now(time)).then(
+          Sessioning.current({ session, now: time }).responds({ subject: username }),
+        ),
+      )
       .then(Authenticating.unregister({ username, password }).responds({ account }))
       .then(respond({ account })),
 );
@@ -93,10 +127,12 @@ const PublishMessageBoardPost = endpoint(
   "/message-board/post",
   ({ session, author, content, time, post }) =>
     receive({ session, content })
-      .then(Sessioning.current({ session }).responds({ subject: author }))
       .then(
-        where(now(time)).then(Posting.publish({ author, content, at: time }).responds({ post })),
+        where(now(time)).then(
+          Sessioning.current({ session, now: time }).responds({ subject: author }),
+        ),
       )
+      .then(Posting.publish({ author, content, at: time }).responds({ post }))
       .then(respond({ post })),
 );
 
@@ -104,9 +140,13 @@ const AddMessageBoardComment = endpoint(
   "/message-board/comment",
   ({ session, author, target, text, time, comment }) =>
     receive({ session, target, text })
-      .then(Sessioning.current({ session }).responds({ subject: author }))
       .then(
-        where(PostTargetExists({ post: target }), now(time))
+        where(now(time)).then(
+          Sessioning.current({ session, now: time }).responds({ subject: author }),
+        ),
+      )
+      .then(
+        where(PostTargetExists({ post: target }))
           .then(Commenting.add({ target, author, text, at: time }).responds({ comment }))
           .then(respond({ comment }))
           .named("post-exists"),
@@ -118,16 +158,20 @@ const AddMessageBoardComment = endpoint(
 
 const RetractMessageBoardComment = endpoint(
   "/message-board/retract-comment",
-  ({ session, author, comment }) =>
+  ({ session, author, comment, time }) =>
     receive({ session, comment })
-      .then(Sessioning.current({ session }).responds({ subject: author }))
+      .then(
+        where(now(time)).then(
+          Sessioning.current({ session, now: time }).responds({ subject: author }),
+        ),
+      )
       .then(Commenting.retract({ comment, author }).responds({ comment }))
       .then(respond({ comment })),
 );
 
-const ListMessageBoard = endpoint("/message-board/list", ({ session }) =>
+const ListMessageBoard = endpoint("/message-board/list", ({ session, time }) =>
   receive({ session })
-    .then(Sessioning.current({ session }).responds({}))
+    .then(where(now(time)).then(Sessioning.current({ session, now: time }).responds({})))
     .then(respond({ board: MessageBoard({}) })),
 );
 
