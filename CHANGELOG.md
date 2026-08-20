@@ -5,6 +5,86 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.15] - 2026-08-20
+
+This beta gives the design skill a separate decomposition review before concept
+contracts are written, adds a framework-owned instant shared across each causal
+flow, and narrows the catalog to reusable single-mechanism entries.
+
+### Compatibility
+
+- `now(variable)` is exported from `@mit-sdg/sync-engine/language`. It is valid
+  only in a reaction or endpoint `where` stage and binds the instant stamped on
+  the causal flow's outermost occurrence. Every reaction in one flow observes
+  the same `Date`; the flow and its outermost log occurrence use one clock read.
+  Registration rejects `now` in views and formers and rejects a variable already
+  authored by an action trigger or `receive(...)`.
+- `assemble` accepts an optional `clock: () => Date`. The default is the system
+  clock. The clock is called once when each causal flow opens, and a return value
+  that is not a valid finite `Date` fails that flow.
+- The skill writes and reviews `design/decomposition.md` before concept files.
+  Each concept row identifies the needs served, catalog match, opaque subject,
+  and a second unrelated application; each cross-concept obligation identifies
+  its permitted false interval and recovery. The decomposition critic returns an
+  `accept`, `split`, or `merge` ruling for every row. Later contract review checks
+  the settled obligations without reopening boundaries.
+- The complete generated catalog listing is included in every designer prompt
+  and checked for staleness. Added the `Expiring`, `Registering`, and `Tallying`
+  concepts. Removed `Discussing`, `Gathering`, and `Timing`, and removed the
+  `incident-room`, `invite-only-workshop`, `member-reservations`,
+  `ranked-discussion`, and `workshop-selection` recipes that depended on the
+  bundled concepts. `now` replaces `Timing` as the source of a flow instant.
+- `Sessioning.start` now requires `lifetime` in milliseconds and `now`, and
+  refuses a lifetime that is not positive and finite with
+  `INVALID_SESSION_LIFETIME`. `Sessioning.current`, `Sessioning.end`, and
+  `Sessioning._active` now require `now`; expiration is explicit and no longer
+  depends on a clock hidden in the implementation.
+- `Selecting.choose` and `Selecting.clear` delete the superseded selection
+  instead of leaving a non-current record addressable through `_get`.
+- Catalog concept queries now state their successful rows as well as their empty
+  case, and `many` queries state a stable ordering.
+- The application-worker prompt includes concrete accepted reaction triggers,
+  response and refusal forms, and the required exported `composition` record.
+  Example selection now checks that the chosen examples demonstrate every
+  mechanism used by the design.
+
+### Migration
+
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.15` when they
+  are used together.
+- Replace a `Timing` instance and its `_now` read with
+  `.where(now(instant))`, then pass `instant` to each concept action that
+  declares it. Inject `clock` through `assemble` when tests need a fixed time.
+- Update `Sessioning` calls to pass an explicit positive finite `lifetime` to
+  `start` and a `now` value to `start`, `current`, `end`, and `_active`.
+- Stop importing the removed catalog concepts and recipes. Replace their bundled
+  behavior with independently selected mechanisms; use `Registering` for
+  deduplicated occurrences, `Tallying` for totals, and `Expiring` for deadlines
+  where those contracts fit.
+- Regenerate a skill-authored design from the decomposition stage. Existing
+  designs without `design/decomposition.md` do not satisfy the new staged
+  designer and critic workflow.
+
+### Generated formats
+
+- Version-1 application manifests gain the `{"op":"now","out":"..."}`
+  reaction where-operation variant. The manifest version remains 1; `now` is
+  rejected in view and former operations.
+- Analysis application indexes, impact traces, source indexes, and project
+  snapshots remain at version 3, unchanged in shape.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.15`.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- The flow instant is framework-owned: request input and action-trigger values
+  cannot forge a `now` binding. An injected `clock` is privileged assembly code
+  and determines both the outermost occurrence stamp and every `now` binding in
+  that flow.
+
+[Release][1.0.0-beta.15] | [Changes since 1.0.0-beta.14][1.0.0-beta.15-compare]
+
 ## [1.0.0-beta.14] - 2026-08-19
 
 This beta makes the skill's role launches verify themselves against the harness
@@ -1224,6 +1304,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.15]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.15
+[1.0.0-beta.15-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.14...v1.0.0-beta.15
 [1.0.0-beta.14]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.14
 [1.0.0-beta.14-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.13...v1.0.0-beta.14
 [1.0.0-beta.13]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.13

@@ -20,7 +20,7 @@
     },
     "packages/analysis": {
       "name": "@mit-sdg/sync-engine-analysis",
-      "version": "1.0.0-beta.14",
+      "version": "1.0.0-beta.15",
       "bin": {
         "sync-engine-analysis": "./dist/command.js",
       },
@@ -28,12 +28,12 @@
         "typescript": ">=6 <7",
       },
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.14",
+        "@mit-sdg/sync-engine": "1.0.0-beta.15",
       },
     },
     "packages/catalog": {
       "name": "@mit-sdg/sync-engine-catalog",
-      "version": "1.0.0-beta.14",
+      "version": "1.0.0-beta.15",
       "bin": {
         "sync-engine-catalog": "./dist/command.js",
       },
@@ -43,26 +43,26 @@
     },
     "packages/http": {
       "name": "@mit-sdg/sync-engine-http",
-      "version": "1.0.0-beta.14",
+      "version": "1.0.0-beta.15",
       "peerDependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.14",
+        "@mit-sdg/sync-engine": "1.0.0-beta.15",
       },
     },
     "packages/skill": {
       "name": "@mit-sdg/sync-engine-skill",
-      "version": "1.0.0-beta.14",
+      "version": "1.0.0-beta.15",
       "bin": {
         "sync-engine-skill": "./dist/command.js",
       },
       "dependencies": {
-        "@mit-sdg/sync-engine": "1.0.0-beta.14",
-        "@mit-sdg/sync-engine-analysis": "1.0.0-beta.14",
-        "@mit-sdg/sync-engine-catalog": "1.0.0-beta.14",
+        "@mit-sdg/sync-engine": "1.0.0-beta.15",
+        "@mit-sdg/sync-engine-analysis": "1.0.0-beta.15",
+        "@mit-sdg/sync-engine-catalog": "1.0.0-beta.15",
       },
     },
     "packages/ssf": {
       "name": "@mit-sdg/sync-engine-ssf",
-      "version": "1.0.0-beta.14",
+      "version": "1.0.0-beta.15",
     },
   },
   "overrides": {
