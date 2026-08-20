@@ -383,12 +383,17 @@ export class FiringPipeline {
             return fuseFormer(ref, resolve(payload.in) as Mapping);
           }
           if (hasMarkerKey(node, "$lit")) {
-            const payload = (node as { $lit: Record<string, unknown> }).$lit;
+            const payload = (node as { $lit: unknown }).$lit;
+            if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+              throw new Error(
+                "A `$lit` payload must be a mapping; arrays and primitives need no escape and are encoded directly.",
+              );
+            }
             const literal: Record<string, unknown> = {};
             // `$lit` protects this object's own dollar-prefixed keys from marker
             // interpretation. Its values were still encoded recursively, so
             // resolve variables and nested literal escapes beneath that root.
-            for (const [key, value] of Object.entries(payload)) {
+            for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
               setOwn(literal, key, resolve(value));
             }
             return literal;

@@ -128,16 +128,18 @@ nor restricts `retention`.
 <<<<<<< HEAD
 `whenIdle()`, `observeSettledChanges(observer)`, and `form(fusedFormer)`. Drain closes root admission immediately;
 =======
+
 `whenIdle()`, `form(fusedFormer)`, and `composition` — the [live composition
 door](#advanced) (`register`, `retire`, `replace` over `ReactionIR`),
 instrumented on first access. The `composition` _option_ is the authored module
 registered at boot; the returned `composition` field is the running door onto
 the same composition. The engine object itself stays behind the facade.
 Drain closes root admission immediately;
->>>>>>> 4ce7196 (Hand the composition door through the assembly facade)
-both lifecycle promises resolve when accepted action, query, and former work
-actually settles. `form(...)` resolves to the formed runtime value; an optional
-record former contributes `null` to that result.
+
+> > > > > > > 4ce7196 (Hand the composition door through the assembly facade)
+> > > > > > > both lifecycle promises resolve when accepted action, query, and former work
+> > > > > > > actually settles. `form(...)` resolves to the formed runtime value; an optional
+> > > > > > > record former contributes `null` to that result.
 
 `observeSettledChanges(...)` reports one conservative change after each causal
 flow containing at least one successful non-boundary concept occurrence has

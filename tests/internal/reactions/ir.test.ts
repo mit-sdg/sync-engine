@@ -282,6 +282,26 @@ describe("then-input strictness", () => {
     expect(reacting.exportReactions().reactions.length).toBe(1);
   });
 
+  test("a marker-shaped value written as data arrives unresolved", async () => {
+    const { reacting, Button, Recorder } = setup();
+    reacting.register({
+      CarryDefinition: reaction(({ kind }: Vars) =>
+        when(refs.Button.clicked({ kind }).responds()).then(
+          refs.Recorder.record({
+            // The payload a live composition change carries is itself IR: its
+            // `$var` is part of the definition being registered, not a blank to
+            // fill from this frame. Encoding wraps it, so resolution returns it.
+            tag: { $var: "kind" } as never,
+          }),
+        ),
+      ),
+    });
+
+    await Button.clicked({ kind: "ThreadPlace" });
+
+    expect(Recorder.order as unknown[]).toEqual([{ $var: "kind" }]);
+  });
+
   test("a dollar-prefixed literal retains its shape while resolving nested variables", async () => {
     const { reacting, Button, Recorder } = setup();
     reacting.register({

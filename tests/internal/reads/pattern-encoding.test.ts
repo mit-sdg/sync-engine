@@ -54,3 +54,37 @@ describe("prototype-named design keys", () => {
     expect(Object.getPrototypeOf(loweredNested.entries)).toBe(Object.prototype);
   });
 });
+
+describe("the `$lit` escape", () => {
+  test("a mapping whose own key is a marker tag is wrapped, and its values stay encoded", () => {
+    const kind = Symbol("kind");
+    const vars = new PatternVariables();
+    const encoded = encodePattern({ tag: { $var: { identity: kind } } }, vars) as Record<
+      string,
+      unknown
+    >;
+
+    expect(encoded.tag).toEqual({ $lit: { $var: { identity: { $var: vars.nameOf(kind) } } } });
+  });
+
+  test("a mapping carrying any dollar-prefixed key is wrapped, not only the marker tags", () => {
+    const encoded = encodePattern({ tag: { $renderer: 1 } }, new PatternVariables()) as Record<
+      string,
+      unknown
+    >;
+
+    // Broader than the marker set on purpose: a key that is unambiguous today
+    // would become ambiguous the day its spelling is promoted to a marker, and
+    // already-encoded values must not change meaning underneath a new tag.
+    expect(encoded.tag).toEqual({ $lit: { $renderer: 1 } });
+  });
+
+  test("a mapping with no dollar-prefixed key is left unwrapped", () => {
+    const encoded = encodePattern({ tag: { identity: 1 } }, new PatternVariables()) as Record<
+      string,
+      unknown
+    >;
+
+    expect(encoded.tag).toEqual({ identity: 1 });
+  });
+});

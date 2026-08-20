@@ -68,6 +68,21 @@ function compositionWatcher(name: string, action: "register" | "retire"): Reacti
   };
 }
 
+/**
+ * Encode built IR as an action input the way `encodeValue` does: every mapping
+ * carrying a dollar-prefixed key is wrapped, so a definition's own markers
+ * travel as data instead of resolving against the asking reaction's frame.
+ */
+function asData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(asData);
+  if (typeof value !== "object" || value === null) return value;
+  const encoded: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    encoded[key] = asData(item);
+  }
+  return Object.keys(encoded).some((key) => key.startsWith("$")) ? { $lit: encoded } : encoded;
+}
+
 /** Watch one specific Button.clicked kind and ask one composition change in the same flow. */
 function compositionAsk(
   name: string,
@@ -79,7 +94,14 @@ function compositionAsk(
     name,
     when: [{ ...buttonReturned, input: { kind } }],
     where: [],
-    then: [{ kind: "request", concept: "CompositionBoundary", action, input: input as PatternIR }],
+    then: [
+      {
+        kind: "request",
+        concept: "CompositionBoundary",
+        action,
+        input: asData(input) as PatternIR,
+      },
+    ],
   };
 }
 
@@ -290,7 +312,7 @@ describe("the composition door", () => {
       reactions: [
         compositionAsk("SwapDeferred", "replace", {
           name: "Deferred",
-          reactions: { $lit: [announce("Deferred", "new", true)] },
+          reactions: [announce("Deferred", "new", true)],
         }),
       ],
     });

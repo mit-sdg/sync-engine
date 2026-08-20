@@ -5,7 +5,7 @@
 export { createEngine } from "../engine/reactions/engine.ts";
 export { vocabulary } from "../engine/reactions/authoring/refs.ts";
 export type { VocabularyAssemblyOptions } from "../engine/boundary/assembly/assembly-facade.ts";
-export type { Engine, EngineOptions } from "../engine/reactions/engine.ts";
+export type { CompositionActions, Engine, EngineOptions } from "../engine/reactions/engine.ts";
 export { faulted } from "../engine/reactions/authoring/channels.ts";
 export { custom } from "../engine/reads/where-ops.ts";
 export { Refuse } from "../engine/reactions/concepts/refuse.ts";
@@ -288,13 +288,22 @@ export declare function assemble<TEntries extends Record<string, ConceptEntry>, 
 export {};
 
 === dist/engine/boundary/assembly/assembly-facade.d.ts ===
+import type { CompositionActions } from "../../reactions/runtime/composing.ts";
 import type { ComputationFn } from "../../reads/computations.ts";
 import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources, SettledChange, SettledChangeObserver, SettledOccurrence } from "./assemble.ts";
 export type { SettledChange, SettledChangeObserver, SettledOccurrence };
 import type { AnyRegisteredConcept, ConceptClassesOfSet, ConceptImplementation, RegisteredConceptSet } from "./concept-set.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
-export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "observeSettledChanges" | "form">;
+export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "observeSettledChanges" | "form"> & {
+    /**
+     * The live composition door: `CompositionBoundary`'s register, retire, and
+     * replace as instrumented actions over `ReactionIR`. The `composition`
+     * *option* is the authored module registered at boot; this field is the
+     * running door onto the same composition. Instrumented on first access.
+     */
+    readonly composition: CompositionActions;
+};
 type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => object>> = AssembleBaseOptions<T, {
     [Name in keyof T]?: ConceptImplementation<T[Name]>;
 }> & RequiredConstructionSources<T>;
@@ -1743,6 +1752,8 @@ import type { ComputationRef } from "../reads/computations.ts";
 import type { FormerRef, FusedFormer } from "../reads/former-nodes.ts";
 import type { RelationView } from "../reads/lines.ts";
 import type { AppIR, ConceptInventoryIR, FormerIR, ReactionIR, ViewIR } from "../reads/ir.ts";
+import type { CompositionActions } from "./runtime/composing.ts";
+export type { CompositionActions } from "./runtime/composing.ts";
 export interface Engine {
     /** Instrument every concept in a record, preserving keys. */
     instrument<T extends Record<string, object>>(concepts: T): T;
@@ -1758,6 +1769,13 @@ export interface Engine {
     declareViews(...refs: RelationView[]): void;
     /** Declare formers no reaction references — reads served at an edge or a CLI. */
     declareFormers(...refs: FormerRef[]): void;
+    /**
+     * The live composition door — register, retire, and replace as instrumented
+     * actions of the core `CompositionBoundary` concept, so every composition
+     * change lands in the occurrence log. Semantics: "Live composition" in the
+     * execution-semantics reference.
+     */
+    readonly composition: CompositionActions;
     /** Register reactions from exported `ReactionIR`; references resolve by name. */
     registerReactions(reactions: ReactionIR[]): void;
     /** Register views from their exported IR, dependencies first. */
@@ -1947,6 +1965,59 @@ export declare class ActionConcept {
 /** Record an accepted execution-limit breach and return its caller-facing error. */
 export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecutionLimit">, flow: string, limit: "actions" | "firings" | "rows"): Error;
 
+=== dist/engine/reactions/runtime/composing.d.ts ===
+/**
+ * The **composition boundary** — the door through which a running engine's
+ * composition changes. Register, retire, and replace are instrumented
+ * actions, so every change lands in the occurrence log with its full
+ * definition as input, serializes through the concept's scheduler, and can
+ * itself be reacted to.
+ */
+import type { ReactionIR } from "../../reads/ir.ts";
+import type { OutcomeContracts } from "../concepts/outcomes.ts";
+import type { ExecutableReaction } from "../types.ts";
+/** One bound family entry: the executable and the definition it came from. */
+export interface BoundFamilyEntry {
+    executable: ExecutableReaction;
+    reaction: ReactionIR;
+}
+/** What the composition door operates through on the engine that owns the catalog. */
+export interface CompositionSeam {
+    ownerOf(name: string): string | undefined;
+    namesOf(base: string): string[] | undefined;
+    bind(reaction: ReactionIR): ExecutableReaction;
+    install(base: string, family: readonly BoundFamilyEntry[]): void;
+    remove(base: string): void;
+}
+/** The composition door as callers reach it: instrumented actions taking and returning data. */
+export interface CompositionActions {
+    register(input: {
+        name: string;
+        reactions: ReactionIR[];
+    }): Promise<Record<string, unknown>>;
+    retire(input: {
+        name: string;
+    }): Promise<Record<string, unknown>>;
+    replace(input: {
+        name: string;
+        reactions: ReactionIR[];
+    }): Promise<Record<string, unknown>>;
+}
+export declare class Composing {
+    #private;
+    static readonly purpose = "Let a running application change what it reacts to without stopping, so a causal choice becomes live behavior the moment it is made.";
+    static readonly principle = "A reaction arrives as portable data and is registered under its name; occurrences landing from then on match it. Retiring the name stops future matching without revoking what already fired; replacing swaps the name's definition in one step. Each change is itself an occurrence, so the composition's history reads back like any other history.";
+    /**
+     * Every operation names its subject and is all-or-nothing: a refusal
+     * leaves the composition unchanged.
+     */
+    static readonly outcomes: OutcomeContracts;
+    constructor(seam: CompositionSeam);
+    register(args: Record<string, unknown>): Record<string, unknown>;
+    retire(args: Record<string, unknown>): Record<string, unknown>;
+    replace(args: Record<string, unknown>): Record<string, unknown>;
+}
+
 === dist/engine/reactions/runtime/firing-pipeline.d.ts ===
 /**
  * The staged firing flow: match one landed occurrence against a reaction's
@@ -1990,11 +2061,12 @@ export declare class FiringPipeline {
     private readonly react;
     private readonly assertRows;
     private readonly consumeAction;
+    private readonly isCurrent;
     private readonly settlement;
     constructor(matcher: TriggerMatcher, actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
-    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
+    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean, isCurrent?: (reaction: ExecutableReaction) => boolean);
     fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
     /**
      * Open settlement frontiers for one flow until none qualifies a trigger.
@@ -2002,7 +2074,9 @@ export declare class FiringPipeline {
      * Each frontier qualifies every trigger armed in the flow before dispatching
      * any of their consequences, exactly as one landed occurrence does for its
      * siblings, then lets those consequences and the ordinary cascades they
-     * start drain before the next frontier opens. An unqualified combination
+     * start drain before the next frontier opens. Qualification reads the
+     * present, so a trigger whose reaction is no longer the currently
+     * registered definition is discarded. An unqualified combination
      * remains armed unless another firing consumes one of its trigger
      * occurrences. An interpreter or integrity failure prevents subsequent
      * frontiers but does not cancel matches already being processed in the current
@@ -2565,6 +2639,7 @@ import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
 import type { RelationView } from "../../reads/lines.ts";
 import type { ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
+import { type CompositionActions } from "./composing.ts";
 import { type QueryCacheMode } from "./instrumenting.ts";
 import { Logging } from "./logging.ts";
 import type { EngineObserver } from "./logging.ts";
@@ -2580,7 +2655,10 @@ export declare class Reacting {
     private readonly triggerMatcher;
     private readonly firingPipeline;
     private readonly execution?;
+    private compositionDoor?;
     constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode);
+    /** Instrumented on first access, so engines that never open the door keep their concept inventories unchanged. */
+    get composition(): CompositionActions;
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
@@ -2625,6 +2703,10 @@ export declare class ReactionCatalog {
     private readonly unloweredByName;
     private readonly namesByBase;
     ownerOf(name: string): string | undefined;
+    /** The names one base owns, in registration order (or `undefined` if unknown). */
+    namesOf(base: string): string[] | undefined;
+    /** Whether this executable is still the currently indexed definition of its name. */
+    isCurrent(reaction: ExecutableReaction): boolean;
     unregisterBase(base: string): void;
     index(reaction: ExecutableReaction): void;
     finishBase(base: string, names: string[], lowered: ReactionIR[]): void;
