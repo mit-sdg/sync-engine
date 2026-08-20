@@ -7,7 +7,7 @@ import { CatalogRegistry } from "../src/registry.ts";
 describe("catalog registry", () => {
   test("loads the curated index and exposes plain asset selectors", async () => {
     const registry = await CatalogRegistry.load();
-    expect([...registry.entries.keys()]).toHaveLength(27);
+    expect([...registry.entries.keys()]).toHaveLength(20);
     const concept = registry.entries.get("concept/selecting");
     expect(concept?.kind).toBe("concept");
     if (concept?.kind !== "concept") throw new Error("missing selecting concept");
@@ -16,12 +16,12 @@ describe("catalog registry", () => {
       "memory/selecting.memory.ts",
     );
 
-    const recipe = registry.entries.get("recipe/workshop-selection");
+    const recipe = registry.entries.get("recipe/review-queue");
     expect(recipe?.kind).toBe("recipe");
-    if (recipe?.kind !== "recipe") throw new Error("missing workshop-selection recipe");
-    expect(recipe.requires).toEqual(["concept/gathering", "concept/selecting"]);
+    if (recipe?.kind !== "recipe") throw new Error("missing review-queue recipe");
+    expect(recipe.requires).toEqual(["concept/timing", "concept/approving", "concept/alerting"]);
     expect(CatalogRegistry.sources(recipe).map(({ selector }) => selector)).toContain(
-      "workshop-selection.ts",
+      "review-queue.ts",
     );
   });
 
@@ -63,12 +63,12 @@ describe("catalog registry", () => {
     const root = await mkdtemp(join(tmpdir(), "catalog-registry-"));
     try {
       await cp(new URL("../entries/", import.meta.url), root, { recursive: true });
-      const path = join(root, "recipe/workshop-selection/manifest.json");
+      const path = join(root, "recipe/review-queue/manifest.json");
       const manifest = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
       manifest.implementations = {};
       await writeFile(path, `${JSON.stringify(manifest)}\n`);
       await expect(CatalogRegistry.load(root)).rejects.toThrow(
-        "recipe/workshop-selection: recipe cannot declare implementations",
+        "recipe/review-queue: recipe cannot declare implementations",
       );
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -73,10 +73,13 @@ leave (gathering: Gathering, member: Person) : return (membership: Membership)
 
 ```queries
 _get (gathering: Gathering) : optional (gathering: Gathering, name: String, host: Person)
+  answers the Gathering's identity, name, and host
   answers no row for an unknown Gathering
 _members (gathering: Gathering) : many (member: Person)
+  answers the Gathering's members
   answers no rows for an unknown Gathering
   orders rows by when each Person joined
 _membership (gathering: Gathering, member: Person) : one (joined: Flag)
+  answers true when the Person is a member of the Gathering
   answers false when Person is not a member or Gathering is unknown
 ```

@@ -320,9 +320,7 @@ expected answer rather than a fault.
 - **Auditing** — Keep a permanent numbered record of who did what to which target, so past activity can be attributed and read back afterwards instead of being reconstructed from state that shows only its current values.
 - **Authenticating** — Establish a username from a password, so a username claim alone cannot act as proof of identity and a compromised password can be replaced or removed.
 - **Commenting** — Attach authored comments to an external target and let only the author retract each comment, so discussion can accumulate without allowing one author to erase another's contribution.
-- **Discussing** — Open an exchange about a subject and collect authored responses, so people can carry the exchange forward and close it deliberately.
 - **Expiring** — Record a deadline for a subject and answer whether it has lapsed at a given instant, so lapsing happens by the passing of time alone and needs no action from anyone.
-- **Gathering** — Let a host create a named gathering and let people join or leave it, so belonging is an explicit, visible state.
 - **Inviting** — Record a directed offer that only its intended recipient may accept or decline, so participation requires consent from both the inviter and invitee.
 - **Labeling** — Classify an item under several stable names in one scope, so the item can be found through overlapping categories instead of being placed in one exclusive container.
 - **Posting** — Publish immutable authored messages in chronological order, so a contribution remains visible and attributed without depending on an external content store.

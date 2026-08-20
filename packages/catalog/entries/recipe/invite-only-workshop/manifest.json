@@ -1,9 +1,0 @@
-{
-  "schema": 2,
-  "id": "recipe/invite-only-workshop",
-  "kind": "recipe",
-  "summary": "Admit workshop members only after a directed invitation is accepted.",
-  "design": "spec.md",
-  "requires": ["concept/timing", "concept/gathering", "concept/inviting"],
-  "sources": ["invite-only-workshop.ts", "invite-only-workshop.test.ts"]
-}

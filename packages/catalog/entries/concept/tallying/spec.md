@@ -8,7 +8,7 @@ be read back without keeping a record of each separate occurrence.
 ## Principle
 
 Exhibit `e1` has never been visited, so its total reads 0. A visitor arrives and Tallying
-raises the total to 1; two more arrivals raise it to 3. Clearing `e1` puts its total back
+increments the total to 1; two more arrivals increment it to 3. Clearing `e1` puts its total back
 to 0, and clearing it again is refused because there is nothing left to clear.
 
 ## Types
@@ -32,7 +32,7 @@ Rule: count is a positive whole number
 ## Actions
 
 ```actions
-raise (subject: Subject) : return (subject: Subject, total: Number)
+increment (subject: Subject) : return (subject: Subject, total: Number)
   where no Total has subject
   then
     add a Total with subject and a count of 1

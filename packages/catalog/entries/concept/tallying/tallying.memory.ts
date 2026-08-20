@@ -3,7 +3,7 @@ import { NothingTallied } from "./tallying.shared.ts";
 export class TallyingMemoryConcept {
   private readonly totals = new Map<string, number>();
 
-  raise({ subject }: { subject: string }) {
+  increment({ subject }: { subject: string }) {
     const total = (this.totals.get(subject) ?? 0) + 1;
     this.totals.set(subject, total);
     return { subject, total };

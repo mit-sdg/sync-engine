@@ -44,7 +44,7 @@ describe("catalog CLI", () => {
   test("lists entries as tab-separated records", async () => {
     const { output } = capture();
     await runCatalog(["list", "recipe"]);
-    expect(output.join("")).toContain("recipe/workshop-selection\trecipe\t");
+    expect(output.join("")).toContain("recipe/review-queue\trecipe\t");
     expect(output.join("")).not.toContain("concept/selecting");
   });
 
@@ -65,11 +65,11 @@ describe("catalog CLI", () => {
 
   test("raw mode emits only asset bytes", async () => {
     const expected = await readFile(
-      new URL("../entries/recipe/workshop-selection/spec.md", import.meta.url),
+      new URL("../entries/recipe/review-queue/spec.md", import.meta.url),
       "utf8",
     );
     const { output } = capture();
-    await runCatalog(["show", "recipe/workshop-selection", "--raw"]);
+    await runCatalog(["show", "recipe/review-queue", "--raw"]);
     expect(output.join("")).toBe(expected);
   });
 
@@ -81,8 +81,8 @@ describe("catalog CLI", () => {
       vi.spyOn(process, "cwd").mockReturnValue(project);
       const { restore } = capture();
       await runCatalog(["list"]);
-      await runCatalog(["show", "recipe/workshop-selection", "--raw"]);
-      await runCatalog(["source", "recipe/workshop-selection", "workshop-selection.ts", "--raw"]);
+      await runCatalog(["show", "recipe/review-queue", "--raw"]);
+      await runCatalog(["source", "recipe/review-queue", "review-queue.ts", "--raw"]);
       restore();
       expect(await treeDigest(project)).toBe(before);
     } finally {

@@ -1,9 +1,0 @@
-{
-  "schema": 2,
-  "id": "recipe/ranked-discussion",
-  "kind": "recipe",
-  "summary": "Collect discussion responses and show their aggregate vote scores.",
-  "design": "spec.md",
-  "requires": ["concept/timing", "concept/discussing", "concept/upvoting"],
-  "sources": ["ranked-discussion.ts", "ranked-discussion.test.ts"]
-}

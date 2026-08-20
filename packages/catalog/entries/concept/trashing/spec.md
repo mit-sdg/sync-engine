@@ -74,7 +74,10 @@ purge (item: Item, at: DateTime) : return (item: Item)
 
 ```queries
 _state (item: Item) : one (status: DispositionStatus)
+  answers the Item's Disposition status
   answers active when the Item has no Disposition
 _trashed () : many (item: Item, trashedAt: DateTime)
+  answers the trashed Items with their trashed times
+  answers no rows when no Items are trashed
   orders rows by trashedAt and then Item identity
 ```

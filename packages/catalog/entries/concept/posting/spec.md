@@ -45,9 +45,14 @@ publish (author: Author, content: String, at: DateTime) : return (post: Post)
 
 ```queries
 _all () : many (post: Post, author: Author, content: String, publishedAt: DateTime)
+  answers all Posts with their authors, content, and publication times
+  answers no rows when there are no Posts
   orders rows by publishedAt and then Post identity
 _get (post: Post) : optional (author: Author, content: String, publishedAt: DateTime)
+  answers the Post's author, content, and publication time
   answers no row for an unknown Post
 _byAuthor (author: Author) : many (post: Post, content: String, publishedAt: DateTime)
+  answers the Author's Posts with their content and publication times
+  answers no rows when the Author has no Posts
   orders rows by publishedAt and then Post identity
 ```

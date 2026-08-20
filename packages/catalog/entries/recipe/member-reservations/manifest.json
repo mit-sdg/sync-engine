@@ -1,9 +1,0 @@
-{
-  "schema": 2,
-  "id": "recipe/member-reservations",
-  "kind": "recipe",
-  "summary": "Let current gathering members reserve exclusive resources.",
-  "design": "spec.md",
-  "requires": ["concept/timing", "concept/gathering", "concept/reserving"],
-  "sources": ["member-reservations.ts", "member-reservations.test.ts"]
-}

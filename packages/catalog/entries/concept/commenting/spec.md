@@ -60,8 +60,10 @@ retract (comment: Comment, author: Author) : return (comment: Comment)
 
 ```queries
 _for (target: Target) : many (comment: Comment, author: Author, text: String, addedAt: DateTime)
+  answers the Target's Comments with their authors, text, and added times
   answers no rows for a Target with no Comments
   orders rows by addedAt and then Comment identity
 _get (comment: Comment) : optional (target: Target, author: Author, text: String, addedAt: DateTime)
+  answers the Comment's target, author, text, and added time
   answers no row for an unknown Comment
 ```

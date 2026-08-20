@@ -60,5 +60,6 @@ end (session: Session) : return (ended: Flag)
 
 ```queries
 _active (session: Session) : optional (subject: Subject, expiresAt: DateTime)
+  answers the active Session's Subject and expiry time
   answers no row for an unknown, ended, or expired Session
 ```

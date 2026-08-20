@@ -86,9 +86,14 @@ withdraw (review: Review, requester: Person, at: DateTime) : return (review: Rev
 
 ```queries
 _get (review: Review) : optional (subject: Subject, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt?: DateTime, reason?: String)
+  answers the Review's subject, requester, reviewer, status, request and decision times, and rejection reason
   answers no row for an unknown Review
 _pendingFor (reviewer: Person) : many (review: Review, subject: Subject, requester: Person, requestedAt: DateTime)
+  answers the Reviewer's pending Reviews with their subjects, requesters, and request times
+  answers no rows when the Reviewer has no pending Reviews
   orders rows by requestedAt and then Review identity
 _history (subject: Subject) : many (review: Review, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt?: DateTime)
+  answers the Subject's Reviews with their requesters, reviewers, statuses, and request and decision times
+  answers no rows when the Subject has no Reviews
   orders rows by requestedAt and then Review identity
 ```

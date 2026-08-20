@@ -73,17 +73,21 @@ record (trail: Trail, event: Event, actor: Actor, action: String, detail: String
 
 ```queries
 _get (entry: Entry) : optional (trail: Trail, position: Position, event: Event, actor: Actor, action: String, detail: String, target: Target, recordedAt: DateTime)
+  answers the Entry's Trail, position, event, actor, action, detail, target, and recorded time
   answers no row for an unknown Entry
 _since (trail: Trail, after: Position) : many (entry: Entry, position: Position, event: Event, actor: Actor, action: String, detail: String, target: Target, recordedAt: DateTime)
   answers the Entries of the Trail above position after, so 0 answers every Entry
   answers no rows when the Trail has no Entry above after
   orders rows by position
 _byActor (trail: Trail, actor: Actor) : many (entry: Entry, position: Position, event: Event, action: String, detail: String, target: Target, recordedAt: DateTime)
+  answers the Actor's Entries in the Trail with their positions, events, actions, details, targets, and recorded times
   answers no rows when the Actor has no Entries in the Trail
   orders rows by position
 _forTarget (trail: Trail, target: Target) : many (entry: Entry, position: Position, event: Event, actor: Actor, action: String, detail: String, recordedAt: DateTime)
+  answers the Target's Entries in the Trail with their positions, events, actors, actions, details, and recorded times
   answers no rows when the Target has no Entries in the Trail
   orders rows by position
 _extent (trail: Trail) : one (entries: Count, last: Position)
+  answers the Trail's Entry count and last position
   answers entries 0 and last 0 for a Trail with no Entries
 ```

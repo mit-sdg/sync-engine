@@ -27,7 +27,7 @@ external Cause
 ## State
 
 ```state
-a seq of Alerts with
+a set of Alerts with
   a recipient Recipient
   a subject Subject
   a cause Cause
@@ -67,8 +67,10 @@ acknowledge (alert: Alert, recipient: Recipient) : return (alert: Alert)
 
 ```queries
 _openFor (recipient: Recipient) : many (alert: Alert, subject: Subject, cause: Cause, raisedAt: DateTime)
+  answers the Recipient's open Alerts with their subjects, causes, and raised times
   answers no rows for a Recipient with no open Alerts
   orders rows by raisedAt and then Alert identity
 _get (alert: Alert) : optional (recipient: Recipient, subject: Subject, cause: Cause, raisedAt: DateTime, open: Flag)
+  answers the Alert's recipient, subject, cause, raised time, and whether it is open
   answers no row for an unknown Alert
 ```
