@@ -4,7 +4,7 @@
 
 <!-- register:web-realization:start -->
 
-`CandidateManifest`, `CandidateSelection`, `ImmediateBindings`, `SelectionApplication`, `WebCandidate`, `WebHead`, `WebRealization`, `applySelection`, `assembleCandidate`, `candidatePathPrefix`, `interfaceRevision`, `realize`
+`CandidateManifest`, `CandidateSelection`, `ImmediateBindings`, `RenderedFault`, `SelectionApplication`, `WebCandidate`, `WebHead`, `WebRealization`, `applySelection`, `assembleCandidate`, `candidatePathPrefix`, `interfaceRevision`, `realize`
 
 <!-- register:web-realization:end -->
 

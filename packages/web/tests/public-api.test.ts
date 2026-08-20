@@ -27,6 +27,7 @@ test("Web has one exact realization surface", () => {
   expect(names).toEqual([
     "realize",
     "ImmediateBindings",
+    "RenderedFault",
     "WebHead",
     "WebRealization",
     "applySelection",
@@ -40,7 +41,7 @@ test("Web has one exact realization surface", () => {
   ]);
   const surface = readFileSync(resolve(root, "public-surface.md"), "utf8");
   expect(surface).toContain(
-    "<!-- register:web-realization:start -->\n\n`CandidateManifest`, `CandidateSelection`, `ImmediateBindings`, `SelectionApplication`, `WebCandidate`, `WebHead`, `WebRealization`, `applySelection`, `assembleCandidate`, `candidatePathPrefix`, `interfaceRevision`, `realize`\n\n<!-- register:web-realization:end -->",
+    "<!-- register:web-realization:start -->\n\n`CandidateManifest`, `CandidateSelection`, `ImmediateBindings`, `RenderedFault`, `SelectionApplication`, `WebCandidate`, `WebHead`, `WebRealization`, `applySelection`, `assembleCandidate`, `candidatePathPrefix`, `interfaceRevision`, `realize`\n\n<!-- register:web-realization:end -->",
   );
   expect(surface).toContain(
     "<!-- register:web-immediates:start -->\n\n`ClearOnAccept`, `RefocusOnRefusal`, `stockImmediates`\n\n<!-- register:web-immediates:end -->",

@@ -421,6 +421,16 @@ export function claimsForEndpoints(
   );
 }
 
+/** What a realization could not do, handed to the host that asked to hear about it. */
+export interface RenderedFault {
+  /** Where the request stopped: opening the endpoint's invocation, or forming its answer. */
+  readonly stage: "open" | "form";
+  /** The request path that faulted. */
+  readonly path: string;
+  /** What was thrown. */
+  readonly cause: unknown;
+}
+
 export interface WebRealization extends FetchRealization {
   /** The canonical content revision of the surface currently served. */
   revision(): Promise<string>;
@@ -467,11 +477,20 @@ export function renderedRealization(options: {
   system: AnyAssembly;
   surface: RenderedSurface;
   onPromote?: (candidate: WebCandidate) => RenderedSurface;
+  onFault?: (fault: RenderedFault) => void;
 }): WebRealization {
   const reader = readerFor(options.system);
   let current = options.surface;
   const holders = new Map<string, HeldRendering>();
   const encoder = new TextEncoder();
+
+  const reportFault = (stage: RenderedFault["stage"], path: string, cause: unknown): void => {
+    try {
+      options.onFault?.({ stage, path, cause });
+    } catch {
+      // A host's own reporting must not decide whether the request is answered.
+    }
+  };
 
   const message = (change: LiveChange): Uint8Array => encoder.encode(`${JSON.stringify(change)}\n`);
 
@@ -736,15 +755,17 @@ export function renderedRealization(options: {
       const opened = current;
       try {
         invocation = await opened.open(path, request);
-      } catch {
+      } catch (cause) {
+        reportFault("open", path, cause);
         return new Response("The rendered endpoint refused the request.", { status: 500 });
       }
       if (invocation === undefined) {
-        return new Response("The rendered endpoint refused the request.", { status: 500 });
+        return new Response("The rendered endpoint produced no invocation.", { status: 500 });
       }
       try {
         formed = await opened.rendering.form(invocation, reader);
-      } catch {
+      } catch (cause) {
+        reportFault("form", path, cause);
         return new Response("The endpoint returned an invalid rendered answer.", { status: 500 });
       }
       const holder = crypto.randomUUID();
@@ -789,6 +810,7 @@ export function realize(options: {
   interface: InterfaceDefinition;
   head?: WebHead;
   immediates?: ImmediateBindings;
+  onFault?: (fault: RenderedFault) => void;
 }): WebRealization {
   const selected = bindInterface(options);
   const rendering = compileHtml(selected);
@@ -832,5 +854,6 @@ export function realize(options: {
     system: options.system,
     surface,
     onPromote: (candidate) => candidate.promotedSurface(),
+    ...(options.onFault === undefined ? {} : { onFault: options.onFault }),
   });
 }

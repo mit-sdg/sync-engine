@@ -112,7 +112,7 @@ export {};
 
 === packages/web/dist/realization/index.d.ts ===
 export { realize } from "./realization.ts";
-export type { ImmediateBindings, WebHead, WebRealization } from "./realization.ts";
+export type { ImmediateBindings, RenderedFault, WebHead, WebRealization } from "./realization.ts";
 export { applySelection, assembleCandidate, candidatePathPrefix } from "./candidate.ts";
 export type { CandidateManifest, CandidateSelection, SelectionApplication, WebCandidate, } from "./candidate.ts";
 export { interfaceRevision } from "./revision.ts";
@@ -167,6 +167,15 @@ export declare function claimsForEndpoints(endpoints: readonly {
     readonly path: string;
     readonly match?: "prefix";
 }[], servedPath: (path: string) => string): readonly FetchClaim[];
+/** What a realization could not do, handed to the host that asked to hear about it. */
+export interface RenderedFault {
+    /** Where the request stopped: opening the endpoint's invocation, or forming its answer. */
+    readonly stage: "open" | "form";
+    /** The request path that faulted. */
+    readonly path: string;
+    /** What was thrown. */
+    readonly cause: unknown;
+}
 export interface WebRealization extends FetchRealization {
     /** The canonical content revision of the surface currently served. */
     revision(): Promise<string>;
@@ -185,6 +194,7 @@ export declare function renderedRealization(options: {
     system: AnyAssembly;
     surface: RenderedSurface;
     onPromote?: (candidate: WebCandidate) => RenderedSurface;
+    onFault?: (fault: RenderedFault) => void;
 }): WebRealization;
 /** Realize rendered endpoints in one interface as opening HTML documents. */
 export declare function realize(options: {
@@ -192,6 +202,7 @@ export declare function realize(options: {
     interface: InterfaceDefinition;
     head?: WebHead;
     immediates?: ImmediateBindings;
+    onFault?: (fault: RenderedFault) => void;
 }): WebRealization;
 export {};
 
