@@ -3,7 +3,10 @@ import type { HarnessAdapterDefinition } from "../harness.ts";
 export const claudeCodeAdapter = {
   id: "claude-code",
   identity: { kind: "agent-id", label: "Claude Code agent ID", stableContinuation: true },
-  promptDelivery: { mode: "agent-file-instruction", field: "prompt" },
+  promptDelivery: {
+    fresh: { mode: "agent-file-instruction", field: "prompt" },
+    continuation: { mode: "agent-file-instruction", field: "prompt" },
+  },
   cwd: { mode: "inherit-application-workspace", field: "coordinator workspace" },
   configurationInheritance: "native-inheritance",
   fresh: {

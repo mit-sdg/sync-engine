@@ -22,6 +22,25 @@ const request = {
   timeoutSeconds: 45,
 } as const;
 
+type TestTransport = HarnessAdapterDefinition["promptDelivery"]["fresh"];
+
+function transportInstruction(transport: TestTransport): string {
+  switch (transport.mode) {
+    case "native-prompt-file":
+      return `Give the generated prompt path to ${transport.field}, which must load that file as the complete native agent message; do not send the path as the message.`;
+    case "shell-file-expansion":
+      return `Feed the generated prompt file contents directly through ${transport.field} without rendering them into coordinator output; do not send the path as the message.`;
+    case "agent-file-instruction":
+      return "Give the agent the generated file-reading instruction.";
+  }
+}
+
+function transportClosing(transport: TestTransport): string {
+  return transport.mode === "agent-file-instruction"
+    ? "Do not inline or rewrite the prompt."
+    : "Transmit the generated prompt from its file without reproducing, summarizing, prefixing, or rewriting it in coordinator output.";
+}
+
 describe("harness adapter conformance", () => {
   test("registers every adapter with one shared prompt-guided support map", () => {
     expect(harnessAdapters.map(({ id }) => id)).toEqual(harnessIds);
@@ -34,12 +53,17 @@ describe("harness adapter conformance", () => {
 
   test("contains only the documented native differences", () => {
     const [paseo, codex, claude, antigravity, cursor] = harnessAdapters;
-    expect(harnessAdapters.map(({ promptDelivery }) => promptDelivery.mode)).toEqual([
-      "agent-file-instruction",
-      "agent-file-instruction",
-      "agent-file-instruction",
-      "agent-file-instruction",
-      "agent-file-instruction",
+    expect(
+      harnessAdapters.map(({ promptDelivery }) => [
+        promptDelivery.fresh.mode,
+        promptDelivery.continuation.mode,
+      ]),
+    ).toEqual([
+      ["shell-file-expansion", "native-prompt-file"],
+      ["agent-file-instruction", "agent-file-instruction"],
+      ["agent-file-instruction", "agent-file-instruction"],
+      ["agent-file-instruction", "agent-file-instruction"],
+      ["shell-file-expansion", "shell-file-expansion"],
     ]);
     expect(harnessAdapters.map(({ cwd }) => cwd.mode)).toEqual([
       "explicit-application-cwd",
@@ -56,7 +80,7 @@ describe("harness adapter conformance", () => {
       cursorFresh: cursor?.fresh.operation,
       cursorContinuation: cursor?.continuation.operation,
     }).toEqual({
-      paseo: "Paseo native agent delegation",
+      paseo: "Paseo CLI",
       codex: "Spawn a fresh worker thread, falling back to the general-purpose agent.",
       claude: "Claude Code Agent tool",
       antigravity: "Invoke one fresh subagent with workspace inherit and return at Idle.",
@@ -85,42 +109,51 @@ describe("harness adapter conformance", () => {
         adapter.configurationInheritance === "native-inheritance"
           ? "inherit coordinator model; inherit coordinator reasoning"
           : "use coordinator-supplied model without provider lookup; use coordinator-supplied reasoning without provider lookup";
+      const freshTransport = adapter.promptDelivery.fresh;
       expect(fresh.native.instruction).toBe(
         [
           adapter.fresh.instruction,
-          "Give the agent the generated file-reading instruction.",
+          transportInstruction(freshTransport),
           `Use ${adapter.cwd.mode} at the supplied cwd.`,
           freshConfiguration,
           `Capture the new ${adapter.identity.label}.`,
           "Observe through the native harness until terminal status or 45 seconds; harmless status checks are allowed, but never resend the prompt automatically.",
-          "Do not inline or rewrite the prompt.",
+          transportClosing(freshTransport),
         ].join(" "),
       );
       expect(fresh.prompt).toMatchObject({
         path: request.promptPath,
-        delivery: adapter.promptDelivery.mode,
-        nativeField: adapter.promptDelivery.field,
+        delivery: freshTransport.mode,
+        nativeField: freshTransport.field,
       });
       expect(fresh.cwd).toMatchObject({ path: request.cwd, behavior: adapter.cwd.mode });
       expect(fresh.capabilitySupport).toBe(promptGuidedCapabilitySupport);
       expect(fresh.capabilityEnforcement).toBe("prompt-guided");
       expect(fresh.timeoutSeconds).toBe(45);
-      expect(fresh.prompt.agentInstruction === undefined).toBe(
-        adapter.promptDelivery.mode === "native-file-input",
+      expect(fresh.prompt.agentInstruction).toBe(
+        freshTransport.mode === "agent-file-instruction"
+          ? `Read and follow the complete assignment in this prompt file:\n${request.promptPath}`
+          : undefined,
       );
       expect(continuation.target).toEqual({ kind: "continuation", agentId: "stable-id" });
       expect(continuation.timeoutSeconds).toBe(45);
+      const continuationTransport = adapter.promptDelivery.continuation;
       expect(continuation.native.instruction).toBe(
         [
           adapter.continuation.instruction,
-          "Give the agent the generated file-reading instruction.",
+          transportInstruction(continuationTransport),
           "Preserve the original agent workspace.",
           "preserve the agent's model; preserve the agent's reasoning",
           `Continue the exact ${adapter.identity.label}; never substitute a fresh agent.`,
           "Observe through the native harness until terminal status or 45 seconds; harmless status checks are allowed, but never resend the prompt automatically.",
-          "Do not inline or rewrite the prompt.",
+          transportClosing(continuationTransport),
         ].join(" "),
       );
+      expect(continuation.prompt).toMatchObject({
+        path: request.promptPath,
+        delivery: continuationTransport.mode,
+        nativeField: continuationTransport.field,
+      });
       expect(continuation.cwd.behavior).toBe("preserve-agent-workspace");
       expect(adapter.identity.stableContinuation).toBe(true);
     }

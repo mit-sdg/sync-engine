@@ -3,7 +3,10 @@ import type { HarnessAdapterDefinition } from "../harness.ts";
 export const antigravityAdapter = {
   id: "antigravity",
   identity: { kind: "conversation-id", label: "conversation ID", stableContinuation: true },
-  promptDelivery: { mode: "agent-file-instruction", field: "instruction" },
+  promptDelivery: {
+    fresh: { mode: "agent-file-instruction", field: "instruction" },
+    continuation: { mode: "agent-file-instruction", field: "instruction" },
+  },
   cwd: { mode: "inherit-application-workspace", field: "workspace: inherit" },
   configurationInheritance: "native-inheritance",
   fresh: {

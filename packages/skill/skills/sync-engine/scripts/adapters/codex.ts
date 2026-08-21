@@ -3,7 +3,10 @@ import type { HarnessAdapterDefinition } from "../harness.ts";
 export const codexAdapter = {
   id: "codex",
   identity: { kind: "agent-id", label: "Codex subagent thread ID", stableContinuation: true },
-  promptDelivery: { mode: "agent-file-instruction", field: "instruction" },
+  promptDelivery: {
+    fresh: { mode: "agent-file-instruction", field: "instruction" },
+    continuation: { mode: "agent-file-instruction", field: "instruction" },
+  },
   cwd: { mode: "inherit-application-workspace", field: "coordinator workspace" },
   configurationInheritance: "native-inheritance",
   fresh: {

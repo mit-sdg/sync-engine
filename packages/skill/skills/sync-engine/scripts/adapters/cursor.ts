@@ -3,7 +3,10 @@ import type { HarnessAdapterDefinition } from "../harness.ts";
 export const cursorAdapter = {
   id: "cursor",
   identity: { kind: "conversation-id", label: "Cursor session ID", stableContinuation: true },
-  promptDelivery: { mode: "agent-file-instruction", field: "prompt argument" },
+  promptDelivery: {
+    fresh: { mode: "shell-file-expansion", field: "the prompt argument" },
+    continuation: { mode: "shell-file-expansion", field: "the resumed prompt argument" },
+  },
   cwd: { mode: "explicit-application-cwd", field: "--workspace" },
   configurationInheritance: "coordinator-supplied",
   fresh: {

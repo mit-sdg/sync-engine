@@ -3,18 +3,22 @@ import type { HarnessAdapterDefinition } from "../harness.ts";
 export const paseoAdapter = {
   id: "paseo",
   identity: { kind: "agent-id", label: "Paseo agent ID", stableContinuation: true },
-  promptDelivery: { mode: "agent-file-instruction", field: "prompt" },
+  promptDelivery: {
+    fresh: { mode: "shell-file-expansion", field: "the paseo run positional prompt" },
+    continuation: { mode: "native-prompt-file", field: "paseo send --prompt-file" },
+  },
   cwd: { mode: "explicit-application-cwd", field: "cwd" },
   configurationInheritance: "coordinator-supplied",
   fresh: {
-    mechanism: "Paseo native agent delegation",
-    operation: "launch fresh agent",
+    mechanism: "Paseo CLI",
+    operation: "paseo run with file-backed positional prompt",
     instruction:
-      "Create one fresh Paseo agent with a short instruction to read the generated prompt path.",
+      "Run paseo run once with its positional prompt populated directly from the generated prompt file.",
   },
   continuation: {
-    mechanism: "Paseo native agent delegation",
-    operation: "send prompt file to agent",
-    instruction: "Send one file-reading continuation instruction to the recorded Paseo agent ID.",
+    mechanism: "Paseo CLI",
+    operation: "paseo send --prompt-file",
+    instruction:
+      "Run paseo send --prompt-file once for the recorded Paseo agent ID and generated prompt path.",
   },
 } as const satisfies HarnessAdapterDefinition;

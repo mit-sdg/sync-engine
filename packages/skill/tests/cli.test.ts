@@ -532,17 +532,15 @@ describe("prompt preparation and completion", () => {
       response: [launch.responsePath],
       record: [launch.recordPath],
       harness: ["paseo"],
-      delivery: ["agent-file-instruction; prompt"],
+      delivery: ["shell-file-expansion; the paseo run positional prompt"],
       cwd: [`${root}; explicit-application-cwd`],
       timeout: [
         "1800 seconds; coordinator-managed observation limit; CLI does not observe harness",
       ],
       sources: undefined,
       target: ["fresh agent"],
-      native: ["Paseo native agent delegation; launch fresh agent"],
-      agentInstruction: [
-        `Read and follow the complete assignment in this prompt file:\n${launch.promptPath}`,
-      ],
+      native: ["Paseo CLI; paseo run with file-backed positional prompt"],
+      agentInstruction: undefined,
       warning: ["paseo capabilities are prompt-guided rather than harness-enforced."],
     });
     const stem = "2026-08-19T09-06-43Z-designer-decomposition";

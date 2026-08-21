@@ -18,9 +18,14 @@ export const promptGuidedCapabilitySupport = Object.freeze(
   Object.fromEntries(capabilityCategories.map((kind) => [kind, "prompt-guided"])),
 ) as CapabilitySupportMap;
 
-type PromptDelivery = {
-  readonly mode: "native-file-input" | "agent-file-instruction";
+type PromptTransport = {
+  readonly mode: "native-prompt-file" | "shell-file-expansion" | "agent-file-instruction";
   readonly field: string;
+};
+
+type PromptDelivery = {
+  readonly fresh: PromptTransport;
+  readonly continuation: PromptTransport;
 };
 
 type FreshCwd = {
@@ -99,7 +104,7 @@ export interface PreparedHarnessInvocation<Capabilities = EffectiveCapabilityGra
   readonly target: LaunchTarget;
   readonly prompt: {
     readonly path: string;
-    readonly delivery: PromptDelivery["mode"];
+    readonly delivery: PromptTransport["mode"];
     readonly nativeField: string;
     readonly agentInstruction?: string;
   };
@@ -153,11 +158,15 @@ export function prepareHarnessInvocation<Capabilities>(
   const configuration = request.configuration ?? inheritedHarnessConfiguration;
   validateConfiguration(configuration);
   const action = request.target.kind === "fresh" ? adapter.fresh : adapter.continuation;
+  const promptTransport =
+    request.target.kind === "fresh"
+      ? adapter.promptDelivery.fresh
+      : adapter.promptDelivery.continuation;
   const capabilityEnforcement = summarizeCapabilitySupport(promptGuidedCapabilitySupport);
   if (capabilityEnforcement === "unsupported") throw new Error("Harness capabilities unsupported");
 
   const agentInstruction =
-    adapter.promptDelivery.mode === "agent-file-instruction"
+    promptTransport.mode === "agent-file-instruction"
       ? `Read and follow the complete assignment in this prompt file:\n${request.promptPath}`
       : undefined;
   const cwdBehavior =
@@ -168,8 +177,8 @@ export function prepareHarnessInvocation<Capabilities>(
     target: request.target,
     prompt: {
       path: request.promptPath,
-      delivery: adapter.promptDelivery.mode,
-      nativeField: adapter.promptDelivery.field,
+      delivery: promptTransport.mode,
+      nativeField: promptTransport.field,
       ...(agentInstruction === undefined ? {} : { agentInstruction }),
     },
     cwd: {
@@ -189,9 +198,7 @@ export function prepareHarnessInvocation<Capabilities>(
       operation: action.operation,
       instruction: [
         action.instruction,
-        adapter.promptDelivery.mode === "native-file-input"
-          ? `Deliver the prompt through ${adapter.promptDelivery.field}.`
-          : "Give the agent the generated file-reading instruction.",
+        promptTransportInstruction(promptTransport),
         request.target.kind === "fresh"
           ? `Use ${adapter.cwd.mode} at the supplied cwd.`
           : "Preserve the original agent workspace.",
@@ -200,7 +207,9 @@ export function prepareHarnessInvocation<Capabilities>(
           ? `Capture the new ${adapter.identity.label}.`
           : `Continue the exact ${adapter.identity.label}; never substitute a fresh agent.`,
         `Observe through the native harness until terminal status or ${request.timeoutSeconds} seconds; harmless status checks are allowed, but never resend the prompt automatically.`,
-        "Do not inline or rewrite the prompt.",
+        promptTransport.mode === "agent-file-instruction"
+          ? "Do not inline or rewrite the prompt."
+          : "Transmit the generated prompt from its file without reproducing, summarizing, prefixing, or rewriting it in coordinator output.",
       ].join(" "),
     },
   };
@@ -234,8 +243,12 @@ export function validateHarnessAdapters(
     ) {
       issues.push(`${name}: stable continuation identity is required`);
     }
-    if (!adapter.promptDelivery || !text(adapter.promptDelivery.field)) {
-      issues.push(`${name}: prompt-file delivery is required`);
+    if (
+      !adapter.promptDelivery ||
+      !completePromptTransport(adapter.promptDelivery.fresh) ||
+      !completePromptTransport(adapter.promptDelivery.continuation)
+    ) {
+      issues.push(`${name}: complete prompt delivery is required`);
     }
     if (!adapter.cwd) issues.push(`${name}: application cwd behavior is required`);
     if (!adapter.configurationInheritance) {
@@ -248,6 +261,27 @@ export function validateHarnessAdapters(
   }
   for (const id of harnessIds) if (!seen.has(id)) issues.push(`missing adapter ${id}`);
   return issues;
+}
+
+function completePromptTransport(transport: PromptTransport | undefined): boolean {
+  return Boolean(
+    transport &&
+    ["native-prompt-file", "shell-file-expansion", "agent-file-instruction"].includes(
+      transport.mode,
+    ) &&
+    text(transport.field),
+  );
+}
+
+function promptTransportInstruction(transport: PromptTransport): string {
+  switch (transport.mode) {
+    case "native-prompt-file":
+      return `Give the generated prompt path to ${transport.field}, which must load that file as the complete native agent message; do not send the path as the message.`;
+    case "shell-file-expansion":
+      return `Feed the generated prompt file contents directly through ${transport.field} without rendering them into coordinator output; do not send the path as the message.`;
+    case "agent-file-instruction":
+      return "Give the agent the generated file-reading instruction.";
+  }
 }
 
 function completeAction(action: NativeAction | undefined): boolean {
