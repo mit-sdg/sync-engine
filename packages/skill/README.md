@@ -42,16 +42,6 @@ directory, complete the
 [pre-CLI scaffold](skills/sync-engine/references/workflow.md#complete-bootstrap-before-the-brief)
 before the first source-checkout CLI invocation.
 
-Pi also offers a direct package-install command:
-
-```sh
-pi install npm:@mit-sdg/sync-engine-skill@VERSION
-```
-
-Pi is one supported coordinator and delegated-role harness; it is not required. When the
-Pi adapter is selected, delegated roles run in child Pi CLI processes backed by persistent
-sessions.
-
 Confirm that the installed CLI is available:
 
 ```sh
