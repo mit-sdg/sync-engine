@@ -47,7 +47,15 @@ import {
 } from "./work.ts";
 
 const commandName = "sync-engine-skill";
-const defaultSkillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+export function defaultSkillRootForCommand(commandPath: string): string {
+  const commandDirectory = dirname(commandPath);
+  return basename(commandDirectory) === "dist"
+    ? resolve(commandDirectory, "../skills/sync-engine")
+    : resolve(commandDirectory, "..");
+}
+
+const defaultSkillRoot = defaultSkillRootForCommand(fileURLToPath(import.meta.url));
 const defaultTimeoutSeconds = 1800;
 
 type WriteOutput = (text: string) => void;

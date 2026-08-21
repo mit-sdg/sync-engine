@@ -16,6 +16,7 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 import type { BootstrapOptions, BootstrapResult } from "../skills/sync-engine/scripts/bootstrap.ts";
 import {
   capabilitySubsetIssue,
+  defaultSkillRootForCommand,
   run,
   type CommandDependencies,
 } from "../skills/sync-engine/scripts/command.ts";
@@ -201,6 +202,15 @@ afterEach(async () => {
 });
 
 describe("skill CLI help and arguments", () => {
+  test("resolves skill assets from source and packaged command layouts", () => {
+    expect(defaultSkillRootForCommand("/package/skills/sync-engine/scripts/command.ts")).toBe(
+      "/package/skills/sync-engine",
+    );
+    expect(defaultSkillRootForCommand("/package/dist/command.js")).toBe(
+      "/package/skills/sync-engine",
+    );
+  });
+
   test("documents the complete small command surface", async () => {
     const root = await application("help");
     const expected = await readFile(resolve(expectedRoot, "help.txt"), "utf8");
