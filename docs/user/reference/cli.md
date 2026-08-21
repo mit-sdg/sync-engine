@@ -142,6 +142,8 @@ config-based `check`. Before assembly, `check-design` proves only these form pro
   every line either parses or is a `Rule:` line, whose prose stays opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;
+- `endpoints` fences contain only `Declaration.Identity at /path` entries with exact
+  dotted identities and portable absolute route paths;
 - `computations` declarations have valid signatures, distinct input names, balanced
   type delimiters, and indented prose bodies;
 - application `types` fences contain only `concrete Name` declarations with prose;
@@ -151,12 +153,14 @@ config-based `check`. Before assembly, `check-design` proves only these form pro
 - binding targets have concrete-name or qualified `Instance.Type` shape;
 - one instance does not mix inline and detached placement within the supplied corpus;
   and
-- computation names, concrete type names, instance names, and binding left sides are
-  not duplicated across the supplied application-design documents.
+- endpoint identities, computation names, concrete type names, instance names, and
+  binding left sides are not duplicated across the supplied application-design
+  documents.
 
 Application declaration syntax is:
 
 ```text
+endpoint             = DeclarationPath "at" PortableAbsoluteRoutePath
 concrete-type        = "concrete" Name, indented-nonempty-prose
 instance             = "instantiate" Definition ("as" Instance)? ("with" local-bindings)?
 local-binding        = External "is" Target
@@ -168,13 +172,14 @@ Target               = Concrete | Instance "." OwnedType
 external, concrete, and owned type names use ASCII letters, digits, and `_`,
 beginning with a letter or `_`; they do not use the hyphens permitted in dotted
 application declaration paths. Arbitrary prose is not admitted inside
-`instances` or `bindings` fences.
+`endpoints`, `instances`, or `bindings` fences.
 
 The command does not discover additional files or require a complete corpus. Its
 bounded SSF parser establishes the declaration and owned-name inventory,
 not a storage schema or invariant/prose semantics. It does not resolve typed links,
-instance definitions, external names, or binding targets against an assembled
-selection. It also does not require complete instances or declaration coverage,
+endpoint identities and paths, instance definitions, external names, or binding targets
+against an assembled selection. It also does not require complete endpoints, instances,
+or declaration coverage,
 compare computation inputs with TypeScript, validate concept source agreement, or
 inspect ordinary prose and computation-body semantics. Those checks need the selected
 assembly and remain the job of config-based `sync-engine check`. In particular, a
@@ -267,8 +272,8 @@ with class fields or storage.
 For the configured design corpus, `check`:
 
 - accepts only explicit local `file:` URLs;
-- parses links, computations, and application `types`, `instances`, and `bindings`
-  fences in every listed document;
+- parses links, computations, and application `endpoints`, `types`, `instances`, and
+  `bindings` fences in every listed document;
 - inventories all normalized source contents for provenance and digests;
 - requires an exact one-to-one match between authored instances and the assembled
   variant's non-core `(instance, definition)` facts;
@@ -277,8 +282,10 @@ For the configured design corpus, `check`:
 - proves qualified binding targets against the selected definition's SSF-owned names,
   while rejecting external-to-external targets and alias chains;
 - resolves every `reaction:`, `view:`, `former:`, and `computation:` link;
-- requires coverage for every selected authored reaction/endpoint tree, named
-  view, and named former;
+- requires every selected endpoint to have exactly one authored endpoint entry whose
+  dotted identity and path match the executable declaration;
+- requires reaction-link coverage for every selected authored reaction/endpoint tree
+  and typed-link coverage for every named view and named former;
 - requires exactly one declaration for every executable computation; and
 - rejects authored declarations that are absent from the selected assembly.
 

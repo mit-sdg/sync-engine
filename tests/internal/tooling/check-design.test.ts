@@ -55,6 +55,10 @@ const composition = `# Notes composition
 [Publishing](reaction:Notes.Publish) uses [the feed](view:Notes.Feed),
 [its former](former:Notes.FormFeed), and [formatting](computation:formatTitle).
 
+\`\`\`endpoints
+Notes.Publish at /notes/publish
+\`\`\`
+
 \`\`\`computations
 formatTitle(title: String) : String
   Normalizes a displayed title.
@@ -147,6 +151,16 @@ describe("authored design form check", () => {
       /needs an indented prose definition/,
     ],
     [
+      "endpoint declaration",
+      "# Bad endpoint\n\n```endpoints\nNotes.Publish on /notes/publish\n```\n",
+      /Declaration\.Identity at \/path/,
+    ],
+    [
+      "endpoint path",
+      "# Bad endpoint path\n\n```endpoints\nNotes.Publish at notes/publish\n```\n",
+      /absolute route pathname/,
+    ],
+    [
       "binding left side",
       "# Bad binding\n\n```bindings\nUser is Person\n```\n",
       /accepts only `Instance.External is Target`/,
@@ -166,6 +180,17 @@ describe("authored design form check", () => {
   });
 
   test.each([
+    [
+      "endpoint",
+      `# Duplicate endpoint
+
+\`\`\`endpoints
+Notes.Publish at /notes/publish
+Notes.Publish at /notes/other
+\`\`\`
+`,
+      "DUPLICATE_ENDPOINT",
+    ],
     [
       "computation",
       `# Duplicate computation

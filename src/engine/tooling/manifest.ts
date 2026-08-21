@@ -331,11 +331,20 @@ function checkedDesign(
   const declarations = checked.declarations.map((declaration) => ({
     ...declaration,
     runtimeNames: runtimeNames(facts.application, declaration),
-    coverage: (
-      checked.coverage.find(
-        ({ kind, identity }) => kind === declaration.kind && identity === declaration.identity,
-      )?.locations ?? []
-    ).map((item) => location(item, sourceIds)),
+    coverage: checked.coverage
+      .filter(
+        ({ kind, identity }) =>
+          identity === declaration.identity &&
+          (kind === declaration.kind || (declaration.source === "endpoint" && kind === "endpoint")),
+      )
+      .flatMap(({ locations }) => locations)
+      .sort(
+        (left, right) =>
+          ordinal(left.source, right.source) ||
+          left.line - right.line ||
+          left.column - right.column,
+      )
+      .map((item) => location(item, sourceIds)),
   }));
   const instancesByName = new Map(
     normalizeAuthoredConceptInstances(checked.documents).map((instance) => [

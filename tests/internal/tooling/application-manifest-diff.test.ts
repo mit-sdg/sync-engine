@@ -162,7 +162,7 @@ async function writeConceptFreeConfigs(directory: string): Promise<{
   );
   await writeFile(
     join(directory, "added.md"),
-    "# Added diff fixture\n\n[Added](reaction:Added).\n",
+    "# Added diff fixture\n\n[Added](reaction:Added).\n\n```endpoints\nAdded at /added\n```\n",
   );
   await writeFile(
     join(directory, "added.config.ts"),

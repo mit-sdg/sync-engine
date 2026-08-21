@@ -51,8 +51,8 @@ blocks.
 
 `Types`, `State`, `Actions`, and `Queries` contain only their one matching fence and
 no surrounding Markdown. Invariant prose goes inside the `state` fence on a `Rule:`
-line rather than after it. Application design links and `computations` fences are
-rejected anywhere in a concept specification.
+line rather than after it. Application design links and `endpoints` or `computations`
+fences are rejected anywhere in a concept specification.
 
 ## Complete example
 

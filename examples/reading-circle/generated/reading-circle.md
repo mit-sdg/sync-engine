@@ -92,7 +92,7 @@ _Views name reusable conditions. Multiple `where` blocks are alternatives._
 ### (member) may not respond in (circle)
 
 Authored path: `ReadingCircle.ReadingDiscussion.NonmemberMayNotRespond`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 15.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 25.
 
 ```view
 (member) may not respond in (circle) — inputs (member, circle); outputs (); bindings ()
@@ -102,7 +102,7 @@ Authored path: `ReadingCircle.ReadingDiscussion.NonmemberMayNotRespond`.
 ### (member) may respond in (circle)
 
 Authored path: `ReadingCircle.ReadingDiscussion.MemberMayRespond`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 12.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 22.
 
 ```view
 (member) may respond in (circle) — inputs (member, circle); outputs (); bindings ()
@@ -117,7 +117,7 @@ _the authored explanation; this section records the generated shape._
 ### the circle page (circle)
 
 Authored path: `ReadingCircle.CirclePages.CirclePage`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 20.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 35.
 
 ```former
 Former "the circle page (circle)" — inputs (circle); bindings (name, host, member, selection, reading, discussion, response, author, text); promises exactly one record — forms:
@@ -166,6 +166,7 @@ then
 
 Authored path: `ReadingCircle.CircleMembership.CreateCircle`.
 - Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 6.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 11.
 
 ```reaction
 when RequestBoundary.request (host, name, path: "/circles/create", requestId)
@@ -177,6 +178,7 @@ then
 
 Authored path: `ReadingCircle.CircleMembership.CreateCircle`.
 - Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 6.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 11.
 
 ```reaction
 when Gathering.create (host, name, gathering: circle), asked by ReadingCircle.CircleMembership.CreateCircle
@@ -190,6 +192,7 @@ then
 
 Authored path: `ReadingCircle.CircleMembership.JoinCircle`.
 - Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 8.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 12.
 
 ```reaction
 when RequestBoundary.request (circle, member, path: "/circles/join", requestId)
@@ -201,6 +204,7 @@ then
 
 Authored path: `ReadingCircle.CircleMembership.JoinCircle`.
 - Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 8.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 12.
 
 ```reaction
 when Gathering.join (gathering: circle, member, membership), asked by ReadingCircle.CircleMembership.JoinCircle
@@ -213,7 +217,8 @@ then
 ### ReadingCircle.CirclePages.GetCirclePage
 
 Authored path: `ReadingCircle.CirclePages.GetCirclePage`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 19.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 34.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 39.
 
 ```reaction
 when RequestBoundary.request (circle, path: "/circles/page", requestId)
@@ -224,7 +229,8 @@ then
 ### ReadingCircle.ReadingDiscussion.AddResponse
 
 Authored path: `ReadingCircle.ReadingDiscussion.AddResponse`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 13.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 23.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 30.
 
 ```reaction
 when RequestBoundary.request (circle, member, path: "/circles/respond", reading, requestId, text)
@@ -239,7 +245,8 @@ then
 ### ReadingCircle.ReadingDiscussion.AddResponse#2
 
 Authored path: `ReadingCircle.ReadingDiscussion.AddResponse`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 13.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 23.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 30.
 
 ```reaction
 when Discussing.respond (author: member, discussion, text, response), asked by ReadingCircle.ReadingDiscussion.AddResponse
@@ -252,7 +259,8 @@ then
 ### ReadingCircle.ReadingDiscussion.ChooseReading
 
 Authored path: `ReadingCircle.ReadingDiscussion.ChooseReading`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 10.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 15.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 19.
 
 ```reaction
 when RequestBoundary.request (circle, path: "/circles/choose", reading, requestId)
@@ -263,7 +271,8 @@ then
 ### ReadingCircle.ReadingDiscussion.ChooseReading#2
 
 Authored path: `ReadingCircle.ReadingDiscussion.ChooseReading`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 10.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 15.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 19.
 
 ```reaction
 when Selecting.choose (item: reading, scope: circle, selection), asked by ReadingCircle.ReadingDiscussion.ChooseReading
@@ -276,7 +285,8 @@ then
 ### ReadingCircle.ReadingDiscussion.RejectNonmemberResponse
 
 Authored path: `ReadingCircle.ReadingDiscussion.RejectNonmemberResponse`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 16.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 26.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 31.
 
 ```reaction
 when RequestBoundary.request (circle, member, path: "/circles/respond", reading, requestId, text)
@@ -289,7 +299,7 @@ then
 ### ReadingCircle.ReadingDiscussion.SelectedReadingOpensDiscussion
 
 Authored path: `ReadingCircle.ReadingDiscussion.SelectedReadingOpensDiscussion`.
-- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 11.
+- Covered by [Reading Circle](../design/compositions/ReadingCircle.md), line 16.
 
 ```reaction
 when Selecting.choose (selection)

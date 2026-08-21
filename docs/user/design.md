@@ -74,10 +74,21 @@ no required `application.md` or design index. Use that flexibility when it has a
 concrete benefit, not merely to make ownership harder to see.
 
 Composition prose is ordinary Markdown with one nonempty H1. Every selected authored
-reaction or endpoint tree, every named view, and every named former requires coverage.
-One link names one exact dotted composition path; wildcards and implied descendants do
-not exist. The checker resolves a link but cannot judge whether the surrounding prose
-states the declaration's decision honestly.
+reaction or endpoint tree, every named view, and every named former requires typed-link
+coverage. One link names one exact dotted composition path; wildcards and implied
+descendants do not exist. The checker resolves a link but cannot judge whether the
+surrounding prose states the declaration's decision honestly.
+
+Every endpoint tree also has one checked boundary declaration beside that prose:
+
+```endpoints
+Sessions.EnteringApplication.Register at /auth/register
+```
+
+The declaration's identity and portable absolute path must exactly match the selected
+`endpoint(...)`. It adds endpoint-specific meaning without replacing the tree's
+`reaction:` link. Different endpoint identities may share a path when the executable
+assembly uses them as alternatives.
 
 `design/types.md` normally contains separate `types` and `instances` fences. Use
 `concrete` only for application types, inventory every selected application

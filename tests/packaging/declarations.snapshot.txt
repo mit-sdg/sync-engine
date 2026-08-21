@@ -4840,6 +4840,11 @@ export interface AuthoredDesignLink {
     text: string;
     location: DesignSourceLocation;
 }
+export interface AuthoredEndpoint {
+    identity: string;
+    path: string;
+    location: DesignSourceLocation;
+}
 export interface AuthoredComputationInput {
     name: string;
     optional: boolean;
@@ -4859,6 +4864,7 @@ export interface AuthoredApplicationDesignDocument {
     content: string;
     digest: string;
     links: readonly AuthoredDesignLink[];
+    endpoints: readonly AuthoredEndpoint[];
     computations: readonly AuthoredComputation[];
     concreteTypes: readonly ConcreteTypeDeclaration[];
     /** Instance declarations authored in this document, with inline bindings attached. */
@@ -4922,8 +4928,13 @@ export interface SelectedConceptDesign {
      */
     ownedTypes?: readonly string[];
 }
+export interface SelectedEndpointDesign {
+    identity: string;
+    path: string;
+}
 export interface SelectedApplicationDesign {
     reactions: readonly string[];
+    endpoints: readonly SelectedEndpointDesign[];
     views: readonly string[];
     formers: readonly string[];
     computations: readonly SelectedComputationDesign[];
@@ -4931,14 +4942,14 @@ export interface SelectedApplicationDesign {
     /** Selected assembly names whose definitions cannot be checked without a specification. */
     unresolvedConceptInstances?: readonly string[];
 }
-export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "MISSING_COVERAGE" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE" | "UNSELECTED_INSTANCE" | "UNDECLARED_SELECTED_INSTANCE" | "INSTANCE_DEFINITION_MISMATCH" | "UNKNOWN_EXTERNAL_BINDING" | "MISSING_EXTERNAL_BINDING" | "UNRESOLVED_BINDING_TARGET" | "EXTERNAL_BINDING_TARGET" | "UNUSED_CONCRETE_TYPE";
+export type ApplicationDesignIssueCode = "UNRESOLVED_LINK" | "UNRESOLVED_ENDPOINT" | "ENDPOINT_PATH_MISMATCH" | "MISSING_COVERAGE" | "DUPLICATE_ENDPOINT" | "DUPLICATE_COMPUTATION" | "UNREGISTERED_COMPUTATION" | "COMPUTATION_INPUT_MISMATCH" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT" | "UNDECLARED_BINDING_INSTANCE" | "UNSELECTED_INSTANCE" | "UNDECLARED_SELECTED_INSTANCE" | "INSTANCE_DEFINITION_MISMATCH" | "UNKNOWN_EXTERNAL_BINDING" | "MISSING_EXTERNAL_BINDING" | "UNRESOLVED_BINDING_TARGET" | "EXTERNAL_BINDING_TARGET" | "UNUSED_CONCRETE_TYPE";
 export interface ApplicationDesignIssue {
     code: ApplicationDesignIssueCode;
     message: string;
     location?: DesignSourceLocation;
 }
 export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
-    code: "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT";
+    code: "DUPLICATE_ENDPOINT" | "DUPLICATE_COMPUTATION" | "DUPLICATE_CONCRETE_TYPE" | "DUPLICATE_INSTANCE" | "DUPLICATE_EXTERNAL_BINDING" | "MIXED_BINDING_PLACEMENT";
     location: DesignSourceLocation;
 };
 /** Merge valid distributed declarations into the canonical per-instance authored model. */
@@ -5002,7 +5013,7 @@ export interface ComputationInputAnalysisContext {
  */
 export type ResolveComputationInputs = (context: ComputationInputAnalysisContext) => readonly AuthoritativeComputationInput[] | Promise<readonly AuthoritativeComputationInput[]>;
 export interface AuthoredDeclarationCoverage {
-    kind: DesignLinkKind;
+    kind: DesignLinkKind | "endpoint";
     identity: string;
     locations: readonly DesignSourceLocation[];
 }

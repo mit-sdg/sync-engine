@@ -114,8 +114,44 @@ score(values: List<Number>) : Number
     ]);
   });
 
+  test("parses endpoint identities and portable paths with exact locations", () => {
+    const document = parseApplicationDesignDocument(
+      `# HTTP boundary
+
+Registration and sign-in are separate public operations.
+
+\`\`\`endpoints
+Sessions.Entering.Register at /auth/register
+Sessions.Entering.SignIn at /auth/sign-in
+\`\`\`
+`,
+      "design/sessions.md",
+    );
+
+    expect(document.endpoints).toEqual([
+      {
+        identity: "Sessions.Entering.Register",
+        path: "/auth/register",
+        location: { source: "design/sessions.md", line: 6, column: 1 },
+      },
+      {
+        identity: "Sessions.Entering.SignIn",
+        path: "/auth/sign-in",
+        location: { source: "design/sessions.md", line: 7, column: 1 },
+      },
+    ]);
+  });
+
   test.each([
     ["# One\n# Two\n[x](reaction:A.B)\n", /exactly one H1/],
+    ["# One\n```endpoints\n```\n", /must declare at least one endpoint/],
+    ["# One\n```endpoints\nNot an endpoint\n```\n", /Declaration\.Identity at \/path/],
+    ["# One\n```endpoints\nApi.Get at relative\n```\n", /absolute route pathname/],
+    ["# One\n```endpoints\nApi.Get at /a/../b\n```\n", /canonical URL pathname/],
+    [
+      "# One\n```endpoints\nApi.Get at /get\n  Explanation belongs in prose.\n```\n",
+      /declarations only/,
+    ],
     ["# One\n[x](reaction:A.*)\n", /exact non-wildcard/],
     ["# One\n```computations\nf(x: String) : String\n```\n", /indented prose body/],
     ["# One\n```computations\nnot a signature\n  Explains it.\n```\n", /needs `name/],
@@ -298,6 +334,7 @@ formatName(person: Person) : String
     );
     const selected = {
       reactions: [],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [],
@@ -342,6 +379,7 @@ formatName(person: Person) : String
     );
     const selected = {
       reactions: [],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [],
@@ -379,6 +417,7 @@ Comments.User is Person
     expect(
       validateAuthoredApplicationDesign([mixed], {
         reactions: [],
+        endpoints: [],
         views: [],
         formers: [],
         computations: [],
@@ -416,6 +455,7 @@ Timing.UnknownDetached is MissingType
     expect(
       validateAuthoredApplicationDesign([document], {
         reactions: [],
+        endpoints: [],
         views: [],
         formers: [],
         computations: [],
@@ -447,6 +487,7 @@ Linking.UnknownDetached is Person
     expect(
       validateAuthoredApplicationDesign([document], {
         reactions: [],
+        endpoints: [],
         views: [],
         formers: [],
         computations: [],
@@ -516,6 +557,7 @@ instantiate Posting
     expect(
       validateAuthoredApplicationDesign([document, typesDocument], {
         reactions: ["Forum.Refresh"],
+        endpoints: [],
         views: ["Forum.Feed"],
         formers: ["Forum.FormFeed"],
         computations: [{ name: "formatName", inputs: [{ name: "person", optional: false }] }],
@@ -525,6 +567,89 @@ instantiate Posting
         ],
       }),
     ).toEqual([]);
+  });
+
+  test("checks endpoint identity, path, uniqueness, and coverage independently of reactions", () => {
+    const correct = parseApplicationDesignDocument(
+      `# Boundary
+
+[Publishing](reaction:Forum.Publish) is public.
+
+\`\`\`endpoints
+Forum.Publish at /posts/publish
+\`\`\`
+`,
+      "correct.md",
+    );
+    const selected = {
+      reactions: ["Forum.Publish"],
+      endpoints: [{ identity: "Forum.Publish", path: "/posts/publish" }],
+      views: [],
+      formers: [],
+      computations: [],
+      concepts: [],
+    };
+    expect(validateAuthoredApplicationDesign([correct], selected)).toEqual([]);
+
+    const declarationOnly = parseApplicationDesignDocument(
+      `# Declaration only
+
+\`\`\`endpoints
+Forum.Publish at /posts/publish
+\`\`\`
+`,
+      "declaration-only.md",
+    );
+    expect(validateAuthoredApplicationDesign([declarationOnly], selected)).toEqual([
+      expect.objectContaining({
+        code: "MISSING_COVERAGE",
+        message: expect.stringContaining("selected reaction"),
+      }),
+    ]);
+
+    const linkOnly = parseApplicationDesignDocument(
+      "# Link only\n\n[Publishing](reaction:Forum.Publish) is public.\n",
+      "link-only.md",
+    );
+    expect(validateAuthoredApplicationDesign([linkOnly], selected)).toEqual([
+      expect.objectContaining({
+        code: "MISSING_COVERAGE",
+        message: expect.stringContaining("selected endpoint"),
+      }),
+    ]);
+
+    const wrong = parseApplicationDesignDocument(
+      `# Wrong boundary
+
+[Publishing](reaction:Forum.Publish) is public.
+
+\`\`\`endpoints
+Forum.Publish at /wrong
+Forum.Missing at /missing
+Forum.Publish at /duplicate
+\`\`\`
+`,
+      "wrong.md",
+    );
+    expect(
+      validateAuthoredApplicationDesign([wrong], {
+        reactions: ["Forum.Publish"],
+        endpoints: [
+          { identity: "Forum.Publish", path: "/posts/publish" },
+          { identity: "Forum.Uncovered", path: "/uncovered" },
+        ],
+        views: [],
+        formers: [],
+        computations: [],
+        concepts: [],
+      }).map(({ code }) => code),
+    ).toEqual([
+      "DUPLICATE_ENDPOINT",
+      "ENDPOINT_PATH_MISMATCH",
+      "UNRESOLVED_ENDPOINT",
+      "ENDPOINT_PATH_MISMATCH",
+      "MISSING_COVERAGE",
+    ]);
   });
 
   test("returns independent resolution, coverage, computation, and application-type issues", () => {
@@ -558,6 +683,7 @@ instantiate Other
     );
     const codes = validateAuthoredApplicationDesign([document, typesDocument], {
       reactions: ["Forum.Expected"],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [{ name: "extra", inputs: [{ name: "value", optional: false }] }],
@@ -593,6 +719,7 @@ instantiate Timing as Extra
     );
     const issues = validateAuthoredApplicationDesign([document], {
       reactions: [],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [],
@@ -629,6 +756,7 @@ instantiate Beta with
     );
     const selected = {
       reactions: [],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [],
@@ -687,6 +815,7 @@ instantiate Targeting as SecondTarget
     );
     const selected = {
       reactions: [],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [],
@@ -789,6 +918,7 @@ Unknown.User is Person
 
     const codes = validateAuthoredApplicationDesign([first, second, typesDocument], {
       reactions: ["Forum.Run"],
+      endpoints: [],
       views: [],
       formers: [],
       computations: [{ name: "selected" }],

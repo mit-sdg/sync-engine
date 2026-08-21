@@ -160,16 +160,26 @@ The supported destination kinds are `reaction:`, `view:`, `former:`, and
 `computation:`. Each destination names exactly one selected declaration; there
 are no wildcards or implied descendant links.
 
-Coverage is bidirectional. Every typed link must resolve, every selected
-authored reaction tree must have a reaction link, and every selected named view
-and former must have a link of its own kind. The checker does not interpret the
-surrounding prose or require one link per sentence. A declaration can have
-several references, all retained in read-back.
+Coverage is bidirectional. Every typed link must resolve, every selected authored
+reaction tree—including an endpoint tree—must have a reaction link, and every selected
+named view and former must have a link of its own kind. The checker does not interpret
+the surrounding prose or require one link per sentence. A declaration can have several
+references, all retained in read-back.
 
-One top-level authored reaction or endpoint tree has one reaction identity even
-when lowering produces several runtime stages. Core-generated boundary and
-outcome reactions are exempt. Views and formers receive full coverage; there is
-no helper exemption.
+Each endpoint tree additionally has exactly one declaration in an `endpoints` fence:
+
+```endpoints
+Sessions.EnteringApplication.Register at /auth/register
+```
+
+The dotted identity must resolve to a selected endpoint and the portable absolute path
+must exactly match its `endpoint(...)` path. Different endpoint identities may share a
+path. This declaration records the boundary address; it does not replace reaction-link
+coverage.
+
+One top-level authored reaction or endpoint tree has one reaction identity even when
+lowering produces several runtime stages. Core-generated boundary and outcome reactions
+are exempt. Views and formers receive full coverage; there is no helper exemption.
 
 ## Stable application identities
 
