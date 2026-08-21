@@ -170,7 +170,7 @@ member of `AnalysisLimits` is omitted:
 | `maxSourceAnchors`                | 100,000     | Distinct retained source anchors.                          |
 | `maxStaticResolutionDepth`        | 32          | Recursive static-value and symbol resolution steps.        |
 | `maxStaticResolutionAlternatives` | 32          | Alternatives retained by one static resolution.            |
-| `maxAstCandidates`                | 100,000     | AST nodes inspected during source discovery.               |
+| `maxAstCandidates`                | 1,000,000   | AST nodes inspected during source discovery.               |
 | `maxAstNodes`                     | 1,000,000   | AST nodes retained across unique repository source trees.  |
 | `maxProjectFiles`                 | 20,000      | Distinct project files.                                    |
 | `maxProjectFileBytes`             | 16,777,216  | UTF-8 bytes in one project file (16 MiB).                  |

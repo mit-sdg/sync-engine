@@ -80,7 +80,7 @@ describe("analysis CLI", () => {
     );
     writeFileSync(
       join(core, "fake.mjs"),
-      `process.stdout.write(${JSON.stringify(JSON.stringify(fixture.manifest))});\n`,
+      `#!/usr/bin/env bun\nif (process.versions.bun === undefined) throw new Error("core command did not use Bun");\nprocess.stdout.write(${JSON.stringify(JSON.stringify(fixture.manifest))});\n`,
     );
 
     const captured = output();

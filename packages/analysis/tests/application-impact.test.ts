@@ -751,7 +751,7 @@ describe("application impact analysis", () => {
       maxSourceAnchors: 100_000,
       maxStaticResolutionDepth: 32,
       maxStaticResolutionAlternatives: 32,
-      maxAstCandidates: 100_000,
+      maxAstCandidates: 1_000_000,
       maxAstNodes: 1_000_000,
       maxProjectFiles: 20_000,
       maxProjectFileBytes: 16_777_216,
