@@ -1,0 +1,9 @@
+{
+  "readableAreas": [{ "area": "work-unit", "path": "." }],
+  "writableAreas": [],
+  "toolKinds": ["repository-read"],
+  "projectShell": "none",
+  "network": false,
+  "generatedOutput": false,
+  "longRunningProcesses": false
+}

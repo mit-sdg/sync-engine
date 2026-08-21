@@ -11,7 +11,7 @@ Install it as a development dependency, then browse a design before choosing sou
 bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.15
 bunx --no-install sync-engine-catalog list
 bunx --no-install sync-engine-catalog show concept/labeling
-bunx --no-install sync-engine-catalog show recipe/workshop-selection
+bunx --no-install sync-engine-catalog show recipe/review-queue
 bunx --no-install sync-engine-catalog source concept/labeling memory/labeling.memory.ts
 ```
 

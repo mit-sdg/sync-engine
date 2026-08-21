@@ -1,270 +1,491 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { designScope, requireDesignDigest } from "./design.ts";
+import { readFile, realpath } from "node:fs/promises";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import {
+  getRoleSpecification,
+  neverGrantableCapabilities,
+  type EffectiveCapabilityGrant,
+  type RoleSpecification,
+  validateCapabilityGrant,
+} from "./roles.ts";
 
-export const promptRoles = [
-  "designer",
-  "critic",
-  "concept-worker",
-  "application-worker",
-  "frontend-worker",
-  "evidence-worker",
-] as const;
+const contextDeliveries = ["fresh", "continuation", "delta", "replacement"] as const;
+export type PromptContextDelivery = (typeof contextDeliveries)[number];
+export type PromptInput =
+  | Readonly<{ id: string; path: string; displayName?: string }>
+  | Readonly<{ id: string; displayName: string; content: string }>;
+export type RetainedSource = Readonly<{ inputId: string; displayName: string; sha256: string }>;
+type PromptSourceKind = "role-template" | "guidance" | "input";
+type PromptSourceDelivery = "inline" | "retained-binding" | "replacement-expansion";
 
-export type PromptRole = (typeof promptRoles)[number];
-
-const roleBudgets: Readonly<Record<PromptRole, number>> = {
-  designer: 32 * 1024,
-  critic: 48 * 1024,
-  "concept-worker": 24 * 1024,
-  "application-worker": 48 * 1024,
-  "frontend-worker": 48 * 1024,
-  "evidence-worker": 32 * 1024,
-};
-
-const directive = /^<!-- (include|input|input\?): ([^ ]+) -->$/;
-const directivePrefix = /^<!-- (?:include|input\??)(?::|\s)/;
-
-export interface PromptInput {
-  readonly slot: string;
-  readonly path: string;
-}
-
-export interface PromptSource {
-  readonly kind: "template" | "include" | "input";
+export interface PromptSourceContribution {
+  readonly kind: PromptSourceKind;
+  readonly inputId?: string;
   readonly path: string;
   readonly displayName: string;
-  readonly bytes: number;
-}
-
-export interface BuiltPrompt {
-  readonly role: PromptRole;
-  readonly content: string;
-  readonly bytes: number;
+  readonly delivery: PromptSourceDelivery;
+  readonly sourceBytes: number;
+  readonly promptBytes: number;
   readonly sha256: string;
-  readonly budget: number;
-  readonly budgetOverridden: boolean;
-  readonly sources: readonly PromptSource[];
 }
 
 export class PromptBuildError extends Error {
   override readonly name = "PromptBuildError";
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
-function normalizeMarkdown(source: string): string {
+export interface BuildPromptOptions {
+  readonly role: string;
+  readonly phase: string;
+  readonly workUnit: string;
+  readonly applicationRoot: string;
+  readonly promptRoot: string;
+  readonly inputs: readonly PromptInput[];
+  readonly grant: unknown;
+  readonly contextDelivery?: PromptContextDelivery;
+  readonly knownRetained?: readonly RetainedSource[];
+  readonly contextLimitBytes?: number;
+}
+
+type Source = Readonly<{ path: string; displayName: string; content: string }>;
+
+function normalize(source: string): string {
   return `${source.replaceAll("\r\n", "\n").replaceAll("\r", "\n").replace(/\n*$/, "")}\n`;
 }
 
-function byteLength(source: string): number {
-  return Buffer.byteLength(source, "utf8");
-}
+const byteLength = (source: string): number => Buffer.byteLength(source, "utf8");
+const digest = (source: string): string => createHash("sha256").update(source).digest("hex");
+const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 function inside(root: string, path: string): boolean {
   const child = relative(root, path);
   return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
 }
 
-function displayName(path: string): string {
-  if (isAbsolute(path)) return basename(path);
-  const normalized = path.replaceAll("\\", "/").replace(/^\.\//, "");
-  return normalized === "" ? basename(resolve(path)) : normalized;
-}
-
-/** Every slot a role accepts, required ones first, optional ones marked. */
-function describeSlots(slots: ReadonlyMap<string, boolean>): string {
-  const names = [...slots].sort(([, a], [, b]) => Number(b) - Number(a));
-  return names.map(([name, required]) => (required ? name : `${name} (optional)`)).join(", ");
-}
-
-function parseTemplate(source: string): ReadonlyMap<string, boolean> {
-  const slots = new Map<string, boolean>();
-  for (const line of source.split("\n")) {
-    const match = line.match(directive);
-    if (match === null) {
-      if (directivePrefix.test(line)) throw new PromptBuildError(`Malformed directive: ${line}`);
-      continue;
-    }
-    const [, kind, value] = match;
-    if (kind === "include") continue;
-    if (slots.has(value!)) throw new PromptBuildError(`Duplicate input directive: ${value}`);
-    slots.set(value!, kind === "input");
+function hasControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
   }
-  return slots;
+  return false;
 }
 
-function rejectNestedDirectives(source: string, path: string): void {
-  for (const line of source.split("\n")) {
-    if (directive.test(line) || directivePrefix.test(line)) {
-      throw new PromptBuildError(`Included file contains a directive: ${path}`);
-    }
-  }
-}
-
-export interface BuildPromptOptions {
-  readonly role: string;
-  readonly inputs: readonly PromptInput[];
-  readonly promptRoot: string;
-  readonly maxBytes?: number;
-  readonly designRoot?: string;
-  readonly expectedDesignDigest?: string;
-}
-
-export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPrompt> {
-  if (!promptRoles.includes(options.role as PromptRole)) {
-    throw new PromptBuildError(
-      `Unknown role: ${options.role}; roles are ${promptRoles.join(", ")}`,
-    );
-  }
-  const role = options.role as PromptRole;
-  const downstream = [
-    "concept-worker",
-    "application-worker",
-    "frontend-worker",
-    "evidence-worker",
-  ].includes(role);
+function safeLabel(value: unknown, label: string): string {
   if (
-    downstream &&
-    (options.designRoot === undefined || options.expectedDesignDigest === undefined)
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.trim() !== value ||
+    hasControl(value) ||
+    ["`", "<", ">", "\\"].some((character) => value.includes(character))
   ) {
-    throw new PromptBuildError(
-      `Role ${role} requires designRoot and expectedDesignDigest from closed review`,
-    );
+    throw new PromptBuildError("unsafe-input", `Unsafe ${label}: ${String(value)}`);
   }
-  if (
-    !downstream &&
-    (options.designRoot !== undefined || options.expectedDesignDigest !== undefined)
-  ) {
-    throw new PromptBuildError(`Role ${role} does not accept a closed design digest`);
-  }
-  if (downstream) {
-    await requireDesignDigest(
-      options.designRoot!,
-      options.expectedDesignDigest!,
-      designScope(role),
-    );
-  }
-  const root = resolve(options.promptRoot);
-  const templatePath = resolve(root, "roles", `${role}.md`);
-  if (!inside(root, templatePath)) throw new PromptBuildError(`Role template escapes prompt root`);
+  return value;
+}
 
-  const rawTemplate = await readFile(templatePath, "utf8");
-  const template = normalizeMarkdown(rawTemplate);
-  const slots = parseTemplate(template);
-  const grouped = new Map<string, Array<PromptInput & { resolved: string; display: string }>>();
-  const seenPaths = new Set<string>();
-  const seenDisplayNames = new Set<string>();
+const retainedKey = ({ inputId, displayName, sha256 }: RetainedSource): string =>
+  `${inputId}\u0000${displayName}\u0000${sha256}`;
 
-  for (const input of options.inputs) {
-    if (!slots.has(input.slot)) {
+function knownRetained(sources: readonly RetainedSource[] = []): ReadonlySet<string> {
+  const known = new Set<string>();
+  for (const source of sources) {
+    const inputId = safeLabel(source.inputId, "retained input id");
+    const displayName = safeLabel(source.displayName, "retained display name");
+    if (!/^[a-f0-9]{64}$/.test(source.sha256)) {
+      throw new PromptBuildError("unsafe-input", `Unsafe retained SHA-256: ${source.sha256}`);
+    }
+    known.add(retainedKey({ inputId, displayName, sha256: source.sha256 }));
+  }
+  return known;
+}
+
+async function promptRoot(path: string): Promise<string> {
+  try {
+    return await realpath(resolve(path));
+  } catch {
+    throw new PromptBuildError("unreadable-input", `Cannot read prompt root ${path}`);
+  }
+}
+
+async function canonicalSource(root: string, path: string, label: string): Promise<Source> {
+  const target = resolve(root, path);
+  if (!inside(root, target)) {
+    throw new PromptBuildError("unreadable-input", `${label} escapes prompt root: ${path}`);
+  }
+  try {
+    const real = await realpath(target);
+    if (!inside(root, real)) throw new Error("escaping source");
+    return {
+      path: real,
+      displayName: path.replaceAll("\\", "/"),
+      content: normalize(await readFile(real, "utf8")),
+    };
+  } catch {
+    throw new PromptBuildError("unreadable-input", `Cannot read ${label} ${path}`);
+  }
+}
+
+async function materializeInputs(
+  specification: RoleSpecification,
+  supplied: readonly PromptInput[],
+): Promise<ReadonlyMap<string, readonly Source[]>> {
+  type Pending = { displayName: string; path: string | undefined; content: string | undefined };
+  const accepted = new Map(specification.inputs.map((input) => [input.id, input]));
+  const grouped = new Map<string, Pending[]>();
+  const displays = new Set<string>();
+
+  for (const raw of supplied) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new PromptBuildError("unsafe-input", "Prompt input must be an object");
+    }
+    const id = safeLabel(raw.id, "input id");
+    if (!accepted.has(id)) {
+      throw new PromptBuildError("unsafe-input", `${specification.id} does not accept input ${id}`);
+    }
+    const file = "path" in raw;
+    if (file === "content" in raw) {
       throw new PromptBuildError(
-        `Role ${role} has no input slot: ${input.slot}; its slots are ${describeSlots(slots)}`,
+        "unsafe-input",
+        `Input ${id} must have exactly one path or content`,
       );
     }
-    const resolvedPath = resolve(input.path);
-    if (seenPaths.has(resolvedPath))
-      throw new PromptBuildError(`Duplicate input file: ${input.path}`);
-    seenPaths.add(resolvedPath);
-    const display = displayName(input.path);
-    if (display.includes("\n") || display.includes("\r") || display.includes("-->")) {
-      throw new PromptBuildError(`Unsafe input display name: ${display}`);
+    const path = file ? raw.path : undefined;
+    if (path !== undefined && (typeof path !== "string" || path.length === 0 || hasControl(path))) {
+      throw new PromptBuildError("unsafe-input", `Unsafe input path: ${String(path)}`);
     }
-    if (seenDisplayNames.has(display))
-      throw new PromptBuildError(`Duplicate input display name: ${display}`);
-    seenDisplayNames.add(display);
-    const values = grouped.get(input.slot) ?? [];
-    values.push({ ...input, resolved: resolvedPath, display });
-    grouped.set(input.slot, values);
+    const content = file ? undefined : raw.content;
+    if (content !== undefined && typeof content !== "string") {
+      throw new PromptBuildError("unsafe-input", `Inline input ${id} must contain text`);
+    }
+    const displayName = safeLabel(
+      raw.displayName ?? (path === undefined ? undefined : basename(path)),
+      "display name",
+    );
+    if (displays.has(displayName)) {
+      throw new PromptBuildError("duplicate-input", `Duplicate input display name: ${displayName}`);
+    }
+    displays.add(displayName);
+    const values = grouped.get(id) ?? [];
+    values.push({ displayName, path, content });
+    grouped.set(id, values);
   }
 
-  for (const [slot, required] of slots) {
-    if (required && (grouped.get(slot)?.length ?? 0) === 0) {
+  for (const input of specification.inputs) {
+    const count = grouped.get(input.id)?.length ?? 0;
+    if (["exactly-one", "one-or-more"].includes(input.cardinality) && count === 0) {
       throw new PromptBuildError(
-        `Missing required input: ${slot}; role ${role} takes ${describeSlots(slots)}`,
+        "missing-required-input",
+        `Missing required input ${input.id} for ${specification.id}`,
       );
     }
+    if (["exactly-one", "zero-or-one"].includes(input.cardinality) && count > 1) {
+      throw new PromptBuildError("duplicate-input", `Input ${input.id} accepts at most one value`);
+    }
   }
 
-  const sources: PromptSource[] = [
-    {
-      kind: "template",
-      path: templatePath,
-      displayName: `roles/${role}.md`,
-      bytes: byteLength(template),
-    },
-  ];
-
-  const renderedLines: string[] = [];
-  for (const line of template.replace(/\n$/, "").split("\n")) {
-    const match = line.match(directive);
-    if (match === null) {
-      renderedLines.push(line);
-      continue;
-    }
-    const [, kind, value] = match as [string, "include" | "input" | "input?", string];
-    if (kind === "include") {
-      const includePath = resolve(dirname(templatePath), value);
-      if (!inside(root, includePath)) {
-        throw new PromptBuildError(`Include escapes prompt root: ${value}`);
+  const result = new Map<string, readonly Source[]>();
+  const realPaths = new Set<string>();
+  for (const contract of specification.inputs) {
+    const values: Source[] = [];
+    for (const pending of [...(grouped.get(contract.id) ?? [])].sort((a, b) =>
+      compare(a.displayName, b.displayName),
+    )) {
+      if (pending.content !== undefined) {
+        values.push({
+          ...pending,
+          path: `<inline:${pending.displayName}>`,
+          content: normalize(pending.content),
+        });
+        continue;
       }
-      const included = normalizeMarkdown(await readFile(includePath, "utf8"));
-      rejectNestedDirectives(included, includePath);
-      sources.push({
-        kind: "include",
-        path: includePath,
-        displayName: relative(root, includePath).split(sep).join("/"),
-        bytes: byteLength(included),
-      });
-      renderedLines.push(included.replace(/\n$/, ""));
-      continue;
+      try {
+        const path = await realpath(pending.path!);
+        if (realPaths.has(path))
+          throw new PromptBuildError(
+            "duplicate-input",
+            `Duplicate input file: ${pending.displayName}`,
+          );
+        realPaths.add(path);
+        values.push({ ...pending, path, content: normalize(await readFile(path, "utf8")) });
+      } catch (error) {
+        if (error instanceof PromptBuildError) throw error;
+        throw new PromptBuildError(
+          "unreadable-input",
+          `Cannot read input ${contract.id} ${pending.displayName}`,
+        );
+      }
     }
+    result.set(contract.id, values);
+  }
+  return result;
+}
 
-    const values = [...(grouped.get(value) ?? [])].sort((left, right) =>
-      left.display < right.display ? -1 : left.display > right.display ? 1 : 0,
-    );
-    const rendered: string[] = [];
-    for (const input of values) {
-      const content = normalizeMarkdown(await readFile(input.resolved, "utf8"));
-      sources.push({
-        kind: "input",
-        path: input.resolved,
-        displayName: input.display,
-        bytes: byteLength(content),
-      });
-      rendered.push(`<!-- source: ${input.display} -->\n\n${content.replace(/\n$/, "")}`);
-    }
-    renderedLines.push(rendered.join("\n\n"));
+const sourceBody = (source: Source): string => source.content.slice(0, -1);
+
+function contribution(
+  kind: PromptSourceKind,
+  source: Source,
+  delivery: PromptSourceDelivery,
+  rendered: string,
+  inputId?: string,
+): PromptSourceContribution {
+  return {
+    kind,
+    ...(inputId === undefined ? {} : { inputId }),
+    path: source.path,
+    displayName: source.displayName,
+    delivery,
+    sourceBytes: byteLength(source.content),
+    promptBytes: byteLength(rendered),
+    sha256: digest(source.content),
+  };
+}
+
+type GrantedArea = Readonly<{ area: string; path: string }>;
+
+function areaPath(applicationRoot: string, workUnit: string, granted: GrantedArea): string {
+  const base =
+    granted.area === "work-unit" || granted.area === "current-decomposition"
+      ? resolve(applicationRoot, ".sync-engine", "work", workUnit)
+      : granted.area === "design" || granted.area === "assigned-design"
+        ? resolve(applicationRoot, "design")
+        : applicationRoot;
+  return resolve(base, granted.path);
+}
+
+function areaList(
+  areas: readonly GrantedArea[],
+  applicationRoot: string,
+  workUnit: string,
+): string {
+  return areas.length === 0
+    ? "none"
+    : areas
+        .map(
+          (granted) =>
+            `\`${granted.area}:${granted.path}\` (${JSON.stringify(areaPath(applicationRoot, workUnit, granted))})`,
+        )
+        .join(", ");
+}
+
+function capabilities(
+  grant: EffectiveCapabilityGrant,
+  applicationRoot: string,
+  workUnit: string,
+): string {
+  const never = neverGrantableCapabilities.map((value) => `\`${value}\``).join(", ");
+  const broadApplicationRead = grant.readableAreas.some(
+    ({ area, path }) => area === "application" && path === ".",
+  );
+  const applicationBoundary = broadApplicationRead
+    ? "Application read `.` excludes `.git`, `.sync-engine`, `.cursor`, `.claude`, `.pi`, `.codex`, `.agents`, `node_modules`, every `SKILL.md`, framework internals, and generated/build output unless separately supplied or granted.\n\n"
+    : "";
+  return `# Capabilities
+
+## Repository boundary
+
+The application root is ${JSON.stringify(applicationRoot)}. Resolve every relative path from that root and stay inside it. You are a bounded role worker, not the coordinator. Even if the harness advertises skills, do not load, invoke, follow, search, or inspect any project-local or global skill, any \`SKILL.md\`, or any harness configuration directory. Do not inspect another generated prompt, task, grant, record, response, agent trace, prior implementation, or prior trial output. Never search, list, read, or write a parent directory, sibling repository or trial, home-directory configuration, or temporary directory. This generated prompt and its supplied context are your complete role contract: do not reread their task, brief, decomposition, contracts, guidance, or role files from disk. Use repository reads only for expressly granted application or design context that is not already embedded.
+
+- Read: ${areaList(grant.readableAreas, applicationRoot, workUnit)}.
+- Write: ${areaList(grant.writableAreas, applicationRoot, workUnit)}.
+- Tools: ${grant.toolKinds.length === 0 ? "none" : grant.toolKinds.map((tool) => `\`${tool}\``).join(", ")}.
+- Project shell: \`${grant.projectShell}\`.
+- Network: ${grant.network ? "granted" : "not granted"}.
+- Generated output: ${grant.generatedOutput ? "granted" : "not granted"}.
+- Long-running processes: ${grant.longRunningProcesses ? "granted" : "not granted"}.
+
+${applicationBoundary}Anything not granted above is unavailable. Generated output may only come from a granted project command and must not be edited manually. Never grantable: ${never}.`;
+}
+
+function deltaCapabilities(grant: EffectiveCapabilityGrant): string {
+  return `# Capabilities
+
+The prior repository boundary remains in force. Current effective grant:
+
+\`\`\`json
+${JSON.stringify(grant)}
+\`\`\``;
+}
+
+function returnShape(specification: RoleSpecification, compact = false): string {
+  if (compact) {
+    const headings = specification.returnShape
+      .map(({ heading, required }) => `\`## ${heading}\`${required ? "" : " (optional)"}`)
+      .join(", ");
+    return `# Return shape\n\nReturn a small result using the prior contract's fields in this order: ${headings}.`;
+  }
+  const fields = specification.returnShape
+    .map((field) => {
+      const guidance = field.guidance === "" ? "" : ` ${field.guidance}`;
+      return `- \`## ${field.heading}\` — ${field.required ? "required" : "optional"}.${guidance}`;
+    })
+    .join("\n");
+  return `# Return shape
+
+Return a small result with these headings in order; omit progress narrative and routine notes.
+
+${fields}`;
+}
+
+function retained(_source: Source): string {
+  return "Unchanged from the prior same-agent context.";
+}
+
+export async function buildPrompt(options: BuildPromptOptions) {
+  let specification: RoleSpecification;
+  try {
+    specification = getRoleSpecification(options.role, options.phase);
+  } catch (error) {
+    throw new PromptBuildError("unknown-specification", String(error));
+  }
+  let effectiveCapabilities: EffectiveCapabilityGrant;
+  try {
+    effectiveCapabilities = validateCapabilityGrant(specification, options.grant);
+  } catch (error) {
+    throw new PromptBuildError("invalid-grant", String(error));
   }
 
-  const content = normalizeMarkdown(renderedLines.join("\n"));
-  if (downstream) {
-    await requireDesignDigest(
-      options.designRoot!,
-      options.expectedDesignDigest!,
-      designScope(role),
+  const workUnit = safeLabel(options.workUnit, "work unit");
+  if (
+    typeof options.applicationRoot !== "string" ||
+    options.applicationRoot.trim() === "" ||
+    hasControl(options.applicationRoot)
+  ) {
+    throw new PromptBuildError("unsafe-input", "Application root cannot be empty or unsafe");
+  }
+  const applicationRoot = resolve(options.applicationRoot);
+  const contextDelivery = options.contextDelivery ?? "fresh";
+  if (!contextDeliveries.includes(contextDelivery)) {
+    throw new PromptBuildError(
+      "unsafe-input",
+      `Unknown context delivery ${String(contextDelivery)}`,
     );
   }
-  const bytes = byteLength(content);
-  const budget = options.maxBytes ?? roleBudgets[role];
-  if (!Number.isSafeInteger(budget) || budget <= 0) {
-    throw new PromptBuildError(`Prompt budget must be a positive integer`);
+  if (
+    options.contextLimitBytes !== undefined &&
+    (!Number.isSafeInteger(options.contextLimitBytes) || options.contextLimitBytes <= 0)
+  ) {
+    throw new PromptBuildError("unsafe-input", "Context limit must be a positive safe integer");
   }
-  if (bytes > budget) {
-    const contributions = sources
-      .map((source) => `${source.displayName}: ${source.bytes} bytes`)
+  const known = knownRetained(options.knownRetained);
+  const samePhaseContinuation = contextDelivery === "delta";
+
+  const root = await promptRoot(options.promptRoot);
+  const role = await canonicalSource(root, specification.templatePath, "role template");
+  const guidance = await Promise.all(
+    specification.guidancePaths.map((path) => canonicalSource(root, path, "guidance")),
+  );
+  const inputs = await materializeInputs(specification, options.inputs);
+  const sources: PromptSourceContribution[] = [];
+  const retainedSources: RetainedSource[] = [];
+
+  const renderedRole = samePhaseContinuation ? "" : sourceBody(role);
+  sources.push(
+    contribution(
+      "role-template",
+      role,
+      samePhaseContinuation ? "retained-binding" : "inline",
+      renderedRole,
+    ),
+  );
+  const roleSection = samePhaseContinuation
+    ? `# Role and objective
+
+Continue work unit \`${workUnit}\`; role \`${specification.role}\`; phase \`${specification.phase}\`. The prior same-phase role contract remains authoritative.`
+    : `# Role and objective
+
+Work unit \`${workUnit}\`; role \`${specification.role}\`; phase \`${specification.phase}\`.
+
+${renderedRole}`;
+
+  const renderedGuidance = guidance.map((source) => {
+    const rendered = samePhaseContinuation ? "" : sourceBody(source);
+    sources.push(
+      contribution(
+        "guidance",
+        source,
+        samePhaseContinuation ? "retained-binding" : "inline",
+        rendered,
+      ),
+    );
+    return rendered;
+  });
+  const guidanceSection = samePhaseContinuation
+    ? "# Guidance\n\nUnchanged from the prior same-agent context. Apply it to the task and changed context below."
+    : `# Guidance
+
+${renderedGuidance.length === 0 ? "No additional guidance for this phase." : renderedGuidance.join("\n\n---\n\n")}`;
+
+  const contextGroups: string[] = [];
+  for (const contract of specification.inputs) {
+    const values = inputs.get(contract.id) ?? [];
+    if (values.length === 0) continue;
+    const renderedValues = values.map((source) => {
+      const identity: RetainedSource = {
+        inputId: contract.id,
+        displayName: source.displayName,
+        sha256: digest(source.content),
+      };
+      const retain = contract.delivery === "retained";
+      if (retain) retainedSources.push(identity);
+      const binding =
+        (contextDelivery === "continuation" || contextDelivery === "delta") &&
+        retain &&
+        known.has(retainedKey(identity));
+      const rendered = binding ? retained(source) : sourceBody(source);
+      const delivery: PromptSourceDelivery = binding
+        ? "retained-binding"
+        : contextDelivery === "replacement" && retain
+          ? "replacement-expansion"
+          : "inline";
+      sources.push(contribution("input", source, delivery, rendered, contract.id));
+      return `**${source.displayName}**\n\n${rendered}`;
+    });
+    contextGroups.push(`## ${contract.heading}\n\n${renderedValues.join("\n\n")}`);
+  }
+  const contextSection = `# Context\n\n${contextGroups.join("\n\n")}`;
+
+  const capabilitySection = samePhaseContinuation
+    ? deltaCapabilities(effectiveCapabilities)
+    : capabilities(effectiveCapabilities, applicationRoot, workUnit);
+  const content = normalize(
+    [
+      roleSection,
+      capabilitySection,
+      guidanceSection,
+      contextSection,
+      returnShape(specification, samePhaseContinuation),
+    ].join("\n\n"),
+  );
+  const totalBytes = byteLength(content);
+  if (options.contextLimitBytes !== undefined && totalBytes > options.contextLimitBytes) {
+    const report = sources
+      .map(
+        (source) =>
+          `${source.displayName}: ${source.promptBytes} prompt bytes (${source.sourceBytes} source bytes)`,
+      )
       .join("; ");
     throw new PromptBuildError(
-      `Prompt is ${bytes} bytes, exceeding the ${budget}-byte budget. Sources: ${contributions}`,
+      "context-limit-overflow",
+      `Prompt is ${totalBytes} bytes, exceeding the actual ${options.contextLimitBytes}-byte context limit. Sources: ${report}`,
     );
   }
 
   return {
-    role,
+    specification,
+    effectiveCapabilities,
+    contextDelivery,
     content,
-    bytes,
-    sha256: createHash("sha256").update(content).digest("hex"),
-    budget,
-    budgetOverridden: options.maxBytes !== undefined,
+    bytes: totalBytes,
+    sha256: digest(content),
     sources,
+    retainedSources,
   };
 }
+
+export type BuiltPrompt = Awaited<ReturnType<typeof buildPrompt>>;

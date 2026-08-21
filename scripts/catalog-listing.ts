@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const conceptRoot = "packages/catalog/entries/concept";
-const listingPath = "packages/skill/skills/sync-engine/prompts/inputs/catalog.md";
+const listingPath = "packages/skill/skills/sync-engine/prompts/guidance/catalog.md";
 
 const preamble = `# Catalog concepts
 
@@ -11,7 +11,9 @@ takes what it acts on as an opaque parameter. Cover a need by instantiating one 
 fits, adapt one where it nearly fits, and invent only where none does. They are
 alternatives, never mandatory names or contracts, and these are all there are. Most
 briefs need a mechanism none of them covers, so "no entry fits, because ..." is an
-expected answer rather than a fault.
+expected answer rather than a fault. Mark an entry \`catalog-unchanged\` only when the
+product needs every listed action and query; otherwise mark it \`catalog-adapted\` and keep
+only the needed surface during contract authoring.
 `;
 
 /** The listing is derived: a hand-kept copy teaches mechanisms the catalog does not ship. */
@@ -23,7 +25,16 @@ export async function catalogListing(projectRoot = process.cwd()): Promise<strin
       const spec = await readFile(resolve(root, entry, "spec.md"), "utf8");
       const name = spec.slice(2, spec.indexOf("\n")).trim();
       const purpose = spec.split("## Purpose")[1]?.split("## Principle")[0] ?? "";
-      return `- **${name}** — ${purpose.split(/\s+/).filter(Boolean).join(" ")}`;
+      const actions = spec
+        .split("## Actions")[1]
+        ?.split("## Queries")[0]
+        ?.matchAll(/^([a-z][A-Za-z0-9_]*)\s*\(/gm);
+      const queries = spec.split("## Queries")[1]?.matchAll(/^(_[A-Za-z0-9_]+)\s*\(/gm);
+      const names = [
+        ...[...(actions ?? [])].map((match) => `\`${match[1]}\``),
+        ...[...(queries ?? [])].map((match) => `\`${match[1]}\``),
+      ];
+      return `- **${name}** — ${purpose.split(/\s+/).filter(Boolean).join(" ")} Surface: ${names.join(", ")}.`;
     }),
   );
   return `${preamble}\n${rows.join("\n")}\n`;

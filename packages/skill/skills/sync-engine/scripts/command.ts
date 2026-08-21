@@ -1,610 +1,883 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
+import { lstat, readFile } from "node:fs/promises";
+import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
-import { checkBriefFile } from "./brief.ts";
-import { designScope, digestDesign, requireDesignDigest } from "./design.ts";
-import { buildPrompt, promptRoles, type PromptInput, type PromptRole } from "./prompt.ts";
-import { agentExists, harness, launchRole } from "./launch.ts";
+import { bootstrapApplication, conflictChoices, type BootstrapDependencies } from "./bootstrap.ts";
 import {
-  previousRole,
-  requireCompletedRole,
-  workspaceFileRole,
-  requireInsideWorkspace,
-  requiredRoles,
-  reserveWorkspacePath,
-  settledStatus,
-  registrationWrappers,
-  verifiedRecords,
-  workspaceDirectory,
-  writePromptContext,
-} from "./workspace.ts";
+  configurationWithUserOverrides,
+  harnessIds,
+  prepareHarnessInvocation,
+  type HarnessId,
+  type LaunchTarget,
+  type PreparedHarnessInvocation,
+} from "./harness.ts";
+import {
+  buildPrompt,
+  type BuiltPrompt,
+  type PromptContextDelivery,
+  type PromptInput,
+  type RetainedSource,
+} from "./prompt.ts";
+import {
+  digestDesign,
+  finalizeLaunch,
+  normalizeLaunchStatus,
+  prepareLaunch,
+  readLaunchRecord,
+  type FinalizedLaunchRecord,
+  type LaunchRecord,
+  type PrepareLaunchResult,
+} from "./records.ts";
+import {
+  getRoleSpecification,
+  projectShellAccessLevels,
+  roleSpecificationIds,
+  roleSpecifications,
+  validateCapabilityGrant,
+  type EffectiveCapabilityGrant,
+} from "./roles.ts";
+import {
+  canonicalPath,
+  isPathInside,
+  requireWorkUnit,
+  startWorkUnitFromTemplate,
+  workUnitPath,
+  type WorkUnit,
+} from "./work.ts";
 
-interface PackageManifest {
-  readonly name?: string;
-  readonly version?: string;
-  readonly bin?: string | Readonly<Record<string, string>>;
-  readonly skill?: string;
-  readonly toolchain?: Readonly<Record<string, string>>;
-  readonly packages?: Readonly<Record<string, string>>;
+const commandName = "sync-engine-skill";
+
+export function defaultSkillRootForCommand(commandPath: string): string {
+  const commandDirectory = dirname(commandPath);
+  return basename(commandDirectory) === "dist"
+    ? resolve(commandDirectory, "../skills/sync-engine")
+    : resolve(commandDirectory, "..");
 }
 
-interface SkillRelease {
-  readonly skill: string;
-  readonly toolchain: Readonly<{ bun: string; node: string; typescript: string }>;
-  readonly packages: Readonly<Record<string, string>>;
+const defaultSkillRoot = defaultSkillRootForCommand(fileURLToPath(import.meta.url));
+const defaultTimeoutSeconds = 1800;
+
+function launchTitle(slug: string, role: string): string {
+  const name = role
+    .split("-")
+    .map((part) => `${part[0]!.toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+  return `${slug} — ${name}`;
 }
 
-const commandDirectory = dirname(fileURLToPath(import.meta.url));
-const sourceSkillRoot = resolve(commandDirectory, "..");
-const skillRoot = existsSync(resolve(sourceSkillRoot, "release.json"))
-  ? sourceSkillRoot
-  : resolve(commandDirectory, "../skills/sync-engine");
-const packageExecutables = {
-  "@mit-sdg/sync-engine": "sync-engine",
-  "@mit-sdg/sync-engine-catalog": "sync-engine-catalog",
-  "@mit-sdg/sync-engine-analysis": "sync-engine-analysis",
+type WriteOutput = (text: string) => void;
+type Bootstrap = typeof bootstrapApplication;
+
+export interface CommandDependencies {
+  readonly cwd?: string;
+  readonly skillRoot?: string;
+  readonly stdout?: WriteOutput;
+  readonly stderr?: WriteOutput;
+  readonly bootstrap?: Bootstrap;
+  readonly bootstrapDependencies?: BootstrapDependencies;
+  readonly now?: () => Date;
+}
+
+export class CliError extends Error {
+  override readonly name = "CliError";
+  constructor(
+    message: string,
+    readonly recovery?: string,
+  ) {
+    super(message);
+  }
+}
+
+const cardinality = {
+  "exactly-one": "one",
+  "zero-or-one": "optional",
+  "one-or-more": "one or more",
+  "zero-or-more": "repeatable optional",
 } as const;
-const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
-const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
-/** Reported commands name the skill root the way SKILL.md and the references write it. */
-const compiler = 'bun "<skill-root>/scripts/command.ts"';
 
-function reference(name: string): string {
-  return resolve(skillRoot, "references", name);
-}
+export function helpText(): string {
+  const inputs = roleSpecificationIds
+    .map((id) => {
+      const specification = roleSpecifications[id];
+      const slots = specification.inputs
+        .filter(({ id: input }) => input !== "task")
+        .map(
+          (input) =>
+            `${input.id} (${cardinality[input.cardinality]}, ${input.delivery === "retained" ? "retained" : "inline"})`,
+        )
+        .join(", ");
+      return `  ${id}: ${slots || "no additional inputs"}`;
+    })
+    .join("\n");
 
-/** Report the exact syntax of the commands this one leads to, choosing no stage. */
-function next(stream: NodeJS.WritableStream, steps: readonly string[]): void {
-  for (const step of steps) stream.write(`Next: ${step}\n`);
-}
+  return `sync-engine skill CLI — prompt builder and validator
 
-function parent(path: string): string | undefined {
-  const next = parse(path).dir;
-  return next === path ? undefined : next;
-}
+Usage:
+  ${commandName} work start <slug>
+    [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+  ${commandName} prompt build --work <slug> --role <role> --phase <phase>
+    --task <path> --grant <json-path> --harness <harness>
+    [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
+    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  ${commandName} launch complete <prepared-record> --agent-id <id>
+    --status <native-status> [--model <id>]
+  ${commandName} continue <finalized-record> --phase <phase> --task <path>
+    --grant <json-path> [--input <slot>=<path>]... [--replace]
+    [--harness <harness>] [--design-root <path>] [--context-limit <bytes>]
+    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  ${commandName} --help
 
-async function manifestAt(path: string): Promise<PackageManifest | undefined> {
-  try {
-    return JSON.parse(await readFile(path, "utf8")) as PackageManifest;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return undefined;
-    throw error;
-  }
-}
+Roles and phases (valid pairs):
+  ${roleSpecificationIds.join("\n  ")}
 
-async function resolveManifest(
-  packageName: string,
-  starts: readonly string[],
-): Promise<{ path: string; manifest: PackageManifest }> {
-  for (const start of starts) {
-    const applicationRoot = resolve(start);
-    for (let directory: string | undefined = applicationRoot; directory !== undefined;) {
-      if (directory === applicationRoot) {
-        const localPath = resolve(directory, "package.json");
-        const local = await manifestAt(localPath);
-        if (local?.name === packageName) return { path: localPath, manifest: local };
-      }
+Harnesses:
+  ${harnessIds.join(", ")}
 
-      const dependencyPath = resolve(directory, "node_modules", packageName, "package.json");
-      const dependency = await manifestAt(dependencyPath);
-      if (dependency !== undefined) return { path: dependencyPath, manifest: dependency };
-      directory = parent(directory);
-    }
-  }
-  throw new Error(`Cannot resolve installed package ${packageName}`);
-}
+Options:
+  --design-root must be the canonical <application>/design directory. Prompt build creates
+  a binding; continue recomputes an existing binding automatically and accepts this option
+  only to introduce one when the prior record has none. Completion uses the recorded root.
+  --context-limit is a positive byte limit supplied by the selected harness or model.
+  --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
+  CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
+  selection; otherwise they inherit native settings. --harness on continue is valid only
+  together with --replace.
 
-async function readSkillRelease(): Promise<SkillRelease> {
-  const path = resolve(skillRoot, "release.json");
-  const value = await manifestAt(path);
-  if (
-    typeof value?.skill !== "string" ||
-    typeof value.toolchain?.bun !== "string" ||
-    typeof value.toolchain.node !== "string" ||
-    typeof value.toolchain.typescript !== "string" ||
-    typeof value.packages !== "object" ||
-    value.packages === null ||
-    Array.isArray(value.packages)
-  ) {
-    throw new Error(`Cannot read sync-engine skill release from ${path}`);
-  }
-  for (const packageName of packageNames) {
-    if (value.packages[packageName] !== value.skill) {
-      throw new Error(
-        `Skill release ${value.skill} must require ${packageName} at that exact version; found ${value.packages[packageName] ?? "no version"}`,
-      );
-    }
-  }
-  return value as SkillRelease;
-}
+Inputs:
+  --task and --grant sources must be inside the application. --task supplies the reserved
+  task input. --input is repeatable, including for a repeatable slot; use one
+  <slot>=<path> argument per file. Brief and decomposition slots require their exact
+  work-unit files; every other input must resolve inside the application or skill root.
+  Accepted slots are:
+${inputs}
 
-function inside(root: string, path: string): boolean {
-  const child = relative(root, path);
-  return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
-}
-
-function requireExecutable(
-  packageName: keyof typeof packageExecutables,
-  path: string,
-  manifest: PackageManifest,
-): void {
-  const executable = packageExecutables[packageName];
-  const bins = typeof manifest.bin === "string" ? { [executable]: manifest.bin } : manifest.bin;
-  const target = bins?.[executable];
-  if (typeof target !== "string" || target.length === 0) {
-    throw new Error(`Installed ${packageName} does not expose required executable ${executable}`);
-  }
-  const packageRoot = dirname(path);
-  const executablePath = resolve(packageRoot, target);
-  if (
-    !inside(packageRoot, executablePath) ||
-    !existsSync(executablePath) ||
-    !statSync(executablePath).isFile()
-  ) {
-    throw new Error(
-      `Installed ${packageName} executable ${executable} has missing or escaping target ${target}`,
-    );
-  }
-}
-
-async function validateReleaseSet(release: SkillRelease, applicationRoot: string): Promise<string> {
-  const resolved: Array<{ name: keyof typeof packageExecutables; version: string }> = [];
-  for (const packageName of packageNames) {
-    const found = await resolveManifest(packageName, [applicationRoot]);
-    if (found.manifest.version === undefined) {
-      throw new Error(`Installed package has no version: ${found.path}`);
-    }
-    requireExecutable(packageName, found.path, found.manifest);
-    resolved.push({ name: packageName, version: found.manifest.version });
+Capability grant JSON (every field is required and must be within the role maximum):
+  {
+    "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
+    "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
+    "toolKinds": ["repository-read", "repository-write"],
+    "projectShell": "none|project-validation|project-local",
+    "network": false,
+    "generatedOutput": false,
+    "longRunningProcesses": false
   }
 
-  const mismatched = resolved.filter(({ name, version }) => version !== release.packages[name]);
-  if (mismatched.length > 0) {
-    const versions = resolved.map(({ name, version }) => `${name}@${version}`).join(", ");
-    throw new Error(
-      `Installed sync-engine release does not match skill ${release.skill}: ${versions}`,
-    );
-  }
-  return release.skill;
-}
+Completion:
+  Before launch complete, copy the native response verbatim into the printed Response
+  path. The prepared record fixes harness, timeout, and design root. Completed status
+  requires nonempty UTF-8; another terminal status permits an empty captured response.
 
-async function requireBriefSetup(release: SkillRelease, applicationRoot: string): Promise<void> {
-  let releaseFailure: string | undefined;
-  try {
-    await validateReleaseSet(release, applicationRoot);
-  } catch (error) {
-    releaseFailure = error instanceof Error ? error.message : String(error);
-  }
+Status normalization:
+  completed: complete, completed, idle, settled, success, succeeded
+  failed: error, failed, failure
+  cancelled: canceled, cancelled, stopped
+  timed-out: timeout, timed-out, timed_out, "timed out"
 
-  const missing = setupFiles.filter((path) => !existsSync(resolve(applicationRoot, path)));
-  if (releaseFailure === undefined && missing.length === 0) return;
+Continuation and replacement:
+  continue normally keeps the prior role, harness, and exact agent identity. It binds only
+  unchanged retained sources known by that agent; unseen or changed sources are inline.
+  Within one phase capabilities must be reused or narrowed; an explicit phase transition
+  uses a grant validated against the new phase maximum.
+  Bound design is redigested automatically. --replace prepares a fresh agent, expands
+  retained inputs in full, and may select --harness; it remains a replacement.
 
-  const reasons = [
-    ...(releaseFailure === undefined ? [] : [`release check failed: ${releaseFailure}`]),
-    ...(missing.length === 0 ? [] : [`missing setup files: ${missing.join(", ")}`]),
-  ].join("; ");
-  throw new Error(
-    `Brief init requires completed sync-engine setup in ${applicationRoot} (${reasons}). Install the exact packages from release.json, run this command's \`release check .\`, then run \`bunx --no-install sync-engine setup\` and retry.`,
-  );
-}
-
-function usage(): string {
-  return `Usage:
-  sync-engine-skill release check [<application-directory>]
-  sync-engine-skill brief init <brief.md>
-  sync-engine-skill brief check <brief.md>
-  sync-engine-skill design digest <design-directory> [--role <role>]
-  sync-engine-skill follow-up new --role <role>
-  sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
-  sync-engine-skill prompt build --role <role> --input <slot>=<path>...
-  sync-engine-skill assignment new --role <role> --design-digest <sha256>
-  sync-engine-skill assignment check <file>
-  sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
-    [--model <model>] only when the user names one for roles
-    [--thinking <id>]
-  sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
-    [--brief <path>]
-
-Roles:
-  designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker
-
-Prompt options:
-  --design-root <directory>       Required for implementation and evidence roles
-  --design-digest <sha256>        Closed reviewed design digest for that directory
-  --max-bytes <positive integer>  Override the role's default byte budget
-  --stdout                        Print prompt bytes instead of writing the prompt file
-
-Generated prompts, follow-ups, assignments, and launch records belong in
-${workspaceDirectory}/ under the application root; the compiler owns those paths.
+Warnings:
+  Continuing with a release mismatch is explicit. Adapters report prompt-guided
+  capabilities when the harness does not enforce them. Missing required response
+  headings warn after finalization but do not discard useful native output.
 `;
 }
 
-function takeValue(args: readonly string[], index: number, option: string): string {
-  const value = args[index + 1];
-  if (value === undefined || value.startsWith("--")) throw new Error(`${option} requires a value`);
+type OptionMode = "value" | "flag" | "repeatable";
+type ParsedOptions = ReadonlyMap<string, readonly string[]>;
+
+function parseTail(
+  args: readonly string[],
+  command: string,
+  positionals: readonly string[],
+  definitions: Readonly<Record<string, OptionMode>>,
+): { readonly positionals: readonly string[]; readonly options: ParsedOptions } {
+  const foundPositionals: string[] = [];
+  let index = 0;
+  for (const name of positionals) {
+    const value = args[index];
+    if (value === undefined || value.startsWith("-")) {
+      throw new CliError(`${command} requires <${name}> before its options`);
+    }
+    foundPositionals.push(value);
+    index += 1;
+  }
+
+  const options = new Map<string, string[]>();
+  while (index < args.length) {
+    const option = args[index]!;
+    if (!option.startsWith("-")) {
+      throw new CliError(`Unexpected positional argument for ${command}: ${option}`);
+    }
+    const mode = definitions[option];
+    if (mode === undefined) throw new CliError(`Unknown option for ${command}: ${option}`);
+    if (mode !== "repeatable" && options.has(option)) {
+      throw new CliError(`Duplicate option for ${command}: ${option}`);
+    }
+    if (mode === "flag") {
+      options.set(option, ["true"]);
+      index += 1;
+      continue;
+    }
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new CliError(`${option} requires a value`);
+    }
+    options.set(option, [...(options.get(option) ?? []), value]);
+    index += 2;
+  }
+  return { positionals: foundPositionals, options };
+}
+
+function required(options: ParsedOptions, option: string, command: string): string {
+  const value = options.get(option)?.[0];
+  if (value === undefined || value.trim() === "") {
+    throw new CliError(`${command} requires ${option} <value>`);
+  }
   return value;
 }
 
-interface PromptArguments {
+function optional(options: ParsedOptions, option: string): string | undefined {
+  const value = options.get(option)?.[0];
+  if (value !== undefined && value.trim() === "") throw new CliError(`${option} cannot be empty`);
+  return value;
+}
+
+function positiveInteger(value: string | undefined, option: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) {
+    throw new CliError(`${option} must be a positive integer`);
+  }
+  return Number(value);
+}
+
+function harness(value: string): HarnessId {
+  if (!harnessIds.includes(value as HarnessId)) {
+    throw new CliError(`Unknown harness ${value}; expected ${harnessIds.join(", ")}`);
+  }
+  return value as HarnessId;
+}
+
+function commandRoot(dependencies: CommandDependencies): string {
+  return canonicalPath(dependencies.cwd ?? process.cwd());
+}
+
+function output(dependencies: CommandDependencies): { out: WriteOutput; err: WriteOutput } {
+  return {
+    out: dependencies.stdout ?? ((text) => process.stdout.write(text)),
+    err: dependencies.stderr ?? ((text) => process.stderr.write(text)),
+  };
+}
+
+async function utf8(path: string, name: string, nonempty = true) {
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(path);
+  } catch (error) {
+    throw new CliError(`${name} is unreadable: ${path}: ${String(error)}`);
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new CliError(`${name} is not valid UTF-8: ${path}`);
+  }
+  if (nonempty && text.trim() === "") throw new CliError(`${name} is empty: ${path}`);
+  return { bytes, text };
+}
+
+async function grantAt(path: string): Promise<unknown> {
+  const source = await utf8(path, "Capability grant");
+  try {
+    return JSON.parse(source.text) as unknown;
+  } catch {
+    throw new CliError(`Capability grant is not valid JSON: ${path}`);
+  }
+}
+
+type FilePromptInput = Readonly<{ id: string; path: string; displayName: string }>;
+
+function displayPath(cwd: string, path: string): string {
+  return relative(cwd, path).split(sep).join("/") || basename(path);
+}
+
+const decompositionInputs = [
+  "current-decomposition",
+  "candidate-decomposition",
+  "accepted-decomposition",
+] as const;
+
+function canonicalSource(path: string, roots: readonly string[], name: string): string {
+  const canonical = canonicalPath(path);
+  if (!roots.some((root) => isPathInside(root, canonical))) {
+    throw new CliError(`${name} escapes its allowed roots: ${path} resolves to ${canonical}`);
+  }
+  return canonical;
+}
+
+function promptInputs(
+  values: readonly string[],
+  cwd: string,
+  skillRoot: string,
+  unit: WorkUnit,
+): FilePromptInput[] {
+  return values.map((value) => {
+    const separator = value.indexOf("=");
+    if (separator <= 0 || separator === value.length - 1) {
+      throw new CliError(`--input must have the form <slot>=<path>: ${value}`);
+    }
+    const id = value.slice(0, separator);
+    if (id === "task") throw new CliError(`The task input must be supplied with --task`);
+    const supplied = resolve(cwd, value.slice(separator + 1));
+    const path = canonicalSource(supplied, [cwd, skillRoot], `Prompt input ${id}`);
+    const expected =
+      id === "brief"
+        ? unit.briefPath
+        : decompositionInputs.includes(id as (typeof decompositionInputs)[number])
+          ? resolve(unit.path, "decomposition.md")
+          : undefined;
+    if (expected !== undefined && (supplied !== expected || path !== expected)) {
+      throw new CliError(`Prompt input ${id} must be the exact work-unit path ${expected}`);
+    }
+    return { id, path, displayName: displayPath(cwd, path) };
+  });
+}
+
+function exactDesignRoot(value: string, cwd: string): string {
+  const expected = resolve(cwd, "design");
+  const supplied = resolve(cwd, value);
+  const canonical = canonicalPath(supplied);
+  if (supplied !== expected || canonical !== expected) {
+    throw new CliError(`Design root must be the canonical application design path: ${expected}`);
+  }
+  return expected;
+}
+
+function requireRecordApplication(record: LaunchRecord, cwd: string): void {
+  const expected = workUnitPath(cwd, record.work.slug);
+  if (record.work.path !== expected) {
+    throw new CliError(`Launch record belongs to another application: ${record.work.path}`);
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new CliError(`Cannot inspect path ${path}: ${String(error)}`);
+  }
+}
+
+function pathCovered(path: string, prior: string): boolean {
+  return prior === "." || path === prior || path.startsWith(`${prior}/`);
+}
+
+/** Return the first capability expansion, or undefined when next reuses or narrows prior. */
+export function capabilitySubsetIssue(
+  next: EffectiveCapabilityGrant,
+  prior: EffectiveCapabilityGrant,
+): string | undefined {
+  for (const field of ["readableAreas", "writableAreas"] as const) {
+    for (const candidate of next[field]) {
+      if (
+        !prior[field].some(
+          (existing) =>
+            existing.area === candidate.area && pathCovered(candidate.path, existing.path),
+        )
+      ) {
+        return `${field} expands at ${candidate.area}:${candidate.path}`;
+      }
+    }
+  }
+  for (const tool of next.toolKinds) {
+    if (!prior.toolKinds.includes(tool)) return `toolKinds expands with ${tool}`;
+  }
+  if (
+    projectShellAccessLevels.indexOf(next.projectShell) >
+    projectShellAccessLevels.indexOf(prior.projectShell)
+  ) {
+    return `projectShell expands from ${prior.projectShell} to ${next.projectShell}`;
+  }
+  for (const flag of ["network", "generatedOutput", "longRunningProcesses"] as const) {
+    if (next[flag] && !prior[flag]) return `${flag} expands from false to true`;
+  }
+  return undefined;
+}
+
+interface PrepareCommandOptions {
+  readonly cwd: string;
+  readonly skillRoot: string;
+  readonly slug: string;
   readonly role: string;
-  readonly inputs: readonly PromptInput[];
-  readonly stdout: boolean;
-  readonly maxBytes?: number;
-  readonly designRoot?: string;
-  readonly designDigest?: string;
+  readonly phase: string;
+  readonly taskPath: string;
+  readonly grantPath: string;
+  readonly inputValues: readonly string[];
+  readonly harness: HarnessId;
+  readonly target: LaunchTarget;
+  readonly delivery: PromptContextDelivery;
+  readonly relationship?: {
+    readonly kind: "continuation" | "replacement";
+    readonly recordPath: string;
+  };
+  readonly design?: { readonly root: string; readonly digest: string };
+  readonly knownRetained?: readonly RetainedSource[];
+  readonly contextLimitBytes?: number;
+  readonly timeoutSeconds: number;
+  readonly model?: string;
+  readonly reasoning?: string;
+  readonly priorGrant?: EffectiveCapabilityGrant;
+  readonly kind: "fresh" | "continuation" | "replacement";
 }
 
-function parsePromptArguments(args: readonly string[]): PromptArguments {
-  let role: string | undefined;
-  let stdout = false;
-  let maxBytes: number | undefined;
-  let designRoot: string | undefined;
-  let designDigest: string | undefined;
-  const inputs: PromptInput[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index]!;
-    if (argument === "--role") {
-      role = takeValue(args, index, argument);
-      index += 1;
-    } else if (argument === "--input") {
-      const value = takeValue(args, index, argument);
-      index += 1;
-      const separator = value.indexOf("=");
-      if (separator <= 0 || separator === value.length - 1) {
-        throw new Error(`--input must have the form <slot>=<path>`);
-      }
-      inputs.push({ slot: value.slice(0, separator), path: value.slice(separator + 1) });
-    } else if (argument === "--stdout") {
-      stdout = true;
-    } else if (argument === "--design-root") {
-      designRoot = takeValue(args, index, argument);
-      index += 1;
-    } else if (argument === "--design-digest") {
-      designDigest = takeValue(args, index, argument);
-      index += 1;
-    } else if (argument === "--max-bytes") {
-      const value = takeValue(args, index, argument);
-      index += 1;
-      maxBytes = Number(value);
-      if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
-        throw new Error(`--max-bytes must be a positive integer`);
-      }
-    } else {
-      throw new Error(`Unknown prompt option: ${argument}`);
-    }
+async function prepareCommand(
+  options: PrepareCommandOptions,
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const unit = await requireWorkUnit(options.cwd, options.slug);
+  const skillRoot = canonicalPath(options.skillRoot);
+  const taskPath = canonicalSource(options.taskPath, [options.cwd], "Task");
+  const grantPath = canonicalSource(options.grantPath, [options.cwd], "Capability grant");
+  const task = await utf8(taskPath, "Task");
+  const rawGrant = await grantAt(grantPath);
+  const configuration = configurationWithUserOverrides({
+    ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.reasoning === undefined ? {} : { reasoning: options.reasoning }),
+  });
+  const suppliedInputs = promptInputs(options.inputValues, options.cwd, skillRoot, unit);
+  for (const input of suppliedInputs) await utf8(input.path, `Prompt input ${input.id}`);
+  const inputs: PromptInput[] = [
+    { id: "task", displayName: displayPath(options.cwd, taskPath), content: task.text },
+    ...suppliedInputs,
+  ];
+  const built = await buildPrompt({
+    role: options.role,
+    phase: options.phase,
+    workUnit: options.slug,
+    applicationRoot: options.cwd,
+    promptRoot: resolve(skillRoot, "prompts"),
+    inputs,
+    grant: rawGrant,
+    contextDelivery: options.delivery,
+    ...(options.knownRetained === undefined ? {} : { knownRetained: options.knownRetained }),
+    ...(options.contextLimitBytes === undefined
+      ? {}
+      : { contextLimitBytes: options.contextLimitBytes }),
+  });
+  if (options.priorGrant !== undefined) {
+    const issue = capabilitySubsetIssue(built.effectiveCapabilities, options.priorGrant);
+    if (issue !== undefined) throw new CliError(`Continuation capability grant ${issue}`);
   }
-
-  if (role === undefined) throw new Error(`prompt build requires --role`);
-  for (const input of inputs) {
-    if (input.slot === "assignment") requireInsideWorkspace(input.path);
-  }
-  return { role, inputs, stdout, maxBytes, designRoot, designDigest };
+  const launch = await prepareLaunch({
+    applicationRoot: options.cwd,
+    slug: options.slug,
+    role: built.specification.role,
+    phase: built.specification.phase,
+    harness: options.harness,
+    timeoutSeconds: options.timeoutSeconds,
+    task: task.bytes,
+    prompt: built.content,
+    promptSha256: built.sha256,
+    grant: built.effectiveCapabilities,
+    retainedSources: built.retainedSources,
+    ...(options.design === undefined ? {} : { design: options.design }),
+    ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
+    ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
+  });
+  const invocation = prepareHarnessInvocation({
+    harness: options.harness,
+    target: options.target,
+    promptPath: launch.artifacts.promptPath,
+    cwd: options.cwd,
+    title: launchTitle(options.slug, built.specification.role),
+    effectiveCapabilities: built.effectiveCapabilities,
+    timeoutSeconds: options.timeoutSeconds,
+    configuration,
+  });
+  printPrepared(options.kind, built, launch, invocation, dependencies);
 }
 
-async function run(args: readonly string[]): Promise<void> {
-  if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-    process.stdout.write(usage());
-    return;
+function printPrepared(
+  kind: PrepareCommandOptions["kind"],
+  built: BuiltPrompt,
+  launch: PrepareLaunchResult,
+  invocation: PreparedHarnessInvocation<EffectiveCapabilityGrant>,
+  dependencies: CommandDependencies,
+): void {
+  const { out } = output(dependencies);
+  const label =
+    kind === "fresh"
+      ? "Fresh launch prepared"
+      : kind === "continuation"
+        ? "Same-agent continuation prepared"
+        : "Fresh-agent replacement prepared";
+  const design =
+    launch.record.design === undefined
+      ? ""
+      : `Design root: ${launch.record.design.root}\nDesign before: ${launch.record.design.before}\n`;
+  out(`${label}: ${built.specification.id}
+Task: ${launch.artifacts.taskPath}
+Capabilities: ${launch.artifacts.capabilitiesPath}
+Prompt: ${launch.artifacts.promptPath}
+Response: ${launch.artifacts.responsePath}
+Record: ${launch.path}
+${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
+  const target =
+    invocation.target.kind === "fresh"
+      ? "Target: fresh agent"
+      : `Target agent: ${invocation.target.agentId}`;
+  out(`Harness: ${invocation.harness}
+Agent title: ${invocation.title.value}${invocation.title.nativeField === undefined ? "" : `; ${invocation.title.nativeField}`}
+Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
+Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
+Timeout: ${launch.record.timeoutSeconds} seconds; coordinator-managed observation limit; CLI does not observe harness
+${target}
+Native: ${invocation.native.mechanism}; ${invocation.native.operation}
+Instruction: ${invocation.native.instruction}\n`);
+  if (invocation.prompt.agentInstruction !== undefined) {
+    out(`Agent instruction: ${invocation.prompt.agentInstruction}\n`);
   }
-
-  const release = await readSkillRelease();
-  if (args[0] === "release" && args[1] === "check" && args.length <= 3) {
-    const applicationRoot = resolve(args[2] ?? process.cwd());
-    const version = await validateReleaseSet(release, applicationRoot);
-    process.stdout.write(`Installed sync-engine release matches skill ${version}.\n`);
-    next(process.stdout, [
-      setupFiles.every((file) => existsSync(resolve(applicationRoot, file)))
-        ? `${compiler} brief init design/brief.md`
-        : `bunx --no-install sync-engine setup`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "brief" && args[1] === "init" && args.length === 3) {
-    const path = resolve(args[2]!);
-    if (existsSync(path)) throw new Error(`Brief already exists: ${args[2]}`);
-    await requireBriefSetup(release, process.cwd());
-    await mkdir(dirname(path), { recursive: true });
-    const template = await readFile(
-      resolve(skillRoot, "prompts/templates/product-brief.md"),
-      "utf8",
+  if (invocation.capabilityEnforcement === "prompt-guided") {
+    out(
+      `Warning: ${invocation.harness} capabilities are prompt-guided rather than harness-enforced.\n`,
     );
-    await writeFile(path, template, { encoding: "utf8", flag: "wx" });
-    process.stdout.write("Brief template initialized. Fill placeholders.\n");
-    next(process.stdout, [`${compiler} brief check ${args[2]}`]);
-    return;
   }
+}
 
-  if (args[0] === "brief" && args[1] === "check" && args.length === 3) {
-    const result = await checkBriefFile(args[2]!);
-    process.stdout.write(
-      `Brief valid: ${result.bytes} bytes, ${result.decisions} decisions, open decisions ${result.openDecisions ? "present" : "none"}; release ${release.skill}.\n`,
+async function workStart(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "work start", ["slug"], { "--conflict": "value" });
+  const cwd = commandRoot(dependencies);
+  const skillRoot = resolve(dependencies.skillRoot ?? defaultSkillRoot);
+  const slug = parsed.positionals[0]!;
+  const candidate = workUnitPath(cwd, slug);
+  if (await pathExists(candidate)) throw new CliError(`Work unit already exists: ${slug}`);
+  const briefTemplatePath = resolve(skillRoot, "prompts/brief.md");
+  await utf8(briefTemplatePath, "Brief template");
+  const conflict = optional(parsed.options, "--conflict");
+  if (
+    conflict !== undefined &&
+    !conflictChoices.includes(conflict as (typeof conflictChoices)[number])
+  ) {
+    throw new CliError(
+      `Unknown conflict choice ${conflict}; expected ${conflictChoices.join(", ")}`,
     );
-    next(process.stdout, [
-      `read ${reference("design-and-criticism.md")}`,
-      `${compiler} prompt build --role designer --input brief=${args[2]} --output <prompt-file>`,
-    ]);
+  }
+  const bootstrap = dependencies.bootstrap ?? bootstrapApplication;
+  const result = await bootstrap(
+    {
+      applicationRoot: cwd,
+      releaseManifestPath: resolve(skillRoot, "release.json"),
+      ...(conflict === undefined
+        ? {}
+        : { conflictChoice: conflict as (typeof conflictChoices)[number] }),
+    },
+    dependencies.bootstrapDependencies,
+  );
+  const { out } = output(dependencies);
+  for (const path of result.changedPaths) out(`Bootstrap path: ${path}\n`);
+  for (const warning of result.warnings) out(`Warning: ${warning}\n`);
+  if (result.outcome === "choice-required") {
+    throw new CliError(
+      `Bootstrap requires an explicit framework conflict choice`,
+      `Rerun with --conflict <${conflictChoices.join("|")}>.`,
+    );
+  }
+  if (result.outcome === "stopped-unchanged") {
+    out(`Bootstrap stopped unchanged: ${result.plan.applicationRoot}\n`);
     return;
   }
-
-  if (args[0] === "design" && args[1] === "digest" && (args.length === 3 || args.length === 5)) {
-    const scoped = args[3] === "--role" ? designScope(args[4] ?? "") : "all";
-    const result = await digestDesign(args[2]!, scoped);
-    process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
-    next(process.stdout, [
-      `read ${reference("implementation.md")}`,
-      `every downstream build and follow-up adds --design-root ${args[2]} --design-digest ${result.digest}`,
-    ]);
-    return;
+  if (result.outcome === "failed") {
+    throw new CliError(
+      `Bootstrap failed: ${result.plan.error ?? "required application setup was not established"}`,
+      `Resolve the reported bootstrap problem, then rerun work start.`,
+    );
   }
+  const unit = await startWorkUnitFromTemplate({
+    applicationRoot: cwd,
+    slug,
+    briefTemplatePath,
+  });
+  out(`Bootstrap: ${result.outcome}; application ${result.plan.applicationRoot}
+Work unit: ${unit.path}
+Brief: ${unit.briefPath}\n`);
+}
 
-  if (args[0] === "follow-up" && args[1] === "new" && args.length === 4) {
-    if (args[2] !== "--role") throw new Error(`follow-up new requires --role`);
-    const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole))
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    const path = await reserveWorkspacePath("followup", role);
-    await writeFile(path, "", "utf8");
-    process.stdout.write(`Follow-up started: ${path}\n`);
-    next(process.stdout, [
-      `write only the new diagnostic, affected paths, and affected command into ${path}`,
-      `${compiler} follow-up check ${path} --design-root <design-root> --design-digest <sha256>`,
-    ]);
-    return;
-  }
+const promptDefinitions = {
+  "--work": "value",
+  "--role": "value",
+  "--phase": "value",
+  "--task": "value",
+  "--grant": "value",
+  "--harness": "value",
+  "--input": "repeatable",
+  "--design-root": "value",
+  "--context-limit": "value",
+  "--timeout": "value",
+  "--model": "value",
+  "--reasoning": "value",
+} as const;
 
-  if (args[0] === "follow-up" && args[1] === "check" && args.length === 7) {
-    if (args[3] !== "--design-root" || args[5] !== "--design-digest") {
-      throw new Error(`follow-up check requires --design-root then --design-digest`);
-    }
-    const followUpPath = requireInsideWorkspace(args[2]!);
-    const followUpName = basename(followUpPath);
-    const followUpRole = workspaceFileRole(followUpName, "followup");
-    if (followUpRole === undefined || !promptRoles.includes(followUpRole as PromptRole)) {
-      throw new Error(
-        `Follow-up file names its role: expected ${workspaceDirectory}/<stamp>-<role>.followup.md, found ${followUpName}; start it with follow-up new`,
-      );
-    }
-    const content = await readFile(followUpPath, "utf8");
-    const bytes = Buffer.byteLength(content, "utf8");
-    if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
-    await requireDesignDigest(args[4]!, args[6]!);
-    process.stdout.write(`Follow-up valid: ${bytes} bytes; design ${args[6]}.\n`);
-    next(process.stdout, [`deliver ${args[2]} to the original role as a file`]);
-    return;
-  }
-
-  if (args[0] === "prompt" && args[1] === "build") {
-    const options = parsePromptArguments(args.slice(2));
-    const predecessor = previousRole(options.role);
-    const predecessorDigest =
-      options.designRoot === undefined || predecessor === undefined
-        ? options.designDigest
-        : (await digestDesign(options.designRoot, designScope(predecessor))).digest;
-    await requireCompletedRole(options.role, undefined, predecessorDigest);
-    for (const input of options.inputs) {
-      if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
-    }
-    const result = await buildPrompt({
-      role: options.role,
-      inputs: options.inputs,
-      promptRoot: resolve(skillRoot, "prompts"),
-      maxBytes: options.maxBytes,
-      designRoot: options.designRoot,
-      expectedDesignDigest: options.designDigest,
-    });
-    const promptPath = options.stdout
+async function promptBuild(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "prompt build", [], promptDefinitions);
+  const cwd = commandRoot(dependencies);
+  const slug = required(parsed.options, "--work", "prompt build");
+  const role = required(parsed.options, "--role", "prompt build");
+  const phase = required(parsed.options, "--phase", "prompt build");
+  const taskPath = resolve(cwd, required(parsed.options, "--task", "prompt build"));
+  const grantPath = resolve(cwd, required(parsed.options, "--grant", "prompt build"));
+  const harnessId = harness(required(parsed.options, "--harness", "prompt build"));
+  getRoleSpecification(role, phase);
+  const designOption = optional(parsed.options, "--design-root");
+  const designRoot = designOption === undefined ? undefined : exactDesignRoot(designOption, cwd);
+  const design =
+    designRoot === undefined
       ? undefined
-      : await reserveWorkspacePath("prompt", result.role);
-    if (promptPath === undefined) process.stdout.write(result.content);
-    else {
-      await writeFile(promptPath, result.content, "utf8");
-      const brief = options.inputs.find((input) => input.slot === "brief");
-      await writePromptContext(promptPath, {
-        format: "sync-engine.skill.prompt-context",
-        version: 1,
-        role: result.role,
-        sha256: result.sha256,
-        ...(brief === undefined
-          ? {}
-          : {
-              briefSha256: createHash("sha256")
-                .update(await readFile(resolve(brief.path), "utf8"))
-                .digest("hex"),
-            }),
-        ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
-      });
-    }
-
-    const report = [
-      `Prompt built: role ${result.role}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
-      ...result.sources.map(
-        (source) =>
-          `  ${source.kind} ${source.displayName}: ${source.bytes} bytes (${source.path})`,
-      ),
-    ].join("\n");
-    const stream = options.stdout ? process.stderr : process.stdout;
-    stream.write(`${report}\n`);
-    const delivered = promptPath ?? "the built prompt";
-    next(stream, [
-      `deliver ${delivered} to a fresh ${result.role} as a file`,
-      ...(options.designRoot === undefined
-        ? []
-        : [
-            `${compiler} follow-up check <file> --design-root ${options.designRoot} --design-digest ${options.designDigest}`,
-          ]),
-    ]);
-    return;
-  }
-
-  if (args[0] === "assignment" && args[1] === "new" && args.length === 6) {
-    if (args[2] !== "--role" || args[4] !== "--design-digest") {
-      throw new Error(`assignment new requires --role then --design-digest`);
-    }
-    const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole))
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    const path = await reserveWorkspacePath("assignment", role);
-    await writeFile(path, assignmentTemplate(role, args[5]!), "utf8");
-    process.stdout.write(`Assignment started: ${path}\n`);
-    next(process.stdout, [
-      `fill it, then ${compiler} assignment check ${path}`,
-      `${compiler} prompt build --role ${role} --input assignment=${path} ...`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "assignment" && args[1] === "check" && args.length === 3) {
-    const checked = await checkAssignmentFile(resolve(args[2]!));
-    process.stdout.write(
-      `Assignment valid: role ${checked.role}; ${checked.bytes} bytes; ${checked.writePaths.length} listed paths.\n`,
-    );
-    return;
-  }
-
-  if (args[0] === "launch") {
-    let role: string | undefined;
-    let prompt: string | undefined;
-    let timeoutSeconds = 1800;
-    let thinking: string | undefined;
-    let model: string | undefined;
-    for (let index = 1; index < args.length; index += 1) {
-      const argument = args[index]!;
-      if (argument === "--role") role = takeValue(args, index, argument);
-      else if (argument === "--prompt") prompt = takeValue(args, index, argument);
-      else if (argument === "--thinking") thinking = takeValue(args, index, argument);
-      else if (argument === "--model") model = takeValue(args, index, argument);
-      else if (argument === "--timeout") {
-        timeoutSeconds = Number(takeValue(args, index, argument));
-        if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
-          throw new Error(`--timeout must be a positive whole number of seconds`);
-        }
-      } else {
-        throw new Error(`Unknown launch option: ${argument}`);
-      }
-      index += 1;
-    }
-    if (role === undefined || prompt === undefined) {
-      throw new Error(`launch requires --role and --prompt`);
-    }
-    if (!promptRoles.includes(role as PromptRole))
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    await requireCompletedRole(role);
-    const launched = await launchRole({
+      : { root: designRoot, digest: (await digestDesign(designRoot)).digest };
+  const contextLimit = positiveInteger(
+    optional(parsed.options, "--context-limit"),
+    "--context-limit",
+  );
+  const timeoutSeconds =
+    positiveInteger(optional(parsed.options, "--timeout"), "--timeout") ?? defaultTimeoutSeconds;
+  const model = optional(parsed.options, "--model");
+  const reasoning = optional(parsed.options, "--reasoning");
+  await prepareCommand(
+    {
+      cwd,
+      skillRoot: resolve(dependencies.skillRoot ?? defaultSkillRoot),
+      slug,
       role,
-      promptPath: prompt,
-      applicationRoot: process.cwd(),
+      phase,
+      taskPath,
+      grantPath,
+      inputValues: parsed.options.get("--input") ?? [],
+      harness: harnessId,
+      target: { kind: "fresh" },
+      delivery: "fresh",
+      kind: "fresh",
+      ...(design === undefined ? {} : { design }),
+      ...(contextLimit === undefined ? {} : { contextLimitBytes: contextLimit }),
       timeoutSeconds,
-      ...(thinking === undefined ? {} : { thinking }),
       ...(model === undefined ? {} : { model }),
-    });
-    const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
-    process.stdout.write(
-      `Launched ${role} through ${harness}: agent ${launched.record.agentId}; ${attested}; settled ${launched.record.status}; record ${launched.recordPath}.\n`,
-    );
-    next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
-    return;
-  }
-
-  if (args[0] === "handback" && args[1] === "check" && (args.length === 6 || args.length === 8)) {
-    if (args[2] !== "--design-root" || args[4] !== "--design-digest") {
-      throw new Error(`handback check requires --design-root then --design-digest`);
-    }
-    if (args.length === 8 && args[6] !== "--brief") {
-      throw new Error(`handback check accepts only --brief after the design digest`);
-    }
-    await requireDesignDigest(args[3]!, args[5]!);
-    const scopedDigests = new Map<string, string>();
-    for (const role of requiredRoles) {
-      scopedDigests.set(role, (await digestDesign(args[3]!, designScope(role))).digest);
-    }
-    const briefSha256 =
-      args.length === 8
-        ? createHash("sha256")
-            .update(await readFile(resolve(args[7]!), "utf8"))
-            .digest("hex")
-        : undefined;
-    const drifted: string[] = [];
-    const strayed: string[] = [];
-    const churned: string[] = [];
-    const missing: string[] = [];
-    const unknown: string[] = [];
-    const unsettled: string[] = [];
-    const wrapped = await registrationWrappers();
-    const lines: string[] = [];
-    for (const role of requiredRoles) {
-      const records = await verifiedRecords(role);
-      if (records.length === 0) {
-        missing.push(role);
-        continue;
-      }
-      for (const entry of records) {
-        const known = agentExists(entry.record.agentId);
-        if (!known) unknown.push(`${role} ${entry.record.agentId}`);
-        if (entry.record.status !== settledStatus) {
-          unsettled.push(`${role} ${entry.record.agentId} (${entry.record.status})`);
-        }
-        for (const path of entry.record.readViolations ?? []) {
-          strayed.push(`${role} read ${path}`);
-        }
-        for (const churn of entry.record.rewrites ?? []) {
-          churned.push(`${role} wrote ${churn.path} ${churn.writes} times`);
-        }
-        if (
-          entry.record.designDigest !== undefined &&
-          entry.record.designDigest !== scopedDigests.get(role)
-        ) {
-          drifted.push(`${role} ran against design ${entry.record.designDigest.slice(0, 12)}`);
-        }
-        if (
-          briefSha256 !== undefined &&
-          entry.record.briefSha256 !== undefined &&
-          entry.record.briefSha256 !== briefSha256
-        ) {
-          drifted.push(`${role} ran against an earlier brief`);
-        }
-        lines.push(
-          `  ${role}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${harness}; ${entry.record.provider} ${entry.record.model}; settled ${entry.record.status}`,
-        );
-      }
-    }
-    process.stdout.write(`Handback check for design ${args[5]}:\n${lines.join("\n")}\n`);
-    const failures = [
-      ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
-      ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
-      ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
-      ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
-      ...(wrapped.length === 0
-        ? []
-        : [`registered a class beside its registry: ${wrapped.join(", ")}`]),
-    ];
-    if (failures.length > 0) throw new Error(failures.join("; "));
-    if (strayed.length > 0) {
-      process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
-    }
-    if (churned.length > 0) {
-      process.stdout.write(
-        `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
-      );
-    }
-    process.stdout.write(`Every required role ran independently.\n`);
-    return;
-  }
-
-  throw new Error(`Unknown command\n${usage()}`);
+      ...(reasoning === undefined ? {} : { reasoning }),
+    },
+    dependencies,
+  );
 }
 
-try {
-  await run(process.argv.slice(2));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`sync-engine-skill: ${message}\n`);
-  process.exitCode = 1;
+function completionTarget(record: LaunchRecord): LaunchTarget {
+  return record.relationship?.kind === "continuation"
+    ? { kind: "continuation", agentId: record.relationship.targetAgentId }
+    : { kind: "fresh" };
+}
+
+function missingResponseHeadings(record: FinalizedLaunchRecord, response: string): string[] {
+  const specification = getRoleSpecification(record.role, record.phase);
+  const headings = new Set<string>();
+  for (const match of response.matchAll(/^##[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)) {
+    headings.add(match[1]!.trim().toLowerCase());
+  }
+  return specification.returnShape
+    .filter(({ required }) => required)
+    .map(({ heading }) => heading)
+    .filter((heading) => !headings.has(heading.toLowerCase()));
+}
+
+async function launchComplete(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "launch complete", ["prepared-record"], {
+    "--agent-id": "value",
+    "--status": "value",
+    "--model": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const agentId = required(parsed.options, "--agent-id", "launch complete");
+  const status = normalizeLaunchStatus(required(parsed.options, "--status", "launch complete"));
+  const model = optional(parsed.options, "--model");
+  const recordPath = resolve(cwd, parsed.positionals[0]!);
+  const record = await readLaunchRecord(recordPath);
+  requireRecordApplication(record, cwd);
+  if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
+  const response = await utf8(record.response.path, "Native response", status === "completed");
+  const validatedGrant = validateCapabilityGrant(
+    getRoleSpecification(record.role, record.phase),
+    record.grant,
+  );
+  const invocation = prepareHarnessInvocation({
+    harness: record.harness,
+    target: completionTarget(record),
+    promptPath: record.prompt.path,
+    cwd,
+    title: launchTitle(record.work.slug, record.role),
+    effectiveCapabilities: validatedGrant,
+    timeoutSeconds: record.timeoutSeconds,
+  });
+  const finalized = await finalizeLaunch({
+    recordPath,
+    agentId,
+    status,
+    enforcement: invocation.capabilityEnforcement,
+    ...(model === undefined ? {} : { model }),
+  });
+  const { out } = output(dependencies);
+  out(`Launch finalized: ${recordPath}
+Response: ${finalized.response.path}
+Harness: ${finalized.harness}; agent ${finalized.agentId}
+Status: ${finalized.status}\n`);
+  if (finalized.enforcement === "prompt-guided") {
+    out(
+      `Warning: ${finalized.harness} capabilities were prompt-guided rather than harness-enforced.\n`,
+    );
+  }
+  const missing = missingResponseHeadings(finalized, response.text);
+  if (missing.length > 0) {
+    out(
+      `Warning: native response is missing required headings: ${missing.join(", ")}; the captured response was finalized unchanged.\n`,
+    );
+  }
+}
+
+async function continueLaunch(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "continue", ["finalized-record"], {
+    "--phase": "value",
+    "--task": "value",
+    "--grant": "value",
+    "--input": "repeatable",
+    "--replace": "flag",
+    "--harness": "value",
+    "--design-root": "value",
+    "--context-limit": "value",
+    "--timeout": "value",
+    "--model": "value",
+    "--reasoning": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const phase = required(parsed.options, "--phase", "continue");
+  const taskPath = resolve(cwd, required(parsed.options, "--task", "continue"));
+  const grantPath = resolve(cwd, required(parsed.options, "--grant", "continue"));
+  const replacing = parsed.options.has("--replace");
+  const selectedHarness = optional(parsed.options, "--harness");
+  if (!replacing && selectedHarness !== undefined) {
+    throw new CliError(`--harness is valid only with --replace`);
+  }
+  if (selectedHarness !== undefined) harness(selectedHarness);
+  const designOption = optional(parsed.options, "--design-root");
+  const contextLimit = positiveInteger(
+    optional(parsed.options, "--context-limit"),
+    "--context-limit",
+  );
+  const timeoutSeconds =
+    positiveInteger(optional(parsed.options, "--timeout"), "--timeout") ?? defaultTimeoutSeconds;
+  const model = optional(parsed.options, "--model");
+  const reasoning = optional(parsed.options, "--reasoning");
+  const priorPath = resolve(cwd, parsed.positionals[0]!);
+  const prior = await readLaunchRecord(priorPath);
+  requireRecordApplication(prior, cwd);
+  if (prior.state !== "finalized") throw new CliError(`continue requires a finalized record`);
+  getRoleSpecification(prior.role, phase);
+  const harnessId = harness(selectedHarness ?? prior.harness);
+  const priorGrant = validateCapabilityGrant(
+    getRoleSpecification(prior.role, prior.phase),
+    prior.grant,
+  );
+  if (prior.design !== undefined && designOption !== undefined) {
+    throw new CliError(`Continue already has a bound design root; omit --design-root`);
+  }
+  const designRoot =
+    prior.design?.root ??
+    (designOption === undefined ? undefined : exactDesignRoot(designOption, cwd));
+  const design =
+    designRoot === undefined
+      ? undefined
+      : {
+          root: exactDesignRoot(designRoot, cwd),
+          digest: (await digestDesign(designRoot)).digest,
+        };
+  const enforceSubset = !replacing && phase === prior.phase;
+  await prepareCommand(
+    {
+      cwd,
+      skillRoot: resolve(dependencies.skillRoot ?? defaultSkillRoot),
+      slug: prior.work.slug,
+      role: prior.role,
+      phase,
+      taskPath,
+      grantPath,
+      inputValues: parsed.options.get("--input") ?? [],
+      harness: harnessId,
+      target: replacing ? { kind: "fresh" } : { kind: "continuation", agentId: prior.agentId },
+      delivery: replacing ? "replacement" : phase === prior.phase ? "delta" : "continuation",
+      relationship: { kind: replacing ? "replacement" : "continuation", recordPath: priorPath },
+      kind: replacing ? "replacement" : "continuation",
+      ...(design === undefined ? {} : { design }),
+      ...(!replacing ? { knownRetained: prior.retainedSources } : {}),
+      ...(contextLimit === undefined ? {} : { contextLimitBytes: contextLimit }),
+      timeoutSeconds,
+      ...(model === undefined ? {} : { model }),
+      ...(reasoning === undefined ? {} : { reasoning }),
+      ...(enforceSubset ? { priorGrant } : {}),
+    },
+    dependencies,
+  );
+}
+
+async function execute(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
+  if (args.length === 0 || (args.length === 1 && (args[0] === "--help" || args[0] === "-h"))) {
+    output(dependencies).out(helpText());
+    return;
+  }
+  if (args[0] === "work" && args[1] === "start") return workStart(args.slice(2), dependencies);
+  if (args[0] === "prompt" && args[1] === "build") return promptBuild(args.slice(2), dependencies);
+  if (args[0] === "launch" && args[1] === "complete")
+    return launchComplete(args.slice(2), dependencies);
+  if (args[0] === "continue") return continueLaunch(args.slice(1), dependencies);
+  throw new CliError(
+    `Unknown or incomplete command: ${args.join(" ")}`,
+    `Use ${commandName} --help.`,
+  );
+}
+
+export async function run(
+  args: readonly string[] = process.argv.slice(2),
+  dependencies: CommandDependencies = {},
+): Promise<number> {
+  try {
+    await execute(args, dependencies);
+    return 0;
+  } catch (error) {
+    const { err } = output(dependencies);
+    err(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    if (error instanceof CliError && error.recovery !== undefined) {
+      err(`Recovery: ${error.recovery}\n`);
+    }
+    return 1;
+  }
+}
+
+if (
+  process.argv[1] !== undefined &&
+  canonicalPath(process.argv[1]) === canonicalPath(fileURLToPath(import.meta.url))
+) {
+  void run().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
 }

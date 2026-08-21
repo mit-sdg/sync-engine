@@ -1,0 +1,12 @@
+{
+  "readableAreas": [
+    { "area": "work-unit", "path": "." },
+    { "area": "design", "path": "." }
+  ],
+  "writableAreas": [{ "area": "assigned-design", "path": "concepts/Tasking.md" }],
+  "toolKinds": ["repository-read", "repository-write"],
+  "projectShell": "project-validation",
+  "network": false,
+  "generatedOutput": false,
+  "longRunningProcesses": false
+}

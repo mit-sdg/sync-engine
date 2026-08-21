@@ -1,0 +1,12 @@
+{
+  "readableAreas": [
+    { "area": "work-unit", "path": "." },
+    { "area": "design", "path": "." }
+  ],
+  "writableAreas": [{ "area": "current-decomposition", "path": "decomposition.md" }],
+  "toolKinds": ["repository-read", "repository-write"],
+  "projectShell": "none",
+  "network": false,
+  "generatedOutput": false,
+  "longRunningProcesses": false
+}

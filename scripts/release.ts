@@ -30,7 +30,11 @@ export const ownedDependencyManifests = [
   ...bunFixtureManifests,
   ...nodeFixtureManifests,
 ] as const;
+const skillWorkspace = workspaceById("skill");
 const skillRuntimeReleasePath = "packages/skill/skills/sync-engine/release.json";
+const skillReleaseSourcePaths = skillWorkspace.requiredPackedFiles
+  .filter((path) => path.startsWith("skills/sync-engine/"))
+  .map((path) => `${skillWorkspace.directory}/${path}`);
 const catalogEntryIndexPath = "packages/catalog/entries/index.json";
 const indexedCatalogEntries: unknown = JSON.parse(
   readFileSync(new URL("../packages/catalog/entries/index.json", import.meta.url), "utf8"),
@@ -79,33 +83,7 @@ export const releaseSourcePaths = [
   "packages/catalog/public-surface.md",
   "packages/catalog/CONTRIBUTING.md",
   "packages/skill/README.md",
-  "packages/skill/skills/sync-engine/SKILL.md",
-  skillRuntimeReleasePath,
-  "packages/skill/skills/sync-engine/scripts/assignment.ts",
-  "packages/skill/skills/sync-engine/scripts/brief.ts",
-  "packages/skill/skills/sync-engine/scripts/command.ts",
-  "packages/skill/skills/sync-engine/scripts/design.ts",
-  "packages/skill/skills/sync-engine/scripts/launch.ts",
-  "packages/skill/skills/sync-engine/scripts/prompt.ts",
-  "packages/skill/skills/sync-engine/scripts/workspace.ts",
-  "packages/skill/skills/sync-engine/references/workflow.md",
-  "packages/skill/skills/sync-engine/references/design-and-criticism.md",
-  "packages/skill/skills/sync-engine/references/implementation.md",
-  "packages/skill/skills/sync-engine/references/harnesses/contract.md",
-  "packages/skill/skills/sync-engine/references/harnesses/paseo.md",
-  "packages/skill/skills/sync-engine/prompts/SOURCES.md",
-  "packages/skill/skills/sync-engine/prompts/common/design.md",
-  "packages/skill/skills/sync-engine/prompts/common/ssf.md",
-  "packages/skill/skills/sync-engine/prompts/common/concept-format.md",
-  "packages/skill/skills/sync-engine/prompts/common/internals.md",
-  "packages/skill/skills/sync-engine/prompts/roles/designer.md",
-  "packages/skill/skills/sync-engine/prompts/roles/critic.md",
-  "packages/skill/skills/sync-engine/prompts/roles/concept-worker.md",
-  "packages/skill/skills/sync-engine/prompts/roles/application-worker.md",
-  "packages/skill/skills/sync-engine/prompts/roles/frontend-worker.md",
-  "packages/skill/skills/sync-engine/prompts/inputs/http.md",
-  "packages/skill/skills/sync-engine/prompts/roles/evidence-worker.md",
-  "packages/skill/skills/sync-engine/prompts/templates/product-brief.md",
+  ...skillReleaseSourcePaths,
   catalogEntryIndexPath,
   "README.md",
   "CHANGELOG.md",

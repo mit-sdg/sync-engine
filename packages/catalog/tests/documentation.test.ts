@@ -1,7 +1,17 @@
 import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, test } from "vite-plus/test";
+import curatedIndex from "../entries/index.json" with { type: "json" };
 
 describe("catalog documentation", () => {
+  test("names only catalog entries present in the curated index", async () => {
+    const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+    const indexedIds = new Set(curatedIndex.map((path) => path.replace(/\/manifest\.json$/, "")));
+    const documentedIds = new Set(readme.match(/\b(?:concept|recipe)\/[a-z][a-z0-9-]*\b/g));
+
+    expect(documentedIds.size).toBeGreaterThan(0);
+    for (const id of documentedIds) expect(indexedIds).toContain(id);
+  });
+
   test("documents the complete read-only command contract", async () => {
     const reference = await readFile(new URL("../public-surface.md", import.meta.url), "utf8");
     for (const term of [
