@@ -1015,7 +1015,7 @@ describe("repository SSF corpus", () => {
   test("parses the packaged skill example and retains its teaching structures", async () => {
     const root = resolve(import.meta.dirname, "../../..");
     const markdown = await readFile(
-      resolve(root, "packages/skill/skills/sync-engine/prompts/common/ssf.md"),
+      resolve(root, "packages/skill/skills/sync-engine/prompts/guidance/design/ssf.md"),
       "utf8",
     );
     const parsed = parseSimpleStateForm(stateFence(markdown), { externalTypes: ["Person"] });

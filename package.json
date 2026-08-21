@@ -83,8 +83,7 @@
     "scenario": "bun run build && bun scripts/examples.ts scenario",
     "test": "LOG_LEVEL=error vp test --maxWorkers=2",
     "typecheck": "tsc --noEmit",
-    "catalog:listing": "bun scripts/update-catalog-listing.ts",
-    "skill:goldens": "bun scripts/update-skill-goldens.ts"
+    "catalog:listing": "bun scripts/update-catalog-listing.ts"
   },
   "dependencies": {
     "mdast-util-from-markdown": "^2.0.3",

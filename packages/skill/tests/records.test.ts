@@ -27,7 +27,7 @@ async function work(slug = "records"): Promise<{ root: string; path: string; slu
     slug,
     briefTemplate: "# Goal\n\nExercise records.\n",
   });
-  return { root, path: unit.path, slug: unit.slug };
+  return { root: unit.applicationRoot, path: unit.path, slug: unit.slug };
 }
 
 const grant: EffectiveCapabilityGrant = {

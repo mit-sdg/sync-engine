@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const conceptRoot = "packages/catalog/entries/concept";
-const listingPath = "packages/skill/skills/sync-engine/prompts/inputs/catalog.md";
+const listingPath = "packages/skill/skills/sync-engine/prompts/guidance/catalog.md";
 
 const preamble = `# Catalog concepts
 

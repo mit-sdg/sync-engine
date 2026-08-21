@@ -729,7 +729,7 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
     packageManager: "bun@1.3.14",
     dependencies: { [catalog.workspace.packageName]: tarballSpecifier(consumer, catalog.tarball) },
   });
-  run("bun", ["install", "--ignore-scripts"], consumer);
+  run("bun", ["install", "--ignore-scripts", "--no-cache"], consumer);
   if (existsSync(resolve(consumer, "node_modules/@mit-sdg/sync-engine"))) {
     throw new Error("catalog-only installation unexpectedly installed core");
   }
@@ -847,7 +847,8 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   const entry = await readFile(resolve(installed, "skills/sync-engine/SKILL.md"), "utf8");
   if (
     !entry.startsWith("---\nname: sync-engine\ndescription:") ||
-    !entry.includes("Use fresh agents for design, criticism, and evidence")
+    !entry.includes("[workflow](references/workflow.md)") ||
+    !entry.includes("Delegate every selected design, criticism")
   ) {
     throw new Error("skill package does not contain the required sync-engine Agent Skill");
   }
@@ -860,64 +861,76 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
     "node_modules/.bin",
     process.platform === "win32" ? "sync-engine-skill.cmd" : "sync-engine-skill",
   );
-  const brief = resolve(consumer, "product/brief.md");
-  await mkdir(dirname(brief), { recursive: true });
-  await writeFile(
-    brief,
-    `# Packed skill\n\n## Objective\n\nBuild a packed application.\n\n## Product decisions\n\nNone.\n\n## Visible success\n\n- The application starts.\n\n## Expected refusals\n\nNone.\n\n## Assumptions\n\nNone.\n\n## Non-goals\n\nNone.\n\n## Open decisions\n\nNone.\n`,
-  );
-  run(bin, ["release", "check", consumer], consumer);
-  run(bin, ["brief", "check", brief], consumer);
-  run(
-    bin,
-    ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${brief}`],
-    consumer,
-  );
-  const workspace = resolve(consumer, ".sync-engine");
-  const written = (await readdir(workspace)).filter((name) => name.endsWith(".prompt.md"));
-  if (written.length !== 1) {
-    throw new Error(`skill prompt build wrote ${written.length} prompts into .sync-engine`);
-  }
-  const promptSource = await readFile(resolve(workspace, written[0]!), "utf8");
-  if (
-    !promptSource.includes("# Independent decomposition designer") ||
-    !promptSource.includes("# Packed skill")
-  ) {
-    throw new Error("packed skill compiler did not produce the designer prompt");
-  }
 
-  const standalone = resolve(temporary, "standalone-skill");
-  const standaloneApplication = resolve(temporary, "standalone-skill-application");
-  await cp(resolve(installed, "skills/sync-engine"), standalone, { recursive: true });
-  await mkdir(standaloneApplication, { recursive: true });
-  const standaloneCommand = resolve(standalone, "scripts/command.ts");
-  run("bun", [standaloneCommand, "brief", "check", brief], standaloneApplication);
-  run(
-    "bun",
-    [
-      standaloneCommand,
+  async function exerciseSkill(
+    invoke: (args: string[]) => void,
+    slug: string,
+    description: string,
+  ): Promise<void> {
+    const workspace = resolve(consumer, ".sync-engine/work", slug);
+    await mkdir(workspace, { recursive: true });
+    const brief = resolve(workspace, "brief.md");
+    const task = resolve(workspace, "task.md");
+    const grant = resolve(workspace, "grant.json");
+    await writeFile(brief, "# Packed skill\n\nDecompose the packed application.\n");
+    await writeFile(task, "# Task\n\nWrite the compact decomposition.\n");
+    await writeFile(
+      grant,
+      `${JSON.stringify(
+        {
+          readableAreas: [{ area: "work-unit", path: "." }],
+          writableAreas: [{ area: "current-decomposition", path: "decomposition.md" }],
+          toolKinds: ["repository-read", "repository-write"],
+          projectShell: "none",
+          network: false,
+          generatedOutput: false,
+          longRunningProcesses: false,
+        },
+        undefined,
+        2,
+      )}\n`,
+    );
+    invoke([
       "prompt",
       "build",
+      "--work",
+      slug,
       "--role",
       "designer",
-      "--mode",
-      "map",
+      "--phase",
+      "decomposition",
+      "--task",
+      task,
+      "--grant",
+      grant,
+      "--harness",
+      "paseo",
       "--input",
       `brief=${brief}`,
-    ],
-    standaloneApplication,
-  );
-  const standaloneWorkspace = resolve(standaloneApplication, ".sync-engine");
-  const standaloneWritten = (await readdir(standaloneWorkspace)).filter((name) =>
-    name.endsWith(".prompt.md"),
-  );
-  if (standaloneWritten.length !== 1) {
-    throw new Error("standalone copied skill compiler did not write one designer prompt");
+    ]);
+    const written = (await readdir(workspace)).filter((name) => name.endsWith(".prompt.md"));
+    if (written.length !== 1) {
+      throw new Error(`${description} wrote ${written.length} designer prompts`);
+    }
+    const promptSource = await readFile(resolve(workspace, written[0]!), "utf8");
+    if (
+      !promptSource.includes("# Decomposition designer") ||
+      !promptSource.includes("# Packed skill")
+    ) {
+      throw new Error(`${description} did not produce the designer prompt`);
+    }
   }
-  const standalonePrompt = resolve(standaloneWorkspace, standaloneWritten[0]!);
-  if (!(await readFile(standalonePrompt, "utf8")).includes("# Packed skill")) {
-    throw new Error("standalone copied skill compiler did not produce the designer prompt");
-  }
+
+  await exerciseSkill((args) => run(bin, args, consumer), "packed-install", "packed skill CLI");
+
+  const standalone = resolve(temporary, "standalone-skill");
+  await cp(resolve(installed, "skills/sync-engine"), standalone, { recursive: true });
+  const standaloneCommand = resolve(standalone, "scripts/command.ts");
+  await exerciseSkill(
+    (args) => run("bun", [standaloneCommand, ...args], consumer),
+    "packed-standalone",
+    "standalone copied skill CLI",
+  );
 }
 
 async function verifySetupAndExamples(
@@ -960,7 +973,7 @@ async function verifySetupAndExamples(
   const setupManifest = JSON.parse(await readFile(setupManifestPath, "utf8")) as DependencyManifest;
   setupManifest.dependencies[core.workspace.packageName] = tarballSpecifier(setup, core.tarball);
   await writePackageManifest(setupManifestPath, setupManifest);
-  run("bun", ["install", "--ignore-scripts"], setup);
+  run("bun", ["install", "--ignore-scripts", "--no-cache"], setup);
   run("bun", ["run", "generate"], setup);
   run("bun", ["run", "check"], setup);
   run("bun", ["run", "start"], setup);
@@ -972,7 +985,7 @@ async function verifySetupAndExamples(
     const manifestPath = resolve(isolated, "package.json");
     const manifest = await prepareWorkspaceDependencies(manifestPath, directory, artifacts);
     await writePackageManifest(manifestPath, manifest);
-    run("bun", ["install", "--ignore-scripts"], isolated);
+    run("bun", ["install", "--ignore-scripts", "--no-cache"], isolated);
     run("bun", ["run", "check"], isolated);
     if ("scenario" in example) run("bun", ["run", "start"], isolated);
   }
@@ -987,7 +1000,7 @@ async function verifySetupAndExamples(
     artifacts,
   );
   await writePackageManifest(standaloneManifestPath, standaloneManifest);
-  run("bun", ["install", "--ignore-scripts"], standalone);
+  run("bun", ["install", "--ignore-scripts", "--no-cache"], standalone);
   run("bun", ["run", "generate"], standalone);
   run("bun", ["run", "typecheck"], standalone);
   run("bun", ["run", "principle"], standalone);

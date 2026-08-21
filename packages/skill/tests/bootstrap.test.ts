@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
@@ -7,7 +8,9 @@ import {
   expectedSetupFiles,
   planBootstrap,
   readSkillRelease,
+  realFiles,
   requiredPackages,
+  runCommand,
   type BootstrapCommand,
   type BootstrapFiles,
   type CommandRunner,
@@ -193,6 +196,54 @@ function successfulRunner(
 }
 
 describe("bootstrap", () => {
+  test("uses the real filesystem and command adapters without hiding failures", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-real-"));
+    const outside = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-outside-"));
+    temporary.push(root, outside);
+    const nested = resolve(root, "nested");
+    const file = resolve(nested, "value.txt");
+
+    await realFiles.ensureDirectory(nested);
+    await realFiles.writeText(file, "value\n");
+    expect(await realFiles.readText(file)).toBe("value\n");
+    expect(await realFiles.readText(resolve(root, "missing.txt"))).toBeUndefined();
+    expect(await realFiles.fileKind(file, root)).toBe("regular");
+    expect(await realFiles.fileKind(file, outside)).toBe("unsafe");
+    expect(await realFiles.fileKind(nested, root)).toBe("unsafe");
+    expect(await realFiles.fileKind(resolve(root, "missing.txt"), root)).toBe("missing");
+
+    await expect(readSkillRelease(resolve(root, "missing.json"), realFiles)).rejects.toThrow(
+      "Release manifest does not exist",
+    );
+    await realFiles.writeText(resolve(root, "invalid.json"), "not JSON");
+    await expect(readSkillRelease(resolve(root, "invalid.json"), realFiles)).rejects.toThrow(
+      "Invalid JSON",
+    );
+    await realFiles.writeText(resolve(root, "array.json"), "[]\n");
+    await expect(readSkillRelease(resolve(root, "array.json"), realFiles)).rejects.toThrow(
+      "Expected a JSON object",
+    );
+    await realFiles.writeText(resolve(root, "incomplete.json"), "{}\n");
+    await expect(readSkillRelease(resolve(root, "incomplete.json"), realFiles)).rejects.toThrow(
+      "Invalid release manifest",
+    );
+
+    await expect(
+      runCommand({
+        executable: process.execPath as BootstrapCommand["executable"],
+        args: ["-e", ""],
+        cwd: root,
+      }),
+    ).resolves.toEqual({ exitCode: 0 });
+    await expect(
+      runCommand({
+        executable: resolve(root, "missing-command") as BootstrapCommand["executable"],
+        args: [],
+        cwd: root,
+      }),
+    ).rejects.toThrow();
+  });
+
   test("validates the supplied exact release set", async () => {
     const files = filesWithRelease();
     await expect(readSkillRelease(releasePath, files)).resolves.toMatchObject({
@@ -237,7 +288,7 @@ describe("bootstrap", () => {
       (
         await planBootstrap(
           { applicationRoot: root, releaseManifestPath: releasePath },
-          { files, runtime: { node: "24.0.0" } },
+          { files, runtime },
         )
       ).state,
     ).toBe("new-app");
@@ -263,7 +314,7 @@ describe("bootstrap", () => {
     const root = resolve(fixtureRoot, "Fresh App_λ");
     const plan = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files },
+      { files, runtime },
     );
     expect(plan.state).toBe("new-app");
     expect(plan.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx"]);
@@ -273,6 +324,7 @@ describe("bootstrap", () => {
       { applicationRoot: root, releaseManifestPath: releasePath },
       {
         files,
+        runtime,
         runCommand: successfulRunner(files, async () => {
           beforeInstall = JSON.parse((await files.readText(resolve(root, "package.json")))!);
         }),
@@ -307,6 +359,7 @@ describe("bootstrap", () => {
       { applicationRoot: root, releaseManifestPath: releasePath },
       {
         files,
+        runtime,
         runCommand: async () => {
           throw new Error("must not run");
         },
@@ -326,7 +379,7 @@ describe("bootstrap", () => {
     );
     const broken = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files },
+      { files, runtime },
     );
     expect(broken).toMatchObject({
       state: "failed",
@@ -401,14 +454,14 @@ describe("bootstrap", () => {
     });
     const plan = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files },
+      { files, runtime },
     );
     expect(plan.state).toBe("missing-tooling");
     expect(plan.missingPackages).toEqual(["@mit-sdg/sync-engine-analysis"]);
 
     const result = await bootstrapApplication(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files, runCommand: successfulRunner(files) },
+      { files, runtime, runCommand: successfulRunner(files) },
     );
     expect(result.outcome).toBe("changed");
     expect(result.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx"]);
@@ -433,7 +486,7 @@ describe("bootstrap", () => {
     });
     const plan = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files: base },
+      { files: base, runtime },
     );
     expect(plan.state).toBe("version-conflict");
     expect(plan.conflict).toMatchObject({
@@ -450,13 +503,13 @@ describe("bootstrap", () => {
     const before = new Map(unchanged.values);
     const waiting = await bootstrapApplication(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files: unchanged, runCommand: successfulRunner(unchanged) },
+      { files: unchanged, runtime, runCommand: successfulRunner(unchanged) },
     );
     expect(waiting.outcome).toBe("choice-required");
     expect(unchanged.values).toEqual(before);
     const stopped = await bootstrapApplication(
       { applicationRoot: root, releaseManifestPath: releasePath, conflictChoice: "stop-unchanged" },
-      { files: unchanged, runCommand: successfulRunner(unchanged) },
+      { files: unchanged, runtime, runCommand: successfulRunner(unchanged) },
     );
     expect(stopped.outcome).toBe("stopped-unchanged");
     expect(unchanged.values).toEqual(before);
@@ -468,7 +521,7 @@ describe("bootstrap", () => {
         releaseManifestPath: releasePath,
         conflictChoice: "continue-with-warning",
       },
-      { files: continuedFiles, runCommand: successfulRunner(continuedFiles) },
+      { files: continuedFiles, runtime, runCommand: successfulRunner(continuedFiles) },
     );
     expect(continued.outcome).toBe("continued-with-warning");
     expect(continued.plan.state).toBe("version-conflict");
@@ -492,7 +545,7 @@ describe("bootstrap", () => {
         releaseManifestPath: releasePath,
         conflictChoice: "align-pinned-release",
       },
-      { files: alignedFiles, runCommand: successfulRunner(alignedFiles) },
+      { files: alignedFiles, runtime, runCommand: successfulRunner(alignedFiles) },
     );
     expect(aligned.outcome).toBe("changed");
     expect(aligned.plan.state).toBe("ready");
@@ -514,6 +567,7 @@ describe("bootstrap", () => {
       { applicationRoot: root, releaseManifestPath: releasePath },
       {
         files,
+        runtime,
         runCommand: async (command) => {
           seen.push(command);
           return { exitCode: 7, stderr: "registry unavailable" };
@@ -535,7 +589,7 @@ describe("bootstrap", () => {
       (
         await planBootstrap(
           { applicationRoot: malformed, releaseManifestPath: releasePath },
-          { files },
+          { files, runtime },
         )
       ).state,
     ).toBe("failed");
@@ -547,6 +601,7 @@ describe("bootstrap", () => {
       { applicationRoot: alternate, releaseManifestPath: releasePath },
       {
         files,
+        runtime,
         runCommand: async () => {
           throw new Error("must not run");
         },

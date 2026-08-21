@@ -4,6 +4,7 @@ import { basename, dirname, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   briefFileName,
+  canonicalPath,
   requirePathInWorkUnit,
   requireWorkUnit,
   reserveRunArtifacts,
@@ -35,7 +36,7 @@ describe("work-unit paths", () => {
   test("accepts only safe, contained slugs", async () => {
     const root = await application();
     expect(workUnitPath(root, "message-board")).toBe(
-      resolve(root, ".sync-engine/work/message-board"),
+      resolve(canonicalPath(root), ".sync-engine/work/message-board"),
     );
 
     for (const slug of ["", ".", "..", "../escape", "a/b", "/absolute", "UPPER", "a--b"]) {
@@ -53,9 +54,9 @@ describe("work-unit paths", () => {
     await symlink(outside, resolve(root, ".sync-engine/work"), "dir");
 
     const message = `Work root escapes the application: ${resolve(
-      root,
+      canonicalPath(root),
       ".sync-engine/work",
-    )} resolves to ${outside}`;
+    )} resolves to ${canonicalPath(outside)}`;
     expect(thrownValue(() => workRoot(root))).toEqual({ name: "WorkError", message });
     expect(
       await rejectedValue(
@@ -76,7 +77,7 @@ describe("work-unit paths", () => {
       message: "Work unit escapes its work root: alias",
     });
     const aliasFile = resolve(root, ".sync-engine/work/alias/file.md");
-    const work = resolve(root, ".sync-engine/work");
+    const work = workRoot(root);
     expect(thrownValue(() => requirePathInWorkUnit(aliasFile, work))).toEqual({
       name: "WorkError",
       message: `Workflow artifact escapes work unit ${work}: ${aliasFile}`,
@@ -107,7 +108,7 @@ describe("work start", () => {
       briefTemplate: template,
     });
 
-    expect(unit.path).toBe(resolve(root, ".sync-engine/work/record-mechanics"));
+    expect(unit.path).toBe(workUnitPath(root, "record-mechanics"));
     expect(unit.briefPath).toBe(resolve(unit.path, briefFileName));
     expect(await readFile(unit.briefPath, "utf8")).toBe(template);
   });
