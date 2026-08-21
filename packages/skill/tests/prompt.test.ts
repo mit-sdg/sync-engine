@@ -21,7 +21,9 @@ const actualPromptRoot = fileURLToPath(new URL("../skills/sync-engine/prompts", 
 const expectedRoot = fileURLToPath(new URL("./fixtures/expected", import.meta.url));
 const applicationRoot = "/application";
 const expectedForPlatform = (content: string): string =>
-  content.replaceAll("/application", JSON.stringify(resolve(applicationRoot)).slice(1, -1));
+  content.replaceAll(/"\/application[^"]*"/g, (quotedPath) =>
+    JSON.stringify(resolve(quotedPath.slice(1, -1))),
+  );
 const fixtureInput = (name: string): string => resolve(promptRoot, "inputs", name);
 const inlineSource = (displayName: string, content: string): string =>
   `**${displayName}**\n\n${content.replaceAll("\r\n", "\n").replaceAll("\r", "\n").trimEnd()}`;
