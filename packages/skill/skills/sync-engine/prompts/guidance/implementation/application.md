@@ -35,9 +35,12 @@ assemble({
 });
 ```
 
-Implement the exact authored reaction, view, former, and computation links. Keep module,
-group, and declaration names aligned with those links, and register every declared
-computation once. Composition coordinates concepts but does not absorb their invariants
+Implement the exact authored endpoint reaction, internal reaction, view, former, and
+computation links. An `endpoint(...)` is itself the reaction declaration named by its
+`reaction:` link; do not wrap it or create it from route prose alone. Before coding,
+compare every requested endpoint with the complete supplied link inventory and block on
+any missing link. Keep module, group, and declaration names aligned with those links, and
+register every declared computation once. Composition coordinates concepts but does not absorb their invariants
 or make separate owners atomic. Hosts project the application boundary and stay free of
 product policy already owned by design. Do not infer registration shapes or refusal maps
 from runtime failures; the supplied specifications and public surfaces contain those

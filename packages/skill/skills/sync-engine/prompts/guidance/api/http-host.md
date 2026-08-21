@@ -14,7 +14,14 @@ HTTP policy into a hand-written Fetch handler.
 
 Every operation remains a sync-engine `endpoint` built from `receive` and `respond`. A
 direct browser GET route maps to an unchanged endpoint; the HTTP package does not replace
-endpoint declarations. For example:
+endpoint declarations. The approved design must first link that endpoint as a reaction,
+for example:
+
+```text
+Resolving a short code [enters the application](reaction:LinkShortener.Links.Resolve).
+```
+
+The source declaration uses that exact final name:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
@@ -30,8 +37,19 @@ const Resolve = endpoint("/links/resolve", ({ code, target }) =>
 export const composition = { Links: { Resolve } };
 ```
 
+Assembly registers the exported group record under the linked module:
+
+```ts
+assemble({
+  conceptSet: applicationConceptSet,
+  instances: applicationConceptSet.implementations(),
+  composition: { LinkShortener: composition },
+});
+```
+
 Use the approved concepts, endpoint paths, conditions, response fields, validators, and
-composition names; the example supplies API shape, not product policy.
+composition names; the example supplies API shape, not product policy. If the endpoint's
+reaction link is absent, stop with a design blocker before writing the declaration.
 
 ## Define one policy and projection
 

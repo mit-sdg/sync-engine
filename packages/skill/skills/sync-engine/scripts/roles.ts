@@ -435,6 +435,14 @@ function areaGrants<A extends string>(
     if (repeatedRoot) {
       fail(spec, `${at} path is already relative to ${area} and cannot repeat its root: ${path}`);
     }
+    const applicationOwnershipOverlap =
+      spec.id === "application-worker/implementation" &&
+      ((area === "owned-integration" && (path === "src" || path.split("/").includes("concepts"))) ||
+        (area === "owned-test" &&
+          (path === "test" || path === "tests" || path.split("/").includes("concepts"))));
+    if (applicationOwnershipOverlap) {
+      fail(spec, `${at} must not cover concept-owned source or tests: ${path}`);
+    }
     if (area === "current-decomposition" && path !== "decomposition.md") {
       fail(spec, "current-decomposition can grant only decomposition.md");
     }

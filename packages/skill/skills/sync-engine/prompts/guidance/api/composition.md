@@ -52,11 +52,14 @@ declaration no link names.
 `view`, `former`, `form`, `each`, `count` and `compute` come from the same subpath.
 
 ```ts
-view(name, (input, output, free) => where(...).holds());
+view(name, (input, output, free) => where(...)).holds();
+view(name, (input, output, free) => where(...)).one();
 former(name, (input, free) => form({ ...shape }));
 former(name, (input, free) => where(...).form({ ...shape }));
 ```
 
+- A view's `.holds()`, `.one()`, `.optional()`, or `.many()` follows the closing
+  `view(...)`; it is never called on `where(...)`.
 - Builders receive binding bags. Reading a property, including by destructuring, declares a
   stable logic variable in that partition. Completed views and formers take one
   object-shaped input mapping.
@@ -90,9 +93,41 @@ former(name, (input, free) => where(...).form({ ...shape }));
 
 `endpoint`, `receive` and `respond` come from `@mit-sdg/sync-engine/boundary`.
 
-```ts
-endpoint(path, vars => receive(input)...then(respond(body)), { input?, validators? });
+An endpoint is itself a selected reaction. Its design carries a `reaction:` link with the
+same module, group, and declaration name. For this design sentence:
+
+```text
+Publishing a post [enters the application](reaction:Board.Publishing.PublishPost).
 ```
+
+use this declaration and placement:
+
+```ts
+const PublishPost = endpoint(
+  "/board/post",
+  ({ author, content, post }) =>
+    receive({ author, content })
+      .then(Posting.publish({ author, content }).responds({ post }))
+      .then(respond({ post })),
+  { input: { required: ["author", "content"] } },
+);
+
+export const composition = { Publishing: { PublishPost } };
+```
+
+and register that composition under its linked module:
+
+```ts
+assemble({
+  conceptSet: applicationConceptSet,
+  instances: applicationConceptSet.implementations(),
+  composition: { Board: composition },
+});
+```
+
+Do not wrap the endpoint in another reaction. Do not declare an endpoint unless its exact
+reaction link exists in approved design. Conversely, every selected public endpoint must
+have this link before implementation begins.
 
 - Paths must be canonical absolute URL pathnames that survive WHATWG pathname handling
   unchanged. Queries, fragments, scheme-relative paths, dot segments, malformed percent

@@ -116,9 +116,12 @@ For each selected phase:
 1. Write a short task that states the objective, acceptance criteria, relevant
    diagnostics, owned outcomes, and expected checks. Do not restate supplied context or
    capability metadata; the generated prompt carries both. A task cannot authorize an
-   alternate framework or transport path that conflicts with supplied public references.
+   alternate framework or transport path that conflicts with supplied public references,
+   or request an endpoint without its exact approved reaction link.
 2. Select an effective capability grant within the role's typed maximum. The prompt
-   builder validates the grant, and listed check commands are not a shell allowlist.
+   builder validates the grant, and listed check commands are not a shell allowlist. For
+   application work, enumerate exact integration files or dedicated directories; never
+   grant a parent path that contains concept implementations or concept tests.
 3. Supply the smallest sufficient set of the brief, affected design, public framework
    references, application paths, and examples. Name useful starting paths, while allowing
    implementation and evidence workers targeted reads elsewhere in the application.

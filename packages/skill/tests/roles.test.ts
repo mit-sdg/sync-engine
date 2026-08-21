@@ -338,6 +338,24 @@ describe("effective capability grants", () => {
       "readableAreas[0] path is already relative to design and cannot repeat its root: design/concepts",
     ],
     [
+      "an application source grant containing concepts",
+      "application-worker/implementation",
+      {
+        ...noCapabilities,
+        writableAreas: [{ area: "owned-integration", path: "src" }],
+      },
+      "writableAreas[0] must not cover concept-owned source or tests: src",
+    ],
+    [
+      "an application test grant containing concept tests",
+      "application-worker/implementation",
+      {
+        ...noCapabilities,
+        writableAreas: [{ area: "owned-test", path: "test/concepts" }],
+      },
+      "writableAreas[0] must not cover concept-owned source or tests: test/concepts",
+    ],
+    [
       "an unmodeled capability",
       "designer/decomposition",
       { ...noCapabilities, gitMutation: true },

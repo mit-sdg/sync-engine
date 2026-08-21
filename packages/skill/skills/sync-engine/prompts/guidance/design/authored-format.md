@@ -96,11 +96,14 @@ definition may have zero or more instances, none carrying its name. Write an ali
 Bindings convey identity only.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
-wildcards. Cover each authored endpoint and reaction tree and each named view and former;
-declare each executable computation once. A composition document reads as prose carrying
-its links, each naming module, group and declaration:
+wildcards. Every selected endpoint is a reaction declaration and therefore needs its own
+`reaction:` link, in addition to links for internal reaction trees. Cover every selected
+endpoint, internal reaction, named view, and former; declare each executable computation
+once. A composition document reads as prose carrying its links, each naming module, group
+and declaration:
 
 ```text
+Submitting a response [enters the application](reaction:Circle.Reading.AddResponse).
 Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
 about it. A circle page shows the circle, its members and that discussion
 [as one record](former:Circle.Pages.CirclePage), and only a member
@@ -117,7 +120,9 @@ normalizeTitle(raw: String) : String
   Produces the canonical task title used by endpoint adaptation.
 ```
 
-Routes stay in prose; link targets are exact dotted source paths.
+Routes stay in prose; do not link a URL path. Link the endpoint declaration under the
+exact module, group, and source name that implementation will register. If the design has
+no endpoint reaction link, implementation must not create that endpoint.
 
 An application document is not an API specification. It carries no endpoint sections and
 no input, return or refusal listings: the concept specification owns those, and a second

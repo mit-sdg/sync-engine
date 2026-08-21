@@ -16,8 +16,10 @@ behavioral evidence.
 - Preserve unaffected approved contracts and the complete surface of every
   `catalog-unchanged` contract.
 - Put concept-owned behavior in concept contracts and cross-concept policy, coordination,
-  and recovery in application composition. Give every promised reaction, view, former,
-  and computation its exact typed link so implementation never invents declaration names.
+  and recovery in application composition. Give every promised endpoint, internal
+  reaction, view, former, and computation its exact typed link so implementation never
+  invents declaration names. An endpoint is linked as a `reaction:` under its intended
+  module, group, and declaration name; the route itself remains prose.
 - Author design only; do not implement source, tests, configuration, or generated output.
 
 ## Stop conditions

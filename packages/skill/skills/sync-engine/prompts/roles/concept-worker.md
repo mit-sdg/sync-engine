@@ -11,6 +11,9 @@ contracts.
   absorb composition, host, frontend, or evidence responsibilities.
 - Keep each concept independent from peer concepts and keep changes focused on its own
   mechanism and observable tests.
+- Treat object-shaped action results and query cardinality arrays as required registration
+  compatibility, and prove them in concept tests rather than deferring them to application
+  assembly.
 - Repair ordinary implementation, type, lint, and test diagnostics within the assigned
   concept scope.
 

@@ -32,9 +32,17 @@ checks an operation identity; a correlation ID is only a trace token.
 
 ## Composition, authorization, and failure
 
-Only composition coordinates concepts. It owns cross-concept policy, workflow, and
-repair, never owner invariants or race decisions. Use one reaction per
-trigger-condition-effect decision and separate independent consequences.
+Only composition coordinates concepts. It owns cross-concept policy, workflow, boundary
+adaptation, and repair, never owner invariants or race decisions. Use one reaction per
+trigger-condition-effect decision and separate independent consequences. Give every
+selected public endpoint its own reaction link and enough decision prose to construct its
+success and refusal behavior without inventing policy.
+
+When an endpoint must choose between a supplied optional value and a generated value,
+declare the complete application computation that makes that choice (for example,
+`selectCode(requested?: String) : String`), not merely a generator that leaves the branch
+undecided. Likewise declare each application derivation needed to turn request data into
+concept action input.
 
 A reaction cannot make separate owners atomic. Realize every accepted obligation with
 its triggering action, closing reaction, observable false interval, stable retry
