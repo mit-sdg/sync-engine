@@ -395,8 +395,10 @@ describe("sync-engine-skill command", () => {
       role !== "critic"
         ? undefined
         : options.mode === "map"
-          ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n"
-          : "No material findings.\n";
+          ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n" +
+            "- PLACEMENT `N1` — accept — concept Tasking owns the lifecycle.\n"
+          : "- CHECK `BRIEF` — Visible successes and refusals are traced.\n" +
+            "- VERDICT — No material findings.\n";
     const responsePath =
       criticResponse === undefined
         ? undefined
@@ -471,6 +473,42 @@ describe("sync-engine-skill command", () => {
     const gated = run(criticArguments, directory);
     expect(gated.status).toBe(0);
     expect(gated.stdout).toContain("Prompt built: role critic");
+  });
+
+  test("records a direct user override of review judgment", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-user-override-");
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    const map = resolve(design, "decomposition.md");
+    await writeFile(map, "# Decomposition\n");
+    await launchRecord(directory, "designer", { mode: "map" });
+
+    const build = (override: boolean) =>
+      run(
+        [
+          "prompt",
+          "build",
+          "--role",
+          "designer",
+          "--mode",
+          "contract",
+          "--input",
+          `brief=${taskBrief}`,
+          "--input",
+          `map=${map}`,
+          ...(override ? ["--user-override"] : []),
+        ],
+        directory,
+      );
+
+    expect(build(false).stderr).toContain("requires a settled critic map launch");
+    const overridden = build(true);
+    expect(overridden.status).toBe(0);
+    expect(overridden.stdout).toContain("direct user override recorded");
+    const prompt = overridden.stdout.match(/Next: deliver (\S+) to the original designer/)?.[1];
+    const context = JSON.parse(await readFile(prompt!.replace(/\.md$/, ".json"), "utf8"));
+    expect(context.userOverride).toBe(true);
   });
 
   test("stops counting a role once design reopens under it", async () => {
@@ -619,6 +657,24 @@ describe("sync-engine-skill command", () => {
     expect(invented.status).toBe(1);
     expect(invented.stdout).toContain("agent invented-agent-id UNKNOWN to paseo");
     expect(invented.stderr).toContain("paseo does not know: designer map invented-agent-id");
+  });
+
+  test("lets a direct user waive missing phases at handback without claiming evidence", async () => {
+    const directory = await temporaryDirectory("sync-engine-skill-handback-override-");
+    temporary.push(directory);
+    const design = resolve(directory, "design");
+    await mkdir(design, { recursive: true });
+    await writeFile(resolve(design, "types.md"), "# Types\n");
+    const digest = run(["design", "digest", design], directory).stdout.match(/[a-f0-9]{64}/)?.[0];
+
+    const result = run(
+      ["handback", "check", "--design-root", design, "--design-digest", digest!, "--user-override"],
+      directory,
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("designer map: USER-OVERRIDDEN");
+    expect(result.stdout).toContain("not represented as independently completed");
+    expect(result.stdout).toContain("Every non-waived required role phase");
   });
 
   test("refuses an assignment that crosses role ownership", async () => {
@@ -858,6 +914,24 @@ In-memory only; nothing survives restart, per the brief's demo decision.
     const contractPrompt = contractBuilt.stdout.match(
       /Next: deliver (\S+) to the original designer/,
     )?.[1];
+    const crossHarness = run(
+      [
+        "launch",
+        "prepare",
+        "--harness",
+        "claude-code",
+        "--role",
+        "designer",
+        "--prompt",
+        contractPrompt!,
+        "--continue-agent",
+        "codex-agent-1",
+      ],
+      directory,
+    );
+    expect(crossHarness.status).toBe(1);
+    expect(crossHarness.stderr).toContain("no settled designer map record through claude-code");
+
     const continuation = run(
       [
         "launch",

@@ -41,9 +41,10 @@ compatibility: Requires filesystem and shell access, Bun, and fresh native subag
 3. Initialize and maintain `product/brief.md` with the workflow's brief commands; do not
    read or recreate the packaged template directly.
 4. Build only the current phase prompt with the compiler. Do not read role templates or
-   common prompt files yourself. Launch an initial role through its guide; route the
-   compiler-built contract phase with `--continue-agent` to the recorded original
-   designer so that phase receives its own audited record.
+   common prompt files yourself. Launch a role through its guide; continue the
+   original designer with the compiler's contract delta and `--continue-agent`. Retained
+   context is hash-bound, not resent. Only direct human instruction permits
+   `--user-override`.
 5. Keep objective, decisions, current stage, critic count, and unresolved material
    issues in active coordinator context. Do not create workflow metadata or a workflow
    database.

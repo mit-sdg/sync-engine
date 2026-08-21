@@ -192,10 +192,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     // trials showed each role can afford, not whatever it currently weighs. The critic
     // fell from 18.2 KiB to 10.6 KiB across those runs with no measured loss.
     const limits: Record<string, number> = {
-      designer: 7 * 1024,
+      designer: 8 * 1024,
       "designer-contract": 13 * 1024,
-      "critic-map": 4 * 1024,
-      critic: 6 * 1024,
+      "critic-map": 8.5 * 1024,
+      critic: 6.25 * 1024,
       "concept-worker": 3.25 * 1024,
       "application-worker": 3.5 * 1024,
       "frontend-worker": 3 * 1024,
@@ -449,7 +449,7 @@ describe("compact sync-engine Agent Skill documents", () => {
     const directives = [...allRoles.matchAll(/^<!-- ([^>]+) -->$/gm)].map(
       (match) => match[1]?.split(":", 1)[0],
     );
-    expect(new Set(directives)).toEqual(new Set(["include", "input", "input?"]));
+    expect(new Set(directives)).toEqual(new Set(["include", "input", "input?", "bind", "bind?"]));
 
     expect(allRoles).not.toMatch(/\{\{|{%|frontmatter|condition:|loop:/);
   });
@@ -458,8 +458,8 @@ describe("compact sync-engine Agent Skill documents", () => {
     const expectedSlots: Record<string, string[]> = {
       designer: ["brief", "existing-design"],
       "designer-contract": ["brief", "map", "review", "existing-design", "catalog"],
-      "critic-map": ["brief", "candidate"],
-      critic: ["brief", "candidate", "blocker"],
+      "critic-map": ["review-context", "brief", "candidate"],
+      critic: ["review-context", "brief", "candidate", "blocker"],
       "concept-worker": ["assignment", "specifications", "examples", "reference"],
       // examples is required for the two roles that must write framework-shaped code
       "application-worker": [
@@ -484,7 +484,7 @@ describe("compact sync-engine Agent Skill documents", () => {
 
     for (const [role, expected] of Object.entries(expectedSlots)) {
       const source = await text(new URL(`roles/${role}.md`, promptRoot));
-      const slots = [...source.matchAll(/^<!-- input\??: ([a-z-]+) -->$/gm)].map(
+      const slots = [...source.matchAll(/^<!-- (?:input|bind)\??: ([a-z-]+) -->$/gm)].map(
         (match) => match[1],
       );
       expect(slots).toEqual(expected);
@@ -595,15 +595,13 @@ describe("compact sync-engine Agent Skill documents", () => {
     const handback = await stage("implementation");
     const normalized = criticism.replace(/\s+/g, " ");
     expect(normalized).toContain("Build a fresh prompt-read-only map critic");
-    expect(normalized).toContain("Every row gets `accept`, `split`, or `merge with <row>`");
-    expect(normalized).toContain("Two map reviews are the hard ceiling");
+    expect(normalized).toContain("Every concept row gets `accept`, `split`, or `merge with <row>`");
+    expect(normalized).toContain("Two map reviews are the default ceiling");
     expect(normalized).toContain(
-      "build a contract-phase file and continue the same recorded designer, never a fresh one",
+      "build a contract-phase delta and continue the same recorded designer, never a fresh one",
     );
-    expect(normalized).toContain(
-      "Two contract passes are the hard ceiling in every authorization mode",
-    );
-    expect(normalized).toContain("`No material findings.` closes criticism");
+    expect(normalized).toContain("Two contract passes are the default ceiling");
+    expect(normalized).toContain("A complete clean `CHECK`/`VERDICT` envelope closes criticism");
     expect(normalized).toContain(
       "send its bullets verbatim plus a neutral repair request to the original designer",
     );
@@ -713,6 +711,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "launch.ts",
       "native-launch.ts",
       "prompt.ts",
+      "review.ts",
       "workspace.ts",
     ]);
 
@@ -780,21 +779,21 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(workflow).toContain("Run it alone—do not chain a premature check");
     expect(normalizedCriticism).toContain(
-      "The map is accepted only when every row is `accept` and no blocker is present",
+      "The map is accepted only when every row and placement is `accept` and no blocker is present",
     );
-    expect(normalizedCriticism).toContain("Two map reviews are the hard ceiling");
+    expect(normalizedCriticism).toContain("Two map reviews are the default ceiling");
     expect(normalizedCriticism).toContain(
-      "build a contract-phase file and continue the same recorded designer, never a fresh one",
+      "build a contract-phase delta and continue the same recorded designer, never a fresh one",
     );
     expect(criticism).toContain("--mode map");
     expect(criticism).toContain("--mode contract");
     expect(criticism).toContain("--input candidate=design/decomposition.md");
     expect(criticism).toContain("--input candidate=design/types.md");
     expect(normalizedCriticism).toContain("Never aggregate them or split criticism");
+    expect(normalizedCriticism).toContain("Two contract passes are the default ceiling");
     expect(normalizedCriticism).toContain(
-      "Two contract passes are the hard ceiling in every authorization mode",
+      "handback lists every earlier missing phase as user-overridden rather than independently completed or critic-approved",
     );
-    expect(normalizedCriticism).toContain("reaching a pass ceiling is never approval");
     for (const slot of [
       "specifications",
       "concept-surfaces",
@@ -813,7 +812,7 @@ describe("compact sync-engine Agent Skill documents", () => {
       "Paseo is the one harness the compiler launches and inspects directly; other supported harnesses use coordinator-mediated native delegation",
     );
     expect(normalizedContract).toContain(
-      "With no override, it must preserve the coordinator's provider, model and reasoning setting",
+      "With no model override, request inheritance of provider, model, reasoning, permissions, and workspace",
     );
     expect(contract).toContain(
       "launch prepare --harness <harness> --role <role> --prompt <prompt-file>",
@@ -834,10 +833,10 @@ describe("compact sync-engine Agent Skill documents", () => {
     );
     expect(paseo).toContain('paseo send "$agent_id" --prompt-file "$follow_up_file" --no-wait');
     expect(codex).toContain("separate subagent threads");
-    expect(codex).toContain("inherit the parent model, reasoning effort, sandbox");
+    expect(codex).toContain("contract's shared configuration policy");
     expect(claude).toContain("Claude Code's `Agent` tool");
-    expect(claude).toContain("Omit `model`, `effort` and `isolation`");
-    expect(antigravity).toContain("workspace\n`inherit` and model `inherit`");
+    expect(claude).toContain("contract's shared configuration policy");
+    expect(antigravity).toContain("workspace\n`inherit`");
 
     for (const guide of [paseo, codex, claude, antigravity]) {
       expect(guide).not.toContain("launch prepare --harness <harness>");

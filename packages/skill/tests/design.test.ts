@@ -7,6 +7,7 @@ import {
   digestDesign,
   requireDesignDigest,
 } from "../skills/sync-engine/scripts/design.ts";
+import { snapshotMap } from "../skills/sync-engine/scripts/review.ts";
 import { readAudit, responseContract } from "../skills/sync-engine/scripts/workspace.ts";
 
 const temporary: string[] = [];
@@ -70,8 +71,20 @@ describe("closed design digest", () => {
 });
 
 describe("role return contract", () => {
-  test("accepts the clean sentinel and a classified contract finding", () => {
-    expect(responseContract("critic", "No material findings.\n", "contract")).toBeUndefined();
+  test("accepts an audited clean verdict and a classified contract finding", () => {
+    expect(
+      responseContract(
+        "critic",
+        "- CHECK `O1` — Retry identity requestId is consumed by register; recovery uses a durable request.\n" +
+          "- CHECK `BRIEF` — Visible successes and refusals are traced.\n" +
+          "- VERDICT — No material findings.\n",
+        "contract",
+        { obligationIds: ["O1"] },
+      ),
+    ).toBeUndefined();
+    expect(responseContract("critic", "No material findings.\n", "contract")).toContain(
+      "CHECK/VERDICT",
+    );
     expect(
       responseContract(
         "critic",
@@ -83,7 +96,12 @@ describe("role return contract", () => {
 
   test("accepts the fenced form its own prompt shows", () => {
     expect(
-      responseContract("critic", "```text\nNo material findings.\n```", "contract"),
+      responseContract(
+        "critic",
+        "```text\n- CHECK `BRIEF` — Visible successes and refusals are traced.\n- VERDICT — No material findings.\n```",
+        "contract",
+        { obligationIds: [] },
+      ),
     ).toBeUndefined();
     expect(
       responseContract(
@@ -98,11 +116,65 @@ describe("role return contract", () => {
     expect(
       responseContract(
         "critic",
-        "- ROW `design/decomposition.md` — Posting — accept — one owner.\n",
+        "- ROW `design/decomposition.md` — Posting — accept — one owner.\n" +
+          "- PLACEMENT `N1` — accept — concept Posting owns publication.\n",
         "map",
+        { mapRows: ["Posting"], placementIds: ["N1"] },
       ),
     ).toBeUndefined();
-    expect(responseContract("critic", "No material findings.", "map")).toContain("ROW verdict");
+    expect(responseContract("critic", "No material findings.", "map")).toContain(
+      "exact verdict forms",
+    );
+  });
+
+  test("requires complete clean checks and complete map coverage", () => {
+    expect(
+      responseContract(
+        "critic",
+        "- CHECK `BRIEF` — Visible successes and refusals are traced.\n" +
+          "- VERDICT — No material findings.\n",
+        "contract",
+        { obligationIds: ["O1"] },
+      ),
+    ).toContain("every map obligation");
+    expect(
+      responseContract(
+        "critic",
+        "- ROW `design/decomposition.md` — Posting — accept — one owner.\n" +
+          "- PLACEMENT `N1` — accept — concept Posting owns publication.\n",
+        "map",
+        { mapRows: ["Posting", "Commenting"], placementIds: ["N1"] },
+      ),
+    ).toContain("every current concept row");
+  });
+
+  test("snapshots need placement, concept rows, and obligation IDs", () => {
+    expect(
+      snapshotMap(`# Design
+
+## Need placement
+
+| Need | Layer | Owner |
+| --- | --- | --- |
+| N1 | concept | Posting |
+| N2 | host | HTTP projection |
+
+## Concepts
+
+| Concept | Need |
+| --- | --- |
+| **Posting** | N1 |
+
+## Obligations
+
+- **O1:** Posting requires publication.
+- \`O2\`: Delivery requires acknowledgement.
+`),
+    ).toMatchObject({
+      rows: ["Posting"],
+      placements: ["N1", "N2"],
+      obligationIds: ["O1", "O2"],
+    });
   });
 
   test("refuses a critic that buries its verdict under a preamble", () => {

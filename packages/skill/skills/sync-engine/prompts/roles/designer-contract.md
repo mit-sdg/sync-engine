@@ -10,10 +10,12 @@
 
 ## Assignment
 
-Continue the design whose decomposition you authored. The accepted map fixes concept
-boundaries; do not reopen them. Apply the map critic's verdicts and carry every obligation
-ID into a composition document with matching trigger, closing reaction, false interval,
-retry identity, and recovery.
+Continue the design from the context below. Normally you are the map designer and the
+compiler hash-binds retained brief, map, and review bytes. Under direct user override the
+compiler expands those bytes and a fresh designer may continue supplied work. The map
+fixes concept boundaries; do not reopen them. Carry every
+obligation ID into a composition document with matching trigger, closing reaction, false
+interval, retry identity, and recovery.
 
 Write only:
 
@@ -38,22 +40,24 @@ After one informed repair, if the same diagnostic signature recurs, stop and rep
 Return exactly `Changed:` with path bullets, `Check:` with the command outcome, and
 `Blocker: none` or one material blocker. Use at most twenty tool calls.
 
-## Product brief
+## Design context
 
-<!-- input: brief -->
+<!-- bind: brief -->
 
-## Accepted decomposition
+<!-- bind: map -->
 
-<!-- input: map -->
-
-## Map critic verdicts
-
-<!-- input: review -->
+<!-- bind?: review -->
 
 ## Existing authored design
 
 <!-- input?: existing-design -->
 
-## Catalog entries instantiated by the map
+## Exact catalog contracts
+
+Only `catalog-unchanged` entries appear below. Preserve their complete mechanism and
+surface. For `catalog-adapted` rows, use the operation inventory retained from the map
+phase and author only the actions and queries this product needs; do not import generic
+cancellation, clearing, replacement, or revocation symmetry merely because the catalog
+mechanism offers it.
 
 <!-- input?: catalog -->

@@ -88,6 +88,7 @@ export const releaseSourcePaths = [
   "packages/skill/skills/sync-engine/scripts/launch.ts",
   "packages/skill/skills/sync-engine/scripts/native-launch.ts",
   "packages/skill/skills/sync-engine/scripts/prompt.ts",
+  "packages/skill/skills/sync-engine/scripts/review.ts",
   "packages/skill/skills/sync-engine/scripts/workspace.ts",
   "packages/skill/skills/sync-engine/references/workflow.md",
   "packages/skill/skills/sync-engine/references/design-and-criticism.md",

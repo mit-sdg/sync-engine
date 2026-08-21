@@ -6,8 +6,10 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   type LaunchRecord,
   isLaunchRecord,
+  nextReviewPass,
   readLaunchRecords,
   requireCompletedRole,
+  requireReviewPass,
   finishedStatuses,
   registrationWrappers,
   requireInsideWorkspace,
@@ -41,8 +43,10 @@ async function record(
     role !== "critic" || overrides.response !== undefined
       ? undefined
       : overrides.mode === "map"
-        ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n"
-        : "No material findings.\n";
+        ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n" +
+          "- PLACEMENT `N1` — accept — concept Tasking owns the lifecycle.\n"
+        : "- CHECK `BRIEF` — Visible successes and refusals are traced.\n" +
+          "- VERDICT — No material findings.\n";
   const responsePath =
     criticResponse === undefined ? undefined : await reserveWorkspacePath("response", role, root);
   if (responsePath !== undefined) await writeFile(responsePath, criticResponse!, "utf8");
@@ -226,6 +230,9 @@ describe("launch records", () => {
     await expect(requireCompletedRole("critic", root, undefined, "map")).rejects.toThrow(
       "requires a settled designer map launch",
     );
+    await expect(
+      requireCompletedRole("critic", root, undefined, "map", true),
+    ).resolves.toBeUndefined();
     await record(root, "designer", { mode: "map" });
     await expect(requireCompletedRole("critic", root, undefined, "map")).resolves.toBeUndefined();
     await record(root, "critic", { mode: "map" });
@@ -236,6 +243,22 @@ describe("launch records", () => {
     await expect(
       requireCompletedRole("critic", root, undefined, "contract"),
     ).resolves.toBeUndefined();
+  });
+
+  test("enforces exactly two critic passes per brief", async () => {
+    const root = await applicationRoot();
+    const briefSha256 = "a".repeat(64);
+    expect(await nextReviewPass("map", briefSha256, root)).toBe(1);
+    await record(root, "critic", { mode: "map", briefSha256, reviewPass: 1 });
+    expect(await nextReviewPass("map", briefSha256, root)).toBe(2);
+    await expect(requireReviewPass("map", briefSha256, 1, root)).rejects.toThrow(
+      "next allowed pass is 2",
+    );
+    await record(root, "critic", { mode: "map", briefSha256, reviewPass: 2 });
+    await expect(nextReviewPass("map", briefSha256, root)).rejects.toThrow(
+      "default ceiling of two",
+    );
+    expect(await nextReviewPass("map", briefSha256, root, true)).toBe(3);
   });
 
   test("does not treat map findings as map acceptance", async () => {
@@ -253,8 +276,11 @@ describe("launch records", () => {
       },
     });
     await expect(requireCompletedRole("designer", root, undefined, "contract")).rejects.toThrow(
-      "requires an accepted map review",
+      "requires accepted concept rows and need placements",
     );
+    await expect(
+      requireCompletedRole("designer", root, undefined, "contract", true),
+    ).resolves.toBeUndefined();
   });
 
   test("requires two contract passes before carrying nonblockers", async () => {

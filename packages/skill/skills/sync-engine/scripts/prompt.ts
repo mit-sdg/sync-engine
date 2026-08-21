@@ -42,8 +42,8 @@ const roleBudgets: Readonly<Record<PromptRole, number>> = {
   "evidence-worker": 32 * 1024,
 };
 
-const directive = /^<!-- (include|input|input\?): ([^ ]+) -->$/;
-const directivePrefix = /^<!-- (?:include|input\??)(?::|\s)/;
+const directive = /^<!-- (include|input|input\?|bind|bind\?): ([^ ]+) -->$/;
+const directivePrefix = /^<!-- (?:include|input\??|bind\??)(?::|\s)/;
 
 export interface PromptInput {
   readonly slot: string;
@@ -51,7 +51,7 @@ export interface PromptInput {
 }
 
 export interface PromptSource {
-  readonly kind: "template" | "include" | "input";
+  readonly kind: "template" | "include" | "input" | "binding";
   readonly path: string;
   readonly displayName: string;
   readonly bytes: number;
@@ -109,7 +109,7 @@ function parseTemplate(source: string): ReadonlyMap<string, boolean> {
     const [, kind, value] = match;
     if (kind === "include") continue;
     if (slots.has(value!)) throw new PromptBuildError(`Duplicate input directive: ${value}`);
-    slots.set(value!, kind === "input");
+    slots.set(value!, kind === "input" || kind === "bind");
   }
   return slots;
 }
@@ -122,10 +122,19 @@ function rejectNestedDirectives(source: string, path: string): void {
   }
 }
 
+export interface PromptInlineInput {
+  readonly slot: string;
+  readonly displayName: string;
+  readonly content: string;
+}
+
 export interface BuildPromptOptions {
   readonly role: string;
   readonly mode?: PromptMode;
   readonly inputs: readonly PromptInput[];
+  readonly inlineInputs?: readonly PromptInlineInput[];
+  /** A user-overridden fresh continuation receives bound source bytes in full. */
+  readonly expandBindings?: boolean;
   readonly promptRoot: string;
   readonly maxBytes?: number;
   readonly designRoot?: string;
@@ -179,7 +188,13 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
   const rawTemplate = await readFile(templatePath, "utf8");
   const template = normalizeMarkdown(rawTemplate);
   const slots = parseTemplate(template);
-  const grouped = new Map<string, Array<PromptInput & { resolved: string; display: string }>>();
+  type Material = {
+    readonly slot: string;
+    readonly resolved?: string;
+    readonly display: string;
+    readonly content?: string;
+  };
+  const grouped = new Map<string, Material[]>();
   const seenPaths = new Set<string>();
   const seenDisplayNames = new Set<string>();
 
@@ -201,7 +216,21 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
       throw new PromptBuildError(`Duplicate input display name: ${display}`);
     seenDisplayNames.add(display);
     const values = grouped.get(input.slot) ?? [];
-    values.push({ ...input, resolved: resolvedPath, display });
+    values.push({ slot: input.slot, resolved: resolvedPath, display });
+    grouped.set(input.slot, values);
+  }
+  for (const input of options.inlineInputs ?? []) {
+    if (!slots.has(input.slot)) {
+      throw new PromptBuildError(
+        `Role ${role} has no input slot: ${input.slot}; its slots are ${describeSlots(slots)}`,
+      );
+    }
+    if (seenDisplayNames.has(input.displayName)) {
+      throw new PromptBuildError(`Duplicate input display name: ${input.displayName}`);
+    }
+    seenDisplayNames.add(input.displayName);
+    const values = grouped.get(input.slot) ?? [];
+    values.push({ slot: input.slot, display: input.displayName, content: input.content });
     grouped.set(input.slot, values);
   }
 
@@ -229,7 +258,11 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
       renderedLines.push(line);
       continue;
     }
-    const [, kind, value] = match as [string, "include" | "input" | "input?", string];
+    const [, kind, value] = match as [
+      string,
+      "include" | "input" | "input?" | "bind" | "bind?",
+      string,
+    ];
     if (kind === "include") {
       const includePath = resolve(dirname(templatePath), value);
       if (!inside(root, includePath)) {
@@ -252,10 +285,21 @@ export async function buildPrompt(options: BuildPromptOptions): Promise<BuiltPro
     );
     const rendered: string[] = [];
     for (const input of values) {
-      const content = normalizeMarkdown(await readFile(input.resolved, "utf8"));
+      const content = normalizeMarkdown(input.content ?? (await readFile(input.resolved!, "utf8")));
+      if ((kind === "bind" || kind === "bind?") && options.expandBindings !== true) {
+        const binding = `<!-- bound: ${input.display}; sha256 ${createHash("sha256").update(content).digest("hex")}; ${byteLength(content)} source bytes retained in the continuing agent context -->`;
+        sources.push({
+          kind: "binding",
+          path: input.resolved ?? `<inline:${input.display}>`,
+          displayName: input.display,
+          bytes: byteLength(binding),
+        });
+        rendered.push(binding);
+        continue;
+      }
       sources.push({
         kind: "input",
-        path: input.resolved,
+        path: input.resolved ?? `<inline:${input.display}>`,
         displayName: input.display,
         bytes: byteLength(content),
       });

@@ -60,6 +60,10 @@ Which side declares a relation implies no storage, navigation, or ownership.
 
 ## Assignment
 
+## Compiler review context
+
+
+
 Review every candidate against the complete brief. The delegated prompt file is your one
 bootstrap read; after it, make no tool calls, inspect nothing else, edit nothing, and
 return one report. Form has already passed and typed links are not yet source-resolved.
@@ -87,8 +91,21 @@ Ignore formatting, naming polish, redundant explanation, parser-enforced mechani
 informational advisories, and merely conceivable unspecified behavior. Classify missing
 authority, bypassable authorization, ownership conflict, unrecoverable obligation, and
 behavior required for visible success or refusal as `BLOCKER`; classify another material
-contract mismatch as `MATERIAL-NONBLOCKER`. Do not create a report file. If clean, return
-exactly `No material findings.` Otherwise return one bullet per finding with no preamble:
+contract mismatch as `MATERIAL-NONBLOCKER`. Do not create a report file.
+
+If clean, prove the checks you performed. Return one `CHECK` for every obligation ID in
+the accepted map, naming the retry identity, the action that consumes it, and the recovery
+source. Then return one `BRIEF` check tracing visible successes, refusals, and scope, and
+the exact final verdict. Use only this envelope:
+
+```text
+- CHECK `O1` — Retry identity <identity> is consumed by <action>; recovery uses <durable or explicitly ephemeral source>.
+- CHECK `BRIEF` — Visible successes and refusals are traced; no material scope mismatch remains.
+- VERDICT — No material findings.
+```
+
+When any material finding exists, return no checks or verdict; return one bullet per
+finding with no preamble:
 
 ```text
 - `BLOCKER` — `design/path.md` — Contract problem and consequence for the brief.

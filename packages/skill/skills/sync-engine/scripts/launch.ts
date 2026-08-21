@@ -12,6 +12,7 @@ import {
   readPromptContext,
   readAudit,
   reserveWorkspacePath,
+  requireReviewPass,
   responseContract,
   settledStatus,
   verifiedRecords,
@@ -156,6 +157,21 @@ async function waitUntilSettled(agentId: string, timeoutSeconds: number): Promis
   return agent;
 }
 
+/** An idle agent has not necessarily started a just-queued turn; wait for state or reply change. */
+async function waitForTurnStart(
+  agentId: string,
+  previousResponse: string,
+  deadline: number,
+): Promise<InspectedAgent> {
+  let agent = inspectAgent(agentId);
+  while (Date.now() < deadline) {
+    if (agent.Status !== settledStatus || finalResponse(agentId) !== previousResponse) return agent;
+    await pause(250);
+    agent = inspectAgent(agentId);
+  }
+  return agent;
+}
+
 export interface LaunchOptions {
   readonly role: string;
   readonly promptPath: string;
@@ -239,13 +255,28 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       `Launch prompt changed or does not belong to ${options.role}: ${promptPath}`,
     );
   }
-  const needsContinuation = options.role === "designer" && context.mode === "contract";
-  if (needsContinuation !== (options.continueAgentId !== undefined)) {
-    throw new LaunchError(
-      needsContinuation
-        ? `Designer contract launch requires its map designer agent ID`
-        : `Only the designer contract phase may continue an existing agent`,
+  if (options.role === "critic") {
+    if (
+      context.mode === undefined ||
+      context.briefSha256 === undefined ||
+      context.reviewPass === undefined
+    ) {
+      throw new LaunchError(`Critic prompt has no compiler-bound review pass`);
+    }
+    await requireReviewPass(
+      context.mode,
+      context.briefSha256,
+      context.reviewPass,
+      options.applicationRoot,
+      context.userOverride === true,
     );
+  }
+  const contractDesigner = options.role === "designer" && context.mode === "contract";
+  if (!contractDesigner && options.continueAgentId !== undefined) {
+    throw new LaunchError(`Only the designer contract phase may continue an existing agent`);
+  }
+  if (contractDesigner && options.continueAgentId === undefined && context.userOverride !== true) {
+    throw new LaunchError(`Designer contract launch requires its map designer agent ID`);
   }
   if (options.continueAgentId !== undefined) {
     const originals = await verifiedRecords("designer", options.applicationRoot, undefined, "map");
@@ -253,6 +284,7 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
       !originals.some(
         (entry) =>
           entry.record.agentId === options.continueAgentId &&
+          (entry.record.harness ?? harness) === harness &&
           entry.record.briefSha256 === context.briefSha256,
       )
     ) {
@@ -342,9 +374,25 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     );
   }
 
-  paseo(["send", agentId, "--prompt-file", promptPath, "--no-wait"]);
   const deadline = Date.now() + options.timeoutSeconds * 1000;
-  let settled = await waitUntilSettled(agentId, options.timeoutSeconds);
+  let ready = inspectAgent(agentId);
+  if (ready.Status !== settledStatus) {
+    ready = await waitUntilSettled(agentId, Math.max(1, Math.ceil((deadline - Date.now()) / 1000)));
+  }
+  if (ready.Status !== settledStatus) {
+    throw new LaunchError(
+      `${options.role} agent ${agentId} did not become idle before assignment; status ${ready.Status}`,
+    );
+  }
+  const previousResponse = finalResponse(agentId);
+  paseo(["send", agentId, "--prompt-file", promptPath, "--no-wait"]);
+  let settled = await waitForTurnStart(agentId, previousResponse, deadline);
+  if (settled.Status !== settledStatus) {
+    settled = await waitUntilSettled(
+      agentId,
+      Math.max(1, Math.ceil((deadline - Date.now()) / 1000)),
+    );
+  }
   let resumes = 0;
   while (settled.Status === resumableStatus && resumes < maxResumes) {
     if (Date.now() >= deadline) break;
@@ -373,7 +421,11 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     options.applicationRoot,
   );
   await writeFile(responsePath, response, "utf8");
-  const violation = responseContract(options.role, response, context?.mode);
+  const violation = responseContract(options.role, response, context?.mode, {
+    mapRows: context?.mapRows,
+    placementIds: context?.placementIds,
+    obligationIds: context?.obligationIds,
+  });
   const opened = readPaths(agentId);
   const rewrites = rewriteCounts(agentId);
   const readViolations = readAudit(options.role, opened.paths, skillRoot);
@@ -394,6 +446,11 @@ export async function launchRole(options: LaunchOptions): Promise<LaunchResult> 
     prompt: { path: promptPath, sha256, bytes: Buffer.byteLength(content, "utf8") },
     ...(context?.briefSha256 === undefined ? {} : { briefSha256: context.briefSha256 }),
     ...(context?.designDigest === undefined ? {} : { designDigest: context.designDigest }),
+    ...(context?.reviewPass === undefined ? {} : { reviewPass: context.reviewPass }),
+    ...(context?.mapRows === undefined ? {} : { mapRows: context.mapRows }),
+    ...(context?.placementIds === undefined ? {} : { placementIds: context.placementIds }),
+    ...(context?.obligationIds === undefined ? {} : { obligationIds: context.obligationIds }),
+    ...(context?.userOverride === true ? { userOverride: true } : {}),
     startedAt,
     settledAt: new Date().toISOString(),
     status: settled.Status,

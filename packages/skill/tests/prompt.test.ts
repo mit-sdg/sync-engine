@@ -100,6 +100,42 @@ describe("deterministic prompt construction", () => {
     expect(mapCritic.content).toBe("# Map critic\n");
   });
 
+  test("hash-binds retained continuation context without resending it", async () => {
+    const setup = await fixture("# Map\n<!-- input: brief -->\n");
+    await writeFile(
+      resolve(setup.root, "roles/designer-contract.md"),
+      "# Continue\n<!-- bind: brief -->\n<!-- bind?: review -->\n",
+    );
+    const brief = await setup.file("brief.md", "SECRET RETAINED CONTEXT");
+    const review = await setup.file("review.md", "All rows accepted.");
+    const result = await buildPrompt({
+      role: "designer",
+      mode: "contract",
+      inputs: [
+        { slot: "brief", path: brief },
+        { slot: "review", path: review },
+      ],
+      promptRoot: setup.root,
+    });
+    expect(result.content).not.toContain("SECRET RETAINED CONTEXT");
+    expect(result.content).not.toContain("All rows accepted.");
+    expect(result.content).toMatch(/bound: brief\.md; sha256 [a-f0-9]{64}; 24 source bytes/);
+    expect(result.sources.filter((source) => source.kind === "binding")).toHaveLength(2);
+
+    const selfContained = await buildPrompt({
+      role: "designer",
+      mode: "contract",
+      inputs: [
+        { slot: "brief", path: brief },
+        { slot: "review", path: review },
+      ],
+      promptRoot: setup.root,
+      expandBindings: true,
+    });
+    expect(selfContained.content).toContain("SECRET RETAINED CONTEXT");
+    expect(selfContained.sources.some((source) => source.kind === "binding")).toBe(false);
+  });
+
   test("orders repeated input files by display name", async () => {
     const setup = await fixture("# Role\n\n<!-- input: brief -->\n");
     const z = await setup.file("z.md", "Z");

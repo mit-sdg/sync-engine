@@ -16,6 +16,7 @@ import {
   type PromptRole,
 } from "./prompt.ts";
 import { agentExists, harness, launchRole } from "./launch.ts";
+import { snapshotMap, type MapSnapshot } from "./review.ts";
 import {
   completeNativeLaunch,
   nativeHarnesses,
@@ -23,7 +24,9 @@ import {
   type NativeHarness,
 } from "./native-launch.ts";
 import {
+  capturedResponse,
   isSettledStatus,
+  nextReviewPass,
   previousPhase,
   readPromptContext,
   requireCompletedRole,
@@ -32,6 +35,7 @@ import {
   requiredPhases,
   reserveWorkspacePath,
   registrationWrappers,
+  reviewRecords,
   verifiedRecords,
   workspaceDirectory,
   writePromptContext,
@@ -227,7 +231,7 @@ function usage(): string {
   sync-engine-skill launch complete --ticket <path> --agent-id <id>
     [--provider <provider>] [--model <model>] [--thinking <setting>]
   sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
-    [--brief <path>]
+    [--brief <path>] [--user-override]
 
 Roles:
   designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker
@@ -241,6 +245,7 @@ Prompt options:
   --design-digest <sha256>        Closed reviewed design digest for that directory
   --max-bytes <positive integer>  Override the role's default byte budget
   --stdout                        Print prompt bytes instead of writing the prompt file
+  --user-override                 Direct human instruction waives review judgment/limit
 
 Generated prompts, follow-ups, assignments, and launch records belong in
 ${workspaceDirectory}/ under the application root; the compiler owns those paths.
@@ -261,6 +266,7 @@ interface PromptArguments {
   readonly mode?: PromptMode;
   readonly designRoot?: string;
   readonly designDigest?: string;
+  readonly userOverride: boolean;
 }
 
 function parsePromptArguments(args: readonly string[]): PromptArguments {
@@ -270,6 +276,7 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   let mode: PromptMode | undefined;
   let designRoot: string | undefined;
   let designDigest: string | undefined;
+  let userOverride = false;
   const inputs: PromptInput[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
@@ -287,6 +294,8 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
       inputs.push({ slot: value.slice(0, separator), path: value.slice(separator + 1) });
     } else if (argument === "--stdout") {
       stdout = true;
+    } else if (argument === "--user-override") {
+      userOverride = true;
     } else if (argument === "--mode") {
       const value = takeValue(args, index, argument);
       index += 1;
@@ -319,7 +328,7 @@ function parsePromptArguments(args: readonly string[]): PromptArguments {
   for (const input of inputs) {
     if (input.slot === "assignment") requireInsideWorkspace(input.path);
   }
-  return { role, inputs, stdout, maxBytes, mode, designRoot, designDigest };
+  return { role, inputs, stdout, maxBytes, mode, designRoot, designDigest, userOverride };
 }
 
 async function reviewedContractDigest(options: PromptArguments): Promise<string | undefined> {
@@ -350,6 +359,58 @@ async function reviewedContractDigest(options: PromptArguments): Promise<string 
   return digest.digest;
 }
 
+interface CriticReviewMetadata {
+  readonly pass: number;
+  readonly snapshot?: MapSnapshot;
+  readonly obligationIds: readonly string[];
+  readonly inlineContent: string;
+}
+
+async function criticReviewMetadata(
+  options: PromptArguments,
+  briefSha256: string | undefined,
+): Promise<CriticReviewMetadata | undefined> {
+  if (options.role !== "critic" || options.mode === undefined) return undefined;
+  if (briefSha256 === undefined) throw new Error(`Critic prompt requires a brief binding`);
+  const pass = await nextReviewPass(options.mode, briefSha256, undefined, options.userOverride);
+  if (options.mode === "contract") {
+    const map = options.inputs.find(
+      (input) => input.slot === "candidate" && basename(input.path) === "decomposition.md",
+    );
+    if (map === undefined) throw new Error(`Contract critic requires a decomposition candidate`);
+    const snapshot = snapshotMap(await readFile(resolve(map.path), "utf8"));
+    return {
+      pass,
+      obligationIds: snapshot.obligationIds,
+      inlineContent: `This is contract review pass ${pass}; two passes are the default limit.`,
+    };
+  }
+
+  const candidate = options.inputs.find((input) => input.slot === "candidate");
+  if (candidate === undefined) throw new Error(`Map critic requires one candidate decomposition`);
+  const snapshot = snapshotMap(await readFile(resolve(candidate.path), "utf8"));
+  if (snapshot.rows.length === 0 || snapshot.placements.length === 0) {
+    throw new Error(`Candidate decomposition requires nonempty Need placement and Concept tables`);
+  }
+  const prior = pass > 1 ? (await reviewRecords("map", briefSha256)).at(-1) : undefined;
+  const priorResponse = prior === undefined ? undefined : await capturedResponse(prior.record);
+  const context = [
+    `This is map review pass ${pass}; two passes are the default limit.`,
+    ...(priorResponse === undefined
+      ? []
+      : [
+          `The prior report follows. Verify its repairs. Reopen an earlier accepted decision only for a new material conflict visible in the revised map:`,
+          priorResponse,
+        ]),
+  ].join("\n\n");
+  return {
+    pass,
+    snapshot,
+    obligationIds: snapshot.obligationIds,
+    inlineContent: context,
+  };
+}
+
 async function launchPromptContext(prompt: string, role: string) {
   const promptPath = requireInsideWorkspace(prompt);
   const context = await readPromptContext(promptPath);
@@ -366,14 +427,17 @@ async function requireContinuation(
   role: string,
   mode: PromptMode | undefined,
   agentId: string | undefined,
-  briefSha256?: string,
+  briefSha256: string | undefined,
+  userOverride: boolean,
+  expectedHarness: string,
 ): Promise<void> {
-  const needsContinuation = role === "designer" && mode === "contract";
-  if (!needsContinuation && agentId !== undefined) {
+  const contractDesigner = role === "designer" && mode === "contract";
+  if (!contractDesigner && agentId !== undefined) {
     throw new Error(`--continue-agent is only valid for the designer contract phase`);
   }
-  if (!needsContinuation) return;
+  if (!contractDesigner) return;
   if (agentId === undefined) {
+    if (userOverride) return;
     throw new Error(`Designer contract launch requires --continue-agent <map-designer-id>`);
   }
   const originals = await verifiedRecords("designer", undefined, undefined, "map");
@@ -381,10 +445,13 @@ async function requireContinuation(
     !originals.some(
       (entry) =>
         entry.record.agentId === agentId &&
+        (entry.record.harness ?? harness) === expectedHarness &&
         (briefSha256 === undefined || entry.record.briefSha256 === briefSha256),
     )
   ) {
-    throw new Error(`Agent ${agentId} has no settled designer map record`);
+    throw new Error(
+      `Agent ${agentId} has no settled designer map record through ${expectedHarness}`,
+    );
   }
 }
 
@@ -483,13 +550,27 @@ async function run(args: readonly string[]): Promise<void> {
 
   if (args[0] === "prompt" && args[1] === "build") {
     const options = parsePromptArguments(args.slice(2));
+    const brief = options.inputs.find((input) => input.slot === "brief");
+    const briefSha256 =
+      brief === undefined
+        ? undefined
+        : createHash("sha256")
+            .update(await readFile(resolve(brief.path), "utf8"))
+            .digest("hex");
+    const review = await criticReviewMetadata(options, briefSha256);
     const reviewedDigest = await reviewedContractDigest(options);
     const predecessor = previousPhase(options.role, options.mode);
     const predecessorDigest =
       options.designRoot === undefined || predecessor === undefined
         ? reviewedDigest
         : (await digestDesign(options.designRoot, designScope(predecessor.role))).digest;
-    await requireCompletedRole(options.role, undefined, predecessorDigest, options.mode);
+    await requireCompletedRole(
+      options.role,
+      undefined,
+      predecessorDigest,
+      options.mode,
+      options.userOverride,
+    );
     for (const input of options.inputs) {
       if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
     }
@@ -497,6 +578,20 @@ async function run(args: readonly string[]): Promise<void> {
       role: options.role,
       ...(options.mode === undefined ? {} : { mode: options.mode }),
       inputs: options.inputs,
+      ...(options.userOverride && options.role === "designer" && options.mode === "contract"
+        ? { expandBindings: true }
+        : {}),
+      ...(review === undefined
+        ? {}
+        : {
+            inlineInputs: [
+              {
+                slot: "review-context",
+                displayName: "compiler-review-context.md",
+                content: review.inlineContent,
+              },
+            ],
+          }),
       promptRoot: resolve(skillRoot, "prompts"),
       maxBytes: options.maxBytes,
       designRoot: options.designRoot,
@@ -508,7 +603,6 @@ async function run(args: readonly string[]): Promise<void> {
     if (promptPath === undefined) process.stdout.write(result.content);
     else {
       await writeFile(promptPath, result.content, "utf8");
-      const brief = options.inputs.find((input) => input.slot === "brief");
       await writePromptContext(promptPath, {
         format: "sync-engine.skill.prompt-context",
         version: 1,
@@ -516,14 +610,21 @@ async function run(args: readonly string[]): Promise<void> {
         ...(result.mode === undefined ? {} : { mode: result.mode }),
         toolPolicy: result.toolPolicy,
         sha256: result.sha256,
-        ...(brief === undefined
+        ...(briefSha256 === undefined ? {} : { briefSha256 }),
+        ...(reviewedDigest === undefined ? {} : { designDigest: reviewedDigest }),
+        ...(options.userOverride ? { userOverride: true as const } : {}),
+        ...(review === undefined
           ? {}
           : {
-              briefSha256: createHash("sha256")
-                .update(await readFile(resolve(brief.path), "utf8"))
-                .digest("hex"),
+              reviewPass: review.pass,
+              ...(review.snapshot === undefined
+                ? {}
+                : {
+                    mapRows: review.snapshot.rows,
+                    placementIds: review.snapshot.placements,
+                  }),
+              obligationIds: review.obligationIds,
             }),
-        ...(reviewedDigest === undefined ? {} : { designDigest: reviewedDigest }),
       });
     }
 
@@ -536,6 +637,11 @@ async function run(args: readonly string[]): Promise<void> {
     ].join("\n");
     const stream = options.stdout ? process.stderr : process.stdout;
     stream.write(`${report}\n`);
+    if (options.userOverride) {
+      stream.write(
+        `WARNING: direct user override recorded; review judgment or review-count defaults do not block this prompt. Integrity checks still apply.\n`,
+      );
+    }
     const delivered = promptPath ?? "the built prompt";
     const recipient =
       result.role === "designer" && result.mode === "contract"
@@ -604,8 +710,21 @@ async function run(args: readonly string[]): Promise<void> {
       );
     }
     const context = await launchPromptContext(prompt, role);
-    await requireCompletedRole(role, undefined, context.designDigest, context.mode);
-    await requireContinuation(role, context.mode, continuationAgentId, context.briefSha256);
+    await requireCompletedRole(
+      role,
+      undefined,
+      context.designDigest,
+      context.mode,
+      context.userOverride === true,
+    );
+    await requireContinuation(
+      role,
+      context.mode,
+      continuationAgentId,
+      context.briefSha256,
+      context.userOverride === true,
+      nativeHarness,
+    );
     const prepared = await prepareNativeLaunch({
       role,
       harness: nativeHarness as NativeHarness,
@@ -697,8 +816,21 @@ async function run(args: readonly string[]): Promise<void> {
     if (!promptRoles.includes(role as PromptRole))
       throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
     const context = await launchPromptContext(prompt, role);
-    await requireCompletedRole(role, undefined, context.designDigest, context.mode);
-    await requireContinuation(role, context.mode, continuationAgentId, context.briefSha256);
+    await requireCompletedRole(
+      role,
+      undefined,
+      context.designDigest,
+      context.mode,
+      context.userOverride === true,
+    );
+    await requireContinuation(
+      role,
+      context.mode,
+      continuationAgentId,
+      context.briefSha256,
+      context.userOverride === true,
+      harness,
+    );
     const launched = await launchRole({
       role,
       promptPath: prompt,
@@ -716,27 +848,32 @@ async function run(args: readonly string[]): Promise<void> {
     return;
   }
 
-  if (args[0] === "handback" && args[1] === "check" && (args.length === 6 || args.length === 8)) {
-    if (args[2] !== "--design-root" || args[4] !== "--design-digest") {
+  if (args[0] === "handback" && args[1] === "check") {
+    const handbackUserOverride = args.includes("--user-override");
+    const handbackArgs = args.filter((argument) => argument !== "--user-override");
+    if (handbackArgs.length !== 6 && handbackArgs.length !== 8) {
+      throw new Error(`handback check requires a design root and digest`);
+    }
+    if (handbackArgs[2] !== "--design-root" || handbackArgs[4] !== "--design-digest") {
       throw new Error(`handback check requires --design-root then --design-digest`);
     }
-    if (args.length === 8 && args[6] !== "--brief") {
+    if (handbackArgs.length === 8 && handbackArgs[6] !== "--brief") {
       throw new Error(`handback check accepts only --brief after the design digest`);
     }
-    await requireDesignDigest(args[3]!, args[5]!);
+    await requireDesignDigest(handbackArgs[3]!, handbackArgs[5]!);
     const scopedDigests = new Map<string, string>();
     for (const phase of requiredPhases) {
       if (!scopedDigests.has(phase.role)) {
         scopedDigests.set(
           phase.role,
-          (await digestDesign(args[3]!, designScope(phase.role))).digest,
+          (await digestDesign(handbackArgs[3]!, designScope(phase.role))).digest,
         );
       }
     }
     const briefSha256 =
-      args.length === 8
+      handbackArgs.length === 8
         ? createHash("sha256")
-            .update(await readFile(resolve(args[7]!), "utf8"))
+            .update(await readFile(resolve(handbackArgs[7]!), "utf8"))
             .digest("hex")
         : undefined;
     const drifted: string[] = [];
@@ -747,12 +884,29 @@ async function run(args: readonly string[]): Promise<void> {
     const unsettled: string[] = [];
     const coordinatorAttested: string[] = [];
     const wrapped = await registrationWrappers();
+    const phaseRecords = await Promise.all(
+      requiredPhases.map((phase) => verifiedRecords(phase.role, undefined, undefined, phase.mode)),
+    );
+    const recordedOverrideBoundary = phaseRecords.reduce(
+      (latest, records, index) =>
+        records.at(-1)?.record.userOverride === true ? Math.max(latest, index) : latest,
+      -1,
+    );
+    const overrideBoundary = handbackUserOverride
+      ? requiredPhases.length
+      : recordedOverrideBoundary;
+    const overridden: string[] = [];
     const lines: string[] = [];
-    for (const phase of requiredPhases) {
+    for (const [index, phase] of requiredPhases.entries()) {
       const label = `${phase.role}${phase.mode === undefined ? "" : ` ${phase.mode}`}`;
-      const records = await verifiedRecords(phase.role, undefined, undefined, phase.mode);
+      const records = phaseRecords[index]!;
       if (records.length === 0) {
-        missing.push(label);
+        if (index < overrideBoundary) {
+          overridden.push(label);
+          lines.push(`  ${label}: USER-OVERRIDDEN; no launch record required`);
+        } else {
+          missing.push(label);
+        }
         continue;
       }
       const latest = records[records.length - 1]!;
@@ -809,19 +963,21 @@ async function run(args: readonly string[]): Promise<void> {
       undefined,
       "contract",
     );
-    const mapDesignerIds = new Set(
-      mapDesignerRecords.slice(-1).map((entry) => entry.record.agentId),
-    );
-    const contractDesignerIds = new Set(
-      contractDesignerRecords.slice(-1).map((entry) => entry.record.agentId),
-    );
+    const designerIdentity = (entry: { readonly record: { agentId: string; harness?: string } }) =>
+      `${entry.record.harness ?? harness}:${entry.record.agentId}`;
+    const mapDesignerIds = new Set(mapDesignerRecords.slice(-1).map(designerIdentity));
+    const contractDesignerIds = new Set(contractDesignerRecords.slice(-1).map(designerIdentity));
     const continuedDesigner = [...contractDesignerIds].some((id) => mapDesignerIds.has(id));
-    process.stdout.write(`Handback check for design ${args[5]}:\n${lines.join("\n")}\n`);
+    process.stdout.write(`Handback check for design ${handbackArgs[5]}:\n${lines.join("\n")}\n`);
     const failures = [
       ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
       ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
       ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
-      ...(mapDesignerIds.size === 0 || contractDesignerIds.size === 0 || continuedDesigner
+      ...(mapDesignerIds.size === 0 ||
+      contractDesignerIds.size === 0 ||
+      continuedDesigner ||
+      overrideBoundary >=
+        requiredPhases.findIndex((phase) => phase.role === "designer" && phase.mode === "contract")
         ? []
         : [`designer contract phase used a different agent from the map phase`]),
       ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
@@ -830,6 +986,14 @@ async function run(args: readonly string[]): Promise<void> {
         : [`registered a class beside its registry: ${wrapped.join(", ")}`]),
     ];
     if (failures.length > 0) throw new Error(failures.join("; "));
+    if (overrideBoundary >= 0) {
+      const source = handbackUserOverride
+        ? "the handback command"
+        : `${requiredPhases[recordedOverrideBoundary]!.role} launch`;
+      process.stdout.write(
+        `Direct user override recorded by ${source}; waived phases are not represented as independently completed or critic-approved${overridden.length === 0 ? "" : `: ${overridden.join(", ")}`}.\n`,
+      );
+    }
     if (coordinatorAttested.length > 0) {
       process.stdout.write(
         `Native launches recorded by the coordinator; this compiler cannot query those harness sessions:\n  ${coordinatorAttested.join("\n  ")}\n`,
@@ -843,7 +1007,11 @@ async function run(args: readonly string[]): Promise<void> {
         `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
       );
     }
-    process.stdout.write(`Every required role phase has a settled launch record.\n`);
+    process.stdout.write(
+      overrideBoundary < 0
+        ? `Every required role phase has a settled launch record.\n`
+        : `Every non-waived required role phase has a settled launch record.\n`,
+    );
     return;
   }
 

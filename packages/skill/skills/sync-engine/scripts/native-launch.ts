@@ -7,6 +7,7 @@ import {
   readLaunchRecords,
   readPromptContext,
   requireInsideWorkspace,
+  requireReviewPass,
   reserveWorkspacePath,
   responseContract,
   verifiedRecords,
@@ -29,6 +30,11 @@ export interface LaunchTicket {
   readonly responsePath: string;
   readonly briefSha256?: string;
   readonly designDigest?: string;
+  readonly reviewPass?: number;
+  readonly mapRows?: readonly string[];
+  readonly placementIds?: readonly string[];
+  readonly obligationIds?: readonly string[];
+  readonly userOverride?: true;
   readonly preparedAt: string;
 }
 
@@ -54,6 +60,8 @@ function isLaunchTicket(value: unknown): value is LaunchTicket {
     typeof ticket.prompt.sha256 === "string" &&
     typeof ticket.prompt.bytes === "number" &&
     typeof ticket.responsePath === "string" &&
+    (ticket.reviewPass === undefined ||
+      (Number.isSafeInteger(ticket.reviewPass) && ticket.reviewPass > 0)) &&
     typeof ticket.preparedAt === "string"
   );
 }
@@ -102,13 +110,32 @@ export async function prepareNativeLaunch(
   }
 
   const applicationRoot = canonical(options.applicationRoot);
-  const needsContinuation = options.role === "designer" && context.mode === "contract";
-  if (needsContinuation !== (options.continuationAgentId !== undefined)) {
-    throw new NativeLaunchError(
-      needsContinuation
-        ? `Designer contract launch requires its map designer agent ID`
-        : `Only the designer contract phase may continue an existing agent`,
+  if (options.role === "critic") {
+    if (
+      context.mode === undefined ||
+      context.briefSha256 === undefined ||
+      context.reviewPass === undefined
+    ) {
+      throw new NativeLaunchError(`Critic prompt has no compiler-bound review pass`);
+    }
+    await requireReviewPass(
+      context.mode,
+      context.briefSha256,
+      context.reviewPass,
+      applicationRoot,
+      context.userOverride === true,
     );
+  }
+  const contractDesigner = options.role === "designer" && context.mode === "contract";
+  if (!contractDesigner && options.continuationAgentId !== undefined) {
+    throw new NativeLaunchError(`Only the designer contract phase may continue an existing agent`);
+  }
+  if (
+    contractDesigner &&
+    options.continuationAgentId === undefined &&
+    context.userOverride !== true
+  ) {
+    throw new NativeLaunchError(`Designer contract launch requires its map designer agent ID`);
   }
   if (options.continuationAgentId !== undefined) {
     const originals = await verifiedRecords("designer", applicationRoot, undefined, "map");
@@ -116,6 +143,7 @@ export async function prepareNativeLaunch(
       !originals.some(
         (entry) =>
           entry.record.agentId === options.continuationAgentId &&
+          entry.record.harness === options.harness &&
           entry.record.briefSha256 === context.briefSha256,
       )
     ) {
@@ -145,6 +173,11 @@ export async function prepareNativeLaunch(
     responsePath,
     ...(context.briefSha256 === undefined ? {} : { briefSha256: context.briefSha256 }),
     ...(context.designDigest === undefined ? {} : { designDigest: context.designDigest }),
+    ...(context.reviewPass === undefined ? {} : { reviewPass: context.reviewPass }),
+    ...(context.mapRows === undefined ? {} : { mapRows: context.mapRows }),
+    ...(context.placementIds === undefined ? {} : { placementIds: context.placementIds }),
+    ...(context.obligationIds === undefined ? {} : { obligationIds: context.obligationIds }),
+    ...(context.userOverride === true ? { userOverride: true } : {}),
     preparedAt: new Date().toISOString(),
   };
   const ticketPath = await reserveWorkspacePath("ticket", options.role, applicationRoot);
@@ -208,9 +241,33 @@ export async function completeNativeLaunch(
     context?.sha256 !== ticket.prompt.sha256 ||
     context?.role !== ticket.role ||
     context?.mode !== ticket.mode ||
-    context?.toolPolicy !== ticket.toolPolicy
+    context?.toolPolicy !== ticket.toolPolicy ||
+    context?.briefSha256 !== ticket.briefSha256 ||
+    context?.designDigest !== ticket.designDigest ||
+    context?.reviewPass !== ticket.reviewPass ||
+    context?.userOverride !== ticket.userOverride ||
+    JSON.stringify(context?.mapRows) !== JSON.stringify(ticket.mapRows) ||
+    JSON.stringify(context?.placementIds) !== JSON.stringify(ticket.placementIds) ||
+    JSON.stringify(context?.obligationIds) !== JSON.stringify(ticket.obligationIds) ||
+    Buffer.byteLength(prompt.content, "utf8") !== ticket.prompt.bytes
   ) {
     throw new NativeLaunchError(`Prompt or role changed after launch preparation: ${promptPath}`);
+  }
+  if (ticket.role === "critic") {
+    if (
+      ticket.mode === undefined ||
+      ticket.briefSha256 === undefined ||
+      ticket.reviewPass === undefined
+    ) {
+      throw new NativeLaunchError(`Critic ticket has no compiler-bound review pass`);
+    }
+    await requireReviewPass(
+      ticket.mode,
+      ticket.briefSha256,
+      ticket.reviewPass,
+      options.applicationRoot,
+      ticket.userOverride === true,
+    );
   }
   const responsePath = requireInsideWorkspace(ticket.responsePath, options.applicationRoot);
   const response = await readFile(responsePath, "utf8");
@@ -219,7 +276,11 @@ export async function completeNativeLaunch(
       `Native agent return is empty; copy its final response verbatim into ${responsePath}`,
     );
   }
-  const violation = responseContract(ticket.role, response, ticket.mode);
+  const violation = responseContract(ticket.role, response, ticket.mode, {
+    mapRows: ticket.mapRows,
+    placementIds: ticket.placementIds,
+    obligationIds: ticket.obligationIds,
+  });
   const record: LaunchRecord = {
     format: "sync-engine.skill.launch-record",
     version: 1,
@@ -236,6 +297,11 @@ export async function completeNativeLaunch(
     prompt: ticket.prompt,
     ...(ticket.briefSha256 === undefined ? {} : { briefSha256: ticket.briefSha256 }),
     ...(ticket.designDigest === undefined ? {} : { designDigest: ticket.designDigest }),
+    ...(ticket.reviewPass === undefined ? {} : { reviewPass: ticket.reviewPass }),
+    ...(ticket.mapRows === undefined ? {} : { mapRows: ticket.mapRows }),
+    ...(ticket.placementIds === undefined ? {} : { placementIds: ticket.placementIds }),
+    ...(ticket.obligationIds === undefined ? {} : { obligationIds: ticket.obligationIds }),
+    ...(ticket.userOverride === true ? { userOverride: true } : {}),
     startedAt: ticket.preparedAt,
     settledAt: new Date().toISOString(),
     status: portableSettledStatus,

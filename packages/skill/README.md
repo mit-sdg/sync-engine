@@ -48,7 +48,7 @@ The coordinator maintains `product/brief.md`. It records what the product does a
 
 The designer authors everything under `design/`, including concept specifications, compositions, and the types document. Every downstream role treats that directory as read-only.
 
-The designer first writes only the decomposition map. A prompt-read-only map critic settles every row and every coverage, authority, and obligation blocker before the same recorded designer receives the contract phase. Authored-contract criticism gets at most two fresh prompt-read-only passes; the critic classifies findings, and remaining blockers stop rather than extending the loop.
+The designer first places every brief need in a concept, composition, host, implementation, or evidence layer and writes only the decomposition map. A prompt-read-only map critic settles every concept row, need placement, authority, and obligation before the same recorded designer receives a compact contract-phase continuation. Two map and contract reviews are the default; pass two receives the prior map report. A clean contract verdict includes auditable checks for every map obligation. A direct human instruction may waive any workflow phase or review judgment, adopt a supplied design, or request another pass with `--user-override`; records and handback disclose every waived phase rather than calling it independent completion or critic approval.
 
 By default, one concept worker implements all concepts and one application worker wires them together. Only compiler-proven disjoint concept batches may run in parallel, and only when the harness enforces their paths.
 
@@ -75,13 +75,13 @@ Every role is recorded through the skill's `launch` commands. In Paseo, `launch`
 
 Managed records contain the harness-observed agent identity, configuration, prompt hash and size, brief hash, design digest, timing, response, and available tool audit. Native records contain the native agent ID and the same compiler-verifiable hashes, but are marked coordinator-attested because the compiler cannot query another harness's in-session agent UI.
 
-Building a role prompt requires a settled record for the preceding phase. The continuing designer contract phase gets its own record tied to the map designer's agent ID. Handback requires records for both designer and critic phases and every required implementation role. Each record must still hash to its prompt and captured response. A managed record must also refer to an agent still known to Paseo. Native handback reports that independent harness attestation was unavailable; the harness's own agent UI or transcript remains inspectable. Work done directly by the coordinator has no valid native delegation and is forbidden even though portable records cannot prove that boundary cryptographically.
+By default, building a role prompt requires a settled record for the preceding phase, and the continuing designer contract phase gets its own record tied to the map designer's agent-and-harness identity. A direct `--user-override` may launch from supplied context instead. Handback requires records for every non-waived phase and names each waived phase explicitly. Each record must still hash to its prompt and captured response. A managed record must also refer to an agent still known to Paseo. Native handback reports that independent harness attestation was unavailable; the harness's own agent UI or transcript remains inspectable. Work done directly by the coordinator has no valid native delegation and is forbidden even though portable records cannot prove that boundary cryptographically.
 
 ### Reply and path audits
 
 After a role settles, two checks read from the harness instead of trusting the role's account of its work.
 
-The reply check enforces the exact critic grammar and worker `Changed`/`Checks`/`Blocker`/`Budget` envelope and rejects empty responses. Portable harnesses treat execution counts as self-reported rather than machine-attested.
+The reply check enforces complete map row and need-placement verdicts, every required clean-contract obligation check, and the worker `Changed`/`Checks`/`Blocker`/`Budget` envelope; it rejects empty responses. Portable harnesses treat execution counts as self-reported rather than machine-attested.
 
 The path check records every path the role opened, and handback reports any that fall
 outside where that role may read. It does not fail the launch: the role has already
@@ -108,7 +108,7 @@ release check [<application-directory>]
 brief init <brief.md>
 brief check <brief.md>
 design digest <design-directory> [--role <role>]
-prompt build --role <role> [--mode map|contract] --input <slot>=<path>...
+prompt build --role <role> [--mode map|contract] --input <slot>=<path>... [--user-override]
 assignment new --role <role> --design-digest <sha256>
 assignment check <file>
 follow-up new --role <role>
@@ -116,7 +116,7 @@ follow-up check <file> --design-root <directory> --design-digest <sha256>
 launch --role <role> --prompt <path> [--continue-agent <id>] [--timeout <seconds>]
 launch prepare --harness <harness> --role <role> --prompt <path> [--continue-agent <id>]
 launch complete --ticket <path> --agent-id <id>
-handback check --design-root <directory> --design-digest <sha256>
+handback check --design-root <directory> --design-digest <sha256> [--user-override]
 ```
 
 Valid roles are `designer`, `critic`, `concept-worker`, `application-worker`, `frontend-worker`, and `evidence-worker`.
@@ -130,9 +130,9 @@ The coordinator decides what a role needs. The compiler puts it in the prompt.
 Each role template declares named slots, and the coordinator fills them with
 `--input <slot>=<path>`, repeating a slot for several files:
 
-- map `designer`: the brief and compiled catalog listing.
-- contract `designer`: the brief, accepted map, map review, and exactly its named catalog entries.
-- map `critic`: the brief and decomposition map.
+- map `designer`: the brief and compact catalog purpose/operation cards.
+- contract `designer`: hash bindings for the brief, accepted map, and review already retained by that same agent, plus full contracts only for `catalog-unchanged` entries.
+- map `critic`: the brief, decomposition map, compact catalog cards, compiler-bound pass count, and the prior report on later passes.
 - contract `critic`: the brief, accepted map, and every candidate contract file.
 - `concept-worker`: its assignment, the approved specifications, implementation examples,
   and an optional reference.
@@ -158,7 +158,7 @@ named on the command line, and the prompt record lists all of them.
 
 ## Prompt compiler
 
-Prompt templates use three directives: `include` adds shared text, `input` requires a file, and `input?` accepts an optional file.
+Prompt templates use five directives: `include` adds shared text; `input` and `input?` add required or optional file bytes; `bind` and `bind?` hash-bind required or optional files without resending bytes already retained by a continuing agent.
 
 The compiler applies byte budgets of 32 KiB for designer prompts, 48 KiB for critics, 24 KiB for concept workers, 48 KiB for application and frontend workers, and 32 KiB for evidence. Checked assignments reject declared tool ceilings above 24, 28, 20, and 20 respectively, with two runs per command and one informed repair per diagnostic signature. Paseo audits observable logs; portable harnesses record that these limits are prompt-enforced.
 

@@ -2,6 +2,13 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import {
+  contractCleanViolation,
+  isCleanContractResponse,
+  mapResponseAccepted,
+  mapResponseViolation,
+  type ReviewExpectation,
+} from "./review.ts";
 
 /** Paseo's status for a role that finished and can receive a follow-up. */
 export const settledStatus = "idle";
@@ -47,6 +54,13 @@ export interface PromptContext {
   readonly sha256: string;
   readonly briefSha256?: string;
   readonly designDigest?: string;
+  /** Critic prompts bind the exact review sequence and expected response coverage. */
+  readonly reviewPass?: number;
+  readonly mapRows?: readonly string[];
+  readonly placementIds?: readonly string[];
+  readonly obligationIds?: readonly string[];
+  /** A direct human instruction may waive a review judgment, never an integrity check. */
+  readonly userOverride?: true;
 }
 
 export function promptContextPath(promptPath: string): string {
@@ -166,6 +180,11 @@ export interface LaunchRecord {
   readonly prompt: { readonly path: string; readonly sha256: string; readonly bytes: number };
   readonly briefSha256?: string;
   readonly designDigest?: string;
+  readonly reviewPass?: number;
+  readonly mapRows?: readonly string[];
+  readonly placementIds?: readonly string[];
+  readonly obligationIds?: readonly string[];
+  readonly userOverride?: true;
   readonly startedAt: string;
   readonly settledAt: string;
   readonly status: string;
@@ -233,6 +252,7 @@ export function responseContract(
   role: string,
   response: string,
   mode?: "map" | "contract",
+  expectation: ReviewExpectation = {},
 ): string | undefined {
   const text = unfenced(response.trim());
   if (text === "") return `${role} returned nothing`;
@@ -262,19 +282,10 @@ export function responseContract(
     return `${role} must return its Changed, Checks, Blocker, and Budget envelope`;
   }
   if (role !== "critic") return undefined;
-  if (mode === "map") {
-    const lines = text.split("\n").filter((line) => line.trim() !== "");
-    const allowed =
-      /^- (?:ROW `design\/decomposition\.md` — |COVERAGE — |AUTHORITY — |OBLIGATION — )/;
-    if (
-      lines.some((line) => line.startsWith("- ROW ")) &&
-      lines.every((line) => allowed.test(line))
-    ) {
-      return undefined;
-    }
-    return `map critic must include a ROW verdict and use only its exact blocker forms`;
+  if (mode === "map") return mapResponseViolation(text, expectation);
+  if (isCleanContractResponse(text)) {
+    return contractCleanViolation(text, expectation.obligationIds);
   }
-  if (text === "No material findings.") return undefined;
   const lines = text.split("\n").filter((line) => line.trim() !== "");
   if (
     lines.every(
@@ -284,7 +295,7 @@ export function responseContract(
   ) {
     return undefined;
   }
-  return `contract critic must return "No material findings." or begin with a classified finding, with no preamble`;
+  return `contract critic must return its CHECK/VERDICT clean envelope or begin with a classified finding, with no preamble`;
 }
 
 export function isLaunchRecord(value: unknown): value is LaunchRecord {
@@ -389,7 +400,49 @@ export async function verifiedRecords(
   return found;
 }
 
-async function capturedResponse(record: LaunchRecord): Promise<string | undefined> {
+/** Review sequences are bounded by the brief, even when contract repair changes the digest. */
+export async function reviewRecords(
+  mode: "map" | "contract",
+  briefSha256: string,
+  applicationRoot?: string,
+): Promise<Array<{ path: string; record: LaunchRecord }>> {
+  return (await verifiedRecords("critic", applicationRoot, undefined, mode)).filter(
+    (entry) => entry.record.briefSha256 === briefSha256,
+  );
+}
+
+export async function nextReviewPass(
+  mode: "map" | "contract",
+  briefSha256: string,
+  applicationRoot?: string,
+  userOverride = false,
+): Promise<number> {
+  const count = (await reviewRecords(mode, briefSha256, applicationRoot)).length;
+  if (count >= 2 && !userOverride) {
+    throw new WorkspaceError(
+      `${mode === "map" ? "Map" : "Contract"} review reached its default ceiling of two settled passes; a direct human instruction may continue with --user-override`,
+    );
+  }
+  return count + 1;
+}
+
+/** Reject stale or concurrently prepared critic prompts; user override only lifts the ceiling. */
+export async function requireReviewPass(
+  mode: "map" | "contract",
+  briefSha256: string,
+  pass: number,
+  applicationRoot?: string,
+  userOverride = false,
+): Promise<void> {
+  const expected = await nextReviewPass(mode, briefSha256, applicationRoot, userOverride);
+  if (pass !== expected) {
+    throw new WorkspaceError(
+      `${mode === "map" ? "Map" : "Contract"} critic prompt is for pass ${pass}, but the next allowed pass is ${expected}`,
+    );
+  }
+}
+
+export async function capturedResponse(record: LaunchRecord): Promise<string | undefined> {
   if (record.response === undefined) return undefined;
   try {
     return unfenced((await readFile(record.response.path, "utf8")).trim());
@@ -406,14 +459,10 @@ async function acceptedCriticPhase(
   if (latest === undefined) return false;
   const response = await capturedResponse(latest.record);
   if (response === undefined) return false;
-  if (mode === "map") {
-    const lines = response.split("\n").filter((line) => line.trim() !== "");
-    return (
-      lines.some((line) => line.startsWith("- ROW ")) &&
-      lines.every((line) => line.startsWith("- ROW ") && line.includes(" — accept — "))
-    );
+  if (mode === "map") return mapResponseAccepted(response);
+  if (isCleanContractResponse(response)) {
+    return contractCleanViolation(response, latest.record.obligationIds) === undefined;
   }
-  if (response === "No material findings.") return true;
   return (
     records.length >= 2 &&
     !response.includes("- `BLOCKER` —") &&
@@ -434,9 +483,10 @@ export async function requireCompletedRole(
   applicationRoot?: string,
   designDigest?: string,
   mode?: "map" | "contract",
+  userOverride = false,
 ): Promise<void> {
   const predecessor = previousPhase(role, mode);
-  if (predecessor === undefined) return;
+  if (predecessor === undefined || userOverride) return;
   const requiredDigest = predecessor.role === "designer" ? undefined : designDigest;
   const completed = await verifiedRecords(
     predecessor.role,
@@ -461,7 +511,7 @@ export async function requireCompletedRole(
     ) {
       throw new WorkspaceError(
         predecessor.mode === "map"
-          ? `Designer contract phase requires an accepted map review with no coverage, authority, or obligation blockers`
+          ? `Designer contract phase requires accepted concept rows and need placements with no authority or obligation blockers`
           : `Implementation requires a clean contract review or a second pass containing only MATERIAL-NONBLOCKER findings`,
       );
     }

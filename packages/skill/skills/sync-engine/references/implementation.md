@@ -115,7 +115,9 @@ failure, return that focused diagnostic to the original worker, rerun the affect
 focused command, then every check invalidated by the changed paths regardless of chain
 position. Do not repeat unaffected checks.
 
-Confirm every required role phase ran independently before reporting anything:
+Confirm every required role phase ran independently before reporting anything. When the
+human directly waives a missing phase or asks to hand back supplied work as-is, append
+`--user-override`; the report lists waived phases instead of inventing their evidence:
 
 ```sh
 bun "<skill-root>/scripts/command.ts" handback check \

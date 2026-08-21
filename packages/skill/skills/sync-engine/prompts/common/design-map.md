@@ -1,8 +1,13 @@
 # Decomposition rules
 
-A concept owns one coherent mechanism and one independent reason for state to change.
+Place every need before concepts: semantic state, lifecycle, and sole authority in a
+concept; cross-concept policy and recovery in composition; protocol projection in the
+host; persistence and restart in implementation/evidence. Placement is ownership, not a
+reason to add a concept row.
+
+A concept owns one mechanism and one independent reason for state to change.
 Layout, workflow, shared identity, endpoint nouns, and a product feature do not define a
-boundary. Read needs from state, actions, lifecycles, authorities and failures.
+boundary. Read concept needs from state, actions, lifecycles, authorities and failures.
 
 A concept is generic only when a second unrelated application can use it unchanged. Name
 the mechanism rather than this product and keep every foreign subject opaque. Parsing,
