@@ -283,13 +283,13 @@ function capabilities(
     ({ area, path }) => area === "application" && path === ".",
   );
   const applicationBoundary = broadApplicationRead
-    ? "Application read `.` excludes `.git`, `.sync-engine`, `node_modules`, framework internals, and generated/build output unless separately supplied or granted.\n\n"
+    ? "Application read `.` excludes `.git`, `.sync-engine`, `.cursor`, `.claude`, `.pi`, `.codex`, `.agents`, `node_modules`, every `SKILL.md`, framework internals, and generated/build output unless separately supplied or granted.\n\n"
     : "";
   return `# Capabilities
 
 ## Repository boundary
 
-The application root is ${JSON.stringify(applicationRoot)}. Resolve every relative path from that root and stay inside it. Never search, list, read, or write a parent directory, sibling repository or trial, home-directory configuration, global skill, or temporary directory. Do not seek prior implementations, prior trial output, or examples outside this application. The generated prompt and supplied context below are authoritative: do not reread their task, brief, decomposition, contracts, guidance, or role files from disk. Use repository reads only for granted application context that is not already embedded.
+The application root is ${JSON.stringify(applicationRoot)}. Resolve every relative path from that root and stay inside it. You are a bounded role worker, not the coordinator. Even if the harness advertises skills, do not load, invoke, follow, search, or inspect any project-local or global skill, any \`SKILL.md\`, or any harness configuration directory. Do not inspect another generated prompt, task, grant, record, response, agent trace, prior implementation, or prior trial output. Never search, list, read, or write a parent directory, sibling repository or trial, home-directory configuration, or temporary directory. This generated prompt and its supplied context are your complete role contract: do not reread their task, brief, decomposition, contracts, guidance, or role files from disk. Use repository reads only for expressly granted application or design context that is not already embedded.
 
 - Read: ${areaList(grant.readableAreas, applicationRoot, workUnit)}.
 - Write: ${areaList(grant.writableAreas, applicationRoot, workUnit)}.
