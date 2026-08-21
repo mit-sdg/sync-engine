@@ -1,4 +1,8 @@
 import {
+  applicationManifestDigest,
+  type ApplicationDiagnostic,
+} from "@mit-sdg/sync-engine/tooling";
+import {
   AnalysisError,
   AnalysisLimitError,
   createApplicationAnalysis,
@@ -144,6 +148,41 @@ describe("application analysis facade", () => {
     );
     expect(analysis.index).toEqual(snapshot.applicationIndex);
     expect(analysis.project?.applicationIndex.provenance.analyzer.version).toBe("1.0.0-beta.6");
+  });
+
+  test("accepts manifest diagnostics independently of their producer ordering", () => {
+    const fixture = applicationProjectFixture();
+    try {
+      const diagnostics: ApplicationDiagnostic[] = [
+        {
+          severity: "warning",
+          code: "UNLOWERED_REACTION",
+          definition: { kind: "reaction", name: "RecordNote" },
+          message: "warning sorts after info in the project snapshot",
+        },
+        {
+          severity: "info",
+          code: "OPAQUE_PATTERN",
+          definition: { kind: "reaction", name: "RecordNote" },
+          message: "info sorts before warning in the project snapshot",
+        },
+      ];
+      const manifest = fixture.manifest as {
+        diagnostics: ApplicationDiagnostic[];
+        digest: string;
+      };
+      manifest.diagnostics = diagnostics;
+      manifest.digest = applicationManifestDigest(fixture.manifest);
+      const snapshot = loadApplicationProject(fixtureOptions(fixture));
+
+      expect(snapshot.manifestDiagnostics.map(({ severity }) => severity)).toEqual([
+        "info",
+        "warning",
+      ]);
+      expect(() => trustedFacade(fixture, snapshot)).not.toThrow();
+    } finally {
+      fixture.cleanup();
+    }
   });
 
   test("rejects malformed manifests and project snapshots before constructing a facade", () => {

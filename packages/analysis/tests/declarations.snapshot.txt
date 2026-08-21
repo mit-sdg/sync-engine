@@ -39,7 +39,7 @@ export interface AnalysisLimits {
     readonly maxStaticResolutionDepth?: number;
     /** Maximum alternatives retained before a value is reported unresolved. Defaults to 32. */
     readonly maxStaticResolutionAlternatives?: number;
-    /** Maximum AST nodes inspected during source discovery. Defaults to 100,000. */
+    /** Maximum AST nodes inspected during source discovery. Defaults to 1,000,000. */
     readonly maxAstCandidates?: number;
     /** Maximum AST nodes retained across unique repository source trees. Defaults to 1,000,000. */
     readonly maxAstNodes?: number;
@@ -76,7 +76,7 @@ export declare const DEFAULT_ANALYSIS_RESOURCE_LIMITS: {
     readonly maxSourceAnchors: 100000;
     readonly maxStaticResolutionDepth: 32;
     readonly maxStaticResolutionAlternatives: 32;
-    readonly maxAstCandidates: 100000;
+    readonly maxAstCandidates: 1000000;
     readonly maxAstNodes: 1000000;
     readonly maxProjectFiles: 20000;
     readonly maxProjectFileBytes: 16777216;
