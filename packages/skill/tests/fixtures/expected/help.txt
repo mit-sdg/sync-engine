@@ -27,7 +27,7 @@ Roles and phases (valid pairs):
   evidence-worker/evidence
 
 Harnesses:
-  paseo, codex, claude-code, antigravity, cursor
+  paseo, pi, codex, claude-code, antigravity, cursor
 
 Options:
   --design-root must be the canonical <application>/design directory. Prompt build creates

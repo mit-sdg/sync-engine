@@ -3,10 +3,11 @@ import { claudeCodeAdapter } from "./adapters/claude-code.ts";
 import { codexAdapter } from "./adapters/codex.ts";
 import { cursorAdapter } from "./adapters/cursor.ts";
 import { paseoAdapter } from "./adapters/paseo.ts";
+import { piAdapter } from "./adapters/pi.ts";
 import type { EnforcementLevel } from "./records.ts";
 import { capabilityCategories, type EffectiveCapabilityGrant } from "./roles.ts";
 
-export const harnessIds = ["paseo", "codex", "claude-code", "antigravity", "cursor"] as const;
+export const harnessIds = ["paseo", "pi", "codex", "claude-code", "antigravity", "cursor"] as const;
 export type HarnessId = (typeof harnessIds)[number];
 export type CapabilitySupport = EnforcementLevel | "unsupported";
 export type CapabilitySupportMap = Readonly<
@@ -130,6 +131,7 @@ export interface PreparedHarnessInvocation<Capabilities = EffectiveCapabilityGra
 
 const definitions = [
   paseoAdapter,
+  piAdapter,
   codexAdapter,
   claudeCodeAdapter,
   antigravityAdapter,

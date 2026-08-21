@@ -53,7 +53,7 @@ describe("harness adapter conformance", () => {
   });
 
   test("contains only the documented native differences", () => {
-    const [paseo, codex, claude, antigravity, cursor] = harnessAdapters;
+    const [paseo, pi, codex, claude, antigravity, cursor] = harnessAdapters;
     expect(
       harnessAdapters.map(({ promptDelivery }) => [
         promptDelivery.fresh.mode,
@@ -61,12 +61,14 @@ describe("harness adapter conformance", () => {
       ]),
     ).toEqual([
       ["shell-file-expansion", "native-prompt-file"],
+      ["shell-file-expansion", "shell-file-expansion"],
       ["agent-file-instruction", "agent-file-instruction"],
       ["agent-file-instruction", "agent-file-instruction"],
       ["agent-file-instruction", "agent-file-instruction"],
       ["shell-file-expansion", "shell-file-expansion"],
     ]);
     expect(harnessAdapters.map(({ cwd }) => cwd.mode)).toEqual([
+      "explicit-application-cwd",
       "explicit-application-cwd",
       "inherit-application-workspace",
       "inherit-application-workspace",
@@ -76,6 +78,9 @@ describe("harness adapter conformance", () => {
     expect({
       paseo: paseo?.fresh.mechanism,
       paseoTitle: paseo?.freshTitleField,
+      piFresh: pi?.fresh.operation,
+      piContinuation: pi?.continuation.operation,
+      piTitle: pi?.freshTitleField,
       codex: codex?.fresh.instruction,
       claude: claude?.fresh.mechanism,
       claudeTitle: claude?.freshTitleField,
@@ -85,6 +90,9 @@ describe("harness adapter conformance", () => {
     }).toEqual({
       paseo: "Paseo CLI",
       paseoTitle: "--title",
+      piFresh: "pi --mode json -p",
+      piContinuation: "pi --mode json -p --session <session-id>",
+      piTitle: "--name",
       codex: "Spawn a fresh worker thread, falling back to the general-purpose agent.",
       claude: "Claude Code Agent tool",
       claudeTitle: "description",
@@ -229,7 +237,7 @@ describe("harness adapter conformance", () => {
 
     const broken = structuredClone(harnessAdapters) as Array<Partial<HarnessAdapterDefinition>>;
     (broken[0]!.identity as { stableContinuation: boolean }).stableContinuation = false;
-    delete (broken[1] as { continuation?: unknown }).continuation;
+    delete (broken[2] as { continuation?: unknown }).continuation;
     expect(validateHarnessAdapters(broken)).toEqual([
       "paseo: stable continuation identity is required",
       "codex: incomplete continuation action",

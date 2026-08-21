@@ -19,20 +19,23 @@ results.
 
 ## Install
 
-With Pi:
+The published package contains a standard Agent Skill under `skills/sync-engine/` and the
+`sync-engine-skill` CLI. Point your Agent Skill loader at that directory and load one copy
+so the `sync-engine` name is unambiguous.
+
+Pi can install the published package directly:
 
 ```sh
 pi install npm:@mit-sdg/sync-engine-skill@VERSION
 ```
 
-Replace `VERSION` with the published skill version you want to load. Pi is a skill loader
-and coordinator environment, not another harness adapter. The Pi environment must expose
-one of the supported adapter mechanisms listed below.
+Replace `VERSION` with the release you want. Pi may coordinate the workflow and, when the
+Pi adapter is selected, launch delegated roles in child Pi CLI processes backed by
+persistent sessions.
 
-With another Agent Skill loader, select the package's `skills/sync-engine/` directory.
-From this checkout, load `packages/skill/skills/sync-engine/`. Load one copy of the
-`sync-engine` skill so its name is unambiguous. In an empty application directory,
-complete the [pre-CLI scaffold](skills/sync-engine/references/workflow.md#complete-bootstrap-before-the-brief)
+From this repository, load `packages/skill/skills/sync-engine/`. In an empty application
+directory, complete the
+[pre-CLI scaffold](skills/sync-engine/references/workflow.md#complete-bootstrap-before-the-brief)
 before the first source-checkout CLI invocation.
 
 The installed CLI documents valid role/phase pairs, inputs, grants, harnesses, and all
@@ -79,9 +82,11 @@ units are retained, ignored, committed, or deleted.
 
 ## Supported harnesses
 
-The same coordinator-mediated flow supports:
+The coordinator environment and delegated-role harness may differ. The same workflow
+supports:
 
 - Paseo
+- Pi
 - Codex
 - Claude Code
 - Antigravity
@@ -89,8 +94,8 @@ The same coordinator-mediated flow supports:
 
 Through each adapter, the coordinator launches fresh role agents with descriptive title
 metadata, preserves same-agent continuation, keeps generated prompts as auditable files,
-and prefers native file-backed
-prompt delivery that does not spend coordinator output tokens. The coordinator copies
+and prefers native file-backed prompt delivery that does not spend coordinator output
+tokens. The coordinator copies
 native output verbatim for skill CLI validation and record finalization. Harness-specific
 invocation details are documented in
 [the harness reference](skills/sync-engine/references/harnesses.md).

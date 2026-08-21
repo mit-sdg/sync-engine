@@ -18,7 +18,7 @@ export const enforcementLevels = ["harness-enforced", "prompt-guided"] as const;
 export type LaunchStatus = (typeof launchStatuses)[number];
 export type EnforcementLevel = (typeof enforcementLevels)[number];
 
-const harnessValues = ["paseo", "codex", "claude-code", "antigravity", "cursor"] as const;
+const harnessValues = ["paseo", "pi", "codex", "claude-code", "antigravity", "cursor"] as const;
 const rolePhaseValues = [
   "designer/decomposition",
   "designer/contracts",

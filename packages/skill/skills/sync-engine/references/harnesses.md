@@ -1,11 +1,12 @@
 # Harness adapters
 
-Paseo, Codex, Claude Code, Antigravity, and Cursor use one coordinator-mediated contract.
+Paseo, Pi, Codex, Claude Code, Antigravity, and Cursor use one coordinator-mediated
+contract.
 The prompt, capabilities, work-unit records, role independence, and continuation meaning
 are the same in every harness. An adapter describes invocation differences; it does not
-choose workflow phases or review outcomes. Pi may load and coordinate the skill, but Pi is
-not itself an adapter; its environment must expose one of these mechanisms. Run
-`sync-engine-skill --help` for exhaustive CLI options.
+choose workflow phases or review outcomes. Running the coordinator inside one harness does
+not select that harness for delegated roles; the coordinator uses the adapter named by the
+prepared launch. Run `sync-engine-skill --help` for exhaustive CLI options.
 
 ## Uniform launch flow
 
@@ -113,10 +114,16 @@ Only the following adapter details vary:
 | Harness     | Fresh launch                                                                                                         | Stable continuation                                                                                               | Prompt transport                                                                                                                              | Workspace detail                                                                                                            |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Paseo       | Launch one fresh Paseo agent with the printed descriptive `--title` and capture its agent ID.                        | Send to the returned Paseo agent ID.                                                                              | Feed the prompt file into the `paseo run` positional prompt without rendering it in coordinator output; use `paseo send --prompt-file` later. | Set the application root as the agent working directory.                                                                    |
+| Pi          | Run `pi --mode json -p --name <title>` and capture the session header ID.                                            | Run Pi with `--session <id>` and verify the emitted session ID.                                                   | Feed the prompt file contents directly as the message argument on each invocation.                                                            | Run from the application root and keep `--session-dir` under the work unit.                                                 |
 | Codex       | Spawn a fresh `worker` thread; use the general-purpose agent when `worker` is unavailable.                           | Resume the same returned thread or agent ID.                                                                      | The in-session tool has no native file input, so send the adapter's short file-reading instruction.                                           | Use the application root shared by the active Codex session.                                                                |
 | Claude Code | Invoke a fresh `general-purpose` agent with the `Agent` tool and printed `description`.                              | Resume the returned agent ID.                                                                                     | The in-session tool has no native file input, so send the adapter's short file-reading instruction.                                           | Keep worktree isolation off so sequential roles share the application workspace.                                            |
 | Antigravity | Call `invoke_subagent` with workspace `inherit`; wait for `Idle`.                                                    | Send the continuation to the same conversation ID.                                                                | The in-session tool has no native file input, so send the adapter's short file-reading instruction.                                           | Inherit the application workspace.                                                                                          |
 | Cursor      | Run `cursor-agent --print --output-format json` with file-backed prompt-argument expansion and capture `session_id`. | Run the same command with `--resume <session_id>`, file-backed prompt-argument expansion, and verify the same ID. | Feed file contents directly to the CLI prompt argument without rendering them in coordinator output.                                          | Pass the application root with `--workspace`; use `--model` when the coordinator supplies a model or the user requests one. |
+
+For Pi, use `<prompt-directory>/pi-sessions` as the persistent `--session-dir`. The first
+JSON record supplies the session ID; the final authoritative assistant `message_end`,
+`agent_end`, process exit, and coordinator timeout determine response and status. A Pi
+adapter launch is a child CLI process, not Pi's optional extension-defined subagent tools.
 
 Fresh launches use separate conversational context while operating on the same
 application files. Implementation roles do not inherit one another's conversations.
