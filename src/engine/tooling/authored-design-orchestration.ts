@@ -76,7 +76,7 @@ export type ResolveComputationInputs = (
 ) => readonly AuthoritativeComputationInput[] | Promise<readonly AuthoritativeComputationInput[]>;
 
 export interface AuthoredDeclarationCoverage {
-  kind: DesignLinkKind;
+  kind: DesignLinkKind | "endpoint";
   identity: string;
   locations: readonly DesignSourceLocation[];
 }
@@ -246,6 +246,16 @@ function coverageOf(
   corpus: readonly AuthoredApplicationDesignDocument[],
 ): AuthoredDeclarationCoverage[] {
   const entries: AuthoredDeclarationCoverage[] = [];
+  for (const endpoint of selected.endpoints) {
+    entries.push({
+      kind: "endpoint",
+      identity: endpoint.identity,
+      locations: corpus
+        .flatMap(({ endpoints }) => endpoints)
+        .filter(({ identity }) => identity === endpoint.identity)
+        .map(({ location }) => location),
+    });
+  }
   for (const [kind, identities] of [
     ["reaction", selected.reactions],
     ["view", selected.views],
@@ -448,6 +458,9 @@ export async function checkAuthoredDesign(options: {
       .filter(({ kind }) => kind === "reaction")
       .map(({ identity }) => identity)
       .sort(ordinal),
+    endpoints: assembled.endpoints
+      .map(({ name: identity, path }) => ({ identity, path }))
+      .sort((left, right) => ordinal(left.identity, right.identity)),
     views: declarations
       .filter(({ kind }) => kind === "view")
       .map(({ identity }) => identity)

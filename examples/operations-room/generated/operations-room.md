@@ -137,7 +137,7 @@ _the authored explanation; this section records the generated shape._
 ### the current mitigation (room)
 
 Authored path: `Room.ReadModels.CurrentMitigation`.
-- Covered by [Room](../design/compositions/Room.md), line 15.
+- Covered by [Room](../design/compositions/Room.md), line 20.
 
 ```former
 Former "the current mitigation (room)" — inputs (room); bindings (mitigation); promises at most one record — forms:
@@ -150,7 +150,7 @@ Former "the current mitigation (room)" — inputs (room); bindings (mitigation);
 ### the operations room (room)
 
 Authored path: `Room.RoomDashboard.RoomDashboard`.
-- Covered by [Room](../design/compositions/Room.md), line 18.
+- Covered by [Room](../design/compositions/Room.md), line 27.
 
 ```former
 Former "the operations room (room)" — inputs (room); bindings (name, host, responder, selection, mitigation, discussion, response, author, text, alert, subject, alertedMitigation); promises exactly one record — forms:
@@ -183,7 +183,7 @@ Former "the operations room (room)" — inputs (room); bindings (name, host, res
 ### the required current mitigation (room)
 
 Authored path: `Room.ReadModels.RequiredCurrentMitigation`.
-- Covered by [Room](../design/compositions/Room.md), line 14.
+- Covered by [Room](../design/compositions/Room.md), line 19.
 
 ```former
 Former "the required current mitigation (room)" — inputs (room); bindings (mitigation); promises exactly one record — forms:
@@ -209,7 +209,7 @@ Former "the responder roster of (room)" — inputs (room); bindings (responder);
 ### the response stats of (discussion)
 
 Authored path: `Room.ReadModels.ResponseStats`.
-- Covered by [Room](../design/compositions/Room.md), line 22.
+- Covered by [Room](../design/compositions/Room.md), line 35.
 
 ```former
 Former "the response stats of (discussion)" — inputs (discussion); bindings (response, responder); promises exactly one record — forms:
@@ -240,6 +240,7 @@ Former "the room summary (room)" — inputs (room); bindings (name, host); promi
 
 Authored path: `Contributions.AddContribution`.
 - Covered by [Contributions](../design/compositions/Contributions.md), line 6.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 16.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
@@ -255,6 +256,7 @@ then
 
 Authored path: `Contributions.AddContribution`.
 - Covered by [Contributions](../design/compositions/Contributions.md), line 6.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 16.
 
 ```reaction
 when Discussing.respond (author: responder, discussion, text, response), asked by Contributions.AddContribution
@@ -268,6 +270,7 @@ then
 
 Authored path: `Contributions.RejectContribution`.
 - Covered by [Contributions](../design/compositions/Contributions.md), line 9.
+- Covered by [Contributions](../design/compositions/Contributions.md), line 17.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/contribute", requestId, responder, room, text)
@@ -324,7 +327,8 @@ then
 ### Room.MitigationSelection.ChooseMitigation
 
 Authored path: `Room.MitigationSelection.ChooseMitigation`.
-- Covered by [Room](../design/compositions/Room.md), line 12.
+- Covered by [Room](../design/compositions/Room.md), line 17.
+- Covered by [Room](../design/compositions/Room.md), line 23.
 
 ```reaction
 when RequestBoundary.request (mitigation, path: "/rooms/choose-mitigation", requestId, room)
@@ -335,7 +339,8 @@ then
 ### Room.MitigationSelection.ChooseMitigation#2
 
 Authored path: `Room.MitigationSelection.ChooseMitigation`.
-- Covered by [Room](../design/compositions/Room.md), line 12.
+- Covered by [Room](../design/compositions/Room.md), line 17.
+- Covered by [Room](../design/compositions/Room.md), line 23.
 
 ```reaction
 when Selecting.choose (item: mitigation, scope: room, selection), asked by Room.MitigationSelection.ChooseMitigation
@@ -348,7 +353,8 @@ then
 ### Room.RoomDashboard.GetRoom
 
 Authored path: `Room.RoomDashboard.GetRoom`.
-- Covered by [Room](../design/compositions/Room.md), line 17.
+- Covered by [Room](../design/compositions/Room.md), line 26.
+- Covered by [Room](../design/compositions/Room.md), line 32.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/get", requestId, room)
@@ -360,6 +366,7 @@ then
 
 Authored path: `Room.RoomMembership.CreateRoom`.
 - Covered by [Room](../design/compositions/Room.md), line 6.
+- Covered by [Room](../design/compositions/Room.md), line 13.
 
 ```reaction
 when RequestBoundary.request (host, name, path: "/rooms/create", requestId)
@@ -371,6 +378,7 @@ then
 
 Authored path: `Room.RoomMembership.CreateRoom`.
 - Covered by [Room](../design/compositions/Room.md), line 6.
+- Covered by [Room](../design/compositions/Room.md), line 13.
 
 ```reaction
 when Gathering.create (host, name, gathering: room), asked by Room.RoomMembership.CreateRoom
@@ -384,6 +392,7 @@ then
 
 Authored path: `Room.RoomMembership.JoinRoom`.
 - Covered by [Room](../design/compositions/Room.md), line 7.
+- Covered by [Room](../design/compositions/Room.md), line 14.
 
 ```reaction
 when RequestBoundary.request (path: "/rooms/join", requestId, responder, room)
@@ -395,6 +404,7 @@ then
 
 Authored path: `Room.RoomMembership.JoinRoom`.
 - Covered by [Room](../design/compositions/Room.md), line 7.
+- Covered by [Room](../design/compositions/Room.md), line 14.
 
 ```reaction
 when Gathering.join (gathering: room, member: responder, membership), asked by Room.RoomMembership.JoinRoom

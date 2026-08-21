@@ -1,4 +1,5 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { assertPortableRoutePath } from "@engine/boundary/protocol/route-path";
 import {
   AUTHORED_PATH_SEGMENT_SOURCE,
   DESIGN_IDENTIFIER_SOURCE,
@@ -25,6 +26,12 @@ export interface AuthoredDesignLink {
   location: DesignSourceLocation;
 }
 
+export interface AuthoredEndpoint {
+  identity: string;
+  path: string;
+  location: DesignSourceLocation;
+}
+
 export interface AuthoredComputationInput {
   name: string;
   optional: boolean;
@@ -46,6 +53,7 @@ export interface AuthoredApplicationDesignDocument {
   content: string;
   digest: string;
   links: readonly AuthoredDesignLink[];
+  endpoints: readonly AuthoredEndpoint[];
   computations: readonly AuthoredComputation[];
   concreteTypes: readonly ConcreteTypeDeclaration[];
   /** Instance declarations authored in this document, with inline bindings attached. */
@@ -250,6 +258,56 @@ function computationsOf(scanned: ScannedMarkdown): AuthoredComputation[] {
     );
 }
 
+function endpointOf(
+  scanned: ScannedMarkdown,
+  fence: MarkdownFence,
+  signature: DesignSourceLine,
+  body: readonly DesignSourceLine[],
+): AuthoredEndpoint {
+  const match = new RegExp(`^(${SEGMENT}(?:\\.${SEGMENT})*)\\s+at\\s+(\\S+)\\s*$`).exec(
+    signature.text,
+  );
+  if (match === null) {
+    fail(scanned, signature.number, "endpoint needs `Declaration.Identity at /path` form");
+  }
+  const prose = body.find(({ text }) => text.trim() !== "");
+  if (prose !== undefined) {
+    fail(
+      scanned,
+      prose.number,
+      "endpoints fence accepts declarations only; move explanation prose outside the fence",
+    );
+  }
+  try {
+    assertPortableRoutePath(match[2], "endpoint design declaration");
+  } catch (error) {
+    fail(
+      scanned,
+      signature.number,
+      error instanceof Error ? error.message.replace(/\.$/, "") : "endpoint path is invalid",
+    );
+  }
+  return {
+    identity: match[1],
+    path: match[2],
+    location: at(scanned, signature.number, sourceColumn(fence, signature)),
+  };
+}
+
+function endpointsOf(scanned: ScannedMarkdown): AuthoredEndpoint[] {
+  const endpoints: AuthoredEndpoint[] = [];
+  for (const fence of scanned.fences.filter(({ info }) => info === "endpoints")) {
+    const groups = declarationGroups(fence);
+    if (groups.length === 0) {
+      fail(scanned, fence.location.line, "endpoints fence must declare at least one endpoint");
+    }
+    endpoints.push(
+      ...groups.map((group) => endpointOf(scanned, fence, group.signature, group.body)),
+    );
+  }
+  return endpoints;
+}
+
 function baseDocument(
   markdown: string,
   source: string,
@@ -273,6 +331,7 @@ function baseDocument(
       content: scanned.content,
       digest: scanned.digest,
       links: linksOf(scanned),
+      endpoints: endpointsOf(scanned),
       computations: computationsOf(scanned),
       concreteTypes,
       instances,
@@ -291,6 +350,7 @@ export function parseApplicationDesignDocument(
     !document.links.some(
       ({ kind }) => kind === "reaction" || kind === "view" || kind === "former",
     ) &&
+    document.endpoints.length === 0 &&
     document.computations.length === 0 &&
     document.concreteTypes.length === 0 &&
     document.instances.length === 0 &&
@@ -299,7 +359,7 @@ export function parseApplicationDesignDocument(
     fail(
       scanned,
       1,
-      "registered design document must cite a reaction, view, or former, or define a computation, application type, concept instance, or binding",
+      "registered design document must cite a reaction, view, or former, or define an endpoint, computation, application type, concept instance, or binding",
     );
   }
   return document;
@@ -475,8 +535,14 @@ export interface SelectedConceptDesign {
   ownedTypes?: readonly string[];
 }
 
+export interface SelectedEndpointDesign {
+  identity: string;
+  path: string;
+}
+
 export interface SelectedApplicationDesign {
   reactions: readonly string[];
+  endpoints: readonly SelectedEndpointDesign[];
   views: readonly string[];
   formers: readonly string[];
   computations: readonly SelectedComputationDesign[];
@@ -487,7 +553,10 @@ export interface SelectedApplicationDesign {
 
 export type ApplicationDesignIssueCode =
   | "UNRESOLVED_LINK"
+  | "UNRESOLVED_ENDPOINT"
+  | "ENDPOINT_PATH_MISMATCH"
   | "MISSING_COVERAGE"
+  | "DUPLICATE_ENDPOINT"
   | "DUPLICATE_COMPUTATION"
   | "UNREGISTERED_COMPUTATION"
   | "COMPUTATION_INPUT_MISMATCH"
@@ -513,6 +582,7 @@ export interface ApplicationDesignIssue {
 
 export type ApplicationDesignFormIssue = ApplicationDesignIssue & {
   code:
+    | "DUPLICATE_ENDPOINT"
     | "DUPLICATE_COMPUTATION"
     | "DUPLICATE_CONCRETE_TYPE"
     | "DUPLICATE_INSTANCE"
@@ -555,11 +625,21 @@ export function validateAuthoredApplicationDesignForm(
   documents: readonly AuthoredApplicationDesignDocument[],
 ): ApplicationDesignFormIssue[] {
   const issues: ApplicationDesignFormIssue[] = [];
+  const endpoints = new Set<string>();
   const computations = new Set<string>();
   const concreteTypes = new Set<string>();
   const instances = new Map<string, AuthoredConceptInstanceDeclaration>();
 
   for (const document of documents) {
+    for (const endpoint of document.endpoints) {
+      if (endpoints.has(endpoint.identity)) {
+        issues.push({
+          code: "DUPLICATE_ENDPOINT",
+          message: `endpoint ${JSON.stringify(endpoint.identity)} has more than one authored declaration.`,
+          location: endpoint.location,
+        });
+      } else endpoints.add(endpoint.identity);
+    }
     for (const computation of document.computations) {
       if (computations.has(computation.name)) {
         issues.push({
@@ -643,10 +723,32 @@ export function validateAuthoredApplicationDesign(
     view: new Set(selected.views),
     former: new Set(selected.formers),
   };
+  const endpointsSelected = selected.endpoints;
+  const selectedEndpoints = new Map(
+    endpointsSelected.map((endpoint) => [endpoint.identity, endpoint]),
+  );
   const computations = new Map(
     selected.computations.map((computation) => [computation.name, computation]),
   );
   const links = corpus.flatMap(({ links }) => links);
+  const endpoints = corpus.flatMap(({ endpoints: declarations }) => declarations);
+
+  for (const endpoint of endpoints) {
+    const selectedEndpoint = selectedEndpoints.get(endpoint.identity);
+    if (selectedEndpoint === undefined) {
+      issues.push({
+        code: "UNRESOLVED_ENDPOINT",
+        message: `endpoint declaration does not resolve to selected endpoint ${JSON.stringify(endpoint.identity)}.`,
+        location: endpoint.location,
+      });
+    } else if (selectedEndpoint.path !== endpoint.path) {
+      issues.push({
+        code: "ENDPOINT_PATH_MISMATCH",
+        message: `endpoint ${JSON.stringify(endpoint.identity)} is declared at ${JSON.stringify(endpoint.path)}, but the selected endpoint is at ${JSON.stringify(selectedEndpoint.path)}.`,
+        location: endpoint.location,
+      });
+    }
+  }
 
   for (const link of links) {
     const resolved =
@@ -659,6 +761,14 @@ export function validateAuthoredApplicationDesign(
         message: `${link.kind} link does not resolve to selected declaration ${JSON.stringify(link.target)}.`,
         location: link.location,
       });
+  }
+  for (const endpoint of endpointsSelected) {
+    if (!endpoints.some(({ identity }) => identity === endpoint.identity)) {
+      issues.push({
+        code: "MISSING_COVERAGE",
+        message: `selected endpoint ${JSON.stringify(endpoint.identity)} at ${JSON.stringify(endpoint.path)} has no authored endpoint declaration.`,
+      });
+    }
   }
   for (const kind of ["reaction", "view", "former"] as const) {
     for (const name of selectedByKind[kind]) {

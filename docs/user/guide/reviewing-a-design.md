@@ -167,12 +167,18 @@ independent application decision.
 
 Build this bidirectional coverage table for an implemented assembly:
 
-| Executable declaration             | Authored evidence                                               |
-| ---------------------------------- | --------------------------------------------------------------- |
-| Authored reaction or endpoint tree | At least one exact `reaction:` link to its selected dotted path |
-| Named view                         | At least one exact `view:` link                                 |
-| Named former                       | At least one exact `former:` link                               |
-| Executable computation             | Exactly one `computations` declaration                          |
+| Executable declaration             | Authored evidence                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| Authored reaction or endpoint tree | At least one exact `reaction:` link to its selected dotted path           |
+| Endpoint tree                      | Exactly one `Declaration.Identity at /path` entry in an `endpoints` fence |
+| Named view                         | At least one exact `view:` link                                           |
+| Named former                       | At least one exact `former:` link                                         |
+| Executable computation             | Exactly one `computations` declaration                                    |
+
+For an endpoint entry, confirm that the identity resolves to an endpoint and that its
+path exactly matches the executable declaration. Distinct endpoint identities may share
+a path as alternatives. The endpoint entry supplements rather than replaces its
+reaction link.
 
 Reject wildcards, namespace-only claims, implied children, wrong link kinds, and links
 to declarations absent from the selected variant. Retain multiple honest references;

@@ -682,9 +682,9 @@ normalized-source digests. It does not retain executable
 computation functions or runtime occurrence state.
 
 Generated Markdown names its manifest producer, concept-specification format,
-and renderer version. It links each selected authored reaction tree, view,
-former, computation, concept, concrete type, and binding to every applicable
-authored source location. It shows structured concept signatures,
+and renderer version. It links each selected authored reaction tree, endpoint
+identity/path declaration, view, former, computation, concept, concrete type, and
+binding to every applicable authored source location. It shows structured concept signatures,
 cardinalities, refusals, definition/instance relationships, and executable
 lowering. It does not copy application prose, Purpose, Principle, full State text,
 action/query bodies, adjacent binding explanations, or computation bodies. These

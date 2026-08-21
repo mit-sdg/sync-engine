@@ -113,6 +113,9 @@ describe("authored design orchestration", () => {
     const design = await fixture(
       "\uFEFF# Forum\r\n\r\n" +
         "Publishing is [handled](reaction:Forum.Publish). A second [citation](reaction:Forum.Publish).\r\n\r\n" +
+        "```endpoints\r\n" +
+        "Forum.Publish at /publish\r\n" +
+        "```\r\n\r\n" +
         "```computations\r\n" +
         "normalize(value?: String) : String\r\n" +
         "  Normalizes display text.\r\n" +
@@ -147,6 +150,7 @@ describe("authored design orchestration", () => {
       });
       expect(checked.selected).toMatchObject({
         reactions: ["Forum.Publish"],
+        endpoints: [{ identity: "Forum.Publish", path: "/publish" }],
         views: [],
         formers: [],
         computations: [{ name: "normalize", inputs: [{ name: "value", optional: true }] }],
@@ -170,6 +174,10 @@ describe("authored design orchestration", () => {
           expect.objectContaining({ line: 3, column: 59 }),
         ],
       });
+      expect(checked.coverage.find(({ kind }) => kind === "endpoint")).toMatchObject({
+        identity: "Forum.Publish",
+        locations: [expect.objectContaining({ line: 6, column: 1 })],
+      });
       expect(checked.computationInputValidation).toEqual([
         { name: "normalize", status: "validated" },
       ]);
@@ -184,6 +192,17 @@ describe("authored design orchestration", () => {
         sources: expect.arrayContaining([
           expect.objectContaining({ kind: "concept", path: "Commenting.md" }),
         ]),
+        declarations: [
+          expect.objectContaining({
+            identity: "Forum.Publish",
+            source: "endpoint",
+            coverage: [
+              expect.objectContaining({ line: 3, column: 15 }),
+              expect.objectContaining({ line: 3, column: 59 }),
+              expect.objectContaining({ line: 6, column: 1 }),
+            ],
+          }),
+        ],
         concepts: [
           expect.objectContaining({
             definition: "Commenting",
@@ -233,7 +252,10 @@ describe("authored design orchestration", () => {
   });
 
   test("rejects traced concept text that only differs in source placement", async () => {
-    const design = await fixture("# Forum\n\n[Publish](reaction:Forum.Publish).\n", typesDesign);
+    const design = await fixture(
+      "# Forum\n\n[Publishing](reaction:Forum.Publish) is public.\n\n```endpoints\nForum.Publish at /publish\n```\n",
+      typesDesign,
+    );
     const assembly = application();
     try {
       const shifted = commentingSpec.replace("## Purpose", "\n## Purpose");
@@ -283,7 +305,11 @@ describe("authored design orchestration", () => {
     const design = await fixture(
       `# Forum
 
-[Publish](reaction:Forum.Publish).
+[Publishing](reaction:Forum.Publish) is public.
+
+\`\`\`endpoints
+Forum.Publish at /publish
+\`\`\`
 
 \`\`\`computations
 normalize(value: String) : String
@@ -308,7 +334,11 @@ normalize(value: String) : String
     const design = await fixture(
       `# Forum
 
-[Wrong](reaction:Forum.Wrong).
+[The wrong endpoint](reaction:Forum.Wrong) is declared.
+
+\`\`\`endpoints
+Forum.Wrong at /wrong
+\`\`\`
 
 \`\`\`computations
 normalize(value: String) : String
@@ -328,13 +358,34 @@ normalize(value: String) : String
       expect(failure).toBeInstanceOf(AuthoredDesignCheckError);
       expect((failure as AuthoredDesignCheckError).issues.map(({ code }) => code)).toEqual([
         "UNRESOLVED_LINK",
+        "UNRESOLVED_ENDPOINT",
         "COMPUTATION_INPUT_MISMATCH",
+        "MISSING_COVERAGE",
         "MISSING_COVERAGE",
         "UNDECLARED_SELECTED_INSTANCE",
         "UNDECLARED_SELECTED_INSTANCE",
       ]);
-      expect((failure as Error).message).toContain('selected reaction "Forum.Publish"');
-      expect((failure as Error).message).toContain("5 issues");
+      expect((failure as Error).message).toContain('selected endpoint "Forum.Publish"');
+      expect((failure as Error).message).toContain("7 issues");
+    } finally {
+      await assembly.beginDrain();
+    }
+  });
+
+  test("checks endpoint declarations in addition to endpoint reaction links", async () => {
+    const mismatch = await fixture(
+      "# Forum\n\n[Publishing](reaction:Forum.Publish) is public.\n\n```endpoints\nForum.Publish at /wrong\n```\n\n```computations\nnormalize(value?: String) : String\n  Normalizes display text.\n```\n",
+      typesDesign,
+    );
+    const assembly = application();
+    try {
+      const failure = await checkAuthoredDesign({ assembly, design: mismatch }).catch(
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(AuthoredDesignCheckError);
+      expect((failure as AuthoredDesignCheckError).issues).toEqual([
+        expect.objectContaining({ code: "ENDPOINT_PATH_MISMATCH" }),
+      ]);
     } finally {
       await assembly.beginDrain();
     }
@@ -344,7 +395,9 @@ normalize(value: String) : String
     const emptyWords = vocabulary({ concepts: {}, computations: {} });
     const Empty = endpoint("/empty", () => receive().then(respond()));
     const assembly = assemble({ vocabulary: emptyWords, composition: { Empty } });
-    const design = await fixture("# Empty\n\n[Empty](reaction:Empty).\n");
+    const design = await fixture(
+      "# Empty\n\n[The empty operation](reaction:Empty) is public.\n\n```endpoints\nEmpty at /empty\n```\n",
+    );
     try {
       await expect(checkAuthoredDesign({ assembly, design })).resolves.toBeDefined();
     } finally {

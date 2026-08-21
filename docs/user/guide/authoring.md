@@ -190,10 +190,26 @@ Editing refreshes derived content.[refresh]
 [refresh]: reaction:Forum.posts.RefreshDerivedContent
 ```
 
-Use the declaration's dotted path in the selected composition. Link every
-authored reaction or endpoint tree, every named view, and every named former at
-least once. Do not use wildcards or assume that a parent path covers descendants.
-A helper view or former still needs coverage.
+Use the declaration's dotted path in the selected composition. Link every authored
+reaction tree, including every endpoint tree, every named view, and every named former
+at least once. Do not use wildcards or assume that a parent path covers descendants. A
+helper view or former still needs coverage.
+
+For each endpoint tree, also declare its boundary path in an `endpoints` fence adjacent
+to the prose that explains it:
+
+```endpoints
+Sessions.EnteringApplication.Register at /auth/register
+Sessions.EnteringApplication.SignIn at /auth/sign-in
+```
+
+Each line has exact `Declaration.Identity at /path` form. The identity must resolve to a
+selected endpoint, and the path must exactly match that endpoint's portable absolute
+route pathname. An `endpoints` fence contains declarations only. Every selected endpoint
+has exactly one declaration across the registered corpus; distinct endpoint identities
+may intentionally share one path when they form alternatives. The endpoint declaration
+adds the boundary path to the design contract—it does not replace the endpoint tree's
+`reaction:` link.
 
 Keep introductions, history, and unresolved notes in unregistered documentation
 unless they also explain selected declarations. There is no required
@@ -276,7 +292,8 @@ sync-engine artifacts check
 `check` defaults to `generated.config.ts`. It fails on malformed concept files,
 unresolvable concept source and TypeScript shapes, an instance inventory that
 differs from the exact assembled variant, incomplete external bindings,
-unresolved typed links, or missing reaction/view/former/computation coverage.
+unresolved typed links, missing or mismatched endpoint declarations, or missing
+reaction/view/former/computation coverage.
 Artifact pinning and checking enforce the same complete design contract.
 
 Review generated diffs. Read-back links each covered declaration to every
@@ -319,8 +336,8 @@ by the old format.
 6. Add one complete `instances` inventory per configured variant. Move each old
    `Instance.External is Target` line either under that instance's inline `with`
    block or into a dedicated `bindings` fence; never split one instance across both.
-7. Remove composition `spec` imports and add exact typed links to registered
-   application prose.
+7. Remove composition `spec` imports, add exact typed links, and declare every endpoint
+   identity and path in registered application documents.
 8. Add declarations for every executable computation.
 9. Add `design: { version: 1, documents }` to each generated config.
 10. Remove `--vocabulary-module`; run `sync-engine check` or pass `--config`.

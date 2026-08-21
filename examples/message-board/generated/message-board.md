@@ -127,7 +127,8 @@ Former "the message board" — inputs (); bindings (post, author, content, comme
 ### Board.BoardComments.AddComment
 
 Authored path: `Board.BoardComments.AddComment`.
-- Covered by [Board](../design/compositions/Board.md), line 19.
+- Covered by [Board](../design/compositions/Board.md), line 26.
+- Covered by [Board](../design/compositions/Board.md), line 33.
 
 ```reaction
 when RequestBoundary.request (content, path: "/board/comment", requestId, session, target)
@@ -138,7 +139,8 @@ then
 ### Board.BoardComments.AddComment:post-exists#2
 
 Authored path: `Board.BoardComments.AddComment`.
-- Covered by [Board](../design/compositions/Board.md), line 19.
+- Covered by [Board](../design/compositions/Board.md), line 26.
+- Covered by [Board](../design/compositions/Board.md), line 33.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Board.BoardComments.AddComment
@@ -152,7 +154,8 @@ then
 ### Board.BoardComments.AddComment:post-exists#3
 
 Authored path: `Board.BoardComments.AddComment`.
-- Covered by [Board](../design/compositions/Board.md), line 19.
+- Covered by [Board](../design/compositions/Board.md), line 26.
+- Covered by [Board](../design/compositions/Board.md), line 33.
 
 ```reaction
 when Commenting.add (author: username, content, target, comment), asked by Board.BoardComments.AddComment:post-exists#2
@@ -165,7 +168,8 @@ then
 ### Board.BoardComments.AddComment:post-missing#2
 
 Authored path: `Board.BoardComments.AddComment`.
-- Covered by [Board](../design/compositions/Board.md), line 19.
+- Covered by [Board](../design/compositions/Board.md), line 26.
+- Covered by [Board](../design/compositions/Board.md), line 33.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Board.BoardComments.AddComment
@@ -179,7 +183,8 @@ then
 ### Board.BoardComments.RetractComment
 
 Authored path: `Board.BoardComments.RetractComment`.
-- Covered by [Board](../design/compositions/Board.md), line 22.
+- Covered by [Board](../design/compositions/Board.md), line 29.
+- Covered by [Board](../design/compositions/Board.md), line 34.
 
 ```reaction
 when RequestBoundary.request (comment, path: "/board/retract-comment", requestId, session)
@@ -190,7 +195,8 @@ then
 ### Board.BoardComments.RetractComment#2
 
 Authored path: `Board.BoardComments.RetractComment`.
-- Covered by [Board](../design/compositions/Board.md), line 22.
+- Covered by [Board](../design/compositions/Board.md), line 29.
+- Covered by [Board](../design/compositions/Board.md), line 34.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Board.BoardComments.RetractComment
@@ -203,7 +209,8 @@ then
 ### Board.BoardComments.RetractComment#3
 
 Authored path: `Board.BoardComments.RetractComment`.
-- Covered by [Board](../design/compositions/Board.md), line 22.
+- Covered by [Board](../design/compositions/Board.md), line 29.
+- Covered by [Board](../design/compositions/Board.md), line 34.
 
 ```reaction
 when Commenting.retract (author: username, comment), asked by Board.BoardComments.RetractComment#2
@@ -216,7 +223,8 @@ then
 ### Board.BoardPublishing.PublishPost
 
 Authored path: `Board.BoardPublishing.PublishPost`.
-- Covered by [Board](../design/compositions/Board.md), line 14.
+- Covered by [Board](../design/compositions/Board.md), line 18.
+- Covered by [Board](../design/compositions/Board.md), line 23.
 
 ```reaction
 when RequestBoundary.request (content, path: "/board/post", requestId, session)
@@ -227,7 +235,8 @@ then
 ### Board.BoardPublishing.PublishPost#2
 
 Authored path: `Board.BoardPublishing.PublishPost`.
-- Covered by [Board](../design/compositions/Board.md), line 14.
+- Covered by [Board](../design/compositions/Board.md), line 18.
+- Covered by [Board](../design/compositions/Board.md), line 23.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Board.BoardPublishing.PublishPost
@@ -240,7 +249,8 @@ then
 ### Board.BoardPublishing.PublishPost#3
 
 Authored path: `Board.BoardPublishing.PublishPost`.
-- Covered by [Board](../design/compositions/Board.md), line 14.
+- Covered by [Board](../design/compositions/Board.md), line 18.
+- Covered by [Board](../design/compositions/Board.md), line 23.
 
 ```reaction
 when Posting.publish (author: username, content, post), asked by Board.BoardPublishing.PublishPost#2
@@ -254,6 +264,7 @@ then
 
 Authored path: `Board.BoardReading.ListBoard`.
 - Covered by [Board](../design/compositions/Board.md), line 7.
+- Covered by [Board](../design/compositions/Board.md), line 15.
 
 ```reaction
 when RequestBoundary.request (path: "/board/list", requestId, session)
@@ -265,6 +276,7 @@ then
 
 Authored path: `Board.BoardReading.ListBoard`.
 - Covered by [Board](../design/compositions/Board.md), line 7.
+- Covered by [Board](../design/compositions/Board.md), line 15.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Board.BoardReading.ListBoard
@@ -297,7 +309,8 @@ then
 ### Sessions.CurrentAccount.CurrentUser
 
 Authored path: `Sessions.CurrentAccount.CurrentUser`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 12.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 17.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 22.
 
 ```reaction
 when RequestBoundary.request (path: "/auth/current", requestId, session)
@@ -308,7 +321,8 @@ then
 ### Sessions.CurrentAccount.CurrentUser#2
 
 Authored path: `Sessions.CurrentAccount.CurrentUser`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 12.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 17.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 22.
 
 ```reaction
 when Sessioning.current (session, subject: username), asked by Sessions.CurrentAccount.CurrentUser
@@ -322,6 +336,7 @@ then
 
 Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 13.
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/register", requestId, username)
@@ -333,6 +348,7 @@ then
 
 Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 13.
 
 ```reaction
 when Authenticating.register (password, username, account), asked by Sessions.EnteringApplication.Register
@@ -344,6 +360,7 @@ then
 
 Authored path: `Sessions.EnteringApplication.Register`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 6.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 13.
 
 ```reaction
 when Sessioning.start (subject: account, expiresAt, session), asked by Sessions.EnteringApplication.Register#2
@@ -357,6 +374,7 @@ then
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 8.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 14.
 
 ```reaction
 when RequestBoundary.request (password, path: "/auth/sign-in", requestId, username)
@@ -368,6 +386,7 @@ then
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 8.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 14.
 
 ```reaction
 when Authenticating.authenticate (password, username, account), asked by Sessions.EnteringApplication.SignIn
@@ -379,6 +398,7 @@ then
 
 Authored path: `Sessions.EnteringApplication.SignIn`.
 - Covered by [Sessions](../design/compositions/Sessions.md), line 8.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 14.
 
 ```reaction
 when Sessioning.start (subject: account, expiresAt, session), asked by Sessions.EnteringApplication.SignIn#2
@@ -391,7 +411,8 @@ then
 ### Sessions.LeavingApplication.SignOut
 
 Authored path: `Sessions.LeavingApplication.SignOut`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 16.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 25.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 30.
 
 ```reaction
 when RequestBoundary.request (path: "/auth/sign-out", requestId, session)
@@ -402,7 +423,8 @@ then
 ### Sessions.LeavingApplication.SignOut#2
 
 Authored path: `Sessions.LeavingApplication.SignOut`.
-- Covered by [Sessions](../design/compositions/Sessions.md), line 16.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 25.
+- Covered by [Sessions](../design/compositions/Sessions.md), line 30.
 
 ```reaction
 when Sessioning.end (session, ended: signedOut), asked by Sessions.LeavingApplication.SignOut
