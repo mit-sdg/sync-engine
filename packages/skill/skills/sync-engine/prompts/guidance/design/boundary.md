@@ -3,9 +3,10 @@
 An endpoint takes one request and produces one answer. Endpoints are the only way into
 the application, and every caller reaches them the same way, regardless of caller.
 
-Say what a caller supplies, what comes back, and every refusal with a stable code and
-its meaning. Do not say how any of that is rendered: no methods, status codes, headers,
-exit codes, or address shapes beyond an endpoint's own name.
+Say what a caller supplies, what comes back, and every refusal with a stable code and its
+meaning. Each selected endpoint separately declares its exact `endpoint(...)` pathname in
+an `endpoints` fence. Do not put transport rendering in behavioral prose or that fence: no
+methods, status codes, headers, exit codes, or projected external routes.
 
 When two refusals have to be indistinguishable to a caller, say that as behaviour.
 

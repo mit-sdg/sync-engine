@@ -90,6 +90,13 @@ Whenever stored facts are in scope, record whether they survive process restart 
 `User:` or `Assumption:`. This durability advice is not a schema gate. Record
 consequential automatic assumptions and any review the user chooses to waive.
 
+When an external transport is selected, consult its supplied public guide before fixing
+interface details in the brief. Distinguish the executable endpoint pathname declared in
+design from any transport-projected public route. Record methods, public paths, input and
+output fields, credentials, and error envelope. If the user did not prescribe them, choose
+a form the selected transport supports. If a user-prescribed interface cannot be represented, surface
+that conflict instead of recording one interface and silently implementing another.
+
 Ask one concise question at a time, or a small related set, with concrete options and a
 recommendation. Ask while the brief is materially incomplete, when criticism exposes a
 product choice, and once before implementation in active mode. Do not ask for choices
@@ -117,14 +124,16 @@ For each selected phase:
    diagnostics, owned outcomes, and expected checks. Do not restate supplied context or
    capability metadata; the generated prompt carries both. A task cannot authorize an
    alternate framework or transport path that conflicts with supplied public references,
-   or request an endpoint without its exact approved reaction link.
+   or request an endpoint without its exact approved reaction link and endpoint entry.
 2. Select an effective capability grant within the role's typed maximum. The prompt
    builder validates the grant, and listed check commands are not a shell allowlist. For
    application work, enumerate exact integration files or dedicated directories; never
    grant a parent path that contains concept implementations or concept tests.
-3. Supply the smallest sufficient set of the brief, affected design, public framework
-   references, application paths, and examples. Name useful starting paths, while allowing
-   implementation and evidence workers targeted reads elsewhere in the application.
+3. Supply the smallest sufficient set of the brief, affected design, additional public
+   framework references, application paths, and examples. Built-in role guidance is
+   already present: do not also pass those same files as `public-references`. Name useful
+   starting paths, while allowing implementation and evidence workers targeted reads
+   elsewhere in the application.
 4. Build the prompt with every required role input:
 
    ```text
@@ -177,8 +186,9 @@ HTTP guidance as a `public-references` input:
 - Client work:
   `--input public-references=<skill-root>/prompts/guidance/api/http-client.md`
 
-Repeat `public-references` for other required public API context. Do not supply HTTP
-guidance to work that does not use its corresponding surface.
+Repeat `public-references` for other required public API context. These are additional
+references and are optional when built-in guidance is sufficient. Do not repeat built-in
+guidance or supply HTTP guidance to work that does not use its corresponding surface.
 
 ## Design and criticism
 
@@ -276,8 +286,9 @@ bounded advice; it does not alter the first critic's finding lifecycle.
 ### Verify repairs with the original review guidance
 
 `critic/verification` has no built-in review rubric. Continue the original critic with the
-brief, original findings, revised candidate, and every guidance file used for the original
-review. Pass guidance through the repeatable `review-guidance` input.
+brief, stable findings or routed implementation blocker, revised candidate, and every
+guidance file used for the original review. Pass guidance through the repeatable
+`review-guidance` input.
 
 For decomposition verification:
 
@@ -377,10 +388,12 @@ sync-engine-skill continue <finalized-record> --phase <phase> --task <path>
 ```
 
 Put the diagnostic, affected paths, and requested outcome in the task. Repeat `--input`
-for the phase's required context. Within the same phase, reuse or narrow the capability
-grant; an explicit phase transition uses a grant validated against the new phase maximum.
-The prompt builder binds only unchanged retained inputs already known by that agent;
-unseen or changed sources are sent inline.
+for the phase's required context. Within the same phase, reuse or narrow the capability grant; an explicit phase transition
+uses a grant validated against the new phase maximum. A same-phase continuation is a
+compact delta containing the current task, current grant, changed or unseen context, and a
+return-heading reminder; its prior role and guidance remain authoritative. A phase
+transition or replacement receives the full applicable role prompt. Unchanged retained
+inputs already known by the agent are bound rather than expanded.
 
 For a context blocker, add the missing public reference or application context in a
 continuation. Do not direct the worker into framework internals.
@@ -393,9 +406,11 @@ For a design blocker:
    affected context.
 3. Revise the decomposition only if boundaries, placement, or obligations changed;
    otherwise revise the affected contracts.
-4. Continue the prior critic to review the bounded revision and its effects. If no prior
+4. Continue the prior critic with `critic/verification` to test the routed stable blocker
+   against the bounded revision and its direct effects. Supply the original review guidance
+   through `review-guidance`. Use another full contracts review only when the revision
+   changes boundaries or materially expands the affected interaction set. If no prior
    critic exists, launch a distinct fresh critic after the candidate revision exists.
-   Continue that critic for any narrow repair verification.
 5. Validate the revised permanent design and continue the original worker. Its existing
    design binding redigests automatically. Only if the prior worker record was unbound,
    add `--design-root design` to introduce the canonical binding.
@@ -448,20 +463,24 @@ work unit, missing required prompt context, a capability grant above a role maxi
 prompt changed after preparation, a stale design digest, continuation through another
 agent or harness, or a harness that cannot provide the adapter contract.
 
-Warnings call for coordinator judgment rather than inventing phase policy. They include
-a malformed structured response, prompt-guided rather than harness-enforced capabilities,
-and a user choice to continue with a release mismatch. The skill CLI validates artifact
-and continuity integrity; the coordinator chooses phases, review acceptance, and repair.
+Warnings call for coordinator judgment rather than automatic failure or mandatory cleanup.
+They include malformed structured responses, prompt-guided capabilities, release mismatch,
+and conservative project analysis. Investigate a warning when it indicates a plausible gap
+in a required outcome; otherwise successful behavioral evidence may be sufficient. Carry
+only material unresolved diagnostics to handback. The skill CLI validates artifact and
+continuity integrity; the coordinator chooses phases, review acceptance, and repair.
 
 ## Hand back directly
 
-Handback is a coordinator response based on the work-unit artifacts and final validation,
-not a separate CLI action. Report:
+Before handback, read role identities from the finalized work-unit records rather than
+reconstructing them from memory or displayed titles. Handback is a coordinator response
+based on those records, the other work-unit artifacts, and final validation. Report:
 
 - the goal and completion status;
 - changed areas;
-- roles actually used and unresolved findings;
-- checks run and their outcomes;
+- roles actually used, their record-derived identities, and unresolved findings;
+- checks run and their pass or fail outcomes;
+- material unresolved diagnostics;
 - relevant checks omitted and why;
 - blockers, material concerns, consequential assumptions, and waived review; and
 - in an interactive mode, one choice to accept, revise, or request more evidence.

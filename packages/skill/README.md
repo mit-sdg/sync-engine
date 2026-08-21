@@ -87,8 +87,9 @@ The same coordinator-mediated flow supports:
 - Antigravity
 - Cursor
 
-Through each adapter, the coordinator launches fresh role agents, preserves same-agent
-continuation, keeps generated prompts as auditable files, and prefers native file-backed
+Through each adapter, the coordinator launches fresh role agents with descriptive title
+metadata, preserves same-agent continuation, keeps generated prompts as auditable files,
+and prefers native file-backed
 prompt delivery that does not spend coordinator output tokens. The coordinator copies
 native output verbatim for skill CLI validation and record finalization. Harness-specific
 invocation details are documented in

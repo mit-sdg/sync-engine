@@ -56,9 +56,43 @@ const AddComment = endpoint(
 );
 ```
 
-`MISSING_ENDPOINT_FALLBACK` means an admitted request can fall through every answer. Add a
-disjoint answer required by approved behavior; do not silence the diagnostic with an
-unconditional branch that overlaps a guarded success.
+`MISSING_ENDPOINT_FALLBACK` means analysis could not establish an answer for every admitted
+request. Add a disjoint answer when approved behavior requires one; do not silence the
+advisory with an unconditional branch that overlaps a guarded success. When the branches
+are intentionally total but conservative analysis still reports the advisory, boundary
+evidence—not warning elimination—decides the behavior.
+
+## Computed optional-input branches
+
+A computation is a condition line inside `where(...)`, not an action passed to `.then(...)`.
+Use `is.among(flag, [true])` and `is.among(flag, [false])` for disjoint boolean branches.
+A computation with no inputs receives `{}`:
+
+```ts
+export const CreateLink = endpoint(
+  "/links",
+  ({ expiresAt, hasExpiry, code }) =>
+    receive({ expiresAt }).then(
+      where(
+        compute(inputs.computations.hasExpiry, { expiresAt }, hasExpiry),
+        is.among(hasExpiry, [true]),
+      )
+        .then(respond({ mode: "expiring" }))
+        .named("with-expiry"),
+      where(
+        compute(inputs.computations.hasExpiry, { expiresAt }, hasExpiry),
+        is.among(hasExpiry, [false]),
+        compute(inputs.computations.defaultCode, {}, code),
+      )
+        .then(respond({ mode: "permanent", code }))
+        .named("without-expiry"),
+    ),
+  { input: { defaults: { expiresAt: null } } },
+);
+```
+
+The endpoint contract supplies `null` when the optional field is absent; do not ask two
+`receive(...)` alternatives to distinguish presence.
 
 ## Intentionally separate reaction
 

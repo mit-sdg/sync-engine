@@ -18,6 +18,7 @@ import { thrownValue } from "./test-support.ts";
 const request = {
   promptPath: "/application/.sync-engine/work/example/run.prompt.md",
   cwd: "/application",
+  title: "example — Evidence Worker",
   effectiveCapabilities: { read: ["src/**"] },
   timeoutSeconds: 45,
 } as const;
@@ -74,15 +75,19 @@ describe("harness adapter conformance", () => {
     ]);
     expect({
       paseo: paseo?.fresh.mechanism,
+      paseoTitle: paseo?.freshTitleField,
       codex: codex?.fresh.instruction,
       claude: claude?.fresh.mechanism,
+      claudeTitle: claude?.freshTitleField,
       antigravity: antigravity?.fresh.instruction,
       cursorFresh: cursor?.fresh.operation,
       cursorContinuation: cursor?.continuation.operation,
     }).toEqual({
       paseo: "Paseo CLI",
+      paseoTitle: "--title",
       codex: "Spawn a fresh worker thread, falling back to the general-purpose agent.",
       claude: "Claude Code Agent tool",
+      claudeTitle: "description",
       antigravity: "Invoke one fresh subagent with workspace inherit and return at Idle.",
       cursorFresh: "cursor-agent --print --output-format json",
       cursorContinuation: "cursor-agent --print --output-format json --resume <session-id>",
@@ -113,14 +118,21 @@ describe("harness adapter conformance", () => {
       expect(fresh.native.instruction).toBe(
         [
           adapter.fresh.instruction,
+          ...(adapter.freshTitleField === undefined
+            ? []
+            : [`Set ${adapter.freshTitleField} to ${JSON.stringify(request.title)}.`]),
           transportInstruction(freshTransport),
           `Use ${adapter.cwd.mode} at the supplied cwd.`,
           freshConfiguration,
           `Capture the new ${adapter.identity.label}.`,
-          "Observe through the native harness until terminal status or 45 seconds; harmless status checks are allowed, but never resend the prompt automatically.",
+          "Observe through the native harness until terminal status or 45 seconds. If the first attempt fails before any agent identity exists and before the prompt is accepted, retry that exact launch once; otherwise never resend the prompt.",
           transportClosing(freshTransport),
         ].join(" "),
       );
+      expect(fresh.title).toEqual({
+        value: request.title,
+        ...(adapter.freshTitleField === undefined ? {} : { nativeField: adapter.freshTitleField }),
+      });
       expect(fresh.prompt).toMatchObject({
         path: request.promptPath,
         delivery: freshTransport.mode,
@@ -136,6 +148,7 @@ describe("harness adapter conformance", () => {
           : undefined,
       );
       expect(continuation.target).toEqual({ kind: "continuation", agentId: "stable-id" });
+      expect(continuation.title).toEqual({ value: request.title });
       expect(continuation.timeoutSeconds).toBe(45);
       const continuationTransport = adapter.promptDelivery.continuation;
       expect(continuation.native.instruction).toBe(

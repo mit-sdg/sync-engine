@@ -7,7 +7,8 @@ result. Match authored results literally:
 - `return (item: Item)` returns `{ item }`;
 - `return ()` returns `{}` (prefer `Record<string, never>`), never `void` or `undefined`;
 - a `one` query returns one row object;
-- an `optional` query returns `[]` or `[row]`; and
+- an `optional` query is annotated `Row[]` or `Array<Row>` and returns an array whose
+  runtime length is zero or one—never annotate it as the tuple union `[] | [Row]`; and
 - a `many` query returns an array of rows in its promised stable order.
 
 These TypeScript and runtime shapes are part of registration compatibility. Never use
@@ -16,10 +17,19 @@ These TypeScript and runtime shapes are part of registration compatibility. Neve
 Registration reads the class prototype. Only declared actions and `_` queries may appear
 there, so keep helpers `#private` or module-level. TypeScript `private` still emits a
 prototype method and is therefore visible as an undeclared action. Declare an explicit
-constructor, initialize owned state there, and give every dependency parameter a default
-so the class constructs with no arguments. Production specification registration is
-outside this assignment; export the raw class and one stable error class per declared
-refusal, but do not call `registerConcept` here.
+constructor, initialize owned state there, and give every parameter a real default
+initializer so runtime constructor arity is zero:
+
+```ts
+constructor(initial: Iterable<Row> = []) {
+  this.#rows = new Map(Array.from(initial, (row) => [row.id, row]));
+}
+```
+
+`parameter?: Type` still contributes to `Class.length` and is not sufficient. Focused
+tests must construct with no arguments and assert `ConceptClass.length === 0`. Production
+specification registration is outside this assignment; export the raw class and one
+stable error class per declared refusal, but do not call `registerConcept` here.
 
 Represent each expected refusal code with one exported stable error class for production
 registration. Faults remain unexpected. Enforce

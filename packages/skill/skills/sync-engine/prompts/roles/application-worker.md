@@ -21,12 +21,15 @@ one assembled application.
   public surfaces. Concept implementation source remains raw and read-only even if a broad
   writable path syntactically contains it; report a concept-surface blocker instead of
   changing a class or its tests.
-- Before editing, inventory every requested endpoint against supplied `reaction:` links.
-  If any endpoint lacks its exact module, group, and declaration link, report a design
-  blocker immediately rather than declaring it or beginning transport work.
-- When a transport reference is supplied, use that public boundary end to end. Do not
-  replace it with a hand-written product router, invoke concepts directly from the host,
-  or duplicate its wire and error policy, even when the task suggests an alternative.
+- Before editing, inventory every requested endpoint against its supplied `reaction:` link
+  and `Declaration.Identity at /path` entry. If either is absent or their identities
+  disagree, report a design blocker immediately rather than declaring the endpoint or
+  beginning transport work. Use the declared path exactly in `endpoint(...)`.
+- When a transport reference is supplied, use that public boundary end to end. Before
+  coding, reconcile its supported methods and paths with the brief-selected interface.
+  Do not replace it with a hand-written product router, invoke concepts directly from the
+  host, duplicate its wire and error policy, or silently expose alternate routes, methods,
+  fields, or credentials, even when the task suggests an alternative.
 - Repair ordinary wiring, source-agreement, artifact, type, and integration diagnostics
   within the assigned application scope.
 
@@ -37,11 +40,11 @@ change without changing approved behavior. Report a context blocker when supplie
 references or examples do not determine the required API. Report a design blocker only
 when every documented realization would change visible behavior, ownership,
 acknowledgement ordering, failure semantics, or a selected declaration. A task may request
-only endpoints already named by approved reaction links.
+only endpoints with approved reaction links and endpoint entries.
 
 For a blocker, report the observed diagnostic or failing scenario, affected behavioral
 commitment, why ordinary documented realizations cannot satisfy it, the smallest decision
-or behavioral/link revision needed, and the commitments that remain unaffected. Do not
+or behavioral/declaration revision needed, and the commitments that remain unaffected. Do not
 guess an undocumented API or bypass a selected transport; a task cannot authorize an
 alternate undocumented framework path. Report an environment blocker when assigned
 checks cannot run for a reason outside the implementation.

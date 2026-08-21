@@ -13,7 +13,12 @@ plus affected approved contracts as the boundary authority. Reopen a boundary on
 no valid contract can realize the required behavior without moving it, and identify the
 conflicting mechanisms precisely. For every affected obligation, compare its trigger,
 closing reaction, observable false interval, retry identity, and recovery with that
-boundary authority.
+boundary authority. Record one compact assessment row per obligation before reaching a
+verdict. Each row states the visible success, whether required effects precede or follow
+acknowledgement, whether the owning action actually accepts the claimed retry identity,
+which available owner action performs recovery, and whether another obligation assigns
+the same effect. Use `none` when a field is intentionally absent; do not infer hidden state
+or implementation.
 
 Check material mismatches in this order:
 
@@ -33,7 +38,9 @@ Check material mismatches in this order:
    storage, or concept actions posed as declarations. Inventory every selected endpoint,
    internal reaction, view, former, and computation and require its exact matching typed
    link. Each endpoint needs a `reaction:` link under its intended module, group, and
-   declaration name; a route or prose label does not count. A separate internal reaction
+   declaration name plus exactly one `Declaration.Identity at /path` entry whose identity
+   agrees with that link and whose path fits the selected boundary. A prose route label
+   does not count. A separate internal reaction
    must represent an intentional deferred behavior rather than duplicate an effect the
    endpoint already owns.
 
@@ -47,7 +54,8 @@ material. Give material findings stable identities.
 
 Limit findings to changed contracts and affected interactions. Ignore unrelated
 pre-existing issues unless they block this change or are materially worsened by it. Do
-not edit the design or prescribe implementation.
+not edit the design or prescribe implementation. An `Approve` verdict still requires the
+compact assessment rows; `Findings: none` alone is not evidence of review.
 
 ## Stop conditions
 

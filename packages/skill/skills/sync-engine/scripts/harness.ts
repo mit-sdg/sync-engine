@@ -50,6 +50,7 @@ export interface HarnessAdapterDefinition {
   readonly promptDelivery: PromptDelivery;
   readonly cwd: FreshCwd;
   readonly configurationInheritance: "native-inheritance" | "coordinator-supplied";
+  readonly freshTitleField?: string;
   readonly fresh: NativeAction;
   readonly continuation: NativeAction;
 }
@@ -94,6 +95,7 @@ export interface PrepareHarnessRequest<Capabilities = EffectiveCapabilityGrant> 
   readonly target: LaunchTarget;
   readonly promptPath: string;
   readonly cwd: string;
+  readonly title: string;
   readonly effectiveCapabilities: Capabilities;
   readonly timeoutSeconds: number;
   readonly configuration?: HarnessConfiguration;
@@ -114,6 +116,7 @@ export interface PreparedHarnessInvocation<Capabilities = EffectiveCapabilityGra
     readonly nativeField?: string;
   };
   readonly configuration: HarnessConfiguration;
+  readonly title: { readonly value: string; readonly nativeField?: string };
   readonly effectiveCapabilities: Capabilities;
   readonly timeoutSeconds: number;
   readonly capabilitySupport: CapabilitySupportMap;
@@ -150,6 +153,7 @@ export function prepareHarnessInvocation<Capabilities>(
   const adapter = getHarnessAdapter(request.harness);
   requireText(request.promptPath, "prompt path");
   requireText(request.cwd, "application working directory");
+  requireText(request.title, "agent title");
   if (!Number.isSafeInteger(request.timeoutSeconds) || request.timeoutSeconds <= 0) {
     throw new Error("timeoutSeconds must be a positive whole number");
   }
@@ -189,6 +193,12 @@ export function prepareHarnessInvocation<Capabilities>(
         : {}),
     },
     configuration,
+    title: {
+      value: request.title,
+      ...(request.target.kind === "fresh" && adapter.freshTitleField !== undefined
+        ? { nativeField: adapter.freshTitleField }
+        : {}),
+    },
     effectiveCapabilities: request.effectiveCapabilities,
     timeoutSeconds: request.timeoutSeconds,
     capabilitySupport: promptGuidedCapabilitySupport,
@@ -198,6 +208,9 @@ export function prepareHarnessInvocation<Capabilities>(
       operation: action.operation,
       instruction: [
         action.instruction,
+        ...(request.target.kind === "fresh" && adapter.freshTitleField !== undefined
+          ? [`Set ${adapter.freshTitleField} to ${JSON.stringify(request.title)}.`]
+          : []),
         promptTransportInstruction(promptTransport),
         request.target.kind === "fresh"
           ? `Use ${adapter.cwd.mode} at the supplied cwd.`
@@ -206,7 +219,9 @@ export function prepareHarnessInvocation<Capabilities>(
         request.target.kind === "fresh"
           ? `Capture the new ${adapter.identity.label}.`
           : `Continue the exact ${adapter.identity.label}; never substitute a fresh agent.`,
-        `Observe through the native harness until terminal status or ${request.timeoutSeconds} seconds; harmless status checks are allowed, but never resend the prompt automatically.`,
+        request.target.kind === "fresh"
+          ? `Observe through the native harness until terminal status or ${request.timeoutSeconds} seconds. If the first attempt fails before any agent identity exists and before the prompt is accepted, retry that exact launch once; otherwise never resend the prompt.`
+          : `Observe through the native harness until terminal status or ${request.timeoutSeconds} seconds; harmless status checks are allowed, but never resend the prompt automatically.`,
         promptTransport.mode === "agent-file-instruction"
           ? "Do not inline or rewrite the prompt."
           : "Transmit the generated prompt from its file without reproducing, summarizing, prefixing, or rewriting it in coordinator output.",
@@ -253,6 +268,9 @@ export function validateHarnessAdapters(
     if (!adapter.cwd) issues.push(`${name}: application cwd behavior is required`);
     if (!adapter.configurationInheritance) {
       issues.push(`${name}: configuration inheritance is required`);
+    }
+    if (adapter.freshTitleField !== undefined && !text(adapter.freshTitleField)) {
+      issues.push(`${name}: fresh title field is invalid`);
     }
     if (!completeAction(adapter.fresh)) issues.push(`${name}: incomplete fresh action`);
     if (!completeAction(adapter.continuation)) {

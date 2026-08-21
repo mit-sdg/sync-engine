@@ -36,15 +36,16 @@ assemble({
 ```
 
 Implement the exact authored endpoint reaction, selected internal reaction, view, former,
-and computation links. An `endpoint(...)` is itself the reaction declaration named by its
-`reaction:` link; it may coordinate every consequence behaviorally assigned to that
-endpoint. Do not wrap it or create it from route prose alone. A separate internal reaction
-exists only when approved design gives it a distinct link; do not duplicate its effect in
-the endpoint.
+and computation links. An `endpoint(...)` is the reaction declaration named by its
+`reaction:` link and uses the exact pathname from that identity's `endpoints` entry; it may
+coordinate every consequence behaviorally assigned to that endpoint. Do not wrap it or
+create it from prose alone. A separate internal reaction exists only when approved design
+gives it a distinct link; do not duplicate its effect in the endpoint.
 
-Before coding, compare every requested endpoint and internal declaration with the complete
-supplied link inventory and block on any missing link. Keep module, group, and declaration
-names aligned with those links, and register every declared computation once. Within those
+Before coding, compare every requested endpoint with both the complete supplied link
+inventory and endpoint entries, then block on absence or disagreement. Keep module, group,
+declaration name, and endpoint pathname aligned with those contracts, and register every
+declared computation once. Within those
 identities, choose documented stages, guards, binding flow, and fallback construction that
 preserve the behavioral commitments. Composition coordinates concepts but does not absorb
 their invariants or make separate owners atomic. Hosts project the application boundary
@@ -54,9 +55,12 @@ contain those facts.
 
 Source-agreement diagnostics are semantic signals as well as wiring failures:
 `MISSING_COVERAGE` and `UNRESOLVED_LINK` mean an authored executable link is absent or
-cannot resolve; `UNDECLARED_SELECTED_INSTANCE` means wiring needs an identity the design
-did not select; `UNREGISTERED_COMPUTATION` means an authored computation lacks its one
-implementation registration. Do not conceal these conditions with alternate wiring.
+cannot resolve. `UNRESOLVED_ENDPOINT`, `ENDPOINT_PATH_MISMATCH`, and `DUPLICATE_ENDPOINT`
+mean endpoint identity/path declarations disagree with the selected assembly.
+`UNDECLARED_SELECTED_INSTANCE` means wiring needs an identity the design did not select;
+`UNREGISTERED_COMPUTATION` means an authored computation lacks its one implementation
+registration. Do not conceal these conditions with alternate wiring.
 
 Generated artifacts must come from the project's generation command and must never be
-edited by hand.
+edited by hand. Construct a gateway with the generated core wire named by `wireName`, not
+a transport projection type.

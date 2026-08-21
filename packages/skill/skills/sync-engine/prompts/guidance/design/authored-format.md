@@ -85,7 +85,8 @@ instantiate Noting as Notes with
 Bare `instantiate D` means `instantiate D as D`, for a definition with no external to
 bind. Bind every external inline on its own instance, as above.
 
-Concept files carry no application links, instances, bindings, or computations.
+Concept files carry no application links, endpoint entries, instances, bindings, or
+computations.
 
 ## Application files
 
@@ -97,40 +98,51 @@ Bindings convey identity only.
 
 Put exact `reaction:`, `view:`, `former:`, and `computation:` links beside prose, never
 wildcards. Every selected endpoint is a reaction declaration and therefore needs its own
-`reaction:` link, in addition to links for internal reaction trees. Cover every selected
-endpoint, internal reaction, named view, and former; declare each executable computation
-once. A composition document reads as prose carrying its links, each naming module, group
-and declaration:
+`reaction:` link, in addition to links for internal reaction trees. It also needs exactly
+one boundary declaration in an `endpoints` fence. Cover every selected endpoint, internal
+reaction, named view, and former; declare each executable computation once. A composition
+document reads as prose carrying its links and endpoint declarations:
 
-```text
+````text
 Submitting a response [enters the application](reaction:Circle.Reading.AddResponse).
+
+```endpoints
+Circle.Reading.AddResponse at /circle/respond
+```
+
 Choosing a reading [opens a discussion](reaction:Circle.Reading.SelectedOpensDiscussion)
 about it. A circle page shows the circle, its members and that discussion
 [as one record](former:Circle.Pages.CirclePage), and only a member
 [may respond](view:Circle.Reading.MemberMayRespond).
-```
+````
 
-Give each composition document a nonempty H1 and decision prose. Declare each computation
-once as `name(inputs) : Result`, no space before its inputs, with an indented body where
-it is used, or in `design/types.md` when shared, and
-reference it as `[normalization](computation:normalizeTitle)`:
+Give each composition document a nonempty H1 and decision prose. An `endpoints` fence
+contains declarations only, one per line in exact `Declaration.Identity at /path` form.
+The identity is the same module, group, and declaration selected by the endpoint's
+`reaction:` link. The portable absolute path is the exact path implementation passes to
+`endpoint(...)`. Different endpoint identities may share a path only when they are
+intentional alternatives.
+
+Declare each computation once as `name(inputs) : Result`, no space before its inputs, with
+an indented body where it is used, or in `design/types.md` when shared, and reference it as
+`[normalization](computation:normalizeTitle)`:
 
 ```computations
 normalizeTitle(raw: String) : String
   Produces the canonical task title used by endpoint adaptation.
 ```
 
-Routes stay in prose; do not link a URL path. Link the endpoint declaration under the
-exact module, group, and source name that implementation will register. The link fixes
-trace identity, not trigger syntax, stage structure, or variable flow. If the design has
-no endpoint reaction link, implementation must not create that endpoint. Do not add an
-internal reaction link for a consequence the endpoint-linked declaration may perform
-unless separate deferred behavior is an intentional design decision.
+The endpoint entry fixes the executable endpoint pathname; its `reaction:` link separately
+fixes trace identity. Neither prescribes trigger syntax, stage structure, or variable
+flow. If either declaration is absent, implementation must not create that endpoint. Do
+not add an internal reaction link for a consequence the endpoint-linked declaration may
+perform unless separate deferred behavior is an intentional design decision.
 
-An application document is not an API specification. It carries no endpoint sections and
-no input, return or refusal listings: the concept specification owns those, and a second
-copy drifts from the one the checker reads.
+An application document does not duplicate endpoint input, return, or refusal listings:
+the concept specifications and composition prose own that behavior, and a second copy
+drifts from the contracts the checker reads. Transport methods, status codes, headers, and
+external route projections remain outside the `endpoints` fence.
 
 `check-design` proves grammar and authored form only. Config checking proves shapes,
-bindings, links, computations, source agreement. Neither proves boundaries, prose truth,
+bindings, links, endpoint identity/path agreement, computations, and source agreement. Neither proves boundaries, prose truth,
 persistence, transactions, authorization, repair, or behavior; review and test.

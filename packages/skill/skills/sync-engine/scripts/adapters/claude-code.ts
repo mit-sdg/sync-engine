@@ -9,6 +9,7 @@ export const claudeCodeAdapter = {
   },
   cwd: { mode: "inherit-application-workspace", field: "coordinator workspace" },
   configurationInheritance: "native-inheritance",
+  freshTitleField: "description",
   fresh: {
     mechanism: "Claude Code Agent tool",
     operation: "invoke",

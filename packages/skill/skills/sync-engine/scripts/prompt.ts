@@ -9,7 +9,7 @@ import {
   validateCapabilityGrant,
 } from "./roles.ts";
 
-const contextDeliveries = ["fresh", "continuation", "replacement"] as const;
+const contextDeliveries = ["fresh", "continuation", "delta", "replacement"] as const;
 export type PromptContextDelivery = (typeof contextDeliveries)[number];
 export type PromptInput =
   | Readonly<{ id: string; path: string; displayName?: string }>
@@ -302,7 +302,23 @@ The application root is ${JSON.stringify(applicationRoot)}. Resolve every relati
 ${applicationBoundary}Anything not granted above is unavailable. Generated output may only come from a granted project command and must not be edited manually. Never grantable: ${never}.`;
 }
 
-function returnShape(specification: RoleSpecification): string {
+function deltaCapabilities(grant: EffectiveCapabilityGrant): string {
+  return `# Capabilities
+
+The prior repository boundary remains in force. Current effective grant:
+
+\`\`\`json
+${JSON.stringify(grant)}
+\`\`\``;
+}
+
+function returnShape(specification: RoleSpecification, compact = false): string {
+  if (compact) {
+    const headings = specification.returnShape
+      .map(({ heading, required }) => `\`## ${heading}\`${required ? "" : " (optional)"}`)
+      .join(", ");
+    return `# Return shape\n\nReturn a small result using the prior contract's fields in this order: ${headings}.`;
+  }
   const fields = specification.returnShape
     .map((field) => {
       const guidance = field.guidance === "" ? "" : ` ${field.guidance}`;
@@ -357,6 +373,7 @@ export async function buildPrompt(options: BuildPromptOptions) {
     throw new PromptBuildError("unsafe-input", "Context limit must be a positive safe integer");
   }
   const known = knownRetained(options.knownRetained);
+  const samePhaseContinuation = contextDelivery === "delta";
 
   const root = await promptRoot(options.promptRoot);
   const role = await canonicalSource(root, specification.templatePath, "role template");
@@ -367,20 +384,40 @@ export async function buildPrompt(options: BuildPromptOptions) {
   const sources: PromptSourceContribution[] = [];
   const retainedSources: RetainedSource[] = [];
 
-  const renderedRole = sourceBody(role);
-  sources.push(contribution("role-template", role, "inline", renderedRole));
-  const roleSection = `# Role and objective
+  const renderedRole = samePhaseContinuation ? "" : sourceBody(role);
+  sources.push(
+    contribution(
+      "role-template",
+      role,
+      samePhaseContinuation ? "retained-binding" : "inline",
+      renderedRole,
+    ),
+  );
+  const roleSection = samePhaseContinuation
+    ? `# Role and objective
+
+Continue work unit \`${workUnit}\`; role \`${specification.role}\`; phase \`${specification.phase}\`. The prior same-phase role contract remains authoritative.`
+    : `# Role and objective
 
 Work unit \`${workUnit}\`; role \`${specification.role}\`; phase \`${specification.phase}\`.
 
 ${renderedRole}`;
 
   const renderedGuidance = guidance.map((source) => {
-    const rendered = sourceBody(source);
-    sources.push(contribution("guidance", source, "inline", rendered));
+    const rendered = samePhaseContinuation ? "" : sourceBody(source);
+    sources.push(
+      contribution(
+        "guidance",
+        source,
+        samePhaseContinuation ? "retained-binding" : "inline",
+        rendered,
+      ),
+    );
     return rendered;
   });
-  const guidanceSection = `# Guidance
+  const guidanceSection = samePhaseContinuation
+    ? "# Guidance\n\nUnchanged from the prior same-agent context. Apply it to the task and changed context below."
+    : `# Guidance
 
 ${renderedGuidance.length === 0 ? "No additional guidance for this phase." : renderedGuidance.join("\n\n---\n\n")}`;
 
@@ -397,7 +434,9 @@ ${renderedGuidance.length === 0 ? "No additional guidance for this phase." : ren
       const retain = contract.delivery === "retained";
       if (retain) retainedSources.push(identity);
       const binding =
-        contextDelivery === "continuation" && retain && known.has(retainedKey(identity));
+        (contextDelivery === "continuation" || contextDelivery === "delta") &&
+        retain &&
+        known.has(retainedKey(identity));
       const rendered = binding ? retained(source) : sourceBody(source);
       const delivery: PromptSourceDelivery = binding
         ? "retained-binding"
@@ -411,13 +450,16 @@ ${renderedGuidance.length === 0 ? "No additional guidance for this phase." : ren
   }
   const contextSection = `# Context\n\n${contextGroups.join("\n\n")}`;
 
+  const capabilitySection = samePhaseContinuation
+    ? deltaCapabilities(effectiveCapabilities)
+    : capabilities(effectiveCapabilities, applicationRoot, workUnit);
   const content = normalize(
     [
       roleSection,
-      capabilities(effectiveCapabilities, applicationRoot, workUnit),
+      capabilitySection,
       guidanceSection,
       contextSection,
-      returnShape(specification),
+      returnShape(specification, samePhaseContinuation),
     ].join("\n\n"),
   );
   const totalBytes = byteLength(content);

@@ -181,17 +181,22 @@ const designerReturn = [
 ];
 const criticReturn = [
   output("Verdict", true, "Approve, revise, or blocked."),
+  output(
+    "Assessments",
+    true,
+    "Compact obligation-by-obligation semantic assessment; do not restate contracts.",
+  ),
   output("Findings", true, "Stable-ID blocker or material findings, or none."),
 ];
 const workerReturn = [
   output("Status", true, "Complete or blocked."),
   output("Changed", true, "Paths changed, or none."),
-  output("Checks", true, "Command and outcome."),
+  output("Checks", true, "Exact command and pass/fail outcome."),
   output("Blockers", true, "Categorize as design, context, or environment."),
   output("Concerns", false, "Material non-blocking uncertainty only."),
 ];
 const verificationFindings =
-  "Stable IDs resolved/unresolved; blocker/material direct regressions or none.";
+  "Stable findings or routed blockers resolved/unresolved; direct regressions or none.";
 
 function template(role: RoleId, phase: RolePhase): string {
   if (role === "designer" || role === "critic") return `roles/${role}-${phase}.md`;
@@ -259,7 +264,7 @@ export const roleSpecifications = {
         true,
         "Adverse assessments keyed to rows; confirm clean coverage once without restating rows.",
       ),
-      criticReturn[1]!,
+      criticReturn[2]!,
     ],
   ),
   "critic/contracts": specification(
@@ -280,7 +285,7 @@ export const roleSpecifications = {
     [
       task("Verification task"),
       brief(),
-      inline("original-findings", "Original finding IDs"),
+      inline("original-findings", "Original finding or routed blocker IDs"),
       inline("revised-candidate", "Revised candidate context", "one-or-more"),
       retained("affected-design", "Retained affected design", "zero-or-more"),
       retained("review-guidance", "Retained review guidance", "one-or-more"),
@@ -294,7 +299,7 @@ export const roleSpecifications = {
       task(),
       brief(),
       retained("specifications", "Concept specifications", "one-or-more"),
-      retained("public-references", "Public framework references", "one-or-more"),
+      retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
       inline("starting-paths", "Exact starting paths"),
     ],
@@ -317,7 +322,7 @@ export const roleSpecifications = {
       retained("concept-specifications", "Concept specifications", "one-or-more"),
       retained("concept-public-surfaces", "Concept public surfaces", "one-or-more"),
       retained("existing-wiring", "Existing wiring and configuration", "zero-or-more"),
-      retained("public-references", "Public framework references", "one-or-more"),
+      retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
       inline("starting-paths", "Exact starting paths"),
     ],
@@ -331,7 +336,7 @@ export const roleSpecifications = {
       brief(),
       retained("public-interface", "Assembled public interface", "one-or-more"),
       inline("frontend-paths", "Frontend starting paths"),
-      retained("public-references", "Public framework references", "one-or-more"),
+      retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
     ],
     workerReturn,
@@ -346,7 +351,7 @@ export const roleSpecifications = {
       retained("public-interface", "Assembled public interface", "one-or-more"),
       retained("frontend-surface", "Frontend surface", "zero-or-more"),
       retained("relevant-tests", "Existing relevant tests", "zero-or-more"),
-      retained("public-references", "Public framework references", "zero-or-more"),
+      retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
     ],
     [

@@ -9,11 +9,12 @@ export const paseoAdapter = {
   },
   cwd: { mode: "explicit-application-cwd", field: "cwd" },
   configurationInheritance: "coordinator-supplied",
+  freshTitleField: "--title",
   fresh: {
     mechanism: "Paseo CLI",
     operation: "paseo run with file-backed positional prompt",
     instruction:
-      "Run paseo run once with its positional prompt populated directly from the generated prompt file.",
+      "Run paseo run with its positional prompt populated directly from the generated prompt file.",
   },
   continuation: {
     mechanism: "Paseo CLI",

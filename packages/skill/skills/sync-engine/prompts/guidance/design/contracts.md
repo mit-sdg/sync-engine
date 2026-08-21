@@ -38,10 +38,12 @@ commitment: its owner, visible success and refusal, ordering relative to acknowl
 and material failure or recovery guarantee. Do not prescribe framework stages, trigger
 syntax, binding flow, or endpoint fallback construction.
 
-Give every selected public endpoint its own reaction link as a trace identity. An endpoint
-may realize all coordination needed for that behavior. Add a separate internal reaction
-link only when the design intentionally selects a distinct deferred or independently
-triggered behavior; do not create one merely to narrate an endpoint's next step.
+Give every selected public endpoint its own reaction link as a trace identity and exactly
+one `Declaration.Identity at /path` entry fixing its executable endpoint pathname. An
+endpoint may realize all coordination needed for that behavior. Add a separate internal
+reaction link only when the design intentionally selects a distinct deferred or
+independently triggered behavior; do not create one merely to narrate an endpoint's next
+step.
 
 Declare a computation when a pure application decision is itself part of the accepted
 behavior or is shared by multiple declarations. Do not introduce computations solely to

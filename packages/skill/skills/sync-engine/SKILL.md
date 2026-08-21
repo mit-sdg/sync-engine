@@ -132,10 +132,13 @@ its response verbatim into the printed response path before `launch complete`, u
 work-unit paths rather than shared temporary files. Completed status requires a nonempty
 response; failed, cancelled, and timed-out launches may finalize an empty response.
 
-`continue` returns to the recorded agent. Existing design bindings are redigested
-automatically; `--design-root` may only introduce a binding when the prior record has none.
+`continue` returns to the recorded agent. A same-phase continuation sends a compact delta;
+a phase transition or replacement sends the complete applicable role prompt. Existing
+design bindings are redigested automatically; `--design-root` may only introduce a binding
+when the prior record has none.
 `--replace` prepares a fresh replacement and is the only mode that may select another
 `--harness`.
 
-The coordinator—not the skill CLI—chooses phases, accepts review judgments, selects
-repairs, and performs handback.
+Before handback, derive actual role identities from finalized records rather than memory
+or displayed titles. The coordinator—not the skill CLI—chooses phases, accepts review
+judgments, selects repairs, and performs handback.

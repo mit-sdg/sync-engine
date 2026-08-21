@@ -81,11 +81,15 @@ former(name, (input, free) => where(...).form({ ...shape }));
   the host row when absent; `whether(...)` keeps it and fills its leaves with `null`.
 - `count(query, input, outputVariable)` requires one non-union query reference and its
   complete input mapping; undeclared fields are rejected recursively.
-- `compute(named, input, output)` runs a pure function supplied as `conceptSet`'s optional
-  second argument and exposed as `set.computations`; it never takes a bare function. Write
+- `compute(named, input, output)` is a condition line inside `where(...)`. It runs a pure
+  function supplied as `conceptSet`'s optional second argument and exposed as
+  `set.computations`; it never takes a bare function. Write
   `conceptSet({ ... }, { isLive: ({ now, expiresAt }) => now < expiresAt })`, then
   `compute(set.computations.isLive, { now, expiresAt }, live)`, binding one output variable.
-  Build that record before the set; references from separate sets do not mix.
+  A no-input computation uses `{}`. Test a computed boolean with
+  `is.among(live, [true])` or `is.among(live, [false])`; `is` is not itself callable and
+  has no `eq`, `same`, or `equal` member. Build the computation record before the set;
+  references from separate sets do not mix.
 - A query's `"one" | "optional" | "many"` promise links to a record return for `"one"` and
   an array of records otherwise, at type level and at runtime.
 
@@ -93,14 +97,18 @@ former(name, (input, free) => where(...).form({ ...shape }));
 
 `endpoint`, `receive` and `respond` come from `@mit-sdg/sync-engine/boundary`.
 
-An endpoint is itself a selected reaction. Its design carries a `reaction:` link with the
-same module, group, and declaration name. For this design sentence:
+An endpoint is itself a selected reaction. Its design carries both a `reaction:` link and
+an `endpoints` entry with the same module, group, and declaration name:
 
 ```text
 Publishing a post [enters the application](reaction:Board.Publishing.PublishPost).
 ```
 
-use this declaration and placement:
+```endpoints
+Board.Publishing.PublishPost at /board/post
+```
+
+Use that exact identity and path in the declaration and placement:
 
 ```ts
 const PublishPost = endpoint(
@@ -126,8 +134,8 @@ assemble({
 ```
 
 Do not wrap the endpoint in another reaction. Do not declare an endpoint unless its exact
-reaction link exists in approved design. Conversely, every selected public endpoint must
-have this link before implementation begins.
+reaction link and endpoint entry exist in approved design. Conversely, every selected
+public endpoint must have both before implementation begins.
 
 - Paths must be canonical absolute URL pathnames that survive WHATWG pathname handling
   unchanged. Queries, fragments, scheme-relative paths, dot segments, malformed percent
@@ -141,6 +149,9 @@ have this link before implementation begins.
   branch a condition that excludes the others. Branching on whether an optional input was
   supplied needs a declared computation; if the design declares none, block rather than
   invent one.
+- A binding produced by a state read belongs to the stage that consumes it. It does not
+  safely cross an intervening action. Consume it before the action, return it from an
+  owning action, or read it again in the later stage.
 - Validators are explicit: `input`, `output` and `domainError`, each returning
   `{ ok: true } | { ok: false; detail?: string }` synchronously, at most once per path. The
   domain-error validator receives the response's top-level `error`. Generated types carry no

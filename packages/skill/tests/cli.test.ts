@@ -518,6 +518,7 @@ describe("prompt preparation and completion", () => {
       response: preparedOutput.Response,
       record: preparedOutput.Record,
       harness: preparedOutput.Harness,
+      title: preparedOutput["Agent title"],
       delivery: preparedOutput["Prompt delivery"],
       cwd: preparedOutput["Working directory"],
       timeout: preparedOutput.Timeout,
@@ -532,6 +533,7 @@ describe("prompt preparation and completion", () => {
       response: [launch.responsePath],
       record: [launch.recordPath],
       harness: ["paseo"],
+      title: ["message-board-search — Designer; --title"],
       delivery: ["shell-file-expansion; the paseo run positional prompt"],
       cwd: [`${root}; explicit-application-cwd`],
       timeout: [
@@ -1073,7 +1075,7 @@ describe("continuation and replacement", () => {
         "Task",
         "Brief",
         "Concept specifications",
-        "Public framework references",
+        "Additional public framework references",
         "Examples",
         "Exact starting paths",
       ]),
@@ -1088,7 +1090,7 @@ describe("continuation and replacement", () => {
         "design/concepts/Posting.md",
         await readFile(specification, "utf8"),
       ),
-      "Public framework references": retainedContext(
+      "Additional public framework references": retainedContext(
         retainedReference.displayName,
         retainedReference.sha256,
         Buffer.byteLength(await readFile(reference)),

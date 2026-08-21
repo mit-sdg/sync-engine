@@ -96,7 +96,7 @@ describe("typed role specifications", () => {
     ]);
     expect(verification.returnShape.map(({ heading }) => heading)).toEqual(["Verdict", "Findings"]);
     expect(verification.returnShape[1]?.guidance).toBe(
-      "Stable IDs resolved/unresolved; blocker/material direct regressions or none.",
+      "Stable findings or routed blockers resolved/unresolved; direct regressions or none.",
     );
 
     for (const id of roleSpecificationIds) {
@@ -126,9 +126,14 @@ describe("typed role specifications", () => {
     const frontend = roleSpecifications["frontend-worker/implementation"];
     expect(frontend.guidancePaths).not.toContain("guidance/api/http-client.md");
 
-    const evidence = roleSpecifications["evidence-worker/evidence"];
-    for (const id of ["public-references", "examples"]) {
-      expect(evidence.inputs.find((input) => input.id === id)).toMatchObject({
+    for (const specification of [
+      roleSpecifications["concept-worker/implementation"],
+      application,
+      frontend,
+      roleSpecifications["evidence-worker/evidence"],
+    ]) {
+      expect(specification.inputs.find((input) => input.id === "public-references")).toMatchObject({
+        heading: "Additional public framework references",
         cardinality: "zero-or-more",
         delivery: "retained",
       });
@@ -160,10 +165,23 @@ describe("typed role specifications", () => {
         guidance: "Stable-ID blocker or material findings, or none.",
       },
     ]);
+    expect(roleSpecifications["critic/contracts"].returnShape).toEqual([
+      { heading: "Verdict", required: true, guidance: "Approve, revise, or blocked." },
+      {
+        heading: "Assessments",
+        required: true,
+        guidance: "Compact obligation-by-obligation semantic assessment; do not restate contracts.",
+      },
+      {
+        heading: "Findings",
+        required: true,
+        guidance: "Stable-ID blocker or material findings, or none.",
+      },
+    ]);
     expect(roleSpecifications["concept-worker/implementation"].returnShape).toEqual([
       { heading: "Status", required: true, guidance: "Complete or blocked." },
       { heading: "Changed", required: true, guidance: "Paths changed, or none." },
-      { heading: "Checks", required: true, guidance: "Command and outcome." },
+      { heading: "Checks", required: true, guidance: "Exact command and pass/fail outcome." },
       {
         heading: "Blockers",
         required: true,

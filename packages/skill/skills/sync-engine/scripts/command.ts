@@ -58,6 +58,14 @@ export function defaultSkillRootForCommand(commandPath: string): string {
 const defaultSkillRoot = defaultSkillRootForCommand(fileURLToPath(import.meta.url));
 const defaultTimeoutSeconds = 1800;
 
+function launchTitle(slug: string, role: string): string {
+  const name = role
+    .split("-")
+    .map((part) => `${part[0]!.toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+  return `${slug} — ${name}`;
+}
+
 type WriteOutput = (text: string) => void;
 type Bootstrap = typeof bootstrapApplication;
 
@@ -489,6 +497,7 @@ async function prepareCommand(
     target: options.target,
     promptPath: launch.artifacts.promptPath,
     cwd: options.cwd,
+    title: launchTitle(options.slug, built.specification.role),
     effectiveCapabilities: built.effectiveCapabilities,
     timeoutSeconds: options.timeoutSeconds,
     configuration,
@@ -526,6 +535,7 @@ ${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
       ? "Target: fresh agent"
       : `Target agent: ${invocation.target.agentId}`;
   out(`Harness: ${invocation.harness}
+Agent title: ${invocation.title.value}${invocation.title.nativeField === undefined ? "" : `; ${invocation.title.nativeField}`}
 Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
 Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
 Timeout: ${launch.record.timeoutSeconds} seconds; coordinator-managed observation limit; CLI does not observe harness
@@ -714,6 +724,7 @@ async function launchComplete(
     target: completionTarget(record),
     promptPath: record.prompt.path,
     cwd,
+    title: launchTitle(record.work.slug, record.role),
     effectiveCapabilities: validatedGrant,
     timeoutSeconds: record.timeoutSeconds,
   });
@@ -814,7 +825,7 @@ async function continueLaunch(
       inputValues: parsed.options.get("--input") ?? [],
       harness: harnessId,
       target: replacing ? { kind: "fresh" } : { kind: "continuation", agentId: prior.agentId },
-      delivery: replacing ? "replacement" : "continuation",
+      delivery: replacing ? "replacement" : phase === prior.phase ? "delta" : "continuation",
       relationship: { kind: replacing ? "replacement" : "continuation", recordPath: priorPath },
       kind: replacing ? "replacement" : "continuation",
       ...(design === undefined ? {} : { design }),

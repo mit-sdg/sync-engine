@@ -227,7 +227,7 @@ describe("deterministic prompt rendering", () => {
         "Task",
         "Brief",
         "Concept specifications",
-        "Public framework references",
+        "Additional public framework references",
         "Examples",
         "Exact starting paths",
       ]),
@@ -235,7 +235,7 @@ describe("deterministic prompt rendering", () => {
       Task: inlineSource("task.md", "Implement Tasking."),
       Brief: inlineSource("brief.md", "Tasking is in scope."),
       "Concept specifications": inlineSource("Tasking.md", conceptContract),
-      "Public framework references": inlineSource("authored-format.md", fencedHeadings),
+      "Additional public framework references": inlineSource("authored-format.md", fencedHeadings),
       "Exact starting paths": inlineSource("paths.md", "src/concepts/tasking"),
     });
     expect(sectionRecord(promptSections(result.content)).Capabilities).toBe(
@@ -354,6 +354,38 @@ describe("deterministic prompt rendering", () => {
     ).toHaveLength(2);
   });
 
+  test("renders same-phase continuation as a compact delta", async () => {
+    const inputs = [
+      { id: "task", path: fixtureInput("task.md") },
+      { id: "brief", path: fixtureInput("brief.md") },
+      { id: "affected-design", path: fixtureInput("a-design.md") },
+    ] as const;
+    const fresh = await buildPrompt(designerOptions({ inputs }));
+    const delta = await buildPrompt(
+      designerOptions({
+        contextDelivery: "delta",
+        knownRetained: fresh.retainedSources,
+        inputs,
+      }),
+    );
+
+    expect(delta.bytes).toBeLessThan(fresh.bytes / 2);
+    expect(sectionRecord(promptSections(delta.content))).toMatchObject({
+      "Role and objective": expect.stringContaining("prior same-phase role contract"),
+      Capabilities: expect.stringContaining("Current effective grant:"),
+      Guidance: expect.stringContaining("Unchanged from the prior same-agent context"),
+      "Return shape": expect.stringContaining("`## Status`, `## Changed`, `## Questions`"),
+    });
+    expect(
+      delta.sources
+        .filter(({ kind, delivery }) => kind !== "input" && delivery === "retained-binding")
+        .map(({ kind }) => kind),
+    ).toEqual(["role-template", "guidance", "guidance"]);
+    expect(delta.sources.find(({ inputId }) => inputId === "brief")?.delivery).toBe(
+      "retained-binding",
+    );
+  });
+
   test("inlines retained input when the display is known but its bytes changed", async () => {
     const fresh = await buildPrompt(designerOptions());
     const changedBrief = "# Brief fixture\n\nChanged bytes must be sent.";
@@ -428,7 +460,7 @@ describe("deterministic prompt rendering", () => {
       promptContext(verification.content, [
         "Verification task",
         "Brief",
-        "Original finding IDs",
+        "Original finding or routed blocker IDs",
         "Revised candidate context",
         "Retained affected design",
         "Retained review guidance",
@@ -436,7 +468,7 @@ describe("deterministic prompt rendering", () => {
     ).toEqual({
       "Verification task": inlineSource("verify-task.md", "Verify F-1."),
       Brief: retainedContext("brief.md", retainedBrief.sha256, Buffer.byteLength(`${brief}\n`)),
-      "Original finding IDs": inlineSource("findings.md", "F-1"),
+      "Original finding or routed blocker IDs": inlineSource("findings.md", "F-1"),
       "Revised candidate context": inlineSource("revision.md", "# Revision\n\nFixed."),
       "Retained review guidance": inlineSource("review.md", review),
     });

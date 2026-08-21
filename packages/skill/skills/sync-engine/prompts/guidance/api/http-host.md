@@ -6,22 +6,30 @@ mapping, and wire projection. Authentication and authorization stay in concepts 
 composition.
 
 Matching HTTP support must already be installed in the application. If it is absent or
-incompatible, report an environment blocker instead of installing or replacing it. Do
-not implement a parallel product router, call concepts directly from the host, or copy
-HTTP policy into a hand-written Fetch handler.
+incompatible, report an environment blocker instead of installing or replacing it. The
+package exposes ordinary endpoints as POST/JSON by their unchanged endpoint pathname;
+policy `direct` adds only GET redirects. It does not turn arbitrary brief-selected dynamic
+GET or POST paths into endpoint inputs. If an exact selected method or path cannot be
+represented, report the mismatch instead of substituting another interface. Do not
+implement a parallel product router, call concepts directly from the host, or copy HTTP
+policy into a hand-written Fetch handler.
 
 ## Declare the boundary
 
 Every operation remains a sync-engine `endpoint` built from `receive` and `respond`. A
 direct browser GET route maps to an unchanged endpoint; the HTTP package does not replace
-endpoint declarations. The approved design must first link that endpoint as a reaction,
-for example:
+endpoint declarations. The approved design must first link that endpoint as a reaction
+and declare its endpoint pathname:
 
 ```text
 Resolving a short code [enters the application](reaction:LinkShortener.Links.Resolve).
 ```
 
-The source declaration uses that exact final name:
+```endpoints
+LinkShortener.Links.Resolve at /links/resolve
+```
+
+The source declaration uses that exact final name and path:
 
 ```ts
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
@@ -49,7 +57,8 @@ assemble({
 
 Use the approved concepts, endpoint paths, conditions, response fields, validators, and
 composition names; the example supplies API shape, not product policy. If the endpoint's
-reaction link is absent, stop with a design blocker before writing the declaration.
+reaction link or endpoint entry is absent, stop with a design blocker before writing the
+declaration.
 
 ## Define one policy and projection
 
