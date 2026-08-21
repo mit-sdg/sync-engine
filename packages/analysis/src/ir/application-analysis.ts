@@ -669,6 +669,12 @@ function sameCanonical(left: unknown, right: unknown): boolean {
   return canonicalAnalysisJson(left) === canonicalAnalysisJson(right);
 }
 
+function sameCanonicalMembers(left: readonly unknown[], right: readonly unknown[]): boolean {
+  const ordered = (values: readonly unknown[]): string[] =>
+    values.map(canonicalAnalysisJson).sort();
+  return sameCanonical(ordered(left), ordered(right));
+}
+
 function validRelativePosixPrefix(value: unknown, label: string): string {
   const path = nonEmptyString(value, label);
   const parts = path.split("/");
@@ -1974,7 +1980,7 @@ export function createApplicationAnalysis(
       project.manifestDigest !== manifest.digest ||
       project.provenance.manifestDigest !== manifest.digest ||
       !sameCanonical(project.provenance.manifest.generator, manifest.generator) ||
-      !sameCanonical(project.manifestDiagnostics, manifest.diagnostics)
+      !sameCanonicalMembers(project.manifestDiagnostics, manifest.diagnostics)
     ) {
       error("SNAPSHOT_MISMATCH", "project analysis does not match the supplied manifest");
     }

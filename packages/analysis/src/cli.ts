@@ -192,8 +192,10 @@ async function packagedCoreCommand(manifestPath: string): Promise<CoreCommand | 
           : undefined;
     if (target === undefined) return undefined;
     const entrypoint = resolve(dirname(manifestPath), target);
+    // Core is a Bun executable and loads Bun application configuration. Invoke its declared
+    // runtime directly instead of inheriting this Node command's process.execPath.
     return existsSync(entrypoint)
-      ? { executable: process.execPath, leadingArguments: [entrypoint] }
+      ? { executable: "bun", leadingArguments: [entrypoint] }
       : undefined;
   } catch {
     return undefined;
