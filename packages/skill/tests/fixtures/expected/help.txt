@@ -1,0 +1,91 @@
+sync-engine skill CLI — prompt builder and validator
+
+Usage:
+  sync-engine-skill work start <slug>
+    [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+  sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
+    --task <path> --grant <json-path> --harness <harness>
+    [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
+    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  sync-engine-skill launch complete <prepared-record> --agent-id <id>
+    --status <native-status> [--model <id>]
+  sync-engine-skill continue <finalized-record> --phase <phase> --task <path>
+    --grant <json-path> [--input <slot>=<path>]... [--replace]
+    [--harness <harness>] [--design-root <path>] [--context-limit <bytes>]
+    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  sync-engine-skill --help
+
+Roles and phases (valid pairs):
+  designer/decomposition
+  designer/contracts
+  critic/decomposition
+  critic/contracts
+  critic/verification
+  concept-worker/implementation
+  application-worker/implementation
+  frontend-worker/implementation
+  evidence-worker/evidence
+
+Harnesses:
+  paseo, codex, claude-code, antigravity, cursor
+
+Options:
+  --design-root must be the canonical <application>/design directory. Prompt build creates
+  a binding; continue recomputes an existing binding automatically and accepts this option
+  only to introduce one when the prior record has none. Completion uses the recorded root.
+  --context-limit is a positive byte limit supplied by the selected harness or model.
+  --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
+  CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
+  selection; otherwise they inherit native settings. --harness on continue is valid only
+  together with --replace.
+
+Inputs:
+  --task and --grant sources must be inside the application. --task supplies the reserved
+  task input. --input is repeatable, including for a repeatable slot; use one
+  <slot>=<path> argument per file. Brief and decomposition slots require their exact
+  work-unit files; every other input must resolve inside the application or skill root.
+  Accepted slots are:
+  designer/decomposition: brief (one, retained), current-decomposition (optional, inline), affected-design (repeatable optional, retained)
+  designer/contracts: brief (one, retained), accepted-decomposition (one, retained), resolved-findings (optional, retained), affected-contracts (repeatable optional, retained), catalog-contracts (repeatable optional, retained), candidate-contracts (repeatable optional, inline)
+  critic/decomposition: brief (one, retained), candidate-decomposition (one, inline), affected-design (repeatable optional, retained)
+  critic/contracts: brief (one, retained), accepted-decomposition (one, retained), changed-contracts (one or more, inline), affected-contracts (repeatable optional, retained)
+  critic/verification: brief (one, retained), original-findings (one, inline), revised-candidate (one or more, inline), affected-design (repeatable optional, retained), review-guidance (one or more, retained)
+  concept-worker/implementation: brief (one, retained), specifications (one or more, retained), public-references (one or more, retained), examples (repeatable optional, retained), starting-paths (one, inline)
+  application-worker/implementation: brief (one, retained), types (one or more, retained), compositions (one or more, retained), obligations (repeatable optional, retained), concept-public-surfaces (one or more, retained), existing-wiring (repeatable optional, retained), public-references (one or more, retained), examples (repeatable optional, retained), starting-paths (one, inline)
+  frontend-worker/implementation: brief (one, retained), public-interface (one or more, retained), frontend-paths (one, inline), public-references (one or more, retained), examples (repeatable optional, retained)
+  evidence-worker/evidence: brief (one, retained), contracts (one or more, retained), public-interface (one or more, retained), frontend-surface (repeatable optional, retained), relevant-tests (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained)
+
+Capability grant JSON (every field is required and must be within the role maximum):
+  {
+    "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
+    "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
+    "toolKinds": ["repository-read", "repository-write"],
+    "projectShell": "none|project-validation|project-local",
+    "network": false,
+    "generatedOutput": false,
+    "longRunningProcesses": false
+  }
+
+Completion:
+  Before launch complete, copy the native response verbatim into the printed Response
+  path. The prepared record fixes harness, timeout, and design root. Completed status
+  requires nonempty UTF-8; another terminal status permits an empty captured response.
+
+Status normalization:
+  completed: complete, completed, idle, settled, success, succeeded
+  failed: error, failed, failure
+  cancelled: canceled, cancelled, stopped
+  timed-out: timeout, timed-out, timed_out, "timed out"
+
+Continuation and replacement:
+  continue normally keeps the prior role, harness, and exact agent identity. It binds only
+  unchanged retained sources known by that agent; unseen or changed sources are inline.
+  Within one phase capabilities must be reused or narrowed; an explicit phase transition
+  uses a grant validated against the new phase maximum.
+  Bound design is redigested automatically. --replace prepares a fresh agent, expands
+  retained inputs in full, and may select --harness; it remains a replacement.
+
+Warnings:
+  Continuing with a release mismatch is explicit. Adapters report prompt-guided
+  capabilities when the harness does not enforce them. Missing required response
+  headings warn after finalization but do not discard useful native output.

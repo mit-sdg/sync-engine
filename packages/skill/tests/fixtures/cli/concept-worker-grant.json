@@ -1,0 +1,12 @@
+{
+  "readableAreas": [{ "area": "application", "path": "." }],
+  "writableAreas": [
+    { "area": "owned-concept", "path": "src/concepts" },
+    { "area": "owned-test", "path": "tests/concepts" }
+  ],
+  "toolKinds": ["repository-read", "repository-write"],
+  "projectShell": "project-local",
+  "network": false,
+  "generatedOutput": false,
+  "longRunningProcesses": false
+}

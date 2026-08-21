@@ -1,54 +1,141 @@
 ---
 name: sync-engine
-description: Design and build an application with @mit-sdg/sync-engine and concept design, through compact independent review, bounded implementation roles, and objective evidence. Use for building an application on the framework, never for changing the framework itself.
+description: Design and build an application with @mit-sdg/sync-engine through scoped concept design, independent criticism, bounded implementation roles, and objective evidence. Use for applications built on the framework, not for changing the framework itself.
 license: Apache-2.0
-compatibility: Requires filesystem and shell access, Bun, and fresh native subagents in Paseo, Codex, Claude Code, or Antigravity; downstream roles use best-effort assigned-path discipline.
+compatibility: Requires filesystem and shell access, Bun, and a supported agent harness with fresh-agent launch and stable continuation.
 ---
 
-# Sync-engine application workflow
+# Sync-engine application skill
 
-## Non-negotiable boundaries
+Coordinate one bounded application change at a time. Read the canonical
+[workflow](references/workflow.md) before starting and the
+[harness reference](references/harnesses.md) before the first role launch.
 
-- Authored Markdown under `design/` is product and design authority. Generated output,
-  implementation, analysis, and coordinator notes are not.
-- Use fresh agents for design, criticism, and evidence, with bounded concept, application,
-  and frontend roles. Record every compiled phase with `launch`; an unrecorded required
-  phase did not run. The coordinator writes only the brief and assignments, never
-  role-owned design, source, or tests.
-- Roles inherit provider, model, and reasoning unless the user names another. Paseo
-  attests these; native records disclose unavailable attestation.
-- Preserve unrelated work. Only the coordinator may change Git's index, refs, or history
-  on a direct, explicit human-user request; see the workflow for scope.
-- Nobody reverse-engineers the framework, the coordinator included. Inside the installed
-  package read only `examples/` and `docs/user/`, never `dist/` or a checkout's source.
-  Downstream implementation and evidence roles additionally receive narrow assigned paths
-  and explicit path discipline; supply them exact public references.
-- Build prompts with the self-contained `scripts/command.ts`; bind downstream work to the reviewed design
-  digest. Deliver generated files by path, never through shell arguments.
-- Stop after required checks and objective evidence pass. Do not iterate for optional
-  polish, informational findings, or an empty critic list.
+## Interact deliberately
 
-## Run the workflow
+Default to active interaction with concise options and a recommendation. The user can
+request less interaction or auto mode in ordinary language and change that preference at
+any time. The [workflow](references/workflow.md) defines checkpoints, assumptions, and
+stopping conditions.
 
-1. Read repository instructions and [start the coordinator
-   workflow](references/workflow.md). Read
-   [design and criticism](references/design-and-criticism.md) and
-   [implementation](references/implementation.md) on reaching those stages, not before.
-2. Read the harness [contract](references/harnesses/contract.md) and exactly one adapter:
-   [Paseo](references/harnesses/paseo.md), [Codex](references/harnesses/codex.md),
-   [Claude Code](references/harnesses/claude-code.md), or
-   [Antigravity](references/harnesses/antigravity.md).
-3. Initialize and maintain `product/brief.md` with the workflow's brief commands; do not
-   read or recreate the packaged template directly.
-4. Build only the current phase prompt with the compiler. Do not read role templates or
-   common prompt files yourself. Launch a role through its guide; continue the
-   original designer with the compiler's contract delta and `--continue-agent`. Retained
-   context is hash-bound, not resent. Only direct human instruction permits
-   `--user-override`.
-5. Keep objective, decisions, current stage, critic count, and unresolved material
-   issues in active coordinator context. Do not create workflow metadata or a workflow
-   database.
+## Start deterministically
 
-The compiler validates inputs, release executables, prompt bytes, follow-ups, design
-identity, role order, launch records, and handback. It chooses no product decision,
-stage, approval, repair, or acceptance; a reported `Next:` line is syntax, not permission.
+Before the first skill CLI invocation in an empty application directory, read
+`<skill-root>/release.json` and create only this administrative scaffold:
+
+```json
+{
+  "name": "<safe-package-name>",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@<exact release.toolchain.bun>"
+}
+```
+
+This is the only pre-Bun administrative scaffold; create it without asking the user. Do
+not replace an existing application's manifest. Then run
+`sync-engine-skill work start <slug>` from the application root. It performs the pinned
+install and standard setup, verifies the framework, analysis, catalog, and toolchain
+environment, and creates the brief.
+
+- In an existing application, add missing required tooling without silently replacing its
+  framework version.
+- On a framework version conflict, offer to align with the pinned release, continue with a
+  warning when the installed core remains usable, or stop unchanged.
+- Stop on any other bootstrap failure; do not continue from an uncertain environment.
+
+## Keep one resumable work unit per change
+
+A work unit lives at `.sync-engine/work/<slug>/`. It contains `brief.md`, an optional
+`decomposition.md`, and timestamped tasks, capability grants, prompts, responses, and
+records. The coordinator inspects `.sync-engine/work/`, proposes a short descriptive
+slug, and asks only when existing work makes the choice ambiguous. Every operation names
+its slug explicitly. Resume an existing directory; `work start` does not overwrite one.
+
+The user decides whether work-unit artifacts are retained, ignored, committed, or
+deleted.
+
+## Keep the coordinator at the boundary
+
+The coordinator owns bootstrap, brief discussion, context selection, task and capability
+selection, launches, final validation, and handback. It authors only the brief and small
+task files, plus trivial setup administration. Copying a harness-returned response
+verbatim into its reserved file is administrative capture, not authored role work. The
+skill CLI validates that capture and finalizes the record; it does not obtain native role
+output itself. Dependency installation remains coordinator-owned, including the
+workflow's matching-release rule for selected HTTP work.
+
+Delegate every selected design, criticism, concept implementation, application
+integration, frontend, and evidence phase. Omitting an irrelevant role does not transfer
+that role's work to the coordinator. Follow the user's, repository's, and harness's Git
+safeguards; this skill adds no separate Git permission policy.
+
+## Select only relevant roles
+
+- **Designer:** add or revise product design. Continue the same designer through
+  decomposition, contracts, and bounded repairs.
+- **Critic:** review design independently. Keep one critic, distinct from the designer,
+  through full reviews and narrow repair verification.
+- **Concept worker:** implement owned concepts and focused tests.
+- **Application worker:** assemble concepts, configuration, hosts, and integration tests.
+- **Frontend worker:** implement a requested client surface against the assembled public
+  interface.
+- **Evidence worker:** independently connect brief outcomes to tests or scenarios and
+  their results.
+
+Each selected role starts with a fresh agent except an explicit same-role continuation.
+A supplied authored design needs syntax validation, but does not by itself require new
+design or criticism. New behavior exposed during implementation requires bounded design
+revision and independent criticism.
+
+## Follow a progressive flow
+
+```text
+brief
+  -> compact decomposition and full independent review when needed
+  -> complete affected contract set and one full changed-set review
+  -> narrow repair verification when findings exist
+  -> implementation
+  -> bounded design feedback if implementation exposes a contract gap
+  -> designer revision and critic verification
+  -> implementation continuation
+  -> validation and handback
+```
+
+Workers report design gaps instead of editing `design/**`. Rebuild design-bound prompts
+whenever permanent authored design changes.
+
+## Use the skill CLI
+
+These are the command families and their core arguments:
+
+```text
+sync-engine-skill work start <slug>
+sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
+  --task <path> --grant <json-path> --harness <harness>
+  [--input <slot>=<path>]... [--design-root <path>] [--timeout <seconds>]
+sync-engine-skill launch complete <prepared-record> --agent-id <id>
+  --status <native-status>
+sync-engine-skill continue <finalized-record> --phase <phase> --task <path>
+  --grant <json-path> [--input <slot>=<path>]... [--replace]
+  [--harness <harness>] [--design-root <path>] [--timeout <seconds>]
+```
+
+Run `sync-engine-skill --help` for valid role/phase pairs, accepted input slots, the grant
+format, conditional options, model selection, and context limits.
+
+`prompt build` prints the reserved prompt, response, and record paths plus the native
+harness instruction; the prepared record binds its harness, timeout, and any canonical
+design root. Trust the package-owned adapter: do not launch smoke-test agents or probe
+resume behavior before useful work. The coordinator invokes the mechanism once and copies
+its response verbatim into the printed response path before `launch complete`, using only
+work-unit paths rather than shared temporary files. Completed status requires a nonempty
+response; failed, cancelled, and timed-out launches may finalize an empty response.
+
+`continue` returns to the recorded agent. Existing design bindings are redigested
+automatically; `--design-root` may only introduce a binding when the prior record has none.
+`--replace` prepares a fresh replacement and is the only mode that may select another
+`--harness`.
+
+The coordinator—not the skill CLI—chooses phases, accepts review judgments, selects
+repairs, and performs handback.

@@ -1,50 +1,22 @@
 # Frontend implementation worker
 
-## Assignment
+## Objective
 
-Implement the requested browser, command-line, or other frontend. Approved Markdown and
-the assembled contract are read-only.
+Implement and test the requested browser, command-line, or other frontend as a thin
+client of the assembled application's public endpoints.
 
-<!-- include: ../common/worker-boundary.md -->
+## Implementation boundaries
 
-<!-- include: ../common/internals.md -->
+- Authored design, application policy, and backend production behavior are read-only.
+- Reach the application through its typed generated endpoint contract. Do not import or
+  bypass concepts, composition, assembly, validation, authorization, or storage.
+- Keep authoritative facts and policy behind endpoints; frontend state and logic serve
+  interaction and presentation only.
+- Repair ordinary frontend, type, lint, and test diagnostics within the assigned scope.
 
-The frontend is a client of the application's endpoints. For a browser frontend,
-construct a typed client with `createHttpClient<GeneratedHttpWire>` from
-`@mit-sdg/sync-engine-http/client`, or use a supplied wrapper around it. Never call an
-application endpoint with `fetch`. Reach the application only through that client and
-the generated wire contract; never import concepts, composition, assembly, or storage,
-and never reimplement or bypass endpoint validation, authorization, or refusals. Treat
-every endpoint result as a union and handle its declared error envelope; expected
-refusals become user-visible outcomes, not silent retries. Frontend state is presentation
-state; authoritative facts stay behind the endpoints.
+## Stop conditions
 
-Keep the frontend thin: adapt user interaction to endpoint calls and presented
-results. Add no product behavior, policy, or persistence the approved design does not
-declare.
-
-Run assigned focused checks and repair ordinary frontend defects. Stop with a
-material contract blocker if the frontend needs a new endpoint, refusal, visible
-behavior, or policy; do not change the design or production source.
-
-Return changed paths, check outcomes, and any blocker.
-
-## Paths and commands
-
-<!-- input: assignment -->
-
-## Product brief
-
-<!-- input: brief -->
-
-## Assembled public interface
-
-<!-- input: public-interface -->
-
-## Selected examples
-
-<!-- input?: examples -->
-
-## Additional exact API reference
-
-<!-- input?: reference -->
+Report a design blocker when the requested experience requires a new or changed endpoint,
+refusal, policy, or visible behavior. Report a context blocker when the assembled public
+interface or required public API guidance is missing, and an environment blocker when
+assigned checks cannot run for a reason outside the frontend.

@@ -1,1012 +1,1200 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
+import type { BootstrapOptions, BootstrapResult } from "../skills/sync-engine/scripts/bootstrap.ts";
+import {
+  capabilitySubsetIssue,
+  run,
+  type CommandDependencies,
+} from "../skills/sync-engine/scripts/command.ts";
+import { digestDesign, readLaunchRecord } from "../skills/sync-engine/scripts/records.ts";
+import type { EffectiveCapabilityGrant } from "../skills/sync-engine/scripts/roles.ts";
+import { parseLabeledOutput, promptContext, retainedContext } from "./test-support.ts";
 
-const command = resolve("packages/skill/skills/sync-engine/scripts/command.ts");
-const taskBrief = resolve("packages/skill/tests/fixtures/task-manager/brief.md");
+const skillRoot = fileURLToPath(new URL("../skills/sync-engine", import.meta.url));
+const fixtureRoot = fileURLToPath(new URL("./fixtures/cli", import.meta.url));
+const expectedRoot = fileURLToPath(new URL("./fixtures/expected", import.meta.url));
 const temporary: string[] = [];
+const instant = new Date("2026-08-19T09:06:43.000Z");
 
-/** Commands report native paths; assertions on path shape read them separator-free. */
-function posixPaths(output: string): string {
-  return output.replaceAll("\\", "/");
+async function application(label: string): Promise<string> {
+  const path = await realpath(await mkdtemp(resolve(tmpdir(), `sync-engine-skill-cli-${label}-`)));
+  temporary.push(path);
+  return path;
 }
 
-/** macOS resolves the temp root through a symlink; commands report the real path. */
-async function temporaryDirectory(prefix: string): Promise<string> {
-  return realpath(await mkdtemp(resolve(tmpdir(), prefix)));
+function bootstrapResult(
+  root: string,
+  outcome: BootstrapResult["outcome"] = "ready",
+  warnings: readonly string[] = [],
+): BootstrapResult {
+  return {
+    outcome,
+    plan: {
+      state: outcome === "choice-required" ? "version-conflict" : "ready",
+      applicationRoot: root,
+      commands: [],
+      missingPackages: [],
+      missingSetupFiles: [],
+      ...(outcome === "choice-required"
+        ? {
+            conflict: {
+              expected: "1.0.0",
+              found: ["0.9.0"],
+              canContinue: true,
+              choices: ["align-pinned-release", "continue-with-warning", "stop-unchanged"],
+            },
+          }
+        : {}),
+    },
+    commands: [],
+    warnings,
+    changedPaths: [],
+  };
 }
 
-function run(args: readonly string[], cwd = process.cwd(), executable = command) {
-  return spawnSync("bun", [executable, ...args], { cwd, encoding: "utf8" });
+interface Invocation {
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
 }
 
-const executables: Record<string, string> = {
-  "@mit-sdg/sync-engine": "sync-engine",
-  "@mit-sdg/sync-engine-analysis": "sync-engine-analysis",
-  "@mit-sdg/sync-engine-catalog": "sync-engine-catalog",
-};
+async function invoke(
+  args: readonly string[],
+  cwd: string,
+  dependencies: Omit<CommandDependencies, "cwd" | "skillRoot" | "stdout" | "stderr"> = {},
+): Promise<Invocation> {
+  let stdout = "";
+  let stderr = "";
+  const code = await run(args, {
+    cwd,
+    skillRoot,
+    bootstrap: async ({ applicationRoot }) => bootstrapResult(applicationRoot),
+    now: () => instant,
+    ...dependencies,
+    stdout: (text) => {
+      stdout += text;
+    },
+    stderr: (text) => {
+      stderr += text;
+    },
+  });
+  return { code, stdout, stderr };
+}
 
-async function writePackage(
-  directory: string,
-  name: string,
-  version: string,
-  executable = executables[name],
-): Promise<void> {
-  const target = resolve(directory, "node_modules", name);
-  const binTarget = "./dist/command.js";
-  await mkdir(resolve(target, "dist"), { recursive: true });
-  await writeFile(
-    resolve(target, "package.json"),
-    JSON.stringify({
-      name,
-      version,
-      bin: executable === undefined ? {} : { [executable]: binTarget },
-    }),
+function reported(output: string, label: string): string {
+  const values = parseLabeledOutput(output)[label];
+  if (values?.length !== 1) throw new Error(`Expected one ${label} field`);
+  return values[0]!;
+}
+
+function cliFailure(message: string, recovery?: string): Invocation {
+  return {
+    code: 1,
+    stdout: "",
+    stderr: `Error: ${message}\n${recovery === undefined ? "" : `Recovery: ${recovery}\n`}`,
+  };
+}
+
+function inlineContext(displayName: string, content: string): string {
+  return `**${displayName}**\n\n${content.trimEnd()}`;
+}
+
+async function copyFixture(root: string, name: string): Promise<string> {
+  const target = resolve(root, "coordination", name);
+  await mkdir(resolve(root, "coordination"), { recursive: true });
+  await cp(resolve(fixtureRoot, name), target);
+  return target;
+}
+
+async function started(root: string, slug = "message-board-search"): Promise<string> {
+  const result = await invoke(["work", "start", slug], root);
+  expect(result).toMatchObject({ code: 0, stderr: "" });
+  return resolve(root, ".sync-engine/work", slug);
+}
+
+interface InitialLaunch {
+  readonly recordPath: string;
+  readonly responsePath: string;
+  readonly promptPath: string;
+  readonly briefPath: string;
+  readonly taskPath: string;
+  readonly grantPath: string;
+  readonly output: string;
+}
+
+async function prepareInitial(
+  root: string,
+  options: {
+    readonly grant?: "designer-grant.json" | "designer-narrow-grant.json";
+    readonly designRoot?: string;
+    readonly timeoutSeconds?: number;
+  } = {},
+): Promise<InitialLaunch> {
+  const unit = resolve(root, ".sync-engine/work/message-board-search");
+  const taskPath = await copyFixture(root, "initial-task.md");
+  const grantPath = await copyFixture(root, options.grant ?? "designer-grant.json");
+  const briefPath = resolve(unit, "brief.md");
+  const result = await invoke(
+    [
+      "prompt",
+      "build",
+      "--work",
+      "message-board-search",
+      "--role",
+      "designer",
+      "--phase",
+      "decomposition",
+      "--task",
+      taskPath,
+      "--grant",
+      grantPath,
+      "--harness",
+      "paseo",
+      "--input",
+      `brief=${briefPath}`,
+      ...(options.designRoot === undefined ? [] : ["--design-root", options.designRoot]),
+      ...(options.timeoutSeconds === undefined
+        ? []
+        : ["--timeout", String(options.timeoutSeconds)]),
+    ],
+    root,
   );
-  await writeFile(resolve(target, binTarget), "#!/usr/bin/env node\n");
+  expect(result).toMatchObject({ code: 0, stderr: "" });
+  return {
+    recordPath: reported(result.stdout, "Record"),
+    responsePath: reported(result.stdout, "Response"),
+    promptPath: reported(result.stdout, "Prompt"),
+    briefPath,
+    taskPath,
+    grantPath,
+    output: result.stdout,
+  };
 }
 
-async function writeConfiguredApplication(directory: string): Promise<void> {
-  for (const name of Object.keys(executables)) {
-    await writePackage(directory, name, "1.0.0-beta.15");
-  }
-  await Promise.all([
-    writeFile(resolve(directory, "package.json"), '{"private":true,"type":"module"}\n'),
-    writeFile(resolve(directory, "tsconfig.json"), "{}\n"),
-    writeFile(resolve(directory, "generated.config.ts"), "export default {};\n"),
-  ]);
+async function finalizeInitial(root: string, launch: InitialLaunch, response?: string) {
+  const content =
+    response ??
+    "## Status\r\n\r\nComplete.\r\n\r\n## Changed\r\n\r\nNone.\r\n\r\n## Questions\r\n\r\nNone.\r\n";
+  await writeFile(launch.responsePath, content, "utf8");
+  const result = await invoke(
+    ["launch", "complete", launch.recordPath, "--agent-id", "designer-agent-1", "--status", "Idle"],
+    root,
+  );
+  return { result, content };
 }
 
 afterEach(async () => {
-  const { rm } = await import("node:fs/promises");
   await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-describe("sync-engine-skill command", () => {
-  test("requires setup before initializing the exact brief template", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-brief-init-");
-    temporary.push(directory);
-    const path = resolve(directory, "product/brief.md");
-    const premature = run(["brief", "init", path], directory);
-    expect(premature.status).toBe(1);
-    expect(premature.stderr).toContain("Brief init requires completed sync-engine setup");
-    expect(premature.stderr).toContain("release check .");
-    expect(premature.stderr).toContain("bunx --no-install sync-engine setup");
-    await expect(readFile(path, "utf8")).rejects.toThrow();
-
-    for (const name of Object.keys(executables)) {
-      await writePackage(directory, name, "1.0.0-beta.15");
-    }
-    const unconfigured = run(["brief", "init", path], directory);
-    expect(unconfigured.status).toBe(1);
-    expect(unconfigured.stderr).toContain("missing setup files");
-    await expect(readFile(path, "utf8")).rejects.toThrow();
-
-    await writeConfiguredApplication(directory);
-    const initialized = run(["brief", "init", path], directory);
-    expect(initialized.status).toBe(0);
-    expect(initialized.stdout).toContain("Brief template initialized. Fill placeholders.\n");
-    expect(initialized.stdout).toContain(
-      `Next: bun "<skill-root>/scripts/command.ts" brief check ${path}\n`,
-    );
-    expect(initialized.stdout).not.toContain(dirname(command));
-    const template = await readFile(
-      resolve("packages/skill/skills/sync-engine/prompts/templates/product-brief.md"),
-      "utf8",
-    );
-    expect(await readFile(path, "utf8")).toBe(template);
-    const repeated = run(["brief", "init", path], directory);
-    expect(repeated.status).toBe(1);
-    expect(repeated.stderr).toContain("Brief already exists");
-
-    const filled = template
-      .replace("<Product name>", "Product")
-      .replace("<One short paragraph describing the useful outcome.>", "Deliver the product.")
-      .replace(
-        "- **D1 — <Decision title> (User):** <Decision and only the reason needed to understand it.>",
-        "- **D1 — Scope (User):** Use one workspace.",
-      )
-      .replace("- <Externally observable successful behavior.>", "- A user completes the task.")
-      .replace("- <Expected denied or rejected behavior.>", "- Invalid input is rejected.")
-      .replace("- <Conservative assumption used to complete the design.>", "- Use local storage.")
-      .replace("- <Behavior intentionally outside scope.>", "- Hosted deployment.");
-    await writeFile(path, filled);
-    const checked = run(["brief", "check", path], directory);
-    expect(checked.status).toBe(0);
-    expect(checked.stdout).toContain("1 decisions, open decisions none");
-    expect(checked.stdout).toContain("Next: read ");
-    expect(posixPaths(checked.stdout)).toContain("references/design-and-criticism.md\n");
-    expect(checked.stdout).toContain(
-      `prompt build --role designer --mode map --input brief=${path}`,
-    );
+describe("skill CLI help and arguments", () => {
+  test("documents the complete small command surface", async () => {
+    const root = await application("help");
+    const expected = await readFile(resolve(expectedRoot, "help.txt"), "utf8");
+    expect(await invoke([], root)).toEqual({ code: 0, stdout: expected, stderr: "" });
   });
 
-  test("validates a brief before an application release set is installed", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-bootstrap-");
-    temporary.push(directory);
-    const result = run(["brief", "check", taskBrief], directory);
-    expect(result.status).toBe(0);
-    expect(result.stdout).toMatch(
-      /^Brief valid: \d+ bytes, 1 decisions, open decisions none; release 1\.0\.0-beta\.15\.\n/,
-    );
-    expect(result.stderr).toBe("");
-  });
-
-  test("writes prompt bytes into the workspace and reports sources separately", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-cli-");
-    temporary.push(directory);
-    const build = [
-      "prompt",
-      "build",
-      "--role",
-      "designer",
-      "--mode",
-      "map",
-      "--input",
-      `brief=${taskBrief}`,
-    ];
-    const first = run(build, directory);
-    expect(first.status).toBe(0);
-    expect(first.stderr).toBe("");
-    expect(first.stdout).toMatch(
-      /Prompt built: role designer; mode map; tools decomposition-write-only; \d+ bytes; budget 32768; sha256 [a-f0-9]{64}/,
-    );
-
-    const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
-    expect(written).toHaveLength(2);
-    const [contextName, promptName] = written as [string, string];
-    expect(promptName).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-designer\.prompt\.md$/);
-    expect(contextName).toBe(promptName.replace(/\.md$/, ".json"));
-    const recorded = JSON.parse(
-      await readFile(resolve(directory, ".sync-engine", contextName), "utf8"),
-    );
-    expect(recorded.role).toBe("designer");
-    expect(recorded.mode).toBe("map");
-    expect(recorded.toolPolicy).toBe("decomposition-write-only");
-    expect(recorded.sha256).toBe(first.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1]);
-    expect(recorded.briefSha256).toMatch(/^[a-f0-9]{64}$/);
-    const output = resolve(directory, ".sync-engine", promptName);
-    expect(first.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
-    const prompt = await readFile(output, "utf8");
-    expect(prompt).toContain("<!-- source: brief.md -->");
-    expect(prompt).not.toContain(first.stdout);
-
-    const second = run(build, directory);
-    expect(second.status).toBe(0);
-    expect(second.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1]).toBe(
-      first.stdout.match(/sha256 ([a-f0-9]{64})/)?.[1],
-    );
-    expect((await readdir(resolve(directory, ".sync-engine"))).length).toBe(4);
-  });
-
-  test("keeps generated workflow files out of the design root", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-placement-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    const product = resolve(directory, "product");
-    await mkdir(product, { recursive: true });
-    await writeFile(resolve(product, "brief.md"), "# Brief\n");
-    const strayAssignment = resolve(design, "assignment.md");
-    await writeFile(strayAssignment, "Assignment.\n");
-
-    const digested = run(["design", "digest", design], directory);
-    const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
-    const rejected = run(
+  test.each([
+    [["prompt", "build", "--unknown", "value"], "Unknown option for prompt build: --unknown"],
+    [
       [
-        "prompt",
-        "build",
-        "--role",
-        "concept-worker",
-        "--input",
-        `assignment=${strayAssignment}`,
-        "--input",
-        `specifications=${resolve(product, "brief.md")}`,
-        "--design-root",
-        design,
-        "--design-digest",
-        digest!,
+        "work",
+        "start",
+        "one",
+        "--conflict",
+        "align-pinned-release",
+        "--conflict",
+        "stop-unchanged",
       ],
-      directory,
-    );
-    expect(rejected.status).toBe(1);
-    expect(rejected.stderr).toContain(".sync-engine/");
+      "Duplicate option for work start: --conflict",
+    ],
+    [
+      ["work", "start", "one", "misplaced"],
+      "Unexpected positional argument for work start: misplaced",
+    ],
+    [
+      ["launch", "complete", "record.json", "extra"],
+      "Unexpected positional argument for launch complete: extra",
+    ],
+  ])("rejects unknown, duplicate, and misplaced arguments", async (args, message) => {
+    const root = await application("arguments");
+    expect(await invoke(args, root)).toEqual(cliFailure(message));
+  });
+});
 
-    const strayFollowUp = resolve(design, "follow-up.md");
-    await writeFile(strayFollowUp, "Rerun the check.\n");
-    const refused = run(
-      ["follow-up", "check", strayFollowUp, "--design-root", design, "--design-digest", digest!],
-      directory,
+describe("work start", () => {
+  test("bootstraps through injected dependencies before creating an unoverwritable brief", async () => {
+    const root = await application("start");
+    const calls: BootstrapOptions[] = [];
+    const injectedBootstrap = {
+      runCommand: async () => ({ exitCode: 0 }),
+    };
+    const first = await invoke(["work", "start", "durable-board"], root, {
+      bootstrapDependencies: injectedBootstrap,
+      bootstrap: async (options, dependencies) => {
+        calls.push(options);
+        expect(dependencies).toBe(injectedBootstrap);
+        return bootstrapResult(options.applicationRoot, "continued-with-warning", [
+          "Continuing with the usable installed release",
+        ]);
+      },
+    });
+    const unit = resolve(root, ".sync-engine/work/durable-board");
+    const brief = resolve(unit, "brief.md");
+    expect(first).toMatchObject({ code: 0, stderr: "" });
+    expect(calls).toEqual([
+      {
+        applicationRoot: root,
+        releaseManifestPath: resolve(skillRoot, "release.json"),
+      },
+    ]);
+    expect(parseLabeledOutput(first.stdout)).toEqual({
+      Warning: ["Continuing with the usable installed release"],
+      Bootstrap: [`continued-with-warning; application ${root}`],
+      "Work unit": [unit],
+      Brief: [brief],
+    });
+    expect(await readFile(brief, "utf8")).toBe(
+      await readFile(resolve(skillRoot, "prompts/brief.md"), "utf8"),
     );
-    expect(refused.status).toBe(1);
-    expect(refused.stderr).toContain("Generated workflow files belong in .sync-engine/");
+
+    await writeFile(brief, "# User-edited brief\n", "utf8");
+    let repeatedBootstrap = false;
+    const repeated = await invoke(["work", "start", "durable-board"], root, {
+      bootstrap: async ({ applicationRoot }) => {
+        repeatedBootstrap = true;
+        return bootstrapResult(applicationRoot);
+      },
+    });
+    expect(repeated).toEqual(cliFailure("Work unit already exists: durable-board"));
+    expect(repeatedBootstrap).toBe(false);
+    expect(await readFile(brief, "utf8")).toBe("# User-edited brief\n");
   });
 
-  test("keeps stdout prompt bytes separate from the stderr report", () => {
-    const result = run([
+  test("rejects an invalid slug before bootstrap mutation", async () => {
+    const root = await application("invalid-slug");
+    let bootstrapped = false;
+    const result = await invoke(["work", "start", "../escape"], root, {
+      bootstrap: async ({ applicationRoot }) => {
+        bootstrapped = true;
+        return bootstrapResult(applicationRoot);
+      },
+    });
+    expect(result).toEqual(cliFailure("Work slug must be 1-80 characters of lowercase kebab case"));
+    expect(bootstrapped).toBe(false);
+  });
+
+  test("does not create work before an explicit conflict choice", async () => {
+    const root = await application("conflict");
+    const result = await invoke(["work", "start", "blocked"], root, {
+      bootstrap: async ({ applicationRoot }) => bootstrapResult(applicationRoot, "choice-required"),
+    });
+    expect(result).toEqual(
+      cliFailure(
+        "Bootstrap requires an explicit framework conflict choice",
+        "Rerun with --conflict <align-pinned-release|continue-with-warning|stop-unchanged>.",
+      ),
+    );
+    await expect(readFile(resolve(root, ".sync-engine/work/blocked/brief.md"))).rejects.toThrow();
+  });
+});
+
+describe("CLI input boundaries", () => {
+  test("requires task and grant sources inside the application", async () => {
+    const root = await application("task-grant-boundary");
+    const unit = await started(root);
+    const task = await copyFixture(root, "initial-task.md");
+    const grant = await copyFixture(root, "designer-grant.json");
+    const base = [
       "prompt",
       "build",
+      "--work",
+      "message-board-search",
       "--role",
       "designer",
-      "--mode",
-      "map",
+      "--phase",
+      "decomposition",
+      "--harness",
+      "paseo",
       "--input",
-      `brief=${taskBrief}`,
-      "--stdout",
-    ]);
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("# Independent decomposition designer");
-    expect(result.stdout).toContain("# Shared task manager");
-    expect(result.stdout).not.toContain("Prompt built:");
-    expect(result.stdout).not.toContain("Next:");
-    expect(result.stdout).not.toContain(".sync-engine");
-    expect(result.stderr).toContain("Prompt built: role designer");
-    expect(result.stderr).toContain("Next: deliver the built prompt to a fresh designer as a file");
-  });
-
-  test("digests closed design and bounds diagnostic follow-ups", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-design-cli-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design);
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    const digested = run(["design", "digest", design], directory);
-    expect(digested.status).toBe(0);
-    const digest = digested.stdout.match(/[a-f0-9]{64}/)?.[0];
-    expect(digest).toBeDefined();
-    expect(posixPaths(digested.stdout)).toContain("references/implementation.md\n");
-    expect(digested.stdout).toContain(
-      `Next: every downstream build and follow-up adds --design-root ${design} --design-digest ${digest}`,
-    );
-
-    await mkdir(resolve(directory, ".sync-engine"), { recursive: true });
-    const named = resolve(directory, ".sync-engine", "repair.followup.md");
-    await writeFile(named, "Run `bun run test`.\n");
-    expect(
-      run(
-        ["follow-up", "check", named, "--design-root", design, "--design-digest", digest!],
-        directory,
-      ).stderr,
-    ).toContain("start it with follow-up new");
-
-    const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
-    expect(started.status).toBe(0);
-    const followUp = started.stdout.match(/Follow-up started: (\S+)/)![1]!;
-    await writeFile(followUp, "Run `bun run test`.\n");
-    const checked = run(
-      ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
-      directory,
-    );
-    expect(checked.status).toBe(0);
-    expect(checked.stdout).toContain("Follow-up valid");
-    expect(checked.stdout).toContain(`Next: deliver ${followUp} to the original role as a file`);
-
-    await writeFile(followUp, "x".repeat(4097));
-    expect(
-      run(
-        ["follow-up", "check", followUp, "--design-root", design, "--design-digest", digest!],
-        directory,
-      ).stderr,
-    ).toContain("maximum is 4096");
-  });
-
-  test("checks an installed application against the embedded release", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-version-");
-    temporary.push(directory);
-    for (const name of [
-      "@mit-sdg/sync-engine",
-      "@mit-sdg/sync-engine-analysis",
-      "@mit-sdg/sync-engine-catalog",
-    ]) {
-      await writePackage(directory, name, "1.0.0-beta.15");
-    }
-    const valid = run(["release", "check", directory], directory);
-    expect(valid.status).toBe(0);
-    expect(valid.stdout).toContain("Installed sync-engine release matches skill 1.0.0-beta.15.\n");
-    expect(valid.stdout).toContain("Next: bunx --no-install sync-engine setup\n");
-
-    await rm(resolve(directory, "node_modules/@mit-sdg/sync-engine-catalog/dist/command.js"));
-    const missingTarget = run(["release", "check", directory], directory);
-    expect(missingTarget.status).toBe(1);
-    expect(missingTarget.stderr).toContain("has missing or escaping target");
-    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.15");
-
-    await writePackage(directory, "@mit-sdg/sync-engine", "0.0.0");
-    const mixed = run(["release", "check", directory], directory);
-    expect(mixed.status).toBe(1);
-    expect(mixed.stderr).toContain("does not match skill 1.0.0-beta.15");
-    expect(mixed.stderr).toContain("@mit-sdg/sync-engine@0.0.0");
-
-    await writePackage(directory, "@mit-sdg/sync-engine", "1.0.0-beta.15", "sync-engine");
-    await writePackage(directory, "@mit-sdg/sync-engine-catalog", "1.0.0-beta.15", "catalog");
-    const staleExecutable = run(["release", "check", directory], directory);
-    expect(staleExecutable.status).toBe(1);
-    expect(staleExecutable.stderr).toContain(
-      "does not expose required executable sync-engine-catalog",
-    );
-  });
-
-  test("does not accept an ancestor source package as an installed dependency", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-ancestor-");
-    temporary.push(directory);
-    await mkdir(resolve(directory, "application"));
-    await writeFile(
-      resolve(directory, "package.json"),
-      JSON.stringify({
-        name: "@mit-sdg/sync-engine",
-        version: "1.0.0-beta.15",
-        bin: { "sync-engine": "./dist/command.js" },
-      }),
-    );
-    await mkdir(resolve(directory, "dist"));
-    await writeFile(resolve(directory, "dist/command.js"), "#!/usr/bin/env node\n");
-    for (const name of ["@mit-sdg/sync-engine-analysis", "@mit-sdg/sync-engine-catalog"]) {
-      await writePackage(resolve(directory, "application"), name, "1.0.0-beta.15");
-    }
-
-    const result = run(
-      ["release", "check", resolve(directory, "application")],
-      resolve(directory, "application"),
-    );
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("Cannot resolve installed package @mit-sdg/sync-engine");
-  });
-
-  test("runs from a standalone copied skill without package installation", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-copy-");
-    temporary.push(directory);
-    const copiedSkill = resolve(directory, "sync-engine");
-    await cp(resolve("packages/skill/skills/sync-engine"), copiedSkill, { recursive: true });
-    const copiedCommand = resolve(copiedSkill, "scripts/command.ts");
-    const result = run(
-      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${taskBrief}`],
-      directory,
-      copiedCommand,
-    );
-    expect(result.status).toBe(0);
-    const written = (await readdir(resolve(directory, ".sync-engine"))).sort();
-    const output = resolve(directory, ".sync-engine", written[1]!);
-    expect(await readFile(output, "utf8")).toContain("# Independent decomposition designer");
-    expect(result.stdout).toContain(`Next: deliver ${output} to a fresh designer as a file`);
-    expect(result.stdout).toContain(copiedSkill);
-  });
-
-  async function launchRecord(
-    directory: string,
-    role: string,
-    options: {
-      agentId?: string;
-      promptBytes?: string;
-      status?: string;
-      designDigest?: string;
-      mode?: "map" | "contract";
-    } = {},
-  ): Promise<string> {
-    const workspace = resolve(directory, ".sync-engine");
-    await mkdir(workspace, { recursive: true });
-    const label = `${role}${options.mode === undefined ? "" : `-${options.mode}`}`;
-    const promptPath = resolve(workspace, `2026-01-01T00-00-00Z-${label}.prompt.md`);
-    const content = options.promptBytes ?? `# ${role}\n`;
-    await writeFile(promptPath, content);
-    const criticResponse =
-      role !== "critic"
-        ? undefined
-        : options.mode === "map"
-          ? "- ROW `design/decomposition.md` — Tasking — accept — one owner.\n" +
-            "- PLACEMENT `N1` — accept — concept Tasking owns the lifecycle.\n"
-          : "- CHECK `BRIEF` — Visible successes and refusals are traced.\n" +
-            "- VERDICT — No material findings.\n";
-    const responsePath =
-      criticResponse === undefined
-        ? undefined
-        : resolve(workspace, `2026-01-01T00-04-00Z-${label}.response.md`);
-    if (responsePath !== undefined) await writeFile(responsePath, criticResponse!);
-    const record = {
-      format: "sync-engine.skill.launch-record",
-      version: 1,
-      role,
-      ...(options.mode === undefined ? {} : { mode: options.mode }),
-      agentId: options.agentId ?? `agent-${role}`,
-      provider: "paseo-test",
-      model: "test-model",
-      cwd: directory,
-      prompt: {
-        path: promptPath,
-        sha256: createHash("sha256").update(content).digest("hex"),
-        bytes: Buffer.byteLength(content, "utf8"),
-      },
-      ...(options.designDigest === undefined ? {} : { designDigest: options.designDigest }),
-      startedAt: "2026-01-01T00:00:00.000Z",
-      settledAt: "2026-01-01T00:05:00.000Z",
-      status: options.status ?? "idle",
-      ...(responsePath === undefined
-        ? {}
-        : {
-            response: {
-              path: responsePath,
-              sha256: createHash("sha256").update(criticResponse!).digest("hex"),
-              bytes: Buffer.byteLength(criticResponse!),
-              contract: "met",
-            },
-          }),
-    };
-    const recordPath = resolve(workspace, `2026-01-01T00-05-00Z-${label}.launch.json`);
-    await writeFile(recordPath, `${JSON.stringify(record, undefined, 2)}\n`);
-    return recordPath;
-  }
-
-  test("builds a later role only after its predecessor actually ran", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-chain-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    const product = resolve(directory, "product");
-    await mkdir(product, { recursive: true });
-    await cp(taskBrief, resolve(product, "brief.md"));
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    await writeFile(resolve(design, "decomposition.md"), "# Decomposition\n");
-
-    const criticArguments = [
-      "prompt",
-      "build",
-      "--role",
-      "critic",
-      "--mode",
-      "contract",
-      "--input",
-      `brief=${resolve(product, "brief.md")}`,
-      "--input",
-      `candidate=${resolve(design, "decomposition.md")}`,
-      "--input",
-      `candidate=${resolve(design, "types.md")}`,
+      `brief=${resolve(unit, "brief.md")}`,
     ];
-    const ungated = run(criticArguments, directory);
-    expect(ungated.status).toBe(1);
-    expect(ungated.stderr).toContain(
-      "Role critic contract requires a settled designer contract launch",
+    const taskSource = resolve(fixtureRoot, "initial-task.md");
+    expect(await invoke([...base, "--task", taskSource, "--grant", grant], root)).toEqual(
+      cliFailure(`Task escapes its allowed roots: ${taskSource} resolves to ${taskSource}`),
     );
 
-    await launchRecord(directory, "designer", { mode: "contract" });
-    const gated = run(criticArguments, directory);
-    expect(gated.status).toBe(0);
-    expect(gated.stdout).toContain("Prompt built: role critic");
+    const grantSource = resolve(fixtureRoot, "designer-grant.json");
+    expect(await invoke([...base, "--task", task, "--grant", grantSource], root)).toEqual(
+      cliFailure(
+        `Capability grant escapes its allowed roots: ${grantSource} resolves to ${grantSource}`,
+      ),
+    );
   });
 
-  test("records a direct user override of review judgment", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-user-override-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    const map = resolve(design, "decomposition.md");
-    await writeFile(map, "# Decomposition\n");
-    await launchRecord(directory, "designer", { mode: "map" });
-
-    const build = (override: boolean) =>
-      run(
+  test("requires exact work brief and decomposition paths", async () => {
+    const root = await application("work-input-boundary");
+    const unit = await started(root);
+    const task = await copyFixture(root, "initial-task.md");
+    const grant = await copyFixture(root, "designer-grant.json");
+    const wrongBrief = resolve(root, "brief.md");
+    await writeFile(wrongBrief, "# Wrong brief\n", "utf8");
+    for (const candidate of [wrongBrief, resolve(skillRoot, "prompts/brief.md")]) {
+      const briefResult = await invoke(
         [
           "prompt",
           "build",
+          "--work",
+          "message-board-search",
           "--role",
           "designer",
-          "--mode",
-          "contract",
+          "--phase",
+          "decomposition",
+          "--task",
+          task,
+          "--grant",
+          grant,
+          "--harness",
+          "paseo",
           "--input",
-          `brief=${taskBrief}`,
-          "--input",
-          `map=${map}`,
-          ...(override ? ["--user-override"] : []),
+          `brief=${candidate}`,
         ],
-        directory,
+        root,
       );
+      expect(briefResult).toEqual(
+        cliFailure(
+          `Prompt input brief must be the exact work-unit path ${resolve(unit, "brief.md")}`,
+        ),
+      );
+    }
 
-    expect(build(false).stderr).toContain("requires a settled critic map launch");
-    const overridden = build(true);
-    expect(overridden.status).toBe(0);
-    expect(overridden.stdout).toContain("direct user override recorded");
-    const prompt = overridden.stdout.match(/Next: deliver (\S+) to the original designer/)?.[1];
-    const context = JSON.parse(await readFile(prompt!.replace(/\.md$/, ".json"), "utf8"));
-    expect(context.userOverride).toBe(true);
-  });
-
-  test("stops counting a role once design reopens under it", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-reopened-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    const product = resolve(directory, "product");
-    await mkdir(product, { recursive: true });
-    await cp(taskBrief, resolve(product, "brief.md"));
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    const reviewed = "b".repeat(64);
-    await launchRecord(directory, "critic", { mode: "contract", designDigest: reviewed });
-    const assignment = resolve(
-      directory,
-      ".sync-engine",
-      "2026-01-01T00-06-00Z-concept-worker.assignment.md",
-    );
-    await writeFile(assignment, "# concept-worker assignment\n");
-
-    const build = (digest: string) =>
-      run(
+    const contractsGrant = await copyFixture(root, "designer-contracts-grant.json");
+    const wrongDecomposition = resolve(root, "decomposition.md");
+    await writeFile(wrongDecomposition, "# Wrong decomposition\n", "utf8");
+    for (const candidate of [wrongDecomposition, resolve(skillRoot, "prompts/brief.md")]) {
+      const decompositionResult = await invoke(
         [
           "prompt",
           "build",
+          "--work",
+          "message-board-search",
           "--role",
-          "concept-worker",
+          "designer",
+          "--phase",
+          "contracts",
+          "--task",
+          task,
+          "--grant",
+          contractsGrant,
+          "--harness",
+          "paseo",
           "--input",
-          `assignment=${assignment}`,
+          `brief=${resolve(unit, "brief.md")}`,
           "--input",
-          `specifications=${resolve(design, "types.md")}`,
-          "--input",
-          `examples=${resolve(design, "types.md")}`,
-          "--design-root",
-          design,
-          "--design-digest",
-          digest,
+          `accepted-decomposition=${candidate}`,
         ],
-        directory,
+        root,
       );
-
-    const reopened = build("c".repeat(64));
-    expect(reopened.status).toBe(1);
-    expect(reopened.stderr).toContain("Design reopened after that role ran, so relaunch it");
+      expect(decompositionResult).toEqual(
+        cliFailure(
+          `Prompt input accepted-decomposition must be the exact work-unit path ${resolve(unit, "decomposition.md")}`,
+        ),
+      );
+    }
   });
 
-  test("treats a role that never settled as not having run", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-unsettled-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    const product = resolve(directory, "product");
-    await mkdir(product, { recursive: true });
-    await cp(taskBrief, resolve(product, "brief.md"));
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    await writeFile(resolve(design, "decomposition.md"), "# Decomposition\n");
-    await launchRecord(directory, "designer", { status: "running", mode: "contract" });
+  test("rejects external inputs, symlink escapes, and noncanonical design roots", async () => {
+    const root = await application("source-boundary");
+    const unit = await started(root);
+    const outside = await application("outside-source");
+    const outsideInput = resolve(outside, "context.md");
+    await writeFile(outsideInput, "# Outside context\n", "utf8");
+    const linkedInput = resolve(root, "linked-context.md");
+    await symlink(outsideInput, linkedInput);
+    const task = await copyFixture(root, "initial-task.md");
+    const grant = await copyFixture(root, "designer-grant.json");
+    const base = [
+      "prompt",
+      "build",
+      "--work",
+      "message-board-search",
+      "--role",
+      "designer",
+      "--phase",
+      "decomposition",
+      "--task",
+      task,
+      "--grant",
+      grant,
+      "--harness",
+      "paseo",
+      "--input",
+      `brief=${resolve(unit, "brief.md")}`,
+    ];
+    for (const [path, canonical] of [
+      [outsideInput, outsideInput],
+      [linkedInput, outsideInput],
+    ] as const) {
+      expect(await invoke([...base, "--input", `affected-design=${path}`], root)).toEqual(
+        cliFailure(
+          `Prompt input affected-design escapes its allowed roots: ${path} resolves to ${canonical}`,
+        ),
+      );
+    }
 
-    const result = run(
-      [
-        "prompt",
-        "build",
-        "--role",
-        "critic",
-        "--mode",
-        "contract",
-        "--input",
-        `brief=${resolve(product, "brief.md")}`,
-        "--input",
-        `candidate=${resolve(design, "decomposition.md")}`,
-        "--input",
-        `candidate=${resolve(design, "types.md")}`,
-      ],
-      directory,
-    );
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      "Role critic contract requires a settled designer contract launch",
-    );
-  });
-
-  test("refuses a launch record whose prompt no longer matches", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-tamper-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    const product = resolve(directory, "product");
-    await mkdir(product, { recursive: true });
-    await cp(taskBrief, resolve(product, "brief.md"));
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    await writeFile(resolve(design, "decomposition.md"), "# Decomposition\n");
-    await launchRecord(directory, "designer", { mode: "contract" });
-    await writeFile(
-      resolve(directory, ".sync-engine", "2026-01-01T00-00-00Z-designer-contract.prompt.md"),
-      "# replaced after the fact\n",
-    );
-
-    const result = run(
-      [
-        "prompt",
-        "build",
-        "--role",
-        "critic",
-        "--mode",
-        "contract",
-        "--input",
-        `brief=${resolve(product, "brief.md")}`,
-        "--input",
-        `candidate=${resolve(design, "decomposition.md")}`,
-        "--input",
-        `candidate=${resolve(design, "types.md")}`,
-      ],
-      directory,
-    );
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      "Role critic contract requires a settled designer contract launch",
+    const design = resolve(root, "design");
+    const copied = resolve(root, "design-copy");
+    await mkdir(design);
+    await mkdir(copied);
+    await writeFile(resolve(design, "types.md"), "# Types\n", "utf8");
+    await writeFile(resolve(copied, "types.md"), "# Types\n", "utf8");
+    expect(await invoke([...base, "--design-root", copied], root)).toEqual(
+      cliFailure(`Design root must be the canonical application design path: ${design}`),
     );
   });
+});
 
-  test("handback names every role that has no independent evidence", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-handback-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    const digest = run(["design", "digest", design], directory).stdout.match(/[a-f0-9]{64}/)?.[0];
+describe("prompt preparation and completion", () => {
+  test("groups one timestamped artifact set and reports native adapter data", async () => {
+    const root = await application("prepare");
+    const unit = await started(root);
+    const launch = await prepareInitial(root);
+    const record = await readLaunchRecord(launch.recordPath);
 
-    const empty = run(
-      ["handback", "check", "--design-root", design, "--design-digest", digest!],
-      directory,
-    );
-    expect(empty.status).toBe(1);
-    expect(empty.stderr).toContain(
-      "no settled launch for: designer map, critic map, designer contract, critic contract, concept-worker, application-worker, evidence-worker",
-    );
-
-    await launchRecord(directory, "designer", {
-      agentId: "invented-agent-id",
-      mode: "map",
-    });
-    const invented = run(
-      ["handback", "check", "--design-root", design, "--design-digest", digest!],
-      directory,
-    );
-    expect(invented.status).toBe(1);
-    expect(invented.stdout).toContain("agent invented-agent-id UNKNOWN to paseo");
-    expect(invented.stderr).toContain("paseo does not know: designer map invented-agent-id");
-  });
-
-  test("lets a direct user waive missing phases at handback without claiming evidence", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-handback-override-");
-    temporary.push(directory);
-    const design = resolve(directory, "design");
-    await mkdir(design, { recursive: true });
-    await writeFile(resolve(design, "types.md"), "# Types\n");
-    const digest = run(["design", "digest", design], directory).stdout.match(/[a-f0-9]{64}/)?.[0];
-
-    const result = run(
-      ["handback", "check", "--design-root", design, "--design-digest", digest!, "--user-override"],
-      directory,
-    );
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("designer map: USER-OVERRIDDEN");
-    expect(result.stdout).toContain("not represented as independently completed");
-    expect(result.stdout).toContain("Every non-waived required role phase");
-  });
-
-  test("refuses an assignment that crosses role ownership", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-assignment-");
-    temporary.push(directory);
-    const started = run(
-      ["assignment", "new", "--role", "concept-worker", "--design-digest", "a".repeat(64)],
-      directory,
-    );
-    expect(started.status).toBe(0);
-    const path = started.stdout.match(/Assignment started: (\S+)/)?.[1];
-    expect(dirname(path!)).toBe(resolve(directory, ".sync-engine"));
-    expect(basename(path!)).toMatch(/^\d{4}-.*-concept-worker\.assignment\.md$/);
-
-    const complete = `# concept-worker assignment
-
-## Storage guarantee
-
-In-memory only; nothing survives restart, per the brief's demo decision.
-
-## Allowed write paths
-
-- \`src/concepts/Shortening.ts\`
-- \`tests/concepts/Shortening.test.ts\`
-
-## Commands
-
-- \`bun test tests/concepts/\`
-- \`tsc --noEmit\`
-
-## Execution budget
-
-- Max tool calls: 24
-- Max runs per command: 2
-- Repairs per diagnostic signature: 1
-`;
-    await writeFile(path!, complete);
-    expect(run(["assignment", "check", path!], directory).status).toBe(0);
-
-    await writeFile(path!, complete.replace("Max tool calls: 24", "Max tool calls: 40"));
-    const unbounded = run(["assignment", "check", path!], directory);
-    expect(unbounded.status).toBe(1);
-    expect(unbounded.stderr).toContain("must state Max tool calls: 24");
-
-    await writeFile(
-      path!,
-      complete.replace(
-        "- `tests/concepts/Shortening.test.ts`",
-        "- `tests/concepts/Shortening.test.ts`\n- `src/concepts/Shortening.registry.ts`",
-      ),
-    );
-    const crossed = run(["assignment", "check", path!], directory);
-    expect(crossed.status).toBe(1);
-    expect(crossed.stderr).toContain(
-      "Assignment gives concept-worker a path owned by the application worker: src/concepts/Shortening.registry.ts",
-    );
-
-    await writeFile(
-      path!,
-      complete.replace("- `tsc --noEmit`", "- `bunx --no-install sync-engine check`"),
-    );
-    const wide = run(["assignment", "check", path!], directory);
-    expect(wide.status).toBe(1);
-    expect(wide.stderr).toContain("application-wide command `sync-engine check`");
-
-    await writeFile(
-      path!,
-      complete.replace(/## Storage guarantee[\s\S]*?## Allowed/, "## Allowed"),
-    );
-    const unstated = run(["assignment", "check", path!], directory);
-    expect(unstated.status).toBe(1);
-    expect(unstated.stderr).toContain("Assignment states no storage guarantee");
-
-    await writeFile(
-      path!,
-      complete.replace(
-        "## Allowed write paths",
-        `## Allowed read paths
-
-- \`node_modules/@mit-sdg/sync-engine/examples/message-board/src/concepts/Posting.registry.ts\`
-
-## Allowed write paths`,
-      ),
-    );
-    expect(run(["assignment", "check", path!], directory).status).toBe(0);
-  });
-
-  test("names the roles and slots instead of sending the coordinator to the source", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-roles-");
-    temporary.push(directory);
-    const unknown = run(
-      ["assignment", "new", "--role", "concept", "--design-digest", "a".repeat(64)],
-      directory,
-    );
-    expect(unknown.status).toBe(1);
-    expect(unknown.stderr).toContain(
-      "Unknown role: concept; roles are designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker",
-    );
-    expect(run(["--help"], directory).stdout).toContain(
-      "designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker",
-    );
-
-    await writeConfiguredApplication(directory);
-    const brief = resolve(directory, "product", "brief.md");
-    await mkdir(dirname(brief), { recursive: true });
-    await cp(taskBrief, brief);
-    const wrongSlot = run(
-      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `outline=${brief}`],
-      directory,
-    );
-    expect(wrongSlot.status).toBe(1);
-    expect(wrongSlot.stderr).toContain("Role designer has no input slot: outline; its slots are");
-  });
-
-  test("names follow-up files itself", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-followup-");
-    temporary.push(directory);
-    const started = run(["follow-up", "new", "--role", "concept-worker"], directory);
-    expect(started.status).toBe(0);
-    const path = started.stdout.match(/Follow-up started: (\S+)/)?.[1];
-    expect(dirname(path!)).toBe(resolve(directory, ".sync-engine"));
-    expect(basename(path!)).toMatch(/^\d{4}-\d{2}-\d{2}T[\d-]+Z-concept-worker\.followup\.md$/);
-    expect(await readFile(path!, "utf8")).toBe("");
-
-    const second = run(["follow-up", "new", "--role", "concept-worker"], directory);
-    expect(second.status).toBe(0);
-    expect(second.stdout.match(/Follow-up started: (\S+)/)?.[1]).not.toBe(path);
-
-    expect(run(["follow-up", "new", "--role", "designer-2"], directory).status).toBe(1);
-  });
-
-  test("launches only through the harness and only from the workspace", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-launch-");
-    temporary.push(directory);
-    const stray = resolve(directory, "designer.prompt.md");
-    await writeFile(stray, "# designer\n");
-    const outside = run(["launch", "--role", "designer", "--prompt", stray], directory);
-    expect(outside.status).toBe(1);
-    expect(outside.stderr).toContain("Generated workflow files belong in .sync-engine/");
-
-    const built = run(
-      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${taskBrief}`],
-      directory,
-    );
-    expect(built.status).toBe(0);
-    const inside = built.stdout.match(/Next: deliver (\S+) to a fresh designer/)?.[1];
-    expect(inside).toBeDefined();
-    const unparented = spawnSync(
-      "bun",
-      [command, "launch", "--role", "designer", "--prompt", inside!],
-      {
-        cwd: directory,
-        encoding: "utf8",
-        env: { ...process.env, PASEO_AGENT_ID: "" },
-      },
-    );
-    expect(unparented.status).toBe(1);
-    expect(unparented.stderr).toContain("PASEO_AGENT_ID is unset");
-
-    const unknownRole = run(["launch", "--role", "reviewer", "--prompt", inside!], directory);
-    expect(unknownRole.status).toBe(1);
-    expect(unknownRole.stderr).toContain("Unknown role: reviewer");
-  });
-
-  test("records a coordinator-mediated native launch without Paseo", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-native-launch-");
-    temporary.push(directory);
-    const built = run(
-      ["prompt", "build", "--role", "designer", "--mode", "map", "--input", `brief=${taskBrief}`],
-      directory,
-    );
-    expect(built.status).toBe(0);
-    const prompt = built.stdout.match(/Next: deliver (\S+) to a fresh designer/)?.[1];
-    expect(prompt).toBeDefined();
-
-    const prepared = run(
-      ["launch", "prepare", "--harness", "codex", "--role", "designer", "--prompt", prompt!],
-      directory,
-    );
-    expect(prepared.status).toBe(0);
-    expect(prepared.stdout).toContain("Native launch prepared: role designer; harness codex");
-    expect(prepared.stdout).toContain("Read ");
-    expect(posixPaths(prepared.stdout)).toContain("references/harnesses/codex.md");
-    const ticket = prepared.stdout.match(/ticket (\S+); response/)?.[1];
-    const response = prepared.stdout.match(/response (\S+)\./)?.[1];
-    expect(ticket).toBeDefined();
-    expect(response).toBeDefined();
-    await writeFile(response!, "Changed: design/decomposition.md\nQuestions: none\n");
-
-    const completed = run(
-      ["launch", "complete", "--ticket", ticket!, "--agent-id", "codex-agent-1"],
-      directory,
-    );
-    expect(completed.status).toBe(0);
-    expect(completed.stdout).toContain(
-      "Completed designer through codex: agent codex-agent-1; native model inheritance recorded but not machine-attested; tools decomposition-write-only",
-    );
-    const launchPath = completed.stdout.match(/record (\S+)\./)?.[1];
-    const record = JSON.parse(await readFile(launchPath!, "utf8"));
+    expect(record.state).toBe("prepared");
     expect(record).toMatchObject({
+      work: { slug: "message-board-search", path: unit },
       role: "designer",
-      mode: "map",
-      toolPolicy: "decomposition-write-only",
-      agentId: "codex-agent-1",
-      harness: "codex",
-      attestation: "coordinator",
-      status: "settled",
-      readAudit: "unavailable",
+      phase: "decomposition",
+      harness: "paseo",
+      timeoutSeconds: 1800,
+      response: { path: launch.responsePath },
+      retainedSources: [
+        { inputId: "brief", displayName: expect.any(String), sha256: expect.any(String) },
+      ],
     });
-    expect(record.provider).toBeUndefined();
-    expect(record.model).toBeUndefined();
-
-    await launchRecord(directory, "critic", { mode: "map" });
-    const map = resolve(directory, "design/decomposition.md");
-    const review = resolve(directory, "map-review.md");
-    await mkdir(dirname(map), { recursive: true });
-    await writeFile(map, "# Decomposition\n");
-    await writeFile(review, "- ROW accepted\n");
-    const contractBuilt = run(
-      [
-        "prompt",
-        "build",
-        "--role",
-        "designer",
-        "--mode",
-        "contract",
-        "--input",
-        `brief=${taskBrief}`,
-        "--input",
-        `map=${map}`,
-        "--input",
-        `review=${review}`,
-      ],
-      directory,
+    expect((await readdir(unit)).sort()).toHaveLength(6);
+    expect(await readFile(launch.responsePath, "utf8")).toBe("");
+    expect(await readFile((record as { prompt: { path: string } }).prompt.path, "utf8")).toBe(
+      await readFile(launch.promptPath, "utf8"),
     );
-    expect(contractBuilt.status).toBe(0);
-    const contractPrompt = contractBuilt.stdout.match(
-      /Next: deliver (\S+) to the original designer/,
-    )?.[1];
-    const crossHarness = run(
-      [
-        "launch",
-        "prepare",
-        "--harness",
-        "claude-code",
-        "--role",
-        "designer",
-        "--prompt",
-        contractPrompt!,
-        "--continue-agent",
-        "codex-agent-1",
+    const prompt = await readFile(launch.promptPath, "utf8");
+    expect(
+      promptContext(prompt, ["Task", "Brief", "Current decomposition", "Affected existing design"]),
+    ).toEqual({
+      Task: inlineContext("coordination/initial-task.md", await readFile(launch.taskPath, "utf8")),
+      Brief: inlineContext(
+        ".sync-engine/work/message-board-search/brief.md",
+        await readFile(launch.briefPath, "utf8"),
+      ),
+    });
+    const preparedOutput = parseLabeledOutput(launch.output);
+    expect({
+      prepared: preparedOutput["Fresh launch prepared"],
+      prompt: preparedOutput.Prompt,
+      response: preparedOutput.Response,
+      record: preparedOutput.Record,
+      harness: preparedOutput.Harness,
+      delivery: preparedOutput["Prompt delivery"],
+      cwd: preparedOutput["Working directory"],
+      timeout: preparedOutput.Timeout,
+      target: preparedOutput.Target,
+      native: preparedOutput.Native,
+      agentInstruction: preparedOutput["Agent instruction"],
+      warning: preparedOutput.Warning,
+    }).toEqual({
+      prepared: ["designer/decomposition"],
+      prompt: [launch.promptPath],
+      response: [launch.responsePath],
+      record: [launch.recordPath],
+      harness: ["paseo"],
+      delivery: ["agent-file-instruction; prompt"],
+      cwd: [`${root}; explicit-application-cwd`],
+      timeout: ["1800 seconds; coordinator-managed, no waiting or polling"],
+      target: ["fresh agent"],
+      native: ["Paseo native agent delegation; launch fresh agent"],
+      agentInstruction: [
+        `Read and follow the complete assignment in this prompt file:\n${launch.promptPath}`,
       ],
-      directory,
-    );
-    expect(crossHarness.status).toBe(1);
-    expect(crossHarness.stderr).toContain("no settled designer map record through claude-code");
+      warning: ["paseo capabilities are prompt-guided rather than harness-enforced."],
+    });
+    const stem = "2026-08-19T09-06-43Z-designer-decomposition";
+    expect((await readdir(unit)).sort()).toEqual([
+      `${stem}.capabilities.json`,
+      `${stem}.prompt.md`,
+      `${stem}.record.json`,
+      `${stem}.response.md`,
+      `${stem}.task.md`,
+      "brief.md",
+    ]);
 
-    const continuation = run(
+    const configured = await prepareInitial(root, { timeoutSeconds: 42 });
+    expect(await readLaunchRecord(configured.recordPath)).toMatchObject({ timeoutSeconds: 42 });
+    expect(parseLabeledOutput(configured.output).Timeout).toEqual([
+      "42 seconds; coordinator-managed, no waiting or polling",
+    ]);
+  });
+
+  test("reads a verbatim native response, normalizes status, and finalizes", async () => {
+    const root = await application("complete");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const { result, content } = await finalizeInitial(root, launch);
+    expect(result).toMatchObject({ code: 0, stderr: "" });
+    expect(parseLabeledOutput(result.stdout)).toEqual({
+      "Launch finalized": [launch.recordPath],
+      Response: [launch.responsePath],
+      Harness: ["paseo; agent designer-agent-1"],
+      Status: ["completed"],
+      Warning: ["paseo capabilities were prompt-guided rather than harness-enforced."],
+    });
+    expect(await readFile(launch.responsePath, "utf8")).toBe(content);
+    expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
+      state: "finalized",
+      harness: "paseo",
+      agentId: "designer-agent-1",
+      status: "completed",
+      enforcement: "prompt-guided",
+    });
+  });
+
+  test("warns on malformed return headings but preserves and finalizes useful output", async () => {
+    const root = await application("shape-warning");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const useful = "The work is complete; no files changed.\n";
+    const { result } = await finalizeInitial(root, launch, useful);
+    expect(result.code).toBe(0);
+    expect(parseLabeledOutput(result.stdout)).toEqual({
+      "Launch finalized": [launch.recordPath],
+      Response: [launch.responsePath],
+      Harness: ["paseo; agent designer-agent-1"],
+      Status: ["completed"],
+      Warning: [
+        "paseo capabilities were prompt-guided rather than harness-enforced.",
+        "native response is missing required headings: Status, Changed, Questions; the captured response was finalized unchanged.",
+      ],
+    });
+    expect(await readFile(launch.responsePath, "utf8")).toBe(useful);
+    expect((await readLaunchRecord(launch.recordPath)).state).toBe("finalized");
+  });
+
+  test("rejects stale design for a nonwriter using the bound canonical root", async () => {
+    const root = await application("stale-design");
+    await started(root);
+    const design = resolve(root, "design");
+    await mkdir(design);
+    await writeFile(resolve(design, "types.md"), "# Types\n", "utf8");
+    const launch = await prepareInitial(root, { designRoot: design });
+    const preparedRecord = await readLaunchRecord(launch.recordPath);
+    expect({
+      root: parseLabeledOutput(launch.output)["Design root"],
+      before: parseLabeledOutput(launch.output)["Design before"],
+    }).toEqual({
+      root: [design],
+      before: [preparedRecord.design?.before],
+    });
+    await writeFile(
+      launch.responsePath,
+      "## Status\nComplete\n## Changed\nNone\n## Questions\nNone\n",
+      "utf8",
+    );
+    await writeFile(resolve(design, "types.md"), "# Changed types\n", "utf8");
+    const result = await invoke(
+      ["launch", "complete", launch.recordPath, "--agent-id", "agent", "--status", "completed"],
+      root,
+    );
+    expect(result).toEqual(cliFailure("Design changed after preparation"));
+    expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
+  });
+
+  test("requires completed output but finalizes empty failure for explicit recovery", async () => {
+    const root = await application("empty-response");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const completed = await invoke(
+      ["launch", "complete", launch.recordPath, "--agent-id", "agent", "--status", "completed"],
+      root,
+    );
+    expect(completed).toEqual(cliFailure(`Native response is empty: ${launch.responsePath}`));
+    expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
+
+    const failed = await invoke(
+      ["launch", "complete", launch.recordPath, "--agent-id", "agent", "--status", "failed"],
+      root,
+    );
+    expect(failed.code).toBe(0);
+    expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
+      state: "finalized",
+      status: "failed",
+      response: { bytes: 0 },
+    });
+
+    const task = await copyFixture(root, "follow-up-task.md");
+    const replacement = await invoke(
       [
-        "launch",
-        "prepare",
+        "continue",
+        launch.recordPath,
+        "--phase",
+        "decomposition",
+        "--task",
+        task,
+        "--grant",
+        launch.grantPath,
+        "--input",
+        `brief=${launch.briefPath}`,
+        "--replace",
         "--harness",
         "codex",
-        "--role",
-        "designer",
-        "--prompt",
-        contractPrompt!,
-        "--continue-agent",
-        "codex-agent-1",
       ],
-      directory,
+      root,
     );
-    expect(continuation.status).toBe(0);
-    expect(continuation.stdout).toContain("send ");
-    expect(continuation.stdout).toContain("to native agent codex-agent-1");
-    const continuationTicket = continuation.stdout.match(/ticket (\S+); response/)?.[1];
-    const continuationResponse = continuation.stdout.match(/response (\S+)\./)?.[1];
+    expect(replacement.code).toBe(0);
+    expect(parseLabeledOutput(replacement.stdout)["Fresh-agent replacement prepared"]).toEqual([
+      "designer/decomposition",
+    ]);
+
+    const invalidLaunch = await prepareInitial(root);
+    await writeFile(invalidLaunch.responsePath, Uint8Array.from([0xc3, 0x28]));
+    const invalid = await invoke(
+      [
+        "launch",
+        "complete",
+        invalidLaunch.recordPath,
+        "--agent-id",
+        "agent-2",
+        "--status",
+        "failed",
+      ],
+      root,
+    );
+    expect(invalid).toEqual(
+      cliFailure(`Native response is not valid UTF-8: ${invalidLaunch.responsePath}`),
+    );
+    expect((await readLaunchRecord(invalidLaunch.recordPath)).state).toBe("prepared");
+  });
+
+  test("does not allow completion to switch the prepared harness", async () => {
+    const root = await application("bound-harness");
+    await started(root);
+    const launch = await prepareInitial(root);
     await writeFile(
-      continuationResponse!,
-      "Changed:\n- design/concepts/Tasking.md\nCheck: passed\nBlocker: none\n",
+      launch.responsePath,
+      "## Status\nComplete\n## Changed\nNone\n## Questions\nNone\n",
+      "utf8",
     );
-    const wrongAgent = run(
-      ["launch", "complete", "--ticket", continuationTicket!, "--agent-id", "replacement-agent"],
-      directory,
+    const switched = await invoke(
+      [
+        "launch",
+        "complete",
+        launch.recordPath,
+        "--agent-id",
+        "agent",
+        "--status",
+        "completed",
+        "--harness",
+        "codex",
+      ],
+      root,
     );
-    expect(wrongAgent.status).toBe(1);
-    expect(wrongAgent.stderr).toContain("Continuation ticket requires agent codex-agent-1");
-    const continued = run(
-      ["launch", "complete", "--ticket", continuationTicket!, "--agent-id", "codex-agent-1"],
-      directory,
+    expect(switched).toEqual(cliFailure("Unknown option for launch complete: --harness"));
+    expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
+      state: "prepared",
+      harness: "paseo",
+    });
+  });
+});
+
+describe("continuation and replacement", () => {
+  test("keeps identity and harness with retained bindings, while replacement expands context", async () => {
+    const root = await application("continuity");
+    await started(root);
+    const initial = await prepareInitial(root);
+    expect((await finalizeInitial(root, initial)).result.code).toBe(0);
+    const followUpTask = await copyFixture(root, "follow-up-task.md");
+    const narrowGrant = await copyFixture(root, "designer-narrow-grant.json");
+
+    const continuation = await invoke(
+      [
+        "continue",
+        initial.recordPath,
+        "--phase",
+        "decomposition",
+        "--task",
+        followUpTask,
+        "--grant",
+        narrowGrant,
+        "--input",
+        `brief=${initial.briefPath}`,
+        "--timeout",
+        "75",
+      ],
+      root,
+      { now: () => new Date("2026-08-19T09:10:00.000Z") },
     );
-    expect(continued.status).toBe(0);
-    const continuationRecordPath = continued.stdout.match(/record (\S+)\./)?.[1];
-    expect(JSON.parse(await readFile(continuationRecordPath!, "utf8"))).toMatchObject({
-      role: "designer",
-      mode: "contract",
-      agentId: "codex-agent-1",
+    expect(continuation).toMatchObject({ code: 0, stderr: "" });
+    const continuationOutput = parseLabeledOutput(continuation.stdout);
+    expect({
+      prepared: continuationOutput["Same-agent continuation prepared"],
+      harness: continuationOutput.Harness,
+      targetAgent: continuationOutput["Target agent"],
+      timeout: continuationOutput.Timeout,
+    }).toEqual({
+      prepared: ["designer/decomposition"],
+      harness: ["paseo"],
+      targetAgent: ["designer-agent-1"],
+      timeout: ["75 seconds; coordinator-managed, no waiting or polling"],
+    });
+    const continuationPath = reported(continuation.stdout, "Record");
+    const continuedRecord = await readLaunchRecord(continuationPath);
+    expect(continuedRecord).toMatchObject({
+      state: "prepared",
+      harness: "paseo",
+      timeoutSeconds: 75,
+      relationship: { kind: "continuation", recordPath: initial.recordPath },
+    });
+    const continuedPrompt = await readFile(continuedRecord.prompt.path, "utf8");
+    const retainedBrief = continuedRecord.retainedSources.find(
+      ({ inputId }) => inputId === "brief",
+    );
+    if (retainedBrief === undefined) throw new Error("Prepared record omitted retained brief");
+    expect(
+      promptContext(continuedPrompt, [
+        "Task",
+        "Brief",
+        "Current decomposition",
+        "Affected existing design",
+      ]),
+    ).toEqual({
+      Task: inlineContext("coordination/follow-up-task.md", await readFile(followUpTask, "utf8")),
+      Brief: retainedContext(
+        retainedBrief.displayName,
+        retainedBrief.sha256,
+        Buffer.byteLength(await readFile(initial.briefPath)),
+      ),
     });
 
-    const repeated = run(
-      ["launch", "complete", "--ticket", ticket!, "--agent-id", "codex-agent-1"],
-      directory,
+    const replacement = await invoke(
+      [
+        "continue",
+        initial.recordPath,
+        "--phase",
+        "decomposition",
+        "--task",
+        followUpTask,
+        "--grant",
+        initial.grantPath,
+        "--input",
+        `brief=${initial.briefPath}`,
+        "--replace",
+        "--harness",
+        "codex",
+      ],
+      root,
+      { now: () => new Date("2026-08-19T09:11:00.000Z") },
     );
-    expect(repeated.status).toBe(1);
-    expect(repeated.stderr).toContain("Launch ticket was already completed");
+    expect(replacement).toMatchObject({ code: 0, stderr: "" });
+    const replacementOutput = parseLabeledOutput(replacement.stdout);
+    expect({
+      prepared: replacementOutput["Fresh-agent replacement prepared"],
+      harness: replacementOutput.Harness,
+      target: replacementOutput.Target,
+      targetAgent: replacementOutput["Target agent"],
+    }).toEqual({
+      prepared: ["designer/decomposition"],
+      harness: ["codex"],
+      target: ["fresh agent"],
+      targetAgent: undefined,
+    });
+    const replacementRecord = await readLaunchRecord(reported(replacement.stdout, "Record"));
+    expect(replacementRecord).toMatchObject({
+      state: "prepared",
+      harness: "codex",
+      relationship: { kind: "replacement", recordPath: initial.recordPath },
+    });
+    const replacementPrompt = await readFile(replacementRecord.prompt.path, "utf8");
+    expect(
+      promptContext(replacementPrompt, [
+        "Task",
+        "Brief",
+        "Current decomposition",
+        "Affected existing design",
+      ]),
+    ).toEqual({
+      Task: inlineContext("coordination/follow-up-task.md", await readFile(followUpTask, "utf8")),
+      Brief: inlineContext(
+        ".sync-engine/work/message-board-search/brief.md",
+        await readFile(initial.briefPath, "utf8"),
+      ),
+    });
   });
 
-  test("rejects malformed native launch preparation and returns", async () => {
-    const directory = await temporaryDirectory("sync-engine-skill-native-invalid-");
-    temporary.push(directory);
-    await mkdir(resolve(directory, ".sync-engine"));
-    const prompt = resolve(directory, ".sync-engine/designer.prompt.md");
-    await writeFile(prompt, "# designer\n");
-    const unbuilt = run(
-      ["launch", "prepare", "--harness", "claude-code", "--role", "designer", "--prompt", prompt],
-      directory,
-    );
-    expect(unbuilt.status).toBe(1);
-    expect(unbuilt.stderr).toContain("requires a prompt written by prompt build");
+  test("inlines unseen cross-phase context and lets the contract designer update design", async () => {
+    const root = await application("designer-phase-transition");
+    await started(root);
+    const design = resolve(root, "design");
+    await mkdir(resolve(design, "concepts"), { recursive: true });
+    await writeFile(resolve(design, "types.md"), "# Types\n", "utf8");
+    const initial = await prepareInitial(root, { designRoot: design });
+    expect((await finalizeInitial(root, initial)).result.code).toBe(0);
+    const task = await copyFixture(root, "follow-up-task.md");
+    const grant = await copyFixture(root, "designer-contracts-grant.json");
+    const decomposition = resolve(root, ".sync-engine/work/message-board-search/decomposition.md");
+    const decompositionText = "# Accepted decomposition\n\nThe bounded map is accepted.\n";
+    await writeFile(decomposition, decompositionText, "utf8");
 
-    const unknown = run(
-      ["launch", "prepare", "--harness", "unknown", "--role", "designer", "--prompt", prompt],
-      directory,
+    const transition = await invoke(
+      [
+        "continue",
+        initial.recordPath,
+        "--phase",
+        "contracts",
+        "--task",
+        task,
+        "--grant",
+        grant,
+        "--input",
+        `brief=${initial.briefPath}`,
+        "--input",
+        `accepted-decomposition=${decomposition}`,
+      ],
+      root,
+      { now: () => new Date("2026-08-19T09:12:00.000Z") },
     );
-    expect(unknown.status).toBe(1);
-    expect(unknown.stderr).toContain("Unknown native harness");
+    expect(transition).toMatchObject({ code: 0, stderr: "" });
+    const transitionOutput = parseLabeledOutput(transition.stdout);
+    expect({
+      prepared: transitionOutput["Same-agent continuation prepared"],
+      targetAgent: transitionOutput["Target agent"],
+    }).toEqual({
+      prepared: ["designer/contracts"],
+      targetAgent: ["designer-agent-1"],
+    });
+    const recordPath = reported(transition.stdout, "Record");
+    const prepared = await readLaunchRecord(recordPath);
+    expect(prepared).toMatchObject({
+      state: "prepared",
+      role: "designer",
+      phase: "contracts",
+      harness: "paseo",
+      grant: {
+        writableAreas: [{ area: "assigned-design", path: "concepts/Tasking.md" }],
+        projectShell: "project-validation",
+      },
+      design: { root: design, before: expect.any(String) },
+      relationship: { kind: "continuation", recordPath: initial.recordPath },
+    });
+    const prompt = await readFile(prepared.prompt.path, "utf8");
+    const retainedBrief = prepared.retainedSources.find(({ inputId }) => inputId === "brief");
+    if (retainedBrief === undefined) throw new Error("Prepared record omitted retained brief");
+    expect(
+      promptContext(prompt, [
+        "Task",
+        "Brief",
+        "Accepted decomposition",
+        "Resolved findings",
+        "Affected contracts",
+        "Catalog contracts",
+        "Candidate contracts",
+      ]),
+    ).toEqual({
+      Task: inlineContext("coordination/follow-up-task.md", await readFile(task, "utf8")),
+      Brief: retainedContext(
+        retainedBrief.displayName,
+        retainedBrief.sha256,
+        Buffer.byteLength(await readFile(initial.briefPath)),
+      ),
+      "Accepted decomposition": inlineContext(
+        ".sync-engine/work/message-board-search/decomposition.md",
+        decompositionText,
+      ),
+    });
+
+    await writeFile(
+      resolve(design, "concepts/Tasking.md"),
+      "# Tasking\n\nThe contract designer changed permanent design.\n",
+      "utf8",
+    );
+    await writeFile(
+      prepared.response.path,
+      "## Status\nComplete\n## Changed\ndesign/concepts/Tasking.md\n## Questions\nNone\n",
+      "utf8",
+    );
+    const completion = await invoke(
+      ["launch", "complete", recordPath, "--agent-id", "designer-agent-1", "--status", "completed"],
+      root,
+    );
+    expect(completion.code).toBe(0);
+    const finalized = await readLaunchRecord(recordPath);
+    expect(finalized).toMatchObject({
+      state: "finalized",
+      harness: "paseo",
+      agentId: "designer-agent-1",
+      phase: "contracts",
+      design: { root: design, before: expect.any(String), after: expect.any(String) },
+    });
+    expect(finalized.design?.after).not.toBe(finalized.design?.before);
   });
 
-  test("reports concise usage and argument failures", () => {
-    expect(run(["--help"]).stdout).toContain("sync-engine-skill prompt build");
-    const missing = run(["prompt", "build"]);
-    expect(missing.status).toBe(1);
-    expect(missing.stderr).toContain("prompt build requires --role");
+  test("refreshes a changed design digest for an implementation continuation", async () => {
+    const root = await application("worker-design-refresh");
+    const unit = await started(root);
+    const design = resolve(root, "design");
+    const specification = resolve(design, "concepts/Posting.md");
+    await mkdir(resolve(design, "concepts"), { recursive: true });
+    await writeFile(specification, "# Posting\n\nInitial approved contract.\n", "utf8");
+    const reference = resolve(root, "public-reference.md");
+    const startingPaths = resolve(root, "starting-paths.md");
+    await writeFile(reference, "# Public reference\n\nUse the documented class API.\n", "utf8");
+    await writeFile(startingPaths, "# Starting paths\n\n- src/concepts/Posting.ts\n", "utf8");
+    const task = await copyFixture(root, "follow-up-task.md");
+    const grant = await copyFixture(root, "concept-worker-grant.json");
+    const brief = resolve(unit, "brief.md");
+    const context = [
+      "--input",
+      `brief=${brief}`,
+      "--input",
+      `specifications=${specification}`,
+      "--input",
+      `public-references=${reference}`,
+      "--input",
+      `starting-paths=${startingPaths}`,
+    ];
+    const initial = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "concept-worker",
+        "--phase",
+        "implementation",
+        "--task",
+        task,
+        "--grant",
+        grant,
+        "--harness",
+        "paseo",
+        ...context,
+        "--design-root",
+        design,
+      ],
+      root,
+    );
+    expect(initial.code).toBe(0);
+    const initialPath = reported(initial.stdout, "Record");
+    const initialRecord = await readLaunchRecord(initialPath);
+    const oldDigest = initialRecord.design?.before;
+    expect(oldDigest).toBe((await digestDesign(design)).digest);
+    const response =
+      "## Status\nComplete\n## Changed\nNone\n## Checks\nPassed\n## Blockers\nNone\n";
+    await writeFile(initialRecord.response.path, response, "utf8");
+    expect(
+      (
+        await invoke(
+          [
+            "launch",
+            "complete",
+            initialPath,
+            "--agent-id",
+            "concept-agent-1",
+            "--status",
+            "completed",
+          ],
+          root,
+        )
+      ).code,
+    ).toBe(0);
+
+    await writeFile(specification, "# Posting\n\nRevised approved contract.\n", "utf8");
+    const continueArgs = [
+      "continue",
+      initialPath,
+      "--phase",
+      "implementation",
+      "--task",
+      task,
+      "--grant",
+      grant,
+      ...context,
+    ];
+    const redundantRoot = await invoke([...continueArgs, "--design-root", design], root);
+    expect(redundantRoot).toEqual(
+      cliFailure("Continue already has a bound design root; omit --design-root"),
+    );
+
+    const continued = await invoke(continueArgs, root, {
+      now: () => new Date("2026-08-19T09:13:00.000Z"),
+    });
+    expect(continued.code).toBe(0);
+    const continuedPath = reported(continued.stdout, "Record");
+    const continuedRecord = await readLaunchRecord(continuedPath);
+    const revisedDigest = (await digestDesign(design)).digest;
+    expect(continuedRecord.design?.before).toBe(revisedDigest);
+    expect(continuedRecord.design?.before).not.toBe(oldDigest);
+    const continuedPrompt = await readFile(continuedRecord.prompt.path, "utf8");
+    const retainedBrief = continuedRecord.retainedSources.find(
+      ({ inputId }) => inputId === "brief",
+    );
+    const retainedReference = continuedRecord.retainedSources.find(
+      ({ inputId }) => inputId === "public-references",
+    );
+    if (retainedBrief === undefined || retainedReference === undefined) {
+      throw new Error("Prepared record omitted retained worker context");
+    }
+    expect(
+      promptContext(continuedPrompt, [
+        "Task",
+        "Brief",
+        "Concept specifications",
+        "Public framework references",
+        "Examples",
+        "Exact starting paths",
+      ]),
+    ).toEqual({
+      Task: inlineContext("coordination/follow-up-task.md", await readFile(task, "utf8")),
+      Brief: retainedContext(
+        retainedBrief.displayName,
+        retainedBrief.sha256,
+        Buffer.byteLength(await readFile(brief)),
+      ),
+      "Concept specifications": inlineContext(
+        "design/concepts/Posting.md",
+        await readFile(specification, "utf8"),
+      ),
+      "Public framework references": retainedContext(
+        retainedReference.displayName,
+        retainedReference.sha256,
+        Buffer.byteLength(await readFile(reference)),
+      ),
+      "Exact starting paths": inlineContext(
+        "starting-paths.md",
+        await readFile(startingPaths, "utf8"),
+      ),
+    });
+
+    await writeFile(specification, "# Posting\n\nChanged again after preparation.\n", "utf8");
+    await writeFile(continuedRecord.response.path, response, "utf8");
+    const staleCompletion = await invoke(
+      [
+        "launch",
+        "complete",
+        continuedPath,
+        "--agent-id",
+        "concept-agent-1",
+        "--status",
+        "completed",
+      ],
+      root,
+    );
+    expect(staleCompletion).toEqual(cliFailure("Design changed after preparation"));
+
+    const refreshed = await invoke(continueArgs, root, {
+      now: () => new Date("2026-08-19T09:14:00.000Z"),
+    });
+    expect(refreshed.code).toBe(0);
+    const refreshedPath = reported(refreshed.stdout, "Record");
+    const refreshedRecord = await readLaunchRecord(refreshedPath);
+    const currentDigest = (await digestDesign(design)).digest;
+    expect(refreshedRecord.design?.before).toBe(currentDigest);
+    await writeFile(refreshedRecord.response.path, response, "utf8");
+    const completed = await invoke(
+      [
+        "launch",
+        "complete",
+        refreshedPath,
+        "--agent-id",
+        "concept-agent-1",
+        "--status",
+        "completed",
+      ],
+      root,
+    );
+    expect(completed.code).toBe(0);
+    expect(await readLaunchRecord(refreshedPath)).toMatchObject({
+      state: "finalized",
+      design: { root: design, before: currentDigest },
+      harness: "paseo",
+      agentId: "concept-agent-1",
+    });
+  });
+
+  test("rejects a capability expansion and a harness change for same-agent continuation", async () => {
+    const root = await application("continuation-integrity");
+    await started(root);
+    const initial = await prepareInitial(root, { grant: "designer-narrow-grant.json" });
+    expect((await finalizeInitial(root, initial)).result.code).toBe(0);
+    const followUpTask = await copyFixture(root, "follow-up-task.md");
+    const fullGrant = await copyFixture(root, "designer-grant.json");
+
+    const expanded = await invoke(
+      [
+        "continue",
+        initial.recordPath,
+        "--phase",
+        "decomposition",
+        "--task",
+        followUpTask,
+        "--grant",
+        fullGrant,
+        "--input",
+        `brief=${initial.briefPath}`,
+      ],
+      root,
+    );
+    expect(expanded).toEqual(
+      cliFailure("Continuation capability grant readableAreas expands at design:."),
+    );
+
+    const changedHarness = await invoke(
+      [
+        "continue",
+        initial.recordPath,
+        "--phase",
+        "decomposition",
+        "--task",
+        followUpTask,
+        "--grant",
+        initial.grantPath,
+        "--input",
+        `brief=${initial.briefPath}`,
+        "--harness",
+        "codex",
+      ],
+      root,
+    );
+    expect(changedHarness).toEqual(cliFailure("--harness is valid only with --replace"));
+  });
+
+  test("recognizes a child path as a narrowed capability", () => {
+    const base: EffectiveCapabilityGrant = {
+      readableAreas: [{ area: "application", path: "src" }],
+      writableAreas: [],
+      toolKinds: ["repository-read"],
+      projectShell: "none",
+      network: false,
+      generatedOutput: false,
+      longRunningProcesses: false,
+    };
+    expect(
+      capabilitySubsetIssue(
+        { ...base, readableAreas: [{ area: "application", path: "src/features" }] },
+        base,
+      ),
+    ).toBeUndefined();
   });
 });

@@ -1,1027 +1,869 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
+import { lstat, readFile } from "node:fs/promises";
+import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assignmentTemplate, checkAssignmentFile } from "./assignment.ts";
-import { checkBriefFile } from "./brief.ts";
-import { designScope, digestDesign, requireDesignDigest } from "./design.ts";
+import { bootstrapApplication, conflictChoices, type BootstrapDependencies } from "./bootstrap.ts";
+import {
+  configurationWithUserOverrides,
+  harnessIds,
+  prepareHarnessInvocation,
+  type HarnessId,
+  type LaunchTarget,
+  type PreparedHarnessInvocation,
+} from "./harness.ts";
 import {
   buildPrompt,
-  promptRoles,
+  type BuiltPrompt,
+  type PromptContextDelivery,
   type PromptInput,
-  type PromptMode,
-  type PromptRole,
+  type RetainedSource,
 } from "./prompt.ts";
-import { agentExists, harness, launchRole } from "./launch.ts";
-import { snapshotMap, type MapSnapshot } from "./review.ts";
 import {
-  completeNativeLaunch,
-  nativeHarnesses,
-  prepareNativeLaunch,
-  type NativeHarness,
-} from "./native-launch.ts";
+  digestDesign,
+  finalizeLaunch,
+  normalizeLaunchStatus,
+  prepareLaunch,
+  readLaunchRecord,
+  type FinalizedLaunchRecord,
+  type LaunchRecord,
+  type PrepareLaunchResult,
+} from "./records.ts";
 import {
-  capturedResponse,
-  isSettledStatus,
-  nextReviewPass,
-  previousPhase,
-  readPromptContext,
-  requireCompletedRole,
-  workspaceFileRole,
-  requireInsideWorkspace,
-  requiredPhases,
-  reserveWorkspacePath,
-  registrationWrappers,
-  reviewRecords,
-  verifiedRecords,
-  workspaceDirectory,
-  writePromptContext,
-} from "./workspace.ts";
+  getRoleSpecification,
+  projectShellAccessLevels,
+  roleSpecificationIds,
+  roleSpecifications,
+  validateCapabilityGrant,
+  type EffectiveCapabilityGrant,
+} from "./roles.ts";
+import {
+  canonicalPath,
+  isPathInside,
+  requireWorkUnit,
+  startWorkUnitFromTemplate,
+  workUnitPath,
+  type WorkUnit,
+} from "./work.ts";
 
-interface PackageManifest {
-  readonly name?: string;
-  readonly version?: string;
-  readonly bin?: string | Readonly<Record<string, string>>;
-  readonly skill?: string;
-  readonly toolchain?: Readonly<Record<string, string>>;
-  readonly packages?: Readonly<Record<string, string>>;
+const commandName = "sync-engine-skill";
+const defaultSkillRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const defaultTimeoutSeconds = 1800;
+
+type WriteOutput = (text: string) => void;
+type Bootstrap = typeof bootstrapApplication;
+
+export interface CommandDependencies {
+  readonly cwd?: string;
+  readonly skillRoot?: string;
+  readonly stdout?: WriteOutput;
+  readonly stderr?: WriteOutput;
+  readonly bootstrap?: Bootstrap;
+  readonly bootstrapDependencies?: BootstrapDependencies;
+  readonly now?: () => Date;
 }
 
-interface SkillRelease {
-  readonly skill: string;
-  readonly toolchain: Readonly<{ bun: string; node: string; typescript: string }>;
-  readonly packages: Readonly<Record<string, string>>;
+export class CliError extends Error {
+  override readonly name = "CliError";
+  constructor(
+    message: string,
+    readonly recovery?: string,
+  ) {
+    super(message);
+  }
 }
 
-const commandDirectory = dirname(fileURLToPath(import.meta.url));
-const sourceSkillRoot = resolve(commandDirectory, "..");
-const skillRoot = existsSync(resolve(sourceSkillRoot, "release.json"))
-  ? sourceSkillRoot
-  : resolve(commandDirectory, "../skills/sync-engine");
-const packageExecutables = {
-  "@mit-sdg/sync-engine": "sync-engine",
-  "@mit-sdg/sync-engine-catalog": "sync-engine-catalog",
-  "@mit-sdg/sync-engine-analysis": "sync-engine-analysis",
+const cardinality = {
+  "exactly-one": "one",
+  "zero-or-one": "optional",
+  "one-or-more": "one or more",
+  "zero-or-more": "repeatable optional",
 } as const;
-const packageNames = Object.keys(packageExecutables) as Array<keyof typeof packageExecutables>;
-const setupFiles = ["package.json", "tsconfig.json", "generated.config.ts"] as const;
-/** Reported commands name the skill root the way SKILL.md and the references write it. */
-const compiler = 'bun "<skill-root>/scripts/command.ts"';
 
-function reference(name: string): string {
-  return resolve(skillRoot, "references", name);
-}
+export function helpText(): string {
+  const inputs = roleSpecificationIds
+    .map((id) => {
+      const specification = roleSpecifications[id];
+      const slots = specification.inputs
+        .filter(({ id: input }) => input !== "task")
+        .map(
+          (input) =>
+            `${input.id} (${cardinality[input.cardinality]}, ${input.delivery === "retained" ? "retained" : "inline"})`,
+        )
+        .join(", ");
+      return `  ${id}: ${slots || "no additional inputs"}`;
+    })
+    .join("\n");
 
-/** Report the exact syntax of the commands this one leads to, choosing no stage. */
-function next(stream: NodeJS.WritableStream, steps: readonly string[]): void {
-  for (const step of steps) stream.write(`Next: ${step}\n`);
-}
+  return `sync-engine skill CLI — prompt builder and validator
 
-function parent(path: string): string | undefined {
-  const next = parse(path).dir;
-  return next === path ? undefined : next;
-}
+Usage:
+  ${commandName} work start <slug>
+    [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+  ${commandName} prompt build --work <slug> --role <role> --phase <phase>
+    --task <path> --grant <json-path> --harness <harness>
+    [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
+    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  ${commandName} launch complete <prepared-record> --agent-id <id>
+    --status <native-status> [--model <id>]
+  ${commandName} continue <finalized-record> --phase <phase> --task <path>
+    --grant <json-path> [--input <slot>=<path>]... [--replace]
+    [--harness <harness>] [--design-root <path>] [--context-limit <bytes>]
+    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  ${commandName} --help
 
-async function manifestAt(path: string): Promise<PackageManifest | undefined> {
-  try {
-    return JSON.parse(await readFile(path, "utf8")) as PackageManifest;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return undefined;
-    throw error;
-  }
-}
+Roles and phases (valid pairs):
+  ${roleSpecificationIds.join("\n  ")}
 
-async function resolveManifest(
-  packageName: string,
-  starts: readonly string[],
-): Promise<{ path: string; manifest: PackageManifest }> {
-  for (const start of starts) {
-    const applicationRoot = resolve(start);
-    for (let directory: string | undefined = applicationRoot; directory !== undefined;) {
-      if (directory === applicationRoot) {
-        const localPath = resolve(directory, "package.json");
-        const local = await manifestAt(localPath);
-        if (local?.name === packageName) return { path: localPath, manifest: local };
-      }
+Harnesses:
+  ${harnessIds.join(", ")}
 
-      const dependencyPath = resolve(directory, "node_modules", packageName, "package.json");
-      const dependency = await manifestAt(dependencyPath);
-      if (dependency !== undefined) return { path: dependencyPath, manifest: dependency };
-      directory = parent(directory);
-    }
-  }
-  throw new Error(`Cannot resolve installed package ${packageName}`);
-}
+Options:
+  --design-root must be the canonical <application>/design directory. Prompt build creates
+  a binding; continue recomputes an existing binding automatically and accepts this option
+  only to introduce one when the prior record has none. Completion uses the recorded root.
+  --context-limit is a positive byte limit supplied by the selected harness or model.
+  --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
+  CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
+  selection; otherwise they inherit native settings. --harness on continue is valid only
+  together with --replace.
 
-async function readSkillRelease(): Promise<SkillRelease> {
-  const path = resolve(skillRoot, "release.json");
-  const value = await manifestAt(path);
-  if (
-    typeof value?.skill !== "string" ||
-    typeof value.toolchain?.bun !== "string" ||
-    typeof value.toolchain.node !== "string" ||
-    typeof value.toolchain.typescript !== "string" ||
-    typeof value.packages !== "object" ||
-    value.packages === null ||
-    Array.isArray(value.packages)
-  ) {
-    throw new Error(`Cannot read sync-engine skill release from ${path}`);
-  }
-  for (const packageName of packageNames) {
-    if (value.packages[packageName] !== value.skill) {
-      throw new Error(
-        `Skill release ${value.skill} must require ${packageName} at that exact version; found ${value.packages[packageName] ?? "no version"}`,
-      );
-    }
-  }
-  return value as SkillRelease;
-}
+Inputs:
+  --task and --grant sources must be inside the application. --task supplies the reserved
+  task input. --input is repeatable, including for a repeatable slot; use one
+  <slot>=<path> argument per file. Brief and decomposition slots require their exact
+  work-unit files; every other input must resolve inside the application or skill root.
+  Accepted slots are:
+${inputs}
 
-function inside(root: string, path: string): boolean {
-  const child = relative(root, path);
-  return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
-}
-
-function requireExecutable(
-  packageName: keyof typeof packageExecutables,
-  path: string,
-  manifest: PackageManifest,
-): void {
-  const executable = packageExecutables[packageName];
-  const bins = typeof manifest.bin === "string" ? { [executable]: manifest.bin } : manifest.bin;
-  const target = bins?.[executable];
-  if (typeof target !== "string" || target.length === 0) {
-    throw new Error(`Installed ${packageName} does not expose required executable ${executable}`);
-  }
-  const packageRoot = dirname(path);
-  const executablePath = resolve(packageRoot, target);
-  if (
-    !inside(packageRoot, executablePath) ||
-    !existsSync(executablePath) ||
-    !statSync(executablePath).isFile()
-  ) {
-    throw new Error(
-      `Installed ${packageName} executable ${executable} has missing or escaping target ${target}`,
-    );
-  }
-}
-
-async function validateReleaseSet(release: SkillRelease, applicationRoot: string): Promise<string> {
-  const resolved: Array<{ name: keyof typeof packageExecutables; version: string }> = [];
-  for (const packageName of packageNames) {
-    const found = await resolveManifest(packageName, [applicationRoot]);
-    if (found.manifest.version === undefined) {
-      throw new Error(`Installed package has no version: ${found.path}`);
-    }
-    requireExecutable(packageName, found.path, found.manifest);
-    resolved.push({ name: packageName, version: found.manifest.version });
+Capability grant JSON (every field is required and must be within the role maximum):
+  {
+    "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
+    "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
+    "toolKinds": ["repository-read", "repository-write"],
+    "projectShell": "none|project-validation|project-local",
+    "network": false,
+    "generatedOutput": false,
+    "longRunningProcesses": false
   }
 
-  const mismatched = resolved.filter(({ name, version }) => version !== release.packages[name]);
-  if (mismatched.length > 0) {
-    const versions = resolved.map(({ name, version }) => `${name}@${version}`).join(", ");
-    throw new Error(
-      `Installed sync-engine release does not match skill ${release.skill}: ${versions}`,
-    );
-  }
-  return release.skill;
-}
+Completion:
+  Before launch complete, copy the native response verbatim into the printed Response
+  path. The prepared record fixes harness, timeout, and design root. Completed status
+  requires nonempty UTF-8; another terminal status permits an empty captured response.
 
-async function requireBriefSetup(release: SkillRelease, applicationRoot: string): Promise<void> {
-  let releaseFailure: string | undefined;
-  try {
-    await validateReleaseSet(release, applicationRoot);
-  } catch (error) {
-    releaseFailure = error instanceof Error ? error.message : String(error);
-  }
+Status normalization:
+  completed: complete, completed, idle, settled, success, succeeded
+  failed: error, failed, failure
+  cancelled: canceled, cancelled, stopped
+  timed-out: timeout, timed-out, timed_out, "timed out"
 
-  const missing = setupFiles.filter((path) => !existsSync(resolve(applicationRoot, path)));
-  if (releaseFailure === undefined && missing.length === 0) return;
+Continuation and replacement:
+  continue normally keeps the prior role, harness, and exact agent identity. It binds only
+  unchanged retained sources known by that agent; unseen or changed sources are inline.
+  Within one phase capabilities must be reused or narrowed; an explicit phase transition
+  uses a grant validated against the new phase maximum.
+  Bound design is redigested automatically. --replace prepares a fresh agent, expands
+  retained inputs in full, and may select --harness; it remains a replacement.
 
-  const reasons = [
-    ...(releaseFailure === undefined ? [] : [`release check failed: ${releaseFailure}`]),
-    ...(missing.length === 0 ? [] : [`missing setup files: ${missing.join(", ")}`]),
-  ].join("; ");
-  throw new Error(
-    `Brief init requires completed sync-engine setup in ${applicationRoot} (${reasons}). Install the exact packages from release.json, run this command's \`release check .\`, then run \`bunx --no-install sync-engine setup\` and retry.`,
-  );
-}
-
-function usage(): string {
-  return `Usage:
-  sync-engine-skill release check [<application-directory>]
-  sync-engine-skill brief init <brief.md>
-  sync-engine-skill brief check <brief.md>
-  sync-engine-skill design digest <design-directory> [--role <role>]
-  sync-engine-skill follow-up new --role <role>
-  sync-engine-skill follow-up check <file> --design-root <directory> --design-digest <sha256>
-  sync-engine-skill prompt build --role <role> --input <slot>=<path>...
-  sync-engine-skill assignment new --role <role> --design-digest <sha256>
-  sync-engine-skill assignment check <file>
-  sync-engine-skill launch --role <role> --prompt <path> [--timeout <seconds>]
-    [--continue-agent <id>] for a later phase of the same role
-    [--model <model>] only when the user names one for Paseo roles
-    [--thinking <id>]
-  sync-engine-skill launch prepare --harness <harness> --role <role> --prompt <path>
-    [--continue-agent <id>]
-  sync-engine-skill launch complete --ticket <path> --agent-id <id>
-    [--provider <provider>] [--model <model>] [--thinking <setting>]
-  sync-engine-skill handback check --design-root <directory> --design-digest <sha256>
-    [--brief <path>] [--user-override]
-
-Roles:
-  designer, critic, concept-worker, application-worker, frontend-worker, evidence-worker
-
-Native harnesses:
-  codex, claude-code, antigravity
-
-Prompt options:
-  --mode <map|contract>           Designer and critic prompt phase
-  --design-root <directory>       Required for implementation and evidence roles
-  --design-digest <sha256>        Closed reviewed design digest for that directory
-  --max-bytes <positive integer>  Override the role's default byte budget
-  --stdout                        Print prompt bytes instead of writing the prompt file
-  --user-override                 Direct human instruction waives review judgment/limit
-
-Generated prompts, follow-ups, assignments, and launch records belong in
-${workspaceDirectory}/ under the application root; the compiler owns those paths.
+Warnings:
+  Continuing with a release mismatch is explicit. Adapters report prompt-guided
+  capabilities when the harness does not enforce them. Missing required response
+  headings warn after finalization but do not discard useful native output.
 `;
 }
 
-function takeValue(args: readonly string[], index: number, option: string): string {
-  const value = args[index + 1];
-  if (value === undefined || value.startsWith("--")) throw new Error(`${option} requires a value`);
+type OptionMode = "value" | "flag" | "repeatable";
+type ParsedOptions = ReadonlyMap<string, readonly string[]>;
+
+function parseTail(
+  args: readonly string[],
+  command: string,
+  positionals: readonly string[],
+  definitions: Readonly<Record<string, OptionMode>>,
+): { readonly positionals: readonly string[]; readonly options: ParsedOptions } {
+  const foundPositionals: string[] = [];
+  let index = 0;
+  for (const name of positionals) {
+    const value = args[index];
+    if (value === undefined || value.startsWith("-")) {
+      throw new CliError(`${command} requires <${name}> before its options`);
+    }
+    foundPositionals.push(value);
+    index += 1;
+  }
+
+  const options = new Map<string, string[]>();
+  while (index < args.length) {
+    const option = args[index]!;
+    if (!option.startsWith("-")) {
+      throw new CliError(`Unexpected positional argument for ${command}: ${option}`);
+    }
+    const mode = definitions[option];
+    if (mode === undefined) throw new CliError(`Unknown option for ${command}: ${option}`);
+    if (mode !== "repeatable" && options.has(option)) {
+      throw new CliError(`Duplicate option for ${command}: ${option}`);
+    }
+    if (mode === "flag") {
+      options.set(option, ["true"]);
+      index += 1;
+      continue;
+    }
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new CliError(`${option} requires a value`);
+    }
+    options.set(option, [...(options.get(option) ?? []), value]);
+    index += 2;
+  }
+  return { positionals: foundPositionals, options };
+}
+
+function required(options: ParsedOptions, option: string, command: string): string {
+  const value = options.get(option)?.[0];
+  if (value === undefined || value.trim() === "") {
+    throw new CliError(`${command} requires ${option} <value>`);
+  }
   return value;
 }
 
-interface PromptArguments {
-  readonly role: string;
-  readonly inputs: readonly PromptInput[];
-  readonly stdout: boolean;
-  readonly maxBytes?: number;
-  readonly mode?: PromptMode;
-  readonly designRoot?: string;
-  readonly designDigest?: string;
-  readonly userOverride: boolean;
+function optional(options: ParsedOptions, option: string): string | undefined {
+  const value = options.get(option)?.[0];
+  if (value !== undefined && value.trim() === "") throw new CliError(`${option} cannot be empty`);
+  return value;
 }
 
-function parsePromptArguments(args: readonly string[]): PromptArguments {
-  let role: string | undefined;
-  let stdout = false;
-  let maxBytes: number | undefined;
-  let mode: PromptMode | undefined;
-  let designRoot: string | undefined;
-  let designDigest: string | undefined;
-  let userOverride = false;
-  const inputs: PromptInput[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index]!;
-    if (argument === "--role") {
-      role = takeValue(args, index, argument);
-      index += 1;
-    } else if (argument === "--input") {
-      const value = takeValue(args, index, argument);
-      index += 1;
-      const separator = value.indexOf("=");
-      if (separator <= 0 || separator === value.length - 1) {
-        throw new Error(`--input must have the form <slot>=<path>`);
-      }
-      inputs.push({ slot: value.slice(0, separator), path: value.slice(separator + 1) });
-    } else if (argument === "--stdout") {
-      stdout = true;
-    } else if (argument === "--user-override") {
-      userOverride = true;
-    } else if (argument === "--mode") {
-      const value = takeValue(args, index, argument);
-      index += 1;
-      if (value !== "map" && value !== "contract") {
-        throw new Error(`--mode must be map or contract`);
-      }
-      mode = value;
-    } else if (argument === "--design-root") {
-      designRoot = takeValue(args, index, argument);
-      index += 1;
-    } else if (argument === "--design-digest") {
-      designDigest = takeValue(args, index, argument);
-      index += 1;
-    } else if (argument === "--max-bytes") {
-      const value = takeValue(args, index, argument);
-      index += 1;
-      maxBytes = Number(value);
-      if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
-        throw new Error(`--max-bytes must be a positive integer`);
-      }
-    } else {
-      throw new Error(`Unknown prompt option: ${argument}`);
-    }
+function positiveInteger(value: string | undefined, option: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) {
+    throw new CliError(`${option} must be a positive integer`);
   }
-
-  if (role === undefined) throw new Error(`prompt build requires --role`);
-  if ((role === "designer" || role === "critic") && mode === undefined) {
-    throw new Error(`prompt build for ${role} requires --mode map or contract`);
-  }
-  for (const input of inputs) {
-    if (input.slot === "assignment") requireInsideWorkspace(input.path);
-  }
-  return { role, inputs, stdout, maxBytes, mode, designRoot, designDigest, userOverride };
+  return Number(value);
 }
 
-async function reviewedContractDigest(options: PromptArguments): Promise<string | undefined> {
-  if (options.role !== "critic" || options.mode !== "contract") return options.designDigest;
-  const map = options.inputs.find(
-    (input) => input.slot === "candidate" && basename(input.path) === "decomposition.md",
-  );
-  if (map === undefined) {
-    throw new Error(`Contract critic requires design/decomposition.md as a candidate`);
+function harness(value: string): HarnessId {
+  if (!harnessIds.includes(value as HarnessId)) {
+    throw new CliError(`Unknown harness ${value}; expected ${harnessIds.join(", ")}`);
   }
-  const designRoot = dirname(resolve(map.path));
-  const candidateInputs = options.inputs.filter((candidate) => candidate.slot === "candidate");
-  const candidatePaths = new Set<string>();
-  for (const input of candidateInputs) {
-    const candidate = resolve(input.path);
-    const within = relative(designRoot, candidate);
-    if (within.startsWith("..") || isAbsolute(within)) {
-      throw new Error(`Contract critic candidates must all belong to ${designRoot}`);
-    }
-    candidatePaths.add(candidate);
-  }
-  const digest = await digestDesign(designRoot);
-  if (candidatePaths.size !== digest.files || candidateInputs.length !== digest.files) {
-    throw new Error(
-      `Contract critic requires every authored design Markdown file exactly once; received ${candidatePaths.size} of ${digest.files}`,
-    );
-  }
-  return digest.digest;
+  return value as HarnessId;
 }
 
-interface CriticReviewMetadata {
-  readonly pass: number;
-  readonly snapshot?: MapSnapshot;
-  readonly obligationIds: readonly string[];
-  readonly inlineContent: string;
+function commandRoot(dependencies: CommandDependencies): string {
+  return canonicalPath(dependencies.cwd ?? process.cwd());
 }
 
-async function criticReviewMetadata(
-  options: PromptArguments,
-  briefSha256: string | undefined,
-): Promise<CriticReviewMetadata | undefined> {
-  if (options.role !== "critic" || options.mode === undefined) return undefined;
-  if (briefSha256 === undefined) throw new Error(`Critic prompt requires a brief binding`);
-  const pass = await nextReviewPass(options.mode, briefSha256, undefined, options.userOverride);
-  if (options.mode === "contract") {
-    const map = options.inputs.find(
-      (input) => input.slot === "candidate" && basename(input.path) === "decomposition.md",
-    );
-    if (map === undefined) throw new Error(`Contract critic requires a decomposition candidate`);
-    const snapshot = snapshotMap(await readFile(resolve(map.path), "utf8"));
-    return {
-      pass,
-      obligationIds: snapshot.obligationIds,
-      inlineContent: `This is contract review pass ${pass}; two passes are the default limit.`,
-    };
-  }
-
-  const candidate = options.inputs.find((input) => input.slot === "candidate");
-  if (candidate === undefined) throw new Error(`Map critic requires one candidate decomposition`);
-  const snapshot = snapshotMap(await readFile(resolve(candidate.path), "utf8"));
-  if (snapshot.rows.length === 0 || snapshot.placements.length === 0) {
-    throw new Error(`Candidate decomposition requires nonempty Need placement and Concept tables`);
-  }
-  const prior = pass > 1 ? (await reviewRecords("map", briefSha256)).at(-1) : undefined;
-  const priorResponse = prior === undefined ? undefined : await capturedResponse(prior.record);
-  const context = [
-    `This is map review pass ${pass}; two passes are the default limit.`,
-    ...(priorResponse === undefined
-      ? []
-      : [
-          `The prior report follows. Verify its repairs. Reopen an earlier accepted decision only for a new material conflict visible in the revised map:`,
-          priorResponse,
-        ]),
-  ].join("\n\n");
+function output(dependencies: CommandDependencies): { out: WriteOutput; err: WriteOutput } {
   return {
-    pass,
-    snapshot,
-    obligationIds: snapshot.obligationIds,
-    inlineContent: context,
+    out: dependencies.stdout ?? ((text) => process.stdout.write(text)),
+    err: dependencies.stderr ?? ((text) => process.stderr.write(text)),
   };
 }
 
-async function launchPromptContext(prompt: string, role: string) {
-  const promptPath = requireInsideWorkspace(prompt);
-  const context = await readPromptContext(promptPath);
-  if (context === undefined) {
-    throw new Error(`Launch requires a prompt written by prompt build: ${prompt}`);
+async function utf8(path: string, name: string, nonempty = true) {
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(path);
+  } catch (error) {
+    throw new CliError(`${name} is unreadable: ${path}: ${String(error)}`);
   }
-  if (context.role !== role) {
-    throw new Error(`Prompt belongs to role ${context.role}, not requested role ${role}`);
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new CliError(`${name} is not valid UTF-8: ${path}`);
   }
-  return context;
+  if (nonempty && text.trim() === "") throw new CliError(`${name} is empty: ${path}`);
+  return { bytes, text };
 }
 
-async function requireContinuation(
-  role: string,
-  mode: PromptMode | undefined,
-  agentId: string | undefined,
-  briefSha256: string | undefined,
-  userOverride: boolean,
-  expectedHarness: string,
-): Promise<void> {
-  const contractDesigner = role === "designer" && mode === "contract";
-  if (!contractDesigner && agentId !== undefined) {
-    throw new Error(`--continue-agent is only valid for the designer contract phase`);
+async function grantAt(path: string): Promise<unknown> {
+  const source = await utf8(path, "Capability grant");
+  try {
+    return JSON.parse(source.text) as unknown;
+  } catch {
+    throw new CliError(`Capability grant is not valid JSON: ${path}`);
   }
-  if (!contractDesigner) return;
-  if (agentId === undefined) {
-    if (userOverride) return;
-    throw new Error(`Designer contract launch requires --continue-agent <map-designer-id>`);
+}
+
+type FilePromptInput = Readonly<{ id: string; path: string; displayName: string }>;
+
+function displayPath(cwd: string, path: string): string {
+  return relative(cwd, path).split(sep).join("/") || basename(path);
+}
+
+const decompositionInputs = [
+  "current-decomposition",
+  "candidate-decomposition",
+  "accepted-decomposition",
+] as const;
+
+function canonicalSource(path: string, roots: readonly string[], name: string): string {
+  const canonical = canonicalPath(path);
+  if (!roots.some((root) => isPathInside(root, canonical))) {
+    throw new CliError(`${name} escapes its allowed roots: ${path} resolves to ${canonical}`);
   }
-  const originals = await verifiedRecords("designer", undefined, undefined, "map");
+  return canonical;
+}
+
+function promptInputs(
+  values: readonly string[],
+  cwd: string,
+  skillRoot: string,
+  unit: WorkUnit,
+): FilePromptInput[] {
+  return values.map((value) => {
+    const separator = value.indexOf("=");
+    if (separator <= 0 || separator === value.length - 1) {
+      throw new CliError(`--input must have the form <slot>=<path>: ${value}`);
+    }
+    const id = value.slice(0, separator);
+    if (id === "task") throw new CliError(`The task input must be supplied with --task`);
+    const supplied = resolve(cwd, value.slice(separator + 1));
+    const path = canonicalSource(supplied, [cwd, skillRoot], `Prompt input ${id}`);
+    const expected =
+      id === "brief"
+        ? unit.briefPath
+        : decompositionInputs.includes(id as (typeof decompositionInputs)[number])
+          ? resolve(unit.path, "decomposition.md")
+          : undefined;
+    if (expected !== undefined && (supplied !== expected || path !== expected)) {
+      throw new CliError(`Prompt input ${id} must be the exact work-unit path ${expected}`);
+    }
+    return { id, path, displayName: displayPath(cwd, path) };
+  });
+}
+
+function exactDesignRoot(value: string, cwd: string): string {
+  const expected = resolve(cwd, "design");
+  const supplied = resolve(cwd, value);
+  const canonical = canonicalPath(supplied);
+  if (supplied !== expected || canonical !== expected) {
+    throw new CliError(`Design root must be the canonical application design path: ${expected}`);
+  }
+  return expected;
+}
+
+function requireRecordApplication(record: LaunchRecord, cwd: string): void {
+  const expected = workUnitPath(cwd, record.work.slug);
+  if (record.work.path !== expected) {
+    throw new CliError(`Launch record belongs to another application: ${record.work.path}`);
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new CliError(`Cannot inspect path ${path}: ${String(error)}`);
+  }
+}
+
+function pathCovered(path: string, prior: string): boolean {
+  return prior === "." || path === prior || path.startsWith(`${prior}/`);
+}
+
+/** Return the first capability expansion, or undefined when next reuses or narrows prior. */
+export function capabilitySubsetIssue(
+  next: EffectiveCapabilityGrant,
+  prior: EffectiveCapabilityGrant,
+): string | undefined {
+  for (const field of ["readableAreas", "writableAreas"] as const) {
+    for (const candidate of next[field]) {
+      if (
+        !prior[field].some(
+          (existing) =>
+            existing.area === candidate.area && pathCovered(candidate.path, existing.path),
+        )
+      ) {
+        return `${field} expands at ${candidate.area}:${candidate.path}`;
+      }
+    }
+  }
+  for (const tool of next.toolKinds) {
+    if (!prior.toolKinds.includes(tool)) return `toolKinds expands with ${tool}`;
+  }
   if (
-    !originals.some(
-      (entry) =>
-        entry.record.agentId === agentId &&
-        (entry.record.harness ?? harness) === expectedHarness &&
-        (briefSha256 === undefined || entry.record.briefSha256 === briefSha256),
-    )
+    projectShellAccessLevels.indexOf(next.projectShell) >
+    projectShellAccessLevels.indexOf(prior.projectShell)
   ) {
-    throw new Error(
-      `Agent ${agentId} has no settled designer map record through ${expectedHarness}`,
+    return `projectShell expands from ${prior.projectShell} to ${next.projectShell}`;
+  }
+  for (const flag of ["network", "generatedOutput", "longRunningProcesses"] as const) {
+    if (next[flag] && !prior[flag]) return `${flag} expands from false to true`;
+  }
+  return undefined;
+}
+
+interface PrepareCommandOptions {
+  readonly cwd: string;
+  readonly skillRoot: string;
+  readonly slug: string;
+  readonly role: string;
+  readonly phase: string;
+  readonly taskPath: string;
+  readonly grantPath: string;
+  readonly inputValues: readonly string[];
+  readonly harness: HarnessId;
+  readonly target: LaunchTarget;
+  readonly delivery: PromptContextDelivery;
+  readonly relationship?: {
+    readonly kind: "continuation" | "replacement";
+    readonly recordPath: string;
+  };
+  readonly design?: { readonly root: string; readonly digest: string };
+  readonly knownRetained?: readonly RetainedSource[];
+  readonly contextLimitBytes?: number;
+  readonly timeoutSeconds: number;
+  readonly model?: string;
+  readonly reasoning?: string;
+  readonly priorGrant?: EffectiveCapabilityGrant;
+  readonly kind: "fresh" | "continuation" | "replacement";
+}
+
+async function prepareCommand(
+  options: PrepareCommandOptions,
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const unit = await requireWorkUnit(options.cwd, options.slug);
+  const skillRoot = canonicalPath(options.skillRoot);
+  const taskPath = canonicalSource(options.taskPath, [options.cwd], "Task");
+  const grantPath = canonicalSource(options.grantPath, [options.cwd], "Capability grant");
+  const task = await utf8(taskPath, "Task");
+  const rawGrant = await grantAt(grantPath);
+  const configuration = configurationWithUserOverrides({
+    ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.reasoning === undefined ? {} : { reasoning: options.reasoning }),
+  });
+  const suppliedInputs = promptInputs(options.inputValues, options.cwd, skillRoot, unit);
+  for (const input of suppliedInputs) await utf8(input.path, `Prompt input ${input.id}`);
+  const inputs: PromptInput[] = [
+    { id: "task", displayName: displayPath(options.cwd, taskPath), content: task.text },
+    ...suppliedInputs,
+  ];
+  const built = await buildPrompt({
+    role: options.role,
+    phase: options.phase,
+    workUnit: options.slug,
+    applicationRoot: options.cwd,
+    promptRoot: resolve(skillRoot, "prompts"),
+    inputs,
+    grant: rawGrant,
+    contextDelivery: options.delivery,
+    ...(options.knownRetained === undefined ? {} : { knownRetained: options.knownRetained }),
+    ...(options.contextLimitBytes === undefined
+      ? {}
+      : { contextLimitBytes: options.contextLimitBytes }),
+  });
+  if (options.priorGrant !== undefined) {
+    const issue = capabilitySubsetIssue(built.effectiveCapabilities, options.priorGrant);
+    if (issue !== undefined) throw new CliError(`Continuation capability grant ${issue}`);
+  }
+  const launch = await prepareLaunch({
+    applicationRoot: options.cwd,
+    slug: options.slug,
+    role: built.specification.role,
+    phase: built.specification.phase,
+    harness: options.harness,
+    timeoutSeconds: options.timeoutSeconds,
+    task: task.bytes,
+    prompt: built.content,
+    promptSha256: built.sha256,
+    grant: built.effectiveCapabilities,
+    retainedSources: built.retainedSources,
+    ...(options.design === undefined ? {} : { design: options.design }),
+    ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
+    ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
+  });
+  const invocation = prepareHarnessInvocation({
+    harness: options.harness,
+    target: options.target,
+    promptPath: launch.artifacts.promptPath,
+    cwd: options.cwd,
+    effectiveCapabilities: built.effectiveCapabilities,
+    timeoutSeconds: options.timeoutSeconds,
+    configuration,
+  });
+  printPrepared(options.kind, built, launch, invocation, dependencies);
+}
+
+function printPrepared(
+  kind: PrepareCommandOptions["kind"],
+  built: BuiltPrompt,
+  launch: PrepareLaunchResult,
+  invocation: PreparedHarnessInvocation<EffectiveCapabilityGrant>,
+  dependencies: CommandDependencies,
+): void {
+  const { out } = output(dependencies);
+  const label =
+    kind === "fresh"
+      ? "Fresh launch prepared"
+      : kind === "continuation"
+        ? "Same-agent continuation prepared"
+        : "Fresh-agent replacement prepared";
+  const design =
+    launch.record.design === undefined
+      ? ""
+      : `Design root: ${launch.record.design.root}\nDesign before: ${launch.record.design.before}\n`;
+  out(`${label}: ${built.specification.id}
+Task: ${launch.artifacts.taskPath}
+Capabilities: ${launch.artifacts.capabilitiesPath}
+Prompt: ${launch.artifacts.promptPath}
+Response: ${launch.artifacts.responsePath}
+Record: ${launch.path}
+${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
+  for (const source of built.sources) {
+    out(
+      `Source: ${source.kind} ${source.displayName}; ${source.promptBytes} prompt bytes (${source.sourceBytes} source bytes); ${source.delivery}\n`,
+    );
+  }
+  const target =
+    invocation.target.kind === "fresh"
+      ? "Target: fresh agent"
+      : `Target agent: ${invocation.target.agentId}`;
+  out(`Harness: ${invocation.harness}
+Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
+Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
+Timeout: ${launch.record.timeoutSeconds} seconds; coordinator-managed, no waiting or polling
+${target}
+Native: ${invocation.native.mechanism}; ${invocation.native.operation}
+Instruction: ${invocation.native.instruction}\n`);
+  if (invocation.prompt.agentInstruction !== undefined) {
+    out(`Agent instruction: ${invocation.prompt.agentInstruction}\n`);
+  }
+  if (invocation.capabilityEnforcement === "prompt-guided") {
+    out(
+      `Warning: ${invocation.harness} capabilities are prompt-guided rather than harness-enforced.\n`,
     );
   }
 }
 
-async function run(args: readonly string[]): Promise<void> {
-  if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-    process.stdout.write(usage());
-    return;
-  }
-
-  const release = await readSkillRelease();
-  if (args[0] === "release" && args[1] === "check" && args.length <= 3) {
-    const applicationRoot = resolve(args[2] ?? process.cwd());
-    const version = await validateReleaseSet(release, applicationRoot);
-    process.stdout.write(`Installed sync-engine release matches skill ${version}.\n`);
-    next(process.stdout, [
-      setupFiles.every((file) => existsSync(resolve(applicationRoot, file)))
-        ? `${compiler} brief init design/brief.md`
-        : `bunx --no-install sync-engine setup`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "brief" && args[1] === "init" && args.length === 3) {
-    const path = resolve(args[2]!);
-    if (existsSync(path)) throw new Error(`Brief already exists: ${args[2]}`);
-    await requireBriefSetup(release, process.cwd());
-    await mkdir(dirname(path), { recursive: true });
-    const template = await readFile(
-      resolve(skillRoot, "prompts/templates/product-brief.md"),
-      "utf8",
+async function workStart(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "work start", ["slug"], { "--conflict": "value" });
+  const cwd = commandRoot(dependencies);
+  const skillRoot = resolve(dependencies.skillRoot ?? defaultSkillRoot);
+  const slug = parsed.positionals[0]!;
+  const candidate = workUnitPath(cwd, slug);
+  if (await pathExists(candidate)) throw new CliError(`Work unit already exists: ${slug}`);
+  const briefTemplatePath = resolve(skillRoot, "prompts/brief.md");
+  await utf8(briefTemplatePath, "Brief template");
+  const conflict = optional(parsed.options, "--conflict");
+  if (
+    conflict !== undefined &&
+    !conflictChoices.includes(conflict as (typeof conflictChoices)[number])
+  ) {
+    throw new CliError(
+      `Unknown conflict choice ${conflict}; expected ${conflictChoices.join(", ")}`,
     );
-    await writeFile(path, template, { encoding: "utf8", flag: "wx" });
-    process.stdout.write("Brief template initialized. Fill placeholders.\n");
-    next(process.stdout, [`${compiler} brief check ${args[2]}`]);
-    return;
   }
-
-  if (args[0] === "brief" && args[1] === "check" && args.length === 3) {
-    const result = await checkBriefFile(args[2]!);
-    process.stdout.write(
-      `Brief valid: ${result.bytes} bytes, ${result.decisions} decisions, open decisions ${result.openDecisions ? "present" : "none"}; release ${release.skill}.\n`,
-    );
-    next(process.stdout, [
-      `read ${reference("design-and-criticism.md")}`,
-      `${compiler} prompt build --role designer --mode map --input brief=${args[2]}`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "design" && args[1] === "digest" && (args.length === 3 || args.length === 5)) {
-    const scoped = args[3] === "--role" ? designScope(args[4] ?? "") : "all";
-    const result = await digestDesign(args[2]!, scoped);
-    process.stdout.write(`Design digest: ${result.digest}; ${result.files} Markdown files.\n`);
-    next(process.stdout, [
-      `read ${reference("implementation.md")}`,
-      `every downstream build and follow-up adds --design-root ${args[2]} --design-digest ${result.digest}`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "follow-up" && args[1] === "new" && args.length === 4) {
-    if (args[2] !== "--role") throw new Error(`follow-up new requires --role`);
-    const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole))
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    const path = await reserveWorkspacePath("followup", role);
-    await writeFile(path, "", "utf8");
-    process.stdout.write(`Follow-up started: ${path}\n`);
-    next(process.stdout, [
-      `write only the new diagnostic, affected paths, and affected command into ${path}`,
-      `${compiler} follow-up check ${path} --design-root <design-root> --design-digest <sha256>`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "follow-up" && args[1] === "check" && args.length === 7) {
-    if (args[3] !== "--design-root" || args[5] !== "--design-digest") {
-      throw new Error(`follow-up check requires --design-root then --design-digest`);
-    }
-    const followUpPath = requireInsideWorkspace(args[2]!);
-    const followUpName = basename(followUpPath);
-    const followUpRole = workspaceFileRole(followUpName, "followup");
-    if (followUpRole === undefined || !promptRoles.includes(followUpRole as PromptRole)) {
-      throw new Error(
-        `Follow-up file names its role: expected ${workspaceDirectory}/<stamp>-<role>.followup.md, found ${followUpName}; start it with follow-up new`,
-      );
-    }
-    const content = await readFile(followUpPath, "utf8");
-    const bytes = Buffer.byteLength(content, "utf8");
-    if (bytes > 4 * 1024) throw new Error(`Follow-up is ${bytes} bytes; maximum is 4096`);
-    await requireDesignDigest(args[4]!, args[6]!);
-    process.stdout.write(`Follow-up valid: ${bytes} bytes; design ${args[6]}.\n`);
-    next(process.stdout, [`deliver ${args[2]} to the original role as a file`]);
-    return;
-  }
-
-  if (args[0] === "prompt" && args[1] === "build") {
-    const options = parsePromptArguments(args.slice(2));
-    const brief = options.inputs.find((input) => input.slot === "brief");
-    const briefSha256 =
-      brief === undefined
-        ? undefined
-        : createHash("sha256")
-            .update(await readFile(resolve(brief.path), "utf8"))
-            .digest("hex");
-    const review = await criticReviewMetadata(options, briefSha256);
-    const reviewedDigest = await reviewedContractDigest(options);
-    const predecessor = previousPhase(options.role, options.mode);
-    const predecessorDigest =
-      options.designRoot === undefined || predecessor === undefined
-        ? reviewedDigest
-        : (await digestDesign(options.designRoot, designScope(predecessor.role))).digest;
-    await requireCompletedRole(
-      options.role,
-      undefined,
-      predecessorDigest,
-      options.mode,
-      options.userOverride,
-    );
-    for (const input of options.inputs) {
-      if (input.slot === "assignment") await checkAssignmentFile(resolve(input.path));
-    }
-    const result = await buildPrompt({
-      role: options.role,
-      ...(options.mode === undefined ? {} : { mode: options.mode }),
-      inputs: options.inputs,
-      ...(options.userOverride && options.role === "designer" && options.mode === "contract"
-        ? { expandBindings: true }
-        : {}),
-      ...(review === undefined
+  const bootstrap = dependencies.bootstrap ?? bootstrapApplication;
+  const result = await bootstrap(
+    {
+      applicationRoot: cwd,
+      releaseManifestPath: resolve(skillRoot, "release.json"),
+      ...(conflict === undefined
         ? {}
-        : {
-            inlineInputs: [
-              {
-                slot: "review-context",
-                displayName: "compiler-review-context.md",
-                content: review.inlineContent,
-              },
-            ],
-          }),
-      promptRoot: resolve(skillRoot, "prompts"),
-      maxBytes: options.maxBytes,
-      designRoot: options.designRoot,
-      expectedDesignDigest: options.designDigest,
-    });
-    const promptPath = options.stdout
-      ? undefined
-      : await reserveWorkspacePath("prompt", result.role);
-    if (promptPath === undefined) process.stdout.write(result.content);
-    else {
-      await writeFile(promptPath, result.content, "utf8");
-      await writePromptContext(promptPath, {
-        format: "sync-engine.skill.prompt-context",
-        version: 1,
-        role: result.role,
-        ...(result.mode === undefined ? {} : { mode: result.mode }),
-        toolPolicy: result.toolPolicy,
-        sha256: result.sha256,
-        ...(briefSha256 === undefined ? {} : { briefSha256 }),
-        ...(reviewedDigest === undefined ? {} : { designDigest: reviewedDigest }),
-        ...(options.userOverride ? { userOverride: true as const } : {}),
-        ...(review === undefined
-          ? {}
-          : {
-              reviewPass: review.pass,
-              ...(review.snapshot === undefined
-                ? {}
-                : {
-                    mapRows: review.snapshot.rows,
-                    placementIds: review.snapshot.placements,
-                  }),
-              obligationIds: review.obligationIds,
-            }),
-      });
-    }
-
-    const report = [
-      `Prompt built: role ${result.role}${result.mode === undefined ? "" : `; mode ${result.mode}`}; tools ${result.toolPolicy}; ${result.bytes} bytes; budget ${result.budget}${result.budgetOverridden ? " (override)" : ""}; sha256 ${result.sha256}; release ${release.skill}.`,
-      ...result.sources.map(
-        (source) =>
-          `  ${source.kind} ${source.displayName}: ${source.bytes} bytes (${source.path})`,
-      ),
-    ].join("\n");
-    const stream = options.stdout ? process.stderr : process.stdout;
-    stream.write(`${report}\n`);
-    if (options.userOverride) {
-      stream.write(
-        `WARNING: direct user override recorded; review judgment or review-count defaults do not block this prompt. Integrity checks still apply.\n`,
-      );
-    }
-    const delivered = promptPath ?? "the built prompt";
-    const recipient =
-      result.role === "designer" && result.mode === "contract"
-        ? "the original designer as a phase file"
-        : `a fresh ${result.role} as a file`;
-    next(stream, [
-      `deliver ${delivered} to ${recipient}`,
-      ...(options.designRoot === undefined
-        ? []
-        : [
-            `${compiler} follow-up check <file> --design-root ${options.designRoot} --design-digest ${options.designDigest}`,
-          ]),
-    ]);
+        : { conflictChoice: conflict as (typeof conflictChoices)[number] }),
+    },
+    dependencies.bootstrapDependencies,
+  );
+  const { out } = output(dependencies);
+  for (const path of result.changedPaths) out(`Bootstrap path: ${path}\n`);
+  for (const warning of result.warnings) out(`Warning: ${warning}\n`);
+  if (result.outcome === "choice-required") {
+    throw new CliError(
+      `Bootstrap requires an explicit framework conflict choice`,
+      `Rerun with --conflict <${conflictChoices.join("|")}>.`,
+    );
+  }
+  if (result.outcome === "stopped-unchanged") {
+    out(`Bootstrap stopped unchanged: ${result.plan.applicationRoot}\n`);
     return;
   }
-
-  if (args[0] === "assignment" && args[1] === "new" && args.length === 6) {
-    if (args[2] !== "--role" || args[4] !== "--design-digest") {
-      throw new Error(`assignment new requires --role then --design-digest`);
-    }
-    const role = args[3]!;
-    if (!promptRoles.includes(role as PromptRole))
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    const path = await reserveWorkspacePath("assignment", role);
-    await writeFile(path, assignmentTemplate(role, args[5]!), "utf8");
-    process.stdout.write(`Assignment started: ${path}\n`);
-    next(process.stdout, [
-      `fill it, then ${compiler} assignment check ${path}`,
-      `${compiler} prompt build --role ${role} --input assignment=${path} ...`,
-    ]);
-    return;
+  if (result.outcome === "failed") {
+    throw new CliError(
+      `Bootstrap failed: ${result.plan.error ?? "required application setup was not established"}`,
+      `Resolve the reported bootstrap problem, then rerun work start.`,
+    );
   }
-
-  if (args[0] === "assignment" && args[1] === "check" && args.length === 3) {
-    const checked = await checkAssignmentFile(resolve(args[2]!));
-    process.stdout.write(
-      `Assignment valid: role ${checked.role}; ${checked.bytes} bytes; ${checked.writePaths.length} listed paths.\n`,
-    );
-    return;
-  }
-
-  if (args[0] === "launch" && args[1] === "prepare") {
-    let role: string | undefined;
-    let prompt: string | undefined;
-    let nativeHarness: string | undefined;
-    let continuationAgentId: string | undefined;
-    for (let index = 2; index < args.length; index += 1) {
-      const argument = args[index]!;
-      if (argument === "--role") role = takeValue(args, index, argument);
-      else if (argument === "--prompt") prompt = takeValue(args, index, argument);
-      else if (argument === "--harness") nativeHarness = takeValue(args, index, argument);
-      else if (argument === "--continue-agent") {
-        continuationAgentId = takeValue(args, index, argument);
-      } else throw new Error(`Unknown launch prepare option: ${argument}`);
-      index += 1;
-    }
-    if (role === undefined || prompt === undefined || nativeHarness === undefined) {
-      throw new Error(`launch prepare requires --harness, --role, and --prompt`);
-    }
-    if (!promptRoles.includes(role as PromptRole)) {
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    }
-    if (!nativeHarnesses.includes(nativeHarness as NativeHarness)) {
-      throw new Error(
-        `Unknown native harness: ${nativeHarness}; harnesses are ${nativeHarnesses.join(", ")}`,
-      );
-    }
-    const context = await launchPromptContext(prompt, role);
-    await requireCompletedRole(
-      role,
-      undefined,
-      context.designDigest,
-      context.mode,
-      context.userOverride === true,
-    );
-    await requireContinuation(
-      role,
-      context.mode,
-      continuationAgentId,
-      context.briefSha256,
-      context.userOverride === true,
-      nativeHarness,
-    );
-    const prepared = await prepareNativeLaunch({
-      role,
-      harness: nativeHarness as NativeHarness,
-      promptPath: prompt,
-      applicationRoot: process.cwd(),
-      ...(continuationAgentId === undefined ? {} : { continuationAgentId }),
-    });
-    process.stdout.write(
-      `Native launch prepared: role ${role}; harness ${nativeHarness}; ticket ${prepared.ticketPath}; response ${prepared.responsePath}.\n`,
-    );
-    next(process.stdout, [
-      `read ${reference(`harnesses/${nativeHarness}.md`)}`,
-      `apply native tool policy ${prepared.ticket.toolPolicy ?? "assignment-only"}`,
-      prepared.ticket.continuationAgentId === undefined
-        ? `launch one fresh native ${role} with only: Read ${prepared.ticket.prompt.path} as your complete assignment and follow it; return exactly what it requests`
-        : `send ${prepared.ticket.prompt.path} to native agent ${prepared.ticket.continuationAgentId} as its next complete phase and wait`,
-      `copy that agent's final response verbatim into ${prepared.responsePath}`,
-      `${compiler} launch complete --ticket ${prepared.ticketPath} --agent-id <native-agent-id>`,
-    ]);
-    return;
-  }
-
-  if (args[0] === "launch" && args[1] === "complete") {
-    let ticket: string | undefined;
-    let agentId: string | undefined;
-    let provider: string | undefined;
-    let model: string | undefined;
-    let thinking: string | undefined;
-    for (let index = 2; index < args.length; index += 1) {
-      const argument = args[index]!;
-      if (argument === "--ticket") ticket = takeValue(args, index, argument);
-      else if (argument === "--agent-id") agentId = takeValue(args, index, argument);
-      else if (argument === "--provider") provider = takeValue(args, index, argument);
-      else if (argument === "--model") model = takeValue(args, index, argument);
-      else if (argument === "--thinking") thinking = takeValue(args, index, argument);
-      else throw new Error(`Unknown launch complete option: ${argument}`);
-      index += 1;
-    }
-    if (ticket === undefined || agentId === undefined) {
-      throw new Error(`launch complete requires --ticket and --agent-id`);
-    }
-    const completed = await completeNativeLaunch({
-      ticketPath: ticket,
-      agentId,
-      applicationRoot: process.cwd(),
-      ...(provider === undefined ? {} : { provider }),
-      ...(model === undefined ? {} : { model }),
-      ...(thinking === undefined ? {} : { thinking }),
-    });
-    const configuration =
-      completed.record.model === undefined
-        ? "native model inheritance recorded but not machine-attested"
-        : `${completed.record.provider ?? "provider unreported"} ${completed.record.model}${completed.record.thinking === undefined ? "" : ` at ${completed.record.thinking}`}`;
-    process.stdout.write(
-      `Completed ${completed.record.role} through ${completed.record.harness}: agent ${completed.record.agentId}; ${configuration}; tools ${completed.record.toolPolicy ?? "unreported"}; record ${completed.recordPath}.\n`,
-    );
-    next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
-    return;
-  }
-
-  if (args[0] === "launch") {
-    let role: string | undefined;
-    let prompt: string | undefined;
-    let timeoutSeconds = 1800;
-    let thinking: string | undefined;
-    let model: string | undefined;
-    let continuationAgentId: string | undefined;
-    for (let index = 1; index < args.length; index += 1) {
-      const argument = args[index]!;
-      if (argument === "--role") role = takeValue(args, index, argument);
-      else if (argument === "--prompt") prompt = takeValue(args, index, argument);
-      else if (argument === "--thinking") thinking = takeValue(args, index, argument);
-      else if (argument === "--model") model = takeValue(args, index, argument);
-      else if (argument === "--continue-agent") {
-        continuationAgentId = takeValue(args, index, argument);
-      } else if (argument === "--timeout") {
-        timeoutSeconds = Number(takeValue(args, index, argument));
-        if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0) {
-          throw new Error(`--timeout must be a positive whole number of seconds`);
-        }
-      } else {
-        throw new Error(`Unknown launch option: ${argument}`);
-      }
-      index += 1;
-    }
-    if (role === undefined || prompt === undefined) {
-      throw new Error(`launch requires --role and --prompt`);
-    }
-    if (!promptRoles.includes(role as PromptRole))
-      throw new Error(`Unknown role: ${role}; roles are ${promptRoles.join(", ")}`);
-    const context = await launchPromptContext(prompt, role);
-    await requireCompletedRole(
-      role,
-      undefined,
-      context.designDigest,
-      context.mode,
-      context.userOverride === true,
-    );
-    await requireContinuation(
-      role,
-      context.mode,
-      continuationAgentId,
-      context.briefSha256,
-      context.userOverride === true,
-      harness,
-    );
-    const launched = await launchRole({
-      role,
-      promptPath: prompt,
-      applicationRoot: process.cwd(),
-      timeoutSeconds,
-      ...(thinking === undefined ? {} : { thinking }),
-      ...(model === undefined ? {} : { model }),
-      ...(continuationAgentId === undefined ? {} : { continueAgentId: continuationAgentId }),
-    });
-    const attested = `${launched.record.provider} ${launched.record.model}${launched.record.thinking === undefined ? "" : ` at ${launched.record.thinking}`}`;
-    process.stdout.write(
-      `Launched ${role} through ${harness}: agent ${launched.record.agentId}; ${attested}; tools ${launched.record.toolPolicy ?? "unreported"}; settled ${launched.record.status}; response ${launched.record.response?.path ?? "unavailable"}; record ${launched.recordPath}.\n`,
-    );
-    next(process.stdout, ["read the agent's return, then continue the workflow stage"]);
-    return;
-  }
-
-  if (args[0] === "handback" && args[1] === "check") {
-    const handbackUserOverride = args.includes("--user-override");
-    const handbackArgs = args.filter((argument) => argument !== "--user-override");
-    if (handbackArgs.length !== 6 && handbackArgs.length !== 8) {
-      throw new Error(`handback check requires a design root and digest`);
-    }
-    if (handbackArgs[2] !== "--design-root" || handbackArgs[4] !== "--design-digest") {
-      throw new Error(`handback check requires --design-root then --design-digest`);
-    }
-    if (handbackArgs.length === 8 && handbackArgs[6] !== "--brief") {
-      throw new Error(`handback check accepts only --brief after the design digest`);
-    }
-    await requireDesignDigest(handbackArgs[3]!, handbackArgs[5]!);
-    const scopedDigests = new Map<string, string>();
-    for (const phase of requiredPhases) {
-      if (!scopedDigests.has(phase.role)) {
-        scopedDigests.set(
-          phase.role,
-          (await digestDesign(handbackArgs[3]!, designScope(phase.role))).digest,
-        );
-      }
-    }
-    const briefSha256 =
-      handbackArgs.length === 8
-        ? createHash("sha256")
-            .update(await readFile(resolve(handbackArgs[7]!), "utf8"))
-            .digest("hex")
-        : undefined;
-    const drifted: string[] = [];
-    const strayed: string[] = [];
-    const churned: string[] = [];
-    const missing: string[] = [];
-    const unknown: string[] = [];
-    const unsettled: string[] = [];
-    const coordinatorAttested: string[] = [];
-    const wrapped = await registrationWrappers();
-    const phaseRecords = await Promise.all(
-      requiredPhases.map((phase) => verifiedRecords(phase.role, undefined, undefined, phase.mode)),
-    );
-    const recordedOverrideBoundary = phaseRecords.reduce(
-      (latest, records, index) =>
-        records.at(-1)?.record.userOverride === true ? Math.max(latest, index) : latest,
-      -1,
-    );
-    const overrideBoundary = handbackUserOverride
-      ? requiredPhases.length
-      : recordedOverrideBoundary;
-    const overridden: string[] = [];
-    const lines: string[] = [];
-    for (const [index, phase] of requiredPhases.entries()) {
-      const label = `${phase.role}${phase.mode === undefined ? "" : ` ${phase.mode}`}`;
-      const records = phaseRecords[index]!;
-      if (records.length === 0) {
-        if (index < overrideBoundary) {
-          overridden.push(label);
-          lines.push(`  ${label}: USER-OVERRIDDEN; no launch record required`);
-        } else {
-          missing.push(label);
-        }
-        continue;
-      }
-      const latest = records[records.length - 1]!;
-      for (const entry of [latest]) {
-        const recordHarness = entry.record.harness ?? harness;
-        const attestation = entry.record.attestation ?? "harness";
-        const known =
-          attestation === "harness" && recordHarness === harness
-            ? agentExists(entry.record.agentId)
-            : true;
-        if (attestation === "harness" && recordHarness === harness && !known) {
-          unknown.push(`${label} ${entry.record.agentId}`);
-        }
-        if (attestation === "coordinator") {
-          coordinatorAttested.push(`${label} ${entry.record.agentId} through ${recordHarness}`);
-        }
-        if (!isSettledStatus(entry.record.status)) {
-          unsettled.push(`${label} ${entry.record.agentId} (${entry.record.status})`);
-        }
-        for (const path of entry.record.readViolations ?? []) {
-          strayed.push(`${label} read ${path}`);
-        }
-        for (const churn of entry.record.rewrites ?? []) {
-          churned.push(`${label} wrote ${churn.path} ${churn.writes} times`);
-        }
-        if (
-          entry.record.designDigest !== undefined &&
-          entry.record.designDigest !== scopedDigests.get(phase.role)
-        ) {
-          drifted.push(`${label} ran against design ${entry.record.designDigest.slice(0, 12)}`);
-        }
-        if (
-          briefSha256 !== undefined &&
-          entry.record.briefSha256 !== undefined &&
-          entry.record.briefSha256 !== briefSha256
-        ) {
-          drifted.push(`${label} ran against an earlier brief`);
-        }
-        const configuration =
-          entry.record.model === undefined
-            ? "native model inheritance unverified"
-            : `${entry.record.provider ?? "provider unreported"} ${entry.record.model}`;
-        lines.push(
-          attestation === "harness"
-            ? `  ${label}: agent ${entry.record.agentId} ${known ? "known" : "UNKNOWN"} to ${recordHarness}; ${configuration}; settled ${entry.record.status}`
-            : `  ${label}: agent ${entry.record.agentId} coordinator-attested through ${recordHarness}; ${configuration}; settled ${entry.record.status}`,
-        );
-      }
-    }
-    const mapDesignerRecords = await verifiedRecords("designer", undefined, undefined, "map");
-    const contractDesignerRecords = await verifiedRecords(
-      "designer",
-      undefined,
-      undefined,
-      "contract",
-    );
-    const designerIdentity = (entry: { readonly record: { agentId: string; harness?: string } }) =>
-      `${entry.record.harness ?? harness}:${entry.record.agentId}`;
-    const mapDesignerIds = new Set(mapDesignerRecords.slice(-1).map(designerIdentity));
-    const contractDesignerIds = new Set(contractDesignerRecords.slice(-1).map(designerIdentity));
-    const continuedDesigner = [...contractDesignerIds].some((id) => mapDesignerIds.has(id));
-    process.stdout.write(`Handback check for design ${handbackArgs[5]}:\n${lines.join("\n")}\n`);
-    const failures = [
-      ...(missing.length === 0 ? [] : [`no settled launch for: ${missing.join(", ")}`]),
-      ...(unknown.length === 0 ? [] : [`${harness} does not know: ${unknown.join(", ")}`]),
-      ...(unsettled.length === 0 ? [] : [`never settled: ${unsettled.join(", ")}`]),
-      ...(mapDesignerIds.size === 0 ||
-      contractDesignerIds.size === 0 ||
-      continuedDesigner ||
-      overrideBoundary >=
-        requiredPhases.findIndex((phase) => phase.role === "designer" && phase.mode === "contract")
-        ? []
-        : [`designer contract phase used a different agent from the map phase`]),
-      ...(drifted.length === 0 ? [] : [`stale inputs: ${drifted.join(", ")}`]),
-      ...(wrapped.length === 0
-        ? []
-        : [`registered a class beside its registry: ${wrapped.join(", ")}`]),
-    ];
-    if (failures.length > 0) throw new Error(failures.join("; "));
-    if (overrideBoundary >= 0) {
-      const source = handbackUserOverride
-        ? "the handback command"
-        : `${requiredPhases[recordedOverrideBoundary]!.role} launch`;
-      process.stdout.write(
-        `Direct user override recorded by ${source}; waived phases are not represented as independently completed or critic-approved${overridden.length === 0 ? "" : `: ${overridden.join(", ")}`}.\n`,
-      );
-    }
-    if (coordinatorAttested.length > 0) {
-      process.stdout.write(
-        `Native launches recorded by the coordinator; this compiler cannot query those harness sessions:\n  ${coordinatorAttested.join("\n  ")}\n`,
-      );
-    }
-    if (strayed.length > 0) {
-      process.stdout.write(`Read outside the role boundary:\n  ${strayed.join("\n  ")}\n`);
-    }
-    if (churned.length > 0) {
-      process.stdout.write(
-        `Rewritten repeatedly, so a fact was missing:\n  ${churned.join("\n  ")}\n`,
-      );
-    }
-    process.stdout.write(
-      overrideBoundary < 0
-        ? `Every required role phase has a settled launch record.\n`
-        : `Every non-waived required role phase has a settled launch record.\n`,
-    );
-    return;
-  }
-
-  throw new Error(`Unknown command\n${usage()}`);
+  const unit = await startWorkUnitFromTemplate({
+    applicationRoot: cwd,
+    slug,
+    briefTemplatePath,
+  });
+  out(`Bootstrap: ${result.outcome}; application ${result.plan.applicationRoot}
+Work unit: ${unit.path}
+Brief: ${unit.briefPath}\n`);
 }
 
-try {
-  await run(process.argv.slice(2));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`sync-engine-skill: ${message}\n`);
-  process.exitCode = 1;
+const promptDefinitions = {
+  "--work": "value",
+  "--role": "value",
+  "--phase": "value",
+  "--task": "value",
+  "--grant": "value",
+  "--harness": "value",
+  "--input": "repeatable",
+  "--design-root": "value",
+  "--context-limit": "value",
+  "--timeout": "value",
+  "--model": "value",
+  "--reasoning": "value",
+} as const;
+
+async function promptBuild(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "prompt build", [], promptDefinitions);
+  const cwd = commandRoot(dependencies);
+  const slug = required(parsed.options, "--work", "prompt build");
+  const role = required(parsed.options, "--role", "prompt build");
+  const phase = required(parsed.options, "--phase", "prompt build");
+  const taskPath = resolve(cwd, required(parsed.options, "--task", "prompt build"));
+  const grantPath = resolve(cwd, required(parsed.options, "--grant", "prompt build"));
+  const harnessId = harness(required(parsed.options, "--harness", "prompt build"));
+  getRoleSpecification(role, phase);
+  const designOption = optional(parsed.options, "--design-root");
+  const designRoot = designOption === undefined ? undefined : exactDesignRoot(designOption, cwd);
+  const design =
+    designRoot === undefined
+      ? undefined
+      : { root: designRoot, digest: (await digestDesign(designRoot)).digest };
+  const contextLimit = positiveInteger(
+    optional(parsed.options, "--context-limit"),
+    "--context-limit",
+  );
+  const timeoutSeconds =
+    positiveInteger(optional(parsed.options, "--timeout"), "--timeout") ?? defaultTimeoutSeconds;
+  const model = optional(parsed.options, "--model");
+  const reasoning = optional(parsed.options, "--reasoning");
+  await prepareCommand(
+    {
+      cwd,
+      skillRoot: resolve(dependencies.skillRoot ?? defaultSkillRoot),
+      slug,
+      role,
+      phase,
+      taskPath,
+      grantPath,
+      inputValues: parsed.options.get("--input") ?? [],
+      harness: harnessId,
+      target: { kind: "fresh" },
+      delivery: "fresh",
+      kind: "fresh",
+      ...(design === undefined ? {} : { design }),
+      ...(contextLimit === undefined ? {} : { contextLimitBytes: contextLimit }),
+      timeoutSeconds,
+      ...(model === undefined ? {} : { model }),
+      ...(reasoning === undefined ? {} : { reasoning }),
+    },
+    dependencies,
+  );
+}
+
+function completionTarget(record: LaunchRecord): LaunchTarget {
+  return record.relationship?.kind === "continuation"
+    ? { kind: "continuation", agentId: record.relationship.targetAgentId }
+    : { kind: "fresh" };
+}
+
+function missingResponseHeadings(record: FinalizedLaunchRecord, response: string): string[] {
+  const specification = getRoleSpecification(record.role, record.phase);
+  const headings = new Set<string>();
+  for (const match of response.matchAll(/^##[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)) {
+    headings.add(match[1]!.trim().toLowerCase());
+  }
+  return specification.returnShape
+    .filter(({ required }) => required)
+    .map(({ heading }) => heading)
+    .filter((heading) => !headings.has(heading.toLowerCase()));
+}
+
+async function launchComplete(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "launch complete", ["prepared-record"], {
+    "--agent-id": "value",
+    "--status": "value",
+    "--model": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const agentId = required(parsed.options, "--agent-id", "launch complete");
+  const status = normalizeLaunchStatus(required(parsed.options, "--status", "launch complete"));
+  const model = optional(parsed.options, "--model");
+  const recordPath = resolve(cwd, parsed.positionals[0]!);
+  const record = await readLaunchRecord(recordPath);
+  requireRecordApplication(record, cwd);
+  if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
+  const response = await utf8(record.response.path, "Native response", status === "completed");
+  const validatedGrant = validateCapabilityGrant(
+    getRoleSpecification(record.role, record.phase),
+    record.grant,
+  );
+  const invocation = prepareHarnessInvocation({
+    harness: record.harness,
+    target: completionTarget(record),
+    promptPath: record.prompt.path,
+    cwd,
+    effectiveCapabilities: validatedGrant,
+    timeoutSeconds: record.timeoutSeconds,
+  });
+  const finalized = await finalizeLaunch({
+    recordPath,
+    agentId,
+    status,
+    enforcement: invocation.capabilityEnforcement,
+    ...(model === undefined ? {} : { model }),
+  });
+  const { out } = output(dependencies);
+  out(`Launch finalized: ${recordPath}
+Response: ${finalized.response.path}
+Harness: ${finalized.harness}; agent ${finalized.agentId}
+Status: ${finalized.status}\n`);
+  if (finalized.enforcement === "prompt-guided") {
+    out(
+      `Warning: ${finalized.harness} capabilities were prompt-guided rather than harness-enforced.\n`,
+    );
+  }
+  const missing = missingResponseHeadings(finalized, response.text);
+  if (missing.length > 0) {
+    out(
+      `Warning: native response is missing required headings: ${missing.join(", ")}; the captured response was finalized unchanged.\n`,
+    );
+  }
+}
+
+async function continueLaunch(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "continue", ["finalized-record"], {
+    "--phase": "value",
+    "--task": "value",
+    "--grant": "value",
+    "--input": "repeatable",
+    "--replace": "flag",
+    "--harness": "value",
+    "--design-root": "value",
+    "--context-limit": "value",
+    "--timeout": "value",
+    "--model": "value",
+    "--reasoning": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const phase = required(parsed.options, "--phase", "continue");
+  const taskPath = resolve(cwd, required(parsed.options, "--task", "continue"));
+  const grantPath = resolve(cwd, required(parsed.options, "--grant", "continue"));
+  const replacing = parsed.options.has("--replace");
+  const selectedHarness = optional(parsed.options, "--harness");
+  if (!replacing && selectedHarness !== undefined) {
+    throw new CliError(`--harness is valid only with --replace`);
+  }
+  if (selectedHarness !== undefined) harness(selectedHarness);
+  const designOption = optional(parsed.options, "--design-root");
+  const contextLimit = positiveInteger(
+    optional(parsed.options, "--context-limit"),
+    "--context-limit",
+  );
+  const timeoutSeconds =
+    positiveInteger(optional(parsed.options, "--timeout"), "--timeout") ?? defaultTimeoutSeconds;
+  const model = optional(parsed.options, "--model");
+  const reasoning = optional(parsed.options, "--reasoning");
+  const priorPath = resolve(cwd, parsed.positionals[0]!);
+  const prior = await readLaunchRecord(priorPath);
+  requireRecordApplication(prior, cwd);
+  if (prior.state !== "finalized") throw new CliError(`continue requires a finalized record`);
+  getRoleSpecification(prior.role, phase);
+  const harnessId = harness(selectedHarness ?? prior.harness);
+  const priorGrant = validateCapabilityGrant(
+    getRoleSpecification(prior.role, prior.phase),
+    prior.grant,
+  );
+  if (prior.design !== undefined && designOption !== undefined) {
+    throw new CliError(`Continue already has a bound design root; omit --design-root`);
+  }
+  const designRoot =
+    prior.design?.root ??
+    (designOption === undefined ? undefined : exactDesignRoot(designOption, cwd));
+  const design =
+    designRoot === undefined
+      ? undefined
+      : {
+          root: exactDesignRoot(designRoot, cwd),
+          digest: (await digestDesign(designRoot)).digest,
+        };
+  const enforceSubset = !replacing && phase === prior.phase;
+  await prepareCommand(
+    {
+      cwd,
+      skillRoot: resolve(dependencies.skillRoot ?? defaultSkillRoot),
+      slug: prior.work.slug,
+      role: prior.role,
+      phase,
+      taskPath,
+      grantPath,
+      inputValues: parsed.options.get("--input") ?? [],
+      harness: harnessId,
+      target: replacing ? { kind: "fresh" } : { kind: "continuation", agentId: prior.agentId },
+      delivery: replacing ? "replacement" : "continuation",
+      relationship: { kind: replacing ? "replacement" : "continuation", recordPath: priorPath },
+      kind: replacing ? "replacement" : "continuation",
+      ...(design === undefined ? {} : { design }),
+      ...(!replacing ? { knownRetained: prior.retainedSources } : {}),
+      ...(contextLimit === undefined ? {} : { contextLimitBytes: contextLimit }),
+      timeoutSeconds,
+      ...(model === undefined ? {} : { model }),
+      ...(reasoning === undefined ? {} : { reasoning }),
+      ...(enforceSubset ? { priorGrant } : {}),
+    },
+    dependencies,
+  );
+}
+
+async function execute(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
+  if (args.length === 0 || (args.length === 1 && (args[0] === "--help" || args[0] === "-h"))) {
+    output(dependencies).out(helpText());
+    return;
+  }
+  if (args[0] === "work" && args[1] === "start") return workStart(args.slice(2), dependencies);
+  if (args[0] === "prompt" && args[1] === "build") return promptBuild(args.slice(2), dependencies);
+  if (args[0] === "launch" && args[1] === "complete")
+    return launchComplete(args.slice(2), dependencies);
+  if (args[0] === "continue") return continueLaunch(args.slice(1), dependencies);
+  throw new CliError(
+    `Unknown or incomplete command: ${args.join(" ")}`,
+    `Use ${commandName} --help.`,
+  );
+}
+
+export async function run(
+  args: readonly string[] = process.argv.slice(2),
+  dependencies: CommandDependencies = {},
+): Promise<number> {
+  try {
+    await execute(args, dependencies);
+    return 0;
+  } catch (error) {
+    const { err } = output(dependencies);
+    err(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+    if (error instanceof CliError && error.recovery !== undefined) {
+      err(`Recovery: ${error.recovery}\n`);
+    }
+    return 1;
+  }
+}
+
+if (
+  process.argv[1] !== undefined &&
+  canonicalPath(process.argv[1]) === canonicalPath(fileURLToPath(import.meta.url))
+) {
+  void run().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
 }
