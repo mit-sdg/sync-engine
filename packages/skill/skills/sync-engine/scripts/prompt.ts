@@ -316,8 +316,8 @@ Return a small result with these headings in order; omit progress narrative and 
 ${fields}`;
 }
 
-function retained(source: Source): string {
-  return `Retained in same-agent context — SHA-256 \`${digest(source.content)}\`, ${byteLength(source.content)} source bytes.`;
+function retained(_source: Source): string {
+  return "Unchanged from the prior same-agent context.";
 }
 
 export async function buildPrompt(options: BuildPromptOptions) {

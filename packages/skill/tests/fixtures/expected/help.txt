@@ -46,9 +46,9 @@ Inputs:
   work-unit files; every other input must resolve inside the application or skill root.
   Accepted slots are:
   designer/decomposition: brief (one, retained), current-decomposition (optional, inline), affected-design (repeatable optional, retained)
-  designer/contracts: brief (one, retained), accepted-decomposition (one, retained), resolved-findings (optional, retained), affected-contracts (repeatable optional, retained), catalog-contracts (repeatable optional, retained), candidate-contracts (repeatable optional, inline)
+  designer/contracts: brief (one, retained), accepted-decomposition (optional, retained), resolved-findings (optional, retained), affected-contracts (repeatable optional, retained), catalog-contracts (repeatable optional, retained), candidate-contracts (repeatable optional, inline)
   critic/decomposition: brief (one, retained), candidate-decomposition (one, inline), affected-design (repeatable optional, retained)
-  critic/contracts: brief (one, retained), accepted-decomposition (one, retained), changed-contracts (one or more, inline), affected-contracts (repeatable optional, retained)
+  critic/contracts: brief (one, retained), accepted-decomposition (optional, retained), changed-contracts (one or more, inline), affected-contracts (repeatable optional, retained)
   critic/verification: brief (one, retained), original-findings (one, inline), revised-candidate (one or more, inline), affected-design (repeatable optional, retained), review-guidance (one or more, retained)
   concept-worker/implementation: brief (one, retained), specifications (one or more, retained), public-references (one or more, retained), examples (repeatable optional, retained), starting-paths (one, inline)
   application-worker/implementation: brief (one, retained), types (one or more, retained), compositions (one or more, retained), obligations (repeatable optional, retained), concept-public-surfaces (one or more, retained), existing-wiring (repeatable optional, retained), public-references (one or more, retained), examples (repeatable optional, retained), starting-paths (one, inline)

@@ -511,6 +511,7 @@ describe("prompt preparation and completion", () => {
       delivery: preparedOutput["Prompt delivery"],
       cwd: preparedOutput["Working directory"],
       timeout: preparedOutput.Timeout,
+      sources: preparedOutput.Source,
       target: preparedOutput.Target,
       native: preparedOutput.Native,
       agentInstruction: preparedOutput["Agent instruction"],
@@ -523,7 +524,10 @@ describe("prompt preparation and completion", () => {
       harness: ["paseo"],
       delivery: ["agent-file-instruction; prompt"],
       cwd: [`${root}; explicit-application-cwd`],
-      timeout: ["1800 seconds; coordinator-managed, no waiting or polling"],
+      timeout: [
+        "1800 seconds; coordinator-managed observation limit; CLI does not observe harness",
+      ],
+      sources: undefined,
       target: ["fresh agent"],
       native: ["Paseo native agent delegation; launch fresh agent"],
       agentInstruction: [
@@ -544,7 +548,7 @@ describe("prompt preparation and completion", () => {
     const configured = await prepareInitial(root, { timeoutSeconds: 42 });
     expect(await readLaunchRecord(configured.recordPath)).toMatchObject({ timeoutSeconds: 42 });
     expect(parseLabeledOutput(configured.output).Timeout).toEqual([
-      "42 seconds; coordinator-managed, no waiting or polling",
+      "42 seconds; coordinator-managed observation limit; CLI does not observe harness",
     ]);
   });
 
@@ -756,7 +760,7 @@ describe("continuation and replacement", () => {
       prepared: ["designer/decomposition"],
       harness: ["paseo"],
       targetAgent: ["designer-agent-1"],
-      timeout: ["75 seconds; coordinator-managed, no waiting or polling"],
+      timeout: ["75 seconds; coordinator-managed observation limit; CLI does not observe harness"],
     });
     const continuationPath = reported(continuation.stdout, "Record");
     const continuedRecord = await readLaunchRecord(continuationPath);

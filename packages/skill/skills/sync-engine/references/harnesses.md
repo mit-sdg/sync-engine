@@ -20,13 +20,14 @@ For every selected role or continuation:
    exact harness and agent identity recorded by the prior launch. Do not launch smoke-test
    agents, probe continuation, or reread adapter source before real work; adapter
    conformance is package-owned and the first bounded role launch is the useful test.
-3. Deliver the prompt by file path. Do not paste or rewrite it. Apply supported harness
-   controls for the effective capabilities and communicate every remaining boundary in
-   the prompt.
+3. Deliver the prompt by file path. Do not paste or rewrite it. The shared capability
+   support map is conservatively prompt-guided, so communicate every boundary in the
+   prompt.
 4. Use the coordinator's model and reasoning level unless the user requested another.
    `prompt build` and `continue` accept `--timeout <seconds>`; the record defaults it to
-   1800 seconds. Wait through the harness's normal agent interface within that limit. The
-   skill CLI reports the limit but does not wait or poll.
+   1800 seconds. Observe through the harness's normal agent interface until terminal
+   status or that limit. Harmless status checks are allowed; never resend the prompt. The
+   skill CLI reports the limit but does not observe the harness.
 5. Preserve the returned agent or conversation ID. The coordinator copies the final or
    partial response verbatim to the prepared response path as administrative capture.
    Keep capture files in the work unit; never use a shared temporary path such as `/tmp`.
@@ -45,7 +46,7 @@ For every selected role or continuation:
    The skill CLI validates the captured response and finalizes the record; it does not
    invoke the harness or obtain native output. The completed record stores the harness and
    agent identity, prompt and response paths, terminal status, effective capabilities,
-   how those capabilities were applied, and model detail when available.
+   aggregate capability enforcement, and model detail when available.
 
 The coordinator performs the one harness invocation. The skill core does not launch or
 poll agents, inspect provider catalogs, or infer agent identity from coordinator
@@ -88,32 +89,27 @@ not change the workflow meaning of a completed role.
 
 ## Capability application
 
-Each adapter publishes a small support map for repository reads, owned-path writes,
+The skill uses one conservative support map for repository reads, owned-path writes,
 project-local shell access, network access, generated-output commands, and long-running
-processes. For each effective capability, the launch record distinguishes:
+processes. Every category is currently **prompt-guided**, and each completed record stores
+that aggregate enforcement level.
 
-- **Harness-enforced:** the harness exposes a control and the coordinator requested it.
-- **Prompt-guided:** the harness exposes no corresponding control, so the role receives
-  the boundary in its prompt.
-- **Unsupported:** the harness cannot represent the required capability category.
-
-Prompt guidance is not a machine-applied restriction. The supplied adapters report these
-categories as prompt-guided; none treats workspace placement as read or write
-confinement. This is a warning and a fact for handback, not a reason to move delegated
-work into the coordinator. An unsupported required capability blocks launch. A grant that
-exceeds the role maximum is invalid regardless of harness support.
+Prompt guidance is not a machine-applied restriction. None of the supplied adapters
+treats workspace placement as read or write confinement. This is a warning and a fact for
+handback, not a reason to move delegated work into the coordinator. A grant that exceeds
+the role maximum is invalid regardless of harness support.
 
 ## Invocation differences
 
 Only the following adapter details vary:
 
-| Harness     | Fresh launch                                                                                                           | Stable continuation                                                                        | Workspace detail                                                                                                                                                                                                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Paseo       | Launch with one short prompt telling the agent to read the generated prompt path; Paseo has no prompt-file CLI option. | Send the same kind of file-reading instruction to the returned Paseo agent ID.             | Set the application root as the agent working directory.                                                                                                                                                                                                                            |
-| Codex       | Spawn a fresh `worker` thread; use the general-purpose agent when `worker` is unavailable.                             | Resume the same returned thread or agent ID.                                               | Use the application root shared by the active Codex session.                                                                                                                                                                                                                        |
-| Claude Code | Invoke a fresh `general-purpose` agent with the `Agent` tool.                                                          | Resume the returned agent ID.                                                              | Keep worktree isolation off so sequential roles share the application workspace.                                                                                                                                                                                                    |
-| Antigravity | Call `invoke_subagent` with workspace `inherit`; wait for `Idle`.                                                      | Send the continuation to the same conversation ID.                                         | Inherit the application workspace.                                                                                                                                                                                                                                                  |
-| Cursor      | Run `cursor-agent --print --output-format json` with the prompt-file instruction and capture `session_id`.             | Run the same command with `--resume <session_id>` and verify the returned ID is unchanged. | Pass the application root with `--workspace`; use `--model` when the coordinator supplies a model or the user requests one. Add `--sandbox enabled` when the installed Cursor CLI supports it; otherwise rely on the explicit prompt boundary and report prompt-guided confinement. |
+| Harness     | Fresh launch                                                                                                           | Stable continuation                                                                        | Workspace detail                                                                                                            |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Paseo       | Launch with one short prompt telling the agent to read the generated prompt path; Paseo has no prompt-file CLI option. | Send the same kind of file-reading instruction to the returned Paseo agent ID.             | Set the application root as the agent working directory.                                                                    |
+| Codex       | Spawn a fresh `worker` thread; use the general-purpose agent when `worker` is unavailable.                             | Resume the same returned thread or agent ID.                                               | Use the application root shared by the active Codex session.                                                                |
+| Claude Code | Invoke a fresh `general-purpose` agent with the `Agent` tool.                                                          | Resume the returned agent ID.                                                              | Keep worktree isolation off so sequential roles share the application workspace.                                            |
+| Antigravity | Call `invoke_subagent` with workspace `inherit`; wait for `Idle`.                                                      | Send the continuation to the same conversation ID.                                         | Inherit the application workspace.                                                                                          |
+| Cursor      | Run `cursor-agent --print --output-format json` with the prompt-file instruction and capture `session_id`.             | Run the same command with `--resume <session_id>` and verify the returned ID is unchanged. | Pass the application root with `--workspace`; use `--model` when the coordinator supplies a model or the user requests one. |
 
 Fresh launches use separate conversational context while operating on the same
 application files. Implementation roles do not inherit one another's conversations.

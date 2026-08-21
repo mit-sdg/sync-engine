@@ -70,9 +70,14 @@ describe("typed role specifications", () => {
     ).toContainEqual({
       id: "accepted-decomposition",
       heading: "Accepted decomposition",
-      cardinality: "exactly-one",
+      cardinality: "zero-or-one",
       delivery: "retained",
     });
+    expect(
+      roleSpecifications["critic/contracts"].inputs.find(
+        ({ id }) => id === "accepted-decomposition",
+      ),
+    ).toMatchObject({ cardinality: "zero-or-one", delivery: "retained" });
     expect(designer.returnShape.map(({ heading }) => heading)).toEqual([
       "Status",
       "Changed",

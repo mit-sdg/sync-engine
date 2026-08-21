@@ -513,11 +513,6 @@ Prompt: ${launch.artifacts.promptPath}
 Response: ${launch.artifacts.responsePath}
 Record: ${launch.path}
 ${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
-  for (const source of built.sources) {
-    out(
-      `Source: ${source.kind} ${source.displayName}; ${source.promptBytes} prompt bytes (${source.sourceBytes} source bytes); ${source.delivery}\n`,
-    );
-  }
   const target =
     invocation.target.kind === "fresh"
       ? "Target: fresh agent"
@@ -525,7 +520,7 @@ ${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
   out(`Harness: ${invocation.harness}
 Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
 Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
-Timeout: ${launch.record.timeoutSeconds} seconds; coordinator-managed, no waiting or polling
+Timeout: ${launch.record.timeoutSeconds} seconds; coordinator-managed observation limit; CLI does not observe harness
 ${target}
 Native: ${invocation.native.mechanism}; ${invocation.native.operation}
 Instruction: ${invocation.native.instruction}\n`);

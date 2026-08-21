@@ -453,6 +453,30 @@ async function verifyArtifact(
   }
 }
 
+async function requireFreshIdentity(
+  prepared: PreparedLaunchRecord,
+  currentRecordPath: string,
+  agentId: string,
+): Promise<void> {
+  const recordNames = (await readdir(prepared.work.path))
+    .filter((name) => name.endsWith(".record.json"))
+    .sort();
+  for (const name of recordNames) {
+    const path = resolve(prepared.work.path, name);
+    if (path === currentRecordPath) continue;
+    const candidate = (await loadRecord(path)).record;
+    if (
+      candidate.state === "finalized" &&
+      candidate.relationship?.kind !== "continuation" &&
+      candidate.harness === prepared.harness &&
+      candidate.agentId === agentId
+    ) {
+      const label = prepared.relationship?.kind === "replacement" ? "Replacement" : "Fresh launch";
+      throw new RecordError(`${label} must use a new agent identity`);
+    }
+  }
+}
+
 export interface FinalizeLaunchOptions {
   readonly recordPath: string;
   readonly agentId: string;
@@ -501,12 +525,15 @@ export async function finalizeLaunch(
     ) {
       throw new RecordError(`Continuation must use the snapshotted harness and agent`);
     }
-  } else if (
-    prepared.relationship?.kind === "replacement" &&
-    prepared.harness === prepared.relationship.targetHarness &&
-    options.agentId === prepared.relationship.targetAgentId
-  ) {
-    throw new RecordError(`Replacement must use a new agent identity`);
+  } else {
+    if (
+      prepared.relationship?.kind === "replacement" &&
+      prepared.harness === prepared.relationship.targetHarness &&
+      options.agentId === prepared.relationship.targetAgentId
+    ) {
+      throw new RecordError(`Replacement must use a new agent identity`);
+    }
+    await requireFreshIdentity(prepared, loaded.path, options.agentId);
   }
 
   const response = await regularFile(prepared.response.path, prepared.work.path, "Response");

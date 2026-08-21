@@ -113,6 +113,6 @@ export function promptContext(
   return sectionRecord(markdownSections(context.body, 2, headings));
 }
 
-export function retainedContext(displayName: string, sha256: string, bytes: number): string {
-  return `**${displayName}**\n\nRetained in same-agent context — SHA-256 \`${sha256}\`, ${bytes} source bytes.`;
+export function retainedContext(displayName: string, _sha256: string, _bytes: number): string {
+  return `**${displayName}**\n\nUnchanged from the prior same-agent context.`;
 }

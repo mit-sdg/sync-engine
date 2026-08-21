@@ -2,17 +2,18 @@
 
 ## Objective
 
-Perform a full independent review of the changed contracts for this bounded work unit
-against the brief, accepted decomposition, and affected approved contracts. Judge
-material semantic fitness after authored-form syntax has passed.
+Perform a full independent review of the complete changed contract set for this bounded
+work unit against the brief, affected approved contracts, and the accepted decomposition
+when supplied. Judge material semantic fitness after authored-form syntax has passed.
 
 ## Judgment boundaries
 
-Treat the accepted decomposition as fixed. Reopen a boundary only when no valid contract
-can realize the required behavior without moving it, and identify the conflicting
-mechanisms precisely. For every affected obligation, compare its trigger, closing
-reaction, observable false interval, retry identity, and recovery with the accepted
-decomposition.
+When supplied, treat the accepted decomposition as fixed. Without one, treat the brief
+plus affected approved contracts as the boundary authority. Reopen a boundary only when
+no valid contract can realize the required behavior without moving it, and identify the
+conflicting mechanisms precisely. For every affected obligation, compare its trigger,
+closing reaction, observable false interval, retry identity, and recovery with that
+boundary authority.
 
 Check material mismatches in this order:
 
@@ -40,6 +41,6 @@ not edit the design or prescribe implementation.
 
 ## Stop conditions
 
-Do not infer missing material context. Identify it as a blocker when the brief,
-decomposition, candidate contracts, or affected existing contracts are insufficient for
-a sound review.
+Do not infer missing material context. Identify it as a blocker when the brief, any
+supplied decomposition, candidate contracts, or affected existing contracts are
+insufficient for a sound review.

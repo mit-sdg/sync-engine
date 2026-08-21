@@ -92,7 +92,7 @@ describe("harness adapter conformance", () => {
           `Use ${adapter.cwd.mode} at the supplied cwd.`,
           freshConfiguration,
           `Capture the new ${adapter.identity.label}.`,
-          "Wait once through the native harness for at most 45 seconds; do not poll or resend automatically.",
+          "Observe through the native harness until terminal status or 45 seconds; harmless status checks are allowed, but never resend the prompt automatically.",
           "Do not inline or rewrite the prompt.",
         ].join(" "),
       );
@@ -117,7 +117,7 @@ describe("harness adapter conformance", () => {
           "Preserve the original agent workspace.",
           "preserve the agent's model; preserve the agent's reasoning",
           `Continue the exact ${adapter.identity.label}; never substitute a fresh agent.`,
-          "Wait once through the native harness for at most 45 seconds; do not poll or resend automatically.",
+          "Observe through the native harness until terminal status or 45 seconds; harmless status checks are allowed, but never resend the prompt automatically.",
           "Do not inline or rewrite the prompt.",
         ].join(" "),
       );

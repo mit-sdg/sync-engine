@@ -100,9 +100,9 @@ checkpoints. In auto mode, skip routine approval and continue on reasonable assu
 Every mode stops for unsafe ambiguity or a material blocker, and the user may change mode
 at any time.
 
-An unreadable, empty, or out-of-work-unit brief is an integrity error. Missing recommended
-context produces a warning. A designer may still report semantic insufficiency as a
-question or blocker.
+An unreadable, empty, or out-of-work-unit brief is an integrity error. Recommended
+context is coordinator guidance, not a CLI warning. A designer may still report semantic
+insufficiency as a question or blocker.
 
 ## Select phases and context
 
@@ -113,12 +113,11 @@ are selected only when they serve the brief.
 
 For each selected phase:
 
-1. Write a short task that states the objective, owned paths or path families, supplied
-   context, expected checks, and any explicitly granted network, generated-output, or
-   long-running-process access.
+1. Write a short task that states the objective, acceptance criteria, relevant
+   diagnostics, owned outcomes, and expected checks. Do not restate supplied context or
+   capability metadata; the generated prompt carries both.
 2. Select an effective capability grant within the role's typed maximum. The prompt
-   builder validates the grant; prose in the task is not the capability boundary, and
-   listed check commands are not a shell allowlist.
+   builder validates the grant, and listed check commands are not a shell allowlist.
 3. Supply the smallest sufficient set of the brief, affected design, public framework
    references, application paths, and examples. Name useful starting paths, while allowing
    implementation and evidence workers targeted reads elsewhere in the application.
@@ -132,10 +131,10 @@ For each selected phase:
 
    Repeat `--input` once per file. Add `--design-root design` when the prompt must bind
    permanent design. `--timeout` is the coordinator's native-launch limit and defaults to
-   1800 seconds; the prepared record stores it, while the skill CLI does not wait or poll.
-   Review the reported source contributions and use the prepared record and response path
-   it creates. Prompt size stops the build only when a selected harness or model supplies
-   a real `--context-limit` and the prompt exceeds it.
+   1800 seconds; the prepared record stores it, while the skill CLI does not observe the
+   harness. Use the prepared record and response path it creates. Prompt size stops the
+   build only when a selected harness or model supplies a real `--context-limit` and the
+   prompt exceeds it.
 
 5. Launch through the selected harness as described in [harnesses.md](harnesses.md). The
    coordinator copies the native role output verbatim into the reserved response file as
@@ -220,9 +219,10 @@ a separate fresh critic agent throughout design work:
    directly regressed. Verification does not restart a holistic review or introduce
    unrelated findings.
 
-Exact table layout and complete row parsing are advisory; semantic completeness decides
-whether the decomposition is useful. The coordinator or user decides whether an
-unresolved non-blocking concern is acceptable and records that decision.
+Use the compact canonical three-section layout. Exact table columns are advisory;
+semantic completeness decides whether the decomposition is useful. The coordinator or
+user decides whether an unresolved non-blocking concern is acceptable and records that
+decision.
 
 Revise the decomposition later only when concept boundaries, need placement, or
 obligations change. A smaller contract correction updates only the affected permanent
@@ -230,10 +230,10 @@ design.
 
 ### Author and review contracts
 
-Continue the original designer once with the accepted decomposition, resolved findings,
-affected existing contracts, and relevant catalog contracts. In that assignment, author
-the complete affected set of concept contracts, application types, and composition needed
-to realize the bounded change. Do not default to separate concept-by-concept author/review
+Continue the original designer once with the accepted decomposition when one exists,
+resolved findings, affected existing contracts, and relevant catalog contracts. In that
+assignment, author the complete affected set of concept contracts, application types, and
+composition needed to realize the bounded change. Do not default to separate concept-by-concept author/review
 loops; they cost additional turns without preserving interactions for review. The
 designer edits only the assigned permanent design paths. If no designer identity exists,
 establish one with the complete-context fresh-designer flow above.
@@ -257,8 +257,8 @@ diagnostic is the first need for design work, apply the fresh identity selection
 Do not duplicate framework parser rules in coordinator logic.
 
 The prior critic, or the distinct fresh critic selected above, then performs one full
-review of the complete changed contract set against the accepted decomposition and
-affected interactions. Repairs return to the established designer as a bounded revision,
+review of the complete changed contract set against the brief, affected approved
+contracts, the accepted decomposition when one exists, and affected interactions. Repairs return to the established designer as a bounded revision,
 and the critic narrowly verifies the stable findings afterward. Do not repeat the full
 review after a repair unless the repair changed boundaries or materially expanded the
 affected interaction set.
@@ -427,7 +427,6 @@ prompt changed after preparation, a stale design digest, continuation through an
 agent or harness, or a harness that cannot provide the adapter contract.
 
 Warnings call for coordinator judgment rather than inventing phase policy. They include
-missing recommended brief or decomposition context, an absent normal predecessor record,
 a malformed structured response, prompt-guided rather than harness-enforced capabilities,
 and a user choice to continue with a release mismatch. The skill CLI validates artifact
 and continuity integrity; the coordinator chooses phases, review acceptance, and repair.

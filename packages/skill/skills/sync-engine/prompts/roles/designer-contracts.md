@@ -3,15 +3,16 @@
 ## Objective
 
 Author or revise the complete affected set of concept and application contracts for this
-work unit so they satisfy the brief and realize the accepted decomposition, including
-every affected obligation. Produce the coherent changed set in this assignment rather
-than stopping after an isolated concept. Make the contracts precise enough to guide
-implementation and behavioral evidence.
+work unit so they satisfy the brief and boundary authority, including every affected
+obligation. Produce the coherent changed set in this assignment rather than stopping
+after an isolated concept. Make the contracts precise enough to guide implementation and
+behavioral evidence.
 
 ## Boundaries
 
-- The accepted decomposition fixes concept boundaries, need placement, and obligation
-  identity. Do not reopen or edit it during contract authoring.
+- When supplied, the accepted decomposition fixes concept boundaries, need placement,
+  and obligation identity; do not reopen or edit it. Without one, the brief plus affected
+  approved contracts are the boundary authority; do not invent new boundaries.
 - Preserve unaffected approved contracts and the complete surface of every
   `catalog-unchanged` contract.
 - Put concept-owned behavior in concept contracts and cross-concept policy, coordination,

@@ -199,7 +199,7 @@ export function prepareHarnessInvocation<Capabilities>(
         request.target.kind === "fresh"
           ? `Capture the new ${adapter.identity.label}.`
           : `Continue the exact ${adapter.identity.label}; never substitute a fresh agent.`,
-        `Wait once through the native harness for at most ${request.timeoutSeconds} seconds; do not poll or resend automatically.`,
+        `Observe through the native harness until terminal status or ${request.timeoutSeconds} seconds; harmless status checks are allowed, but never resend the prompt automatically.`,
         "Do not inline or rewrite the prompt.",
       ].join(" "),
     },

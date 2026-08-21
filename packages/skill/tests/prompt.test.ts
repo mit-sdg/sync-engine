@@ -17,6 +17,7 @@ import {
 } from "./test-support.ts";
 
 const promptRoot = fileURLToPath(new URL("./fixtures/prompts", import.meta.url));
+const actualPromptRoot = fileURLToPath(new URL("../skills/sync-engine/prompts", import.meta.url));
 const expectedRoot = fileURLToPath(new URL("./fixtures/expected", import.meta.url));
 const applicationRoot = "/application";
 const fixtureInput = (name: string): string => resolve(promptRoot, "inputs", name);
@@ -146,6 +147,62 @@ describe("deterministic prompt rendering", () => {
     expect(second.sha256).toBe(first.sha256);
     expect(first.sha256).toBe(createHash("sha256").update(first.content).digest("hex"));
     expect(first.bytes).toBe(Buffer.byteLength(first.content, "utf8"));
+  });
+
+  test("builds complete contract assignments without an accepted decomposition", async () => {
+    await buildPrompt({
+      role: "designer",
+      phase: "contracts",
+      workUnit: "contract-repair",
+      applicationRoot,
+      promptRoot: actualPromptRoot,
+      grant: {
+        readableAreas: [
+          { area: "work-unit", path: "." },
+          { area: "design", path: "." },
+        ],
+        writableAreas: [{ area: "assigned-design", path: "concepts/Tasking.md" }],
+        toolKinds: ["repository-read", "repository-write"],
+        projectShell: "project-validation",
+        network: false,
+        generatedOutput: false,
+        longRunningProcesses: false,
+      },
+      inputs: [
+        { id: "task", displayName: "task.md", content: "Repair the complete affected set." },
+        { id: "brief", displayName: "brief.md", content: "Preserve approved boundaries." },
+        {
+          id: "affected-contracts",
+          displayName: "Tasking.md",
+          content: conceptContract,
+        },
+      ],
+    });
+
+    await buildPrompt({
+      role: "critic",
+      phase: "contracts",
+      workUnit: "contract-repair",
+      applicationRoot,
+      promptRoot: actualPromptRoot,
+      grant: {
+        readableAreas: [
+          { area: "work-unit", path: "." },
+          { area: "design", path: "." },
+        ],
+        writableAreas: [],
+        toolKinds: ["repository-read"],
+        projectShell: "none",
+        network: false,
+        generatedOutput: false,
+        longRunningProcesses: false,
+      },
+      inputs: [
+        { id: "task", displayName: "review.md", content: "Review the complete changed set." },
+        { id: "brief", displayName: "brief.md", content: "Preserve approved boundaries." },
+        { id: "changed-contracts", displayName: "Tasking.md", content: conceptContract },
+      ],
+    });
   });
 
   test("preserves fenced headings and a complete concept contract byte-for-byte", async () => {

@@ -2,8 +2,9 @@
 
 Use exactly three canonical sections: `## Need placement`, `## Concepts`, and
 `## Obligations`, plus a short `## Open decisions` section only when a material choice is
-actually unresolved. Use compact tables throughout. This artifact is a decision index,
-not a preliminary specification.
+actually unresolved. Use compact tables throughout. Exact column details are advisory;
+semantic completeness decides approval. This artifact is a decision index, not a
+preliminary specification.
 
 Group related user-visible needs. Use one row per affected concept and one row per genuine
 cross-owner obligation. Keep each cell to one sentence. Do not add action signatures,

@@ -90,8 +90,8 @@ The same coordinator-mediated flow supports:
 Through each adapter, the coordinator launches fresh role agents, preserves same-agent
 continuation, delivers prompts by file path, and uses the application working directory.
 The coordinator copies native output verbatim for skill CLI validation and record
-finalization. Harness-specific capability controls and invocation details are documented
-in [the harness reference](skills/sync-engine/references/harnesses.md).
+finalization. Harness-specific invocation details are documented in
+[the harness reference](skills/sync-engine/references/harnesses.md).
 
 ## Read next
 

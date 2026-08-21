@@ -260,7 +260,7 @@ describe("bootstrap", () => {
 
   test("creates only a minimal manifest before exact Bun install and setup", async () => {
     const files = filesWithRelease();
-    const root = resolve(fixtureRoot, "fresh-app");
+    const root = resolve(fixtureRoot, "Fresh App_λ");
     const plan = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
       { files },
@@ -279,7 +279,7 @@ describe("bootstrap", () => {
       },
     );
     expect(beforeInstall).toEqual({
-      name: "fresh-app",
+      name: "sync-engine-app",
       private: true,
       type: "module",
       packageManager: `bun@${bunVersion}`,

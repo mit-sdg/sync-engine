@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export const requiredPackages = [
   ["@mit-sdg/sync-engine", "sync-engine"],
@@ -514,7 +514,7 @@ export async function bootstrapApplication(
       await files.writeText(
         path,
         json({
-          name: basename(initial.applicationRoot) || "sync-engine-app",
+          name: "sync-engine-app",
           private: true,
           type: "module",
           packageManager: `bun@${initial.release!.toolchain.bun}`,

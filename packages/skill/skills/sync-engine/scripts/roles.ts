@@ -235,7 +235,7 @@ export const roleSpecifications = {
     [
       task(),
       brief(),
-      retained("accepted-decomposition", "Accepted decomposition"),
+      retained("accepted-decomposition", "Accepted decomposition", "zero-or-one"),
       retained("resolved-findings", "Resolved decomposition findings", "zero-or-one"),
       retained("affected-contracts", "Affected existing contracts", "zero-or-more"),
       retained("catalog-contracts", "Relevant unchanged catalog contracts", "zero-or-more"),
@@ -268,7 +268,7 @@ export const roleSpecifications = {
     [
       task("Review task"),
       brief(),
-      retained("accepted-decomposition", "Accepted decomposition"),
+      retained("accepted-decomposition", "Accepted decomposition", "zero-or-one"),
       inline("changed-contracts", "Changed candidate contracts", "one-or-more"),
       retained("affected-contracts", "Affected existing contracts", "zero-or-more"),
     ],

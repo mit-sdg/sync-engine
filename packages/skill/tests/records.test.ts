@@ -201,6 +201,33 @@ describe("prepared and finalized records", () => {
 });
 
 describe("relationship identity snapshots", () => {
+  test("ordinary fresh launches cannot reuse a finalized fresh harness identity", async () => {
+    const unit = await work("fresh-identity");
+    await finalizedTarget(unit, { role: "designer", phase: "decomposition" });
+
+    const reused = await prepared(unit, {
+      role: "critic",
+      phase: "decomposition",
+      at: new Date("2026-08-19T09:12:00.000Z"),
+    });
+    expect(
+      await rejectedValue(
+        complete(reused.path, "independent review", { agentId: "agent-original" }),
+      ),
+    ).toEqual({ name: "RecordError", message: "Fresh launch must use a new agent identity" });
+
+    const otherHarness = await prepared(unit, {
+      role: "critic",
+      phase: "decomposition",
+      harness: "codex",
+      at: new Date("2026-08-19T09:12:01.000Z"),
+    });
+    const finalized = await complete(otherHarness.path, "independent review", {
+      agentId: "agent-original",
+    });
+    expect(finalized).toMatchObject({ harness: "codex", agentId: "agent-original" });
+  });
+
   test("continuation binds its harness and agent without rereading a mutable target", async () => {
     const unit = await work("continuation");
     const target = await finalizedTarget(unit, { role: "critic", phase: "contracts" });

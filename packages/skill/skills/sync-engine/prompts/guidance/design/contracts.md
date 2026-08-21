@@ -1,9 +1,10 @@
 # Contract design guidance
 
-The accepted decomposition fixes boundaries and ownership. Concept contracts define each
-mechanism; application contracts define selected identities, cross-concept decisions,
-coordination, and recovery. Preserve every accepted obligation ID and its trigger,
-closing reaction, observable false interval, retry identity, and recovery.
+The boundary authority fixes boundaries and ownership: use the accepted decomposition
+when supplied, otherwise the brief plus affected approved contracts. Concept contracts
+define each mechanism; application contracts define selected identities, cross-concept
+decisions, coordination, and recovery. Preserve every accepted obligation ID and its
+trigger, closing reaction, observable false interval, retry identity, and recovery.
 
 ## Purpose, state, and ownership
 
