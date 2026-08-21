@@ -203,11 +203,11 @@ afterEach(async () => {
 
 describe("skill CLI help and arguments", () => {
   test("resolves skill assets from source and packaged command layouts", () => {
-    expect(defaultSkillRootForCommand("/package/skills/sync-engine/scripts/command.ts")).toBe(
-      "/package/skills/sync-engine",
-    );
-    expect(defaultSkillRootForCommand("/package/dist/command.js")).toBe(
-      "/package/skills/sync-engine",
+    expect(
+      defaultSkillRootForCommand(resolve("/package/skills/sync-engine/scripts/command.ts")),
+    ).toBe(resolve("/package/skills/sync-engine"));
+    expect(defaultSkillRootForCommand(resolve("/package/dist/command.js"))).toBe(
+      resolve("/package/skills/sync-engine"),
     );
   });
 

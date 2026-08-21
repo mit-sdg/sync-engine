@@ -20,6 +20,8 @@ const promptRoot = fileURLToPath(new URL("./fixtures/prompts", import.meta.url))
 const actualPromptRoot = fileURLToPath(new URL("../skills/sync-engine/prompts", import.meta.url));
 const expectedRoot = fileURLToPath(new URL("./fixtures/expected", import.meta.url));
 const applicationRoot = "/application";
+const expectedForPlatform = (content: string): string =>
+  content.replaceAll("/application", JSON.stringify(resolve(applicationRoot)).slice(1, -1));
 const fixtureInput = (name: string): string => resolve(promptRoot, "inputs", name);
 const inlineSource = (displayName: string, content: string): string =>
   `**${displayName}**\n\n${content.replaceAll("\r\n", "\n").replaceAll("\r", "\n").trimEnd()}`;
@@ -134,7 +136,7 @@ describe("deterministic prompt rendering", () => {
       resolve(expectedRoot, "designer-decomposition.prompt.md"),
       "utf8",
     );
-    expect(Buffer.from(first.content)).toEqual(Buffer.from(expected));
+    expect(Buffer.from(first.content)).toEqual(Buffer.from(expectedForPlatform(expected)));
     expect(promptSections(first.content).map(({ heading }) => heading)).toEqual([
       "Role and objective",
       "Capabilities",
@@ -239,7 +241,9 @@ describe("deterministic prompt rendering", () => {
       "Exact starting paths": inlineSource("paths.md", "src/concepts/tasking"),
     });
     expect(sectionRecord(promptSections(result.content)).Capabilities).toBe(
-      (await readFile(resolve(expectedRoot, "read-application.capabilities.md"), "utf8")).trimEnd(),
+      expectedForPlatform(
+        await readFile(resolve(expectedRoot, "read-application.capabilities.md"), "utf8"),
+      ).trimEnd(),
     );
     expect(result.sources.find(({ inputId }) => inputId === "specifications")?.promptBytes).toBe(
       Buffer.byteLength(conceptContract),
