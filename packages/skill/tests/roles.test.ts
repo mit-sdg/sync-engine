@@ -115,10 +115,12 @@ describe("typed role specifications", () => {
   test("keeps conditional API context in inputs and requires application types", () => {
     const application = roleSpecifications["application-worker/implementation"];
     expect(application.guidancePaths).not.toContain("guidance/api/http-host.md");
-    expect(application.inputs.find(({ id }) => id === "types")).toMatchObject({
-      cardinality: "one-or-more",
-      delivery: "retained",
-    });
+    for (const id of ["types", "concept-specifications", "concept-public-surfaces"]) {
+      expect(application.inputs.find((input) => input.id === id)).toMatchObject({
+        cardinality: "one-or-more",
+        delivery: "retained",
+      });
+    }
 
     const frontend = roleSpecifications["frontend-worker/implementation"];
     expect(frontend.guidancePaths).not.toContain("guidance/api/http-client.md");
@@ -307,6 +309,33 @@ describe("effective capability grants", () => {
         readableAreas: [{ area: "application", path: ".sync-engine/work" }],
       },
       "readableAreas[0] cannot grant .sync-engine/work",
+    ],
+    [
+      "application skill directories",
+      "concept-worker/implementation",
+      {
+        ...noCapabilities,
+        readableAreas: [{ area: "application", path: ".cursor/skills" }],
+      },
+      "readableAreas[0] cannot grant .cursor/skills",
+    ],
+    [
+      "a repeated work-unit root",
+      "designer/decomposition",
+      {
+        ...noCapabilities,
+        readableAreas: [{ area: "work-unit", path: ".sync-engine/work/example" }],
+      },
+      "readableAreas[0] path is already relative to work-unit and cannot repeat its root: .sync-engine/work/example",
+    ],
+    [
+      "a repeated design root",
+      "designer/contracts",
+      {
+        ...noCapabilities,
+        readableAreas: [{ area: "design", path: "design/concepts" }],
+      },
+      "readableAreas[0] path is already relative to design and cannot repeat its root: design/concepts",
     ],
     [
       "an unmodeled capability",

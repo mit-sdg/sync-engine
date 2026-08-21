@@ -309,6 +309,7 @@ export const roleSpecifications = {
       retained("types", "Authored types", "one-or-more"),
       retained("compositions", "Compositions", "one-or-more"),
       retained("obligations", "Cross-concept obligations", "zero-or-more"),
+      retained("concept-specifications", "Concept specifications", "one-or-more"),
       retained("concept-public-surfaces", "Concept public surfaces", "one-or-more"),
       retained("existing-wiring", "Existing wiring and configuration", "zero-or-more"),
       retained("public-references", "Public framework references", "one-or-more"),
@@ -428,13 +429,29 @@ function areaGrants<A extends string>(
     if (write && path === ".") {
       fail(spec, `write area ${area} must name a concrete path family`);
     }
+    const repeatedRoot =
+      (area === "work-unit" && path.split("/")[0] === ".sync-engine") ||
+      ((area === "design" || area === "assigned-design") && path.split("/")[0] === "design");
+    if (repeatedRoot) {
+      fail(spec, `${at} path is already relative to ${area} and cannot repeat its root: ${path}`);
+    }
     if (area === "current-decomposition" && path !== "decomposition.md") {
       fail(spec, "current-decomposition can grant only decomposition.md");
     }
     const application = write ? area.startsWith("owned-") : area === "application";
     const blocked = write
-      ? [".git", ".sync-engine", "node_modules", "design"]
-      : [".git", ".sync-engine", "node_modules"];
+      ? [
+          ".git",
+          ".sync-engine",
+          ".cursor",
+          ".claude",
+          ".pi",
+          ".codex",
+          ".agents",
+          "node_modules",
+          "design",
+        ]
+      : [".git", ".sync-engine", ".cursor", ".claude", ".pi", ".codex", ".agents", "node_modules"];
     if (application && path !== "." && blocked.includes(path.split("/")[0]!)) {
       fail(spec, `${at} cannot grant ${path}`);
     }

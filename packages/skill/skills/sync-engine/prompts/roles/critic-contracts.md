@@ -26,8 +26,9 @@ Check material mismatches in this order:
 4. **Composition:** authorization enforcement, visible results, obligation recovery, and
    no irreversible consumption before acknowledgement agree.
 5. **Application documents:** there are no external aliases, unused concretes, inferred
-   storage, or concept actions posed as declarations; every promised consequence or
-   derived or shared value has its matching typed link.
+   storage, or concept actions posed as declarations. Inventory every promised reaction,
+   view, former, and computation and require its exact matching typed link; a prose label
+   does not count, and implementation must not have to invent a declaration name.
 
 Ignore naming polish, redundant explanation, parser-enforced mechanics, informational
 advisories, and merely conceivable unspecified behavior. Missing authority, bypassable

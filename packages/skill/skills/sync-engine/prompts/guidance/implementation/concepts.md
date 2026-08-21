@@ -6,8 +6,11 @@ returns the declared row shape and cardinality.
 
 Registration reads the class prototype. Only declared actions and `_` queries may appear
 there, so keep helpers `#private` or module-level. TypeScript `private` still emits a
-prototype method and is therefore visible as an undeclared action. Give every constructor
-parameter a default so the class constructs with no arguments.
+prototype method and is therefore visible as an undeclared action. Declare an explicit
+constructor, initialize owned state there, and give every dependency parameter a default
+so the class constructs with no arguments. The application worker owns specification
+registration; export the class and one stable error class per declared refusal, but do not
+call `registerConcept` here.
 
 Map each expected refusal code to a stable error class. Faults remain unexpected. Enforce
 invariants and race-sensitive decisions in the owning action and, where persistence is

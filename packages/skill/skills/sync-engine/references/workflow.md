@@ -115,7 +115,8 @@ For each selected phase:
 
 1. Write a short task that states the objective, acceptance criteria, relevant
    diagnostics, owned outcomes, and expected checks. Do not restate supplied context or
-   capability metadata; the generated prompt carries both.
+   capability metadata; the generated prompt carries both. A task cannot authorize an
+   alternate framework or transport path that conflicts with supplied public references.
 2. Select an effective capability grant within the role's typed maximum. The prompt
    builder validates the grant, and listed check commands are not a shell allowlist.
 3. Supply the smallest sufficient set of the brief, affected design, public framework

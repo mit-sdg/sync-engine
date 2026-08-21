@@ -1,29 +1,109 @@
 # HTTP projection and hosting
 
 `@mit-sdg/sync-engine-http` exposes an assembled application over POST/JSON. Its policy
-derives CORS, request-origin checks, cookie attributes, and wire projection;
-authentication and authorization stay in concepts and composition.
+derives CORS, request-origin checks, cookie attributes, direct GET routes, public error
+mapping, and wire projection. Authentication and authorization stay in concepts and
+composition.
 
-Matching `@mit-sdg/sync-engine-http` support must already be installed by the coordinator.
-If it is absent or incompatible, report an environment blocker instead of installing or
-replacing it.
+Matching HTTP support must already be installed by the coordinator. If it is absent or
+incompatible, report an environment blocker instead of installing or replacing it. Do
+not implement a parallel product router, call concepts directly from the host, or copy
+HTTP policy into a hand-written Fetch handler.
 
-Add `httpWire({ policy, name: "AppWireHttp" })` from
-`@mit-sdg/sync-engine-http/tooling` to generated-config projections and regenerate. Host
-the assembly with `createGateway`, `createHttpHandler({ application, gateway, policy })`,
-and `Bun.serve({ hostname, port, fetch: handler })`. The host routes the complete request
-URL to the handler and may serve frontend assets beside `basePath`.
+## Declare the boundary
 
-The handler accepts POST/JSON by pathname. Without policy it emits no CORS or cookie
-headers, limits bodies to 1 MiB, and maps private failures to `INTERNAL_ERROR`.
+Every operation remains a sync-engine `endpoint` built from `receive` and `respond`. A
+direct browser GET route maps to an unchanged endpoint; the HTTP package does not replace
+endpoint declarations. For example:
 
-A browser-followed link reaches an unchanged endpoint through a policy `direct` GET
-route. Each `{name}` fills the endpoint input. A route states a JSON status or a redirect
-field containing an absolute URL; it carries no cookies or request-origin check and
-cannot serve a cookie endpoint.
+```ts
+import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
+import { where } from "@mit-sdg/sync-engine/language";
+import { concepts } from "../concepts.ts";
 
-`httpPolicy(init)` freezes `publicOrigin`, `basePath`, `publicErrors`, browser CORS,
-`requestOrigins`, cookies, limits, and direct routes. Map distinguishable refusal codes
-to `INVALID_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, or `CONFLICT`; unmapped
-errors remain private. A cookie binding names its cookie and supplied endpoint input,
-plus issuing endpoints' value/expiry fields and clearing endpoints.
+const Resolve = endpoint("/links/resolve", ({ code, target }) =>
+  receive({ code }).then(
+    where(concepts.Links._resolve({ code }).is({ target })).then(respond({ target })),
+  ),
+);
+
+export const composition = { Links: { Resolve } };
+```
+
+Use the approved concepts, endpoint paths, conditions, response fields, validators, and
+composition names; the example supplies API shape, not product policy.
+
+## Define one policy and projection
+
+Construct policy with `httpPolicy` from `@mit-sdg/sync-engine-http/policy`. Map only
+caller-visible refusal codes. A browser-followed link uses `direct`; each `{name}` fills
+the endpoint input, and `redirect` names an absolute-URL response field. Direct routes are
+GET-only and redirect with 302.
+
+```ts
+import { httpPolicy } from "@mit-sdg/sync-engine-http/policy";
+
+export const appHttpPolicy = httpPolicy({
+  publicErrors: {
+    INVALID_URL: "INVALID_REQUEST",
+    NOT_FOUND: "NOT_FOUND",
+    INVALID_SECRET: "FORBIDDEN",
+    ALIAS_EXISTS: "CONFLICT",
+  },
+  direct: [{ method: "GET", path: "/{code}", endpoint: "/links/resolve", redirect: "target" }],
+});
+```
+
+Add `httpWire` to the generated config and use the same policy at runtime:
+
+```ts
+import { httpWire } from "@mit-sdg/sync-engine-http/tooling";
+import { assembleApplication } from "./src/assembly.ts";
+import { appHttpPolicy } from "./src/http-policy.ts";
+
+export default {
+  assemble: assembleApplication,
+  title: "Application",
+  wireName: "AppWire",
+  design: {
+    version: 1,
+    documents: [
+      new URL("./design/types.md", import.meta.url),
+      new URL("./design/composition.md", import.meta.url),
+    ],
+  },
+  projections: [httpWire({ policy: appHttpPolicy, name: "AppWireHttp" })],
+};
+```
+
+Run the project's generation command; never edit generated wire output.
+
+## Bind gateway, handler, and host
+
+Create a typed gateway from the generated wire, pass it with the same assembled
+application and policy to the package handler, then give that handler to `Bun.serve`:
+
+```ts
+import { createGateway } from "@mit-sdg/sync-engine/boundary";
+import { createHttpHandler } from "@mit-sdg/sync-engine-http/handler";
+import type { AppWire } from "../generated/wire.ts";
+import { assembleApplication } from "./assembly.ts";
+import { appHttpPolicy } from "./http-policy.ts";
+
+export function createApplicationHttpHandler() {
+  const application = assembleApplication();
+  const gateway = createGateway<AppWire>({ application });
+  return createHttpHandler({ application, gateway, policy: appHttpPolicy });
+}
+
+export function startHost(hostname = "localhost", port = 3000) {
+  return Bun.serve({ hostname, port, fetch: createApplicationHttpHandler() });
+}
+```
+
+The package handler accepts POST/JSON by endpoint pathname. Without policy it emits no
+CORS or cookie headers, limits bodies to 1 MiB, and maps private failures to
+`INTERNAL_ERROR`. `httpPolicy` owns CORS, request-origin checks, cookie attributes,
+limits, direct routes, and public error categories; do not duplicate them in host code.
+Tests for an HTTP application exercise this package handler or the actual listener, not a
+substitute handler with the same name.
