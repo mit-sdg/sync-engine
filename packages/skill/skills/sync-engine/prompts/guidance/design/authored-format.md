@@ -121,8 +121,11 @@ normalizeTitle(raw: String) : String
 ```
 
 Routes stay in prose; do not link a URL path. Link the endpoint declaration under the
-exact module, group, and source name that implementation will register. If the design has
-no endpoint reaction link, implementation must not create that endpoint.
+exact module, group, and source name that implementation will register. The link fixes
+trace identity, not trigger syntax, stage structure, or variable flow. If the design has
+no endpoint reaction link, implementation must not create that endpoint. Do not add an
+internal reaction link for a consequence the endpoint-linked declaration may perform
+unless separate deferred behavior is an intentional design decision.
 
 An application document is not an API specification. It carries no endpoint sections and
 no input, return or refusal listings: the concept specification owns those, and a second

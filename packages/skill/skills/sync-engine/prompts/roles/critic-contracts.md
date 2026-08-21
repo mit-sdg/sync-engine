@@ -24,18 +24,23 @@ Check material mismatches in this order:
 3. **Actions:** refusals and post-refusal state, lifecycle, repetition, deletion, repair,
    absent input identities, query cardinality, and stable `many` ordering agree.
 4. **Composition:** authorization enforcement, visible results, obligation recovery, and
-   no irreversible consumption before acknowledgement agree. Boundary adaptation is
-   executable: optional request choices and other derived concept inputs have complete
-   computations rather than prose or a partial generator.
+   acknowledgement ordering agree. Reject required work placed after visible success when
+   failure could lose that work; duplicate ownership of one effect; compensation without
+   an available owner action; and idempotency claims whose owner action accepts no stable
+   operation identity. Do not simulate framework lowering or require implementation-stage
+   dataflow in the prose.
 5. **Application documents:** there are no external aliases, unused concretes, inferred
-   storage, or concept actions posed as declarations. Inventory every promised endpoint,
+   storage, or concept actions posed as declarations. Inventory every selected endpoint,
    internal reaction, view, former, and computation and require its exact matching typed
    link. Each endpoint needs a `reaction:` link under its intended module, group, and
-   declaration name; a route or prose label does not count, and implementation must not
-   have to invent a declaration name.
+   declaration name; a route or prose label does not count. A separate internal reaction
+   must represent an intentional deferred behavior rather than duplicate an effect the
+   endpoint already owns.
 
-Ignore naming polish, redundant explanation, parser-enforced mechanics, informational
-advisories, and merely conceivable unspecified behavior. Missing authority, bypassable
+Ignore naming polish, redundant explanation, parser-enforced mechanics, framework-stage
+realization, informational advisories, and merely conceivable unspecified behavior. Do
+not judge whether prose determines framework stages, bindings, or lowering; those are not
+contract-review criteria. Missing authority, bypassable
 authorization, ownership conflict, unrecoverable obligation, or behavior required for
 visible success or refusal is a blocker; another consequential contract mismatch is
 material. Give material findings stable identities.

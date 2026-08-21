@@ -114,6 +114,7 @@ describe("typed role specifications", () => {
 
   test("keeps conditional API context in inputs and requires application types", () => {
     const application = roleSpecifications["application-worker/implementation"];
+    expect(application.guidancePaths).toContain("guidance/api/application-example.md");
     expect(application.guidancePaths).not.toContain("guidance/api/http-host.md");
     for (const id of ["types", "concept-specifications", "concept-public-surfaces"]) {
       expect(application.inputs.find((input) => input.id === id)).toMatchObject({

@@ -17,12 +17,12 @@ Registration reads the class prototype. Only declared actions and `_` queries ma
 there, so keep helpers `#private` or module-level. TypeScript `private` still emits a
 prototype method and is therefore visible as an undeclared action. Declare an explicit
 constructor, initialize owned state there, and give every dependency parameter a default
-so the class constructs with no arguments. The application worker owns specification
-registration; export the class and one stable error class per declared refusal, but do not
-call `registerConcept` here.
+so the class constructs with no arguments. Production specification registration is
+outside this assignment; export the raw class and one stable error class per declared
+refusal, but do not call `registerConcept` here.
 
-Represent each expected refusal code with one exported stable error class so the
-application worker can map it during registration. Faults remain unexpected. Enforce
+Represent each expected refusal code with one exported stable error class for production
+registration. Faults remain unexpected. Enforce
 invariants and race-sensitive decisions in the owning action and, where persistence is
 involved, in the same storage transaction or constraint. Implement repetition and
 lifecycle behavior exactly as contracted.

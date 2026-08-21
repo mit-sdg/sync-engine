@@ -5,7 +5,7 @@ derives CORS, request-origin checks, cookie attributes, direct GET routes, publi
 mapping, and wire projection. Authentication and authorization stay in concepts and
 composition.
 
-Matching HTTP support must already be installed by the coordinator. If it is absent or
+Matching HTTP support must already be installed in the application. If it is absent or
 incompatible, report an environment blocker instead of installing or replacing it. Do
 not implement a parallel product router, call concepts directly from the host, or copy
 HTTP policy into a hand-written Fetch handler.

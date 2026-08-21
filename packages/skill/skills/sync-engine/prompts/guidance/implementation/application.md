@@ -5,7 +5,7 @@ assembly, configuration, boundary projection, hosting, and artifact wiring. Use 
 package subpaths and the supplied declaration references.
 
 Use each implemented concept class directly; do not wrap, adapt, subclass, or replace it.
-The application worker owns registration. Import the approved Markdown specification as
+This assignment owns production registration. Import the approved Markdown specification as
 text, map every declared refusal code to the supplied stable error class, and pass the
 resulting descriptor—not the raw class—to `conceptSet`:
 
@@ -35,16 +35,22 @@ assemble({
 });
 ```
 
-Implement the exact authored endpoint reaction, internal reaction, view, former, and
-computation links. An `endpoint(...)` is itself the reaction declaration named by its
-`reaction:` link; do not wrap it or create it from route prose alone. Before coding,
-compare every requested endpoint with the complete supplied link inventory and block on
-any missing link. Keep module, group, and declaration names aligned with those links, and
-register every declared computation once. Composition coordinates concepts but does not absorb their invariants
-or make separate owners atomic. Hosts project the application boundary and stay free of
-product policy already owned by design. Do not infer registration shapes or refusal maps
-from runtime failures; the supplied specifications and public surfaces contain those
-facts.
+Implement the exact authored endpoint reaction, selected internal reaction, view, former,
+and computation links. An `endpoint(...)` is itself the reaction declaration named by its
+`reaction:` link; it may coordinate every consequence behaviorally assigned to that
+endpoint. Do not wrap it or create it from route prose alone. A separate internal reaction
+exists only when approved design gives it a distinct link; do not duplicate its effect in
+the endpoint.
+
+Before coding, compare every requested endpoint and internal declaration with the complete
+supplied link inventory and block on any missing link. Keep module, group, and declaration
+names aligned with those links, and register every declared computation once. Within those
+identities, choose documented stages, guards, binding flow, and fallback construction that
+preserve the behavioral commitments. Composition coordinates concepts but does not absorb
+their invariants or make separate owners atomic. Hosts project the application boundary
+and stay free of product policy already owned by design. Do not infer registration shapes
+or refusal maps from runtime failures; the supplied specifications and public surfaces
+contain those facts.
 
 Source-agreement diagnostics are semantic signals as well as wiring failures:
 `MISSING_COVERAGE` and `UNRESOLVED_LINK` mean an authored executable link is absent or

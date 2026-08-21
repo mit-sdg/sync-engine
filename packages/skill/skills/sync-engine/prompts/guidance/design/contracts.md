@@ -33,16 +33,20 @@ checks an operation identity; a correlation ID is only a trace token.
 ## Composition, authorization, and failure
 
 Only composition coordinates concepts. It owns cross-concept policy, workflow, boundary
-adaptation, and repair, never owner invariants or race decisions. Use one reaction per
-trigger-condition-effect decision and separate independent consequences. Give every
-selected public endpoint its own reaction link and enough decision prose to construct its
-success and refusal behavior without inventing policy.
+adaptation, and repair, never owner invariants or race decisions. State the behavioral
+commitment: its owner, visible success and refusal, ordering relative to acknowledgement,
+and material failure or recovery guarantee. Do not prescribe framework stages, trigger
+syntax, binding flow, or endpoint fallback construction.
 
-When an endpoint must choose between a supplied optional value and a generated value,
-declare the complete application computation that makes that choice (for example,
-`selectCode(requested?: String) : String`), not merely a generator that leaves the branch
-undecided. Likewise declare each application derivation needed to turn request data into
-concept action input.
+Give every selected public endpoint its own reaction link as a trace identity. An endpoint
+may realize all coordination needed for that behavior. Add a separate internal reaction
+link only when the design intentionally selects a distinct deferred or independently
+triggered behavior; do not create one merely to narrate an endpoint's next step.
+
+Declare a computation when a pure application decision is itself part of the accepted
+behavior or is shared by multiple declarations. Do not introduce computations solely to
+spell out framework adaptation, defaults, or variable transport that implementation may
+choose without changing visible behavior.
 
 A reaction cannot make separate owners atomic. Realize every accepted obligation with
 its triggering action, closing reaction, observable false interval, stable retry

@@ -12,11 +12,15 @@ one assembled application.
   contracts or implementations, frontend behavior, or independent evidence.
 - Implement only declared application policy, identities, links, computations, and host
   projection; do not create another framework layer or move owner invariants into
-  composition.
-- Own concept registration and assembly from the supplied specifications and public
-  surfaces; never make the concept worker register application instances. Concept source
-  remains read-only even if a broad writable path syntactically contains it; report a
-  concept-surface blocker instead of changing a class or its tests.
+  composition. Choose the documented stage, binding, and branching realization yourself
+  when that choice preserves the approved behavior.
+- Treat an endpoint-linked reaction as able to realize all behavior assigned to that
+  endpoint. Implement a separate internal reaction only when approved design selects its
+  distinct link; never duplicate one effect in both places.
+- Own production concept registration and assembly from the supplied specifications and
+  public surfaces. Concept implementation source remains raw and read-only even if a broad
+  writable path syntactically contains it; report a concept-surface blocker instead of
+  changing a class or its tests.
 - Before editing, inventory every requested endpoint against supplied `reaction:` links.
   If any endpoint lacks its exact module, group, and declaration link, report a design
   blocker immediately rather than declaring it or beginning transport work.
@@ -28,10 +32,16 @@ one assembled application.
 
 ## Stop conditions
 
-Report a design blocker if wiring requires an undeclared selected instance, link,
-computation, external binding, policy, recovery rule, endpoint behavior, or any change to
-an owner, action, refusal, or lifecycle. A task may request only endpoints already named by
-approved reaction links. Report a context blocker rather than guessing an undocumented
-public API or bypassing a selected transport; a task cannot authorize an alternate
-undocumented framework path. Report an environment blocker when assigned checks cannot
-run for a reason outside the implementation.
+Repair an implementation issue when documented syntax, stage arrangement, or binding can
+change without changing approved behavior. Report a context blocker when supplied public
+references or examples do not determine the required API. Report a design blocker only
+when every documented realization would change visible behavior, ownership,
+acknowledgement ordering, failure semantics, or a selected declaration. A task may request
+only endpoints already named by approved reaction links.
+
+For a blocker, report the observed diagnostic or failing scenario, affected behavioral
+commitment, why ordinary documented realizations cannot satisfy it, the smallest decision
+or behavioral/link revision needed, and the commitments that remain unaffected. Do not
+guess an undocumented API or bypass a selected transport; a task cannot authorize an
+alternate undocumented framework path. Report an environment blocker when assigned
+checks cannot run for a reason outside the implementation.

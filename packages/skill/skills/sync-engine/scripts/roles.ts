@@ -302,7 +302,12 @@ export const roleSpecifications = {
   ),
   "application-worker/implementation": specification(
     "application-worker/implementation",
-    ["implementation/framework-safety", "implementation/application", "api/composition"],
+    [
+      "implementation/framework-safety",
+      "implementation/application",
+      "api/composition",
+      "api/application-example",
+    ],
     [
       task(),
       brief(),

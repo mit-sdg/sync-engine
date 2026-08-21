@@ -330,9 +330,10 @@ changed paths. Each selected implementation role starts fresh and does not inher
 another implementation role's conversation. Evidence work is fresh and independent from
 the implementation it examines. Send repairs to the original role agent when available.
 
-Use owned directory or path families rather than predicting every filename, so a worker
-can create focused helpers and tests in its area. Expanding write ownership requires a
-new explicit grant or another role. Implementation and evidence workers may run
+Use dedicated owned directories or exact path families, so a worker can create focused
+helpers and tests without receiving a parent that also contains another owner's source.
+Expanding write ownership requires a new explicit grant or another role. Implementation
+and evidence workers may run
 project-local inspection, focused checks, filters, and formatters within their
 capabilities. A contract designer may run assigned design validation; a decomposition
 designer has no shell, and a critic has neither writes nor shell. Designers and critics
@@ -349,6 +350,23 @@ Workers may read complete diagnostics and repair their assigned source. A worker
 an unresolved issue as a design, context, or environment blocker.
 
 ### Route implementation feedback
+
+Classify feedback by authority rather than by which command exposed it:
+
+- **Implementation:** documented syntax, binding, staging, or branching can change while
+  preserving approved behavior. Return it to the same implementation identity.
+- **Context:** the supplied public references, examples, generated public contracts, or
+  application context do not determine the required API. Add the missing public context;
+  do not revise design.
+- **Design:** every documented realization would change visible behavior, ownership,
+  acknowledgement ordering, failure semantics, or a selected declaration. Route the
+  behavioral decision through design revision and independent criticism.
+- **Environment:** an assigned check cannot run for a reason outside the implementation.
+
+A blocked implementation response must preserve the concrete diagnostic or failing
+scenario, affected behavioral commitment, why ordinary documented realizations do not
+satisfy it, the smallest decision or link revision needed, and unaffected commitments.
+Do not translate a framework-syntax uncertainty into a design change.
 
 For an implementation defect, prepare a same-agent continuation:
 

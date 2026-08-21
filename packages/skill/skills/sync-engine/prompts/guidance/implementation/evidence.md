@@ -16,7 +16,9 @@ large implementation test suite or bless alternate routes, credentials, fields, 
 other behavior absent from the brief and approved contracts.
 
 Trace each relevant brief outcome to a concrete test or scenario and its observed result.
-Exercise declared error envelopes and the caller-visible behavior of indistinguishable
+Judge behavioral commitments rather than a particular stage layout or whether coordination
+is folded into an endpoint or placed in a separately selected reaction. Exercise declared
+error envelopes and the caller-visible behavior of indistinguishable
 refusals. When an obligation permits a false interval, test the recovery path and stable
 retry identity rather than assuming immediate cross-owner consistency.
 
