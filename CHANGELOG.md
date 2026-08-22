@@ -5,6 +5,83 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.16] - 2026-08-22
+
+This beta makes endpoint paths part of the checked authored design, fixes analysis
+of Bun application projects, and replaces the skill coordinator with resumable,
+capability-recorded work units across six supported harnesses.
+
+### Compatibility
+
+- Application design documents use `endpoints` fences containing
+  `Declaration.Identity at /path`. Every selected endpoint must have exactly one
+  authored declaration whose identity and portable absolute path match the
+  executable endpoint. Endpoint declarations supplement rather than replace the
+  endpoint tree's `reaction:` link coverage.
+- `check-design` validates endpoint declaration syntax and duplicates without an
+  assembly. Config-based `sync-engine check` additionally rejects unresolved
+  endpoint identities, path mismatches, and missing endpoint declarations.
+- Analysis launches a packaged core `sync-engine` command with Bun rather than
+  the analysis CLI's Node executable, raises the default `maxAstCandidates` from
+  100,000 to 1,000,000, and compares manifest diagnostics without depending on
+  producer order.
+- Successful human-readable `sync-engine check` and `verify` output summarizes
+  application advisories instead of listing each one. `--show-advisories` lists
+  them; `--fail-on-warnings` still lists diagnostics that cause failure, and
+  JSON output retains the complete diagnostic array.
+- The skill coordinator now keeps each bounded change under
+  `.sync-engine/work/<slug>/`, with typed role phases, explicit capability
+  grants, prepared and finalized launch records, captured responses, and
+  same-identity continuation. Its previous brief, assignment, launch, follow-up,
+  and handback command workflow is replaced.
+- Skill harness adapters support Paseo, Pi, Codex, Claude Code, Antigravity, and
+  Cursor. Capability grants are recorded and checked against role maxima, but
+  remain prompt-guided unless the selected harness reports enforcement.
+- Design work is split into decomposition and contract authoring with separate
+  criticism phases. Verification, concept, application, optional frontend, and
+  evidence roles receive phase-specific guidance and retained inputs.
+
+### Migration
+
+- Install core, HTTP, analysis, catalog, and skill at `1.0.0-beta.16` when they
+  are used together.
+- Add an `endpoints` fence to the authored application design for every selected
+  endpoint, using its exact declaration identity and route path. Keep the
+  existing `reaction:` link that covers the endpoint's reaction tree.
+- Start new skill work with `sync-engine-skill work start <slug>` and follow the
+  new prompt, launch, completion, and continuation flow. Previous top-level
+  `.sync-engine/` launch records do not satisfy the new work-unit workflow.
+- Ensure Bun is available when the Node-based analysis CLI resolves and invokes
+  a packaged core command from a Bun application project.
+- Add `--show-advisories` to existing human-readable check invocations that
+  depend on individual warning and informational lines.
+
+### Generated formats
+
+- Core application manifests remain at version 1. A checked endpoint
+  declaration now contributes its source location to the endpoint declaration's
+  existing `coverage` array, alongside reaction-link provenance when present.
+- Analysis application indexes, impact traces, source indexes, and project
+  snapshots remain at version 3, unchanged in shape.
+- The skill replaces `sync-engine.skill.launch-record` files at the top of
+  `.sync-engine/` with per-work-unit task, capability, prompt, response, and
+  prepared/finalized record files. The previous records are not consumed by the
+  new coordinator.
+- Regenerated declarations and example application artifacts update package and
+  projector provenance to `1.0.0-beta.16`.
+
+### Runtime and security support
+
+- Supported Node, Bun, TypeScript, and security windows are unchanged.
+- Analysis remains a Node executable, but invokes the packaged core command with
+  Bun so Bun configuration can load correctly. The higher AST candidate default
+  increases bounded discovery work without changing the one-million retained-node
+  limit.
+- Skill capability grants are auditable coordination evidence, not a sandbox;
+  the underlying harness determines technical access and enforcement.
+
+[Release][1.0.0-beta.16] | [Changes since 1.0.0-beta.15][1.0.0-beta.16-compare]
+
 ## [1.0.0-beta.15] - 2026-08-20
 
 This beta gives the design skill a separate decomposition review before concept
@@ -1304,6 +1381,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.16]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.16
+[1.0.0-beta.16-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.15...v1.0.0-beta.16
 [1.0.0-beta.15]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.15
 [1.0.0-beta.15-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.14...v1.0.0-beta.15
 [1.0.0-beta.14]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.14

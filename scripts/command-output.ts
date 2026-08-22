@@ -46,7 +46,7 @@ function isUsefulDiagnostic(line: string): boolean {
   const plain = stripAnsi(line).trim();
   if (plain === "" || plain.startsWith("{")) return false;
   if (/^info [A-Z][A-Z0-9_]+:/.test(plain)) return true;
-  if (/\b[1-9]\d* advisories?\b/i.test(plain)) return true;
+  if (/\b[1-9]\d* advisor(?:y|ies)\b/i.test(plain)) return true;
   if (/^(?:npm )?warn(?:ing)?(?:\s|:)/i.test(plain)) return true;
   if (/^(?:error|fatal)(?:\s|:)/i.test(plain)) return true;
   if (/^(?:\(node:\d+\)\s+)?(?:Experimental|Deprecation)Warning\b/.test(plain)) return true;

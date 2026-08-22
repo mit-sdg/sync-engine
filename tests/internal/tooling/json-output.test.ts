@@ -147,6 +147,13 @@ describe("versioned JSON validation output", () => {
     expect(passing.json.diagnostics).toContainEqual(
       expect.objectContaining({ code: "MISSING_ENDPOINT_FALLBACK", severity: "warning" }),
     );
+    expect(passing.text.stdout).not.toContain("warning MISSING_ENDPOINT_FALLBACK");
+    expect(passing.text.stdout).toContain("use --show-advisories to list them");
+
+    const expanded = run(["check", "--config", readingCircle, "--show-advisories"]);
+    expect(expanded.status).toBe(0);
+    expect(expanded.stdout).toContain("warning MISSING_ENDPOINT_FALLBACK");
+    expect(expanded.stdout).toContain("info ORDER_SENSITIVE_FORMER");
 
     const failing = jsonModes(["check", "--config", readingCircle, "--fail-on-warnings"]);
     expect(failing.text.status).toBe(1);
@@ -159,6 +166,7 @@ describe("versioned JSON validation output", () => {
     expect(failing.json.diagnostics).toContainEqual(
       expect.objectContaining({ code: "MISSING_ENDPOINT_FALLBACK", severity: "warning" }),
     );
+    expect(failing.text.stdout).toContain("warning MISSING_ENDPOINT_FALLBACK");
   }, 60_000);
 
   test("check-design emits located SSF records and preserves pass/fail exit codes", () => {

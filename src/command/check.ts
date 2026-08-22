@@ -408,7 +408,7 @@ export async function conceptDirectories(
     .sort();
 }
 
-const usage = `sync-engine check [--config path] [--fail-on-warnings] [--format json]
+const usage = `sync-engine check [--config path] [--fail-on-warnings] [--show-advisories] [--format json]
   Check the configured application, including concept TypeScript source agreement and application diagnostics.
   The configuration path defaults to generated.config.ts.`;
 
@@ -526,6 +526,7 @@ export async function checkCommand(
     config: true,
     failOnWarnings: true,
     format: true,
+    showAdvisories: true,
     operands: "none",
   });
   const output: OutputFormat | "silent" = render === "silent" ? "silent" : options.format;
@@ -574,8 +575,14 @@ export async function checkCommand(
     return report;
   }
   console.log(`Concept action/query source check passed for ${checked.conceptCount} concepts.`);
-  printApplicationDiagnostics(checked.diagnostics);
+  const showAdvisories = options.showAdvisories || failure !== undefined;
+  if (showAdvisories) printApplicationDiagnostics(checked.diagnostics);
   if (failure !== undefined) throw failure;
-  console.log(`Application diagnostic check passed with ${checked.diagnostics.length} advisories.`);
+  const advisoryCount = checked.diagnostics.length;
+  const hiddenHint =
+    advisoryCount > 0 && !showAdvisories ? " (use --show-advisories to list them)" : "";
+  console.log(
+    `Application diagnostic check passed with ${advisoryCount} ${advisoryCount === 1 ? "advisory" : "advisories"}${hiddenHint}.`,
+  );
   return report;
 }

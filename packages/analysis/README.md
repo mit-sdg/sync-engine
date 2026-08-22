@@ -28,7 +28,7 @@ concept-specification and application-design locations.
 Pin analysis and core to the same exact beta:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.15 @mit-sdg/sync-engine-analysis@1.0.0-beta.15
+bun add --exact @mit-sdg/sync-engine@1.0.0-beta.16 @mit-sdg/sync-engine-analysis@1.0.0-beta.16
 ```
 
 The ESM package supports Node.js `>=24 <25`. Project analysis depends on

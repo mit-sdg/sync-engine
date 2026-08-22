@@ -142,6 +142,21 @@ describe("sync-engine verify", () => {
     expect(verified.stdout).toMatch(
       /configured design documents: 2\n  check-design: passed\n  check: passed\n  artifacts check: passed\nVerification passed\./,
     );
+    expect(verified.stdout).not.toContain("warning MISSING_ENDPOINT_FALLBACK");
+    expect(verified.stdout).toContain("use --show-advisories to list them");
+
+    const expanded = run(
+      "verify",
+      "--config",
+      "examples/reading-circle/generated.config.ts",
+      "--show-advisories",
+    );
+    expect({ status: expanded.status, stderr: expanded.stderr }).toEqual({
+      status: 0,
+      stderr: "",
+    });
+    expect(expanded.stdout).toContain("warning MISSING_ENDPOINT_FALLBACK");
+    expect(expanded.stdout).toContain("info ORDER_SENSITIVE_FORMER");
 
     const report = await withoutOutput(() =>
       inDirectory(root, () =>

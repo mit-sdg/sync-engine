@@ -79,16 +79,18 @@ export interface CommandOptionSyntax {
     readonly config?: true;
     readonly failOnWarnings?: true;
     readonly format?: true;
+    readonly showAdvisories?: true;
     readonly operands: OperandRequirement;
 }
 export interface ParsedCommandOptions {
     readonly configPath?: string;
     readonly failOnWarnings: boolean;
     readonly format: OutputFormat;
+    readonly showAdvisories: boolean;
     readonly operands: readonly string[];
 }
 /**
- * Parse only the validation commands' three shared flags and their path operands.
+ * Parse only the validation commands' shared flags and their path operands.
  * This is intentionally not a general command-line framework.
  */
 export declare function parseCommandOptions(args: readonly string[], usage: string, syntax: CommandOptionSyntax): ParsedCommandOptions;

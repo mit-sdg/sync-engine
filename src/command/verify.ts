@@ -7,7 +7,7 @@ import { describeError } from "@engine/utils/redaction";
 import { parseCommandOptions } from "./command-options.ts";
 import { writeJsonDocument } from "./diagnostic-report.ts";
 
-const usage = `sync-engine verify [--config path] [--fail-on-warnings] [--format json]
+const usage = `sync-engine verify [--config path] [--fail-on-warnings] [--show-advisories] [--format json]
   Run the configured design, application, and artifact checks and report every result.
   The configuration path defaults to generated.config.ts.`;
 
@@ -94,6 +94,7 @@ export async function verifyCommand(args: readonly string[]): Promise<Verificati
     config: true,
     failOnWarnings: true,
     format: true,
+    showAdvisories: true,
     operands: "none",
   });
   const configPath = options.configPath ?? "generated.config.ts";
@@ -113,6 +114,7 @@ export async function verifyCommand(args: readonly string[]): Promise<Verificati
     "--config",
     configPath,
     ...(options.failOnWarnings ? ["--fail-on-warnings"] : []),
+    ...(options.showAdvisories ? ["--show-advisories"] : []),
   ];
   const steps: VerificationStepResult[] = [
     documents.length === 0
