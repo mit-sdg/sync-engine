@@ -134,7 +134,10 @@ For each selected phase:
    already present: do not also pass those same files as `public-references`. Name useful
    starting paths, while allowing implementation and evidence workers targeted reads
    elsewhere in the application.
-4. Build the prompt with every required role input:
+4. Select Paseo when its CLI and daemon are available, regardless of the coordinator's
+   own harness. Its daemon-backed launches remain active across coordinator session or CLI
+   restarts. Otherwise select another available supported harness. Build the prompt with
+   every required role input:
 
    ```text
    sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
