@@ -321,11 +321,11 @@ export const vocabulary = declareVocabulary({
     spec       Print assembly counts and the assembled read-back.
     wire       Print the wire contract.
 
-  sync-engine check [--config path] [--fail-on-warnings] [--format json]
+  sync-engine check [--config path] [--fail-on-warnings] [--show-advisories] [--format json]
     Check the configured application, including concept TypeScript source agreement and application diagnostics.
     The configuration path defaults to generated.config.ts.
 
-  sync-engine verify [--config path] [--fail-on-warnings] [--format json]
+  sync-engine verify [--config path] [--fail-on-warnings] [--show-advisories] [--format json]
     Run the configured design, application, and artifact checks and report every result.
     The configuration path defaults to generated.config.ts.\n`;
     const help = spawnSync("bun", ["src/command/main.ts", "--help"], {

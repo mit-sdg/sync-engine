@@ -509,6 +509,8 @@ remain unproved because siblings evaluate independently and do not share a
 state snapshot. The analyzer does not prove arbitrary view, computation,
 validator, action-outcome, or concurrent-state logic. Warnings remain advisory
 unless `sync-engine check --fail-on-warnings` runs with an application config.
+Human-readable checks summarize advisories by default;
+`--show-advisories` lists each one, while JSON output always retains them.
 
 ## Boundary, gateway, and client
 

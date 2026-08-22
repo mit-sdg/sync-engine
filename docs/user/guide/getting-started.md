@@ -18,7 +18,7 @@ the tutorial's core release:
 ```sh
 mkdir workshop-app
 cd workshop-app
-bunx --package @mit-sdg/sync-engine@1.0.0-beta.15 sync-engine setup
+bunx --package @mit-sdg/sync-engine@1.0.0-beta.16 sync-engine setup
 ```
 
 ## Inspect the initialized application
