@@ -107,6 +107,11 @@ whenever permanent authored design changes.
 
 ## Use the skill CLI
 
+Prefer `--harness paseo` when the Paseo CLI and daemon are available, even when the
+coordinator is running in another harness. Paseo's daemon-backed roles remain active
+across coordinator session or CLI restarts. Otherwise select another available supported
+harness.
+
 These are the command families and their core arguments:
 
 ```text

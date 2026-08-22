@@ -79,6 +79,10 @@ support:
 - Antigravity
 - Cursor
 
+When the Paseo CLI and daemon are available, the coordinator prefers Paseo for delegated
+roles even if it is running in another harness; daemon-backed roles remain active across
+coordinator session or CLI restarts.
+
 Every adapter preserves generated prompts as auditable files, starts fresh role contexts,
 and records the identity needed for same-agent continuation. Native invocation and prompt
 transport differ by harness; see the

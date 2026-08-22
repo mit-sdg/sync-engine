@@ -5,8 +5,11 @@ contract.
 The prompt, capabilities, work-unit records, role independence, and continuation meaning
 are the same in every harness. An adapter describes invocation differences; it does not
 choose workflow phases or review outcomes. Running the coordinator inside one harness does
-not select that harness for delegated roles; the coordinator uses the adapter named by the
-prepared launch. Run `sync-engine-skill --help` for exhaustive CLI options.
+not select that harness for delegated roles. Prefer Paseo when its CLI and daemon are
+available because `paseo run` delegates to the persistent background daemon and survives
+coordinator session or CLI restarts. Otherwise use another available supported harness.
+The coordinator names that choice explicitly in the prepared launch. Run
+`sync-engine-skill --help` for exhaustive CLI options.
 
 ## Uniform launch flow
 
