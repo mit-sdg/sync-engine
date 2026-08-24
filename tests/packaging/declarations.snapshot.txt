@@ -2311,7 +2311,7 @@ export declare class MemoryStore {
     private replaceRecord;
     /** Drop each record from both the id map and the derived consumed index. */
     private dropRecords;
-    /** Remove firings whose consumed occurrences are all evicted and rebuild retained consumption. */
+    /** Remove firings whose retained consumed occurrences are all being evicted. */
     private dropFiringsFor;
 }
 export {};

@@ -254,6 +254,69 @@ describe("log store: window retention", () => {
     expect(store.reactionFailures.map((failure) => failure.flow)).toEqual(["second-flow"]);
   });
 
+  test("updates firing indexes incrementally when a firing spans retained flows", () => {
+    const store = new MemoryStore({ window: 1 });
+    const first = record({ id: "first", flow: "first" });
+    const second = record({ id: "second", flow: "second" });
+    store.append({ kind: "invocation", at: 1, record: first });
+    store.append({ kind: "invocation", at: 2, record: second });
+    store.append({
+      kind: "firing",
+      at: 3,
+      firing: {
+        id: "shared",
+        reaction: "Shared",
+        flow: "second",
+        bindings: {},
+        consumed: [first.id, second.id],
+        produced: [],
+        at: 3,
+      },
+    });
+    store.append({
+      kind: "firing",
+      at: 4,
+      firing: {
+        id: "first-only",
+        reaction: "FirstOnly",
+        flow: "first",
+        bindings: {},
+        consumed: [first.id],
+        produced: [],
+        at: 4,
+      },
+    });
+
+    store.flowSettled("first");
+    store.flowSettled("second");
+
+    expect(store.firingsByReaction("Shared").map(({ id }) => id)).toEqual(["shared"]);
+    expect(store.firingsByReaction("FirstOnly")).toEqual([]);
+    expect(store.hasConsumed(first.id, "Shared")).toBe(false);
+    expect(store.hasConsumed(second.id, "Shared")).toBe(true);
+
+    const third = record({ id: "third", flow: "third" });
+    store.append({ kind: "invocation", at: 5, record: third });
+    store.append({
+      kind: "firing",
+      at: 6,
+      firing: {
+        id: "third-only",
+        reaction: "Shared",
+        flow: "third",
+        bindings: {},
+        consumed: [third.id],
+        produced: [],
+        at: 6,
+      },
+    });
+    store.flowSettled("third");
+
+    expect(store.firingsByReaction("Shared").map(({ id }) => id)).toEqual(["third-only"]);
+    expect(store.hasConsumed(second.id, "Shared")).toBe(false);
+    expect(store.hasConsumed(third.id, "Shared")).toBe(true);
+  });
+
   test("rejects invalid windows", () => {
     for (const window of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => new MemoryStore({ window })).toThrow(

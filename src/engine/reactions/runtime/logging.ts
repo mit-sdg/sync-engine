@@ -3,6 +3,7 @@ import { logger } from "@engine/utils/logger";
 import { redact, serializeError } from "@engine/utils/redaction";
 import type { Redactor } from "@engine/utils/redaction";
 import { inspect } from "@engine/utils/runtime";
+import { globalRegistry } from "@engine/utils/global-registry";
 import type { ActionRecord } from "./actions.ts";
 import type { ActionConcept } from "./actions.ts";
 import { actionNameOf, conceptNameOf } from "../concepts/introspect.ts";
@@ -35,6 +36,13 @@ export interface EngineObserver {
   onAction(ev: LogEvent): void;
 }
 
+type EngineObserverFilter = (record: ActionRecord, stored: ActionRecord | undefined) => boolean;
+const engineObserverFilters = globalRegistry<WeakMap<EngineObserver, EngineObserverFilter>>(
+  "@mit-sdg/sync-engine/internal-engine-observer-filters",
+  () => new WeakMap(),
+  (value): value is WeakMap<EngineObserver, EngineObserverFilter> => value instanceof WeakMap,
+);
+
 export enum Logging {
   OFF,
   TRACE,
@@ -52,6 +60,7 @@ export class ReactionLogger {
   ) {}
 
   addObserver(observer: EngineObserver): () => void {
+    engineObserverFilters.delete(observer);
     return this.observers.add(observer);
   }
 
@@ -87,9 +96,16 @@ export class ReactionLogger {
   /** Call each observer; log an opaque error class when one throws. */
   emit(record: ActionRecord, durationMs?: number): void {
     if (this.observers.size === 0 || durationMs === undefined) return;
+    const stored = this.actions._getById(record.id);
+    let event: LogEvent | undefined;
     this.observers.notify(
-      (observer, event) => observer.onAction(event),
-      this.toEvent(record, durationMs),
+      (observer) => {
+        const accepts = engineObserverFilters.get(observer);
+        if (accepts !== undefined && !accepts(record, stored)) return;
+        event ??= this.toEvent(record, durationMs);
+        return observer.onAction(event);
+      },
+      undefined,
       (error) => logger.warn("observer threw", { error: serializeError(error) }),
     );
   }

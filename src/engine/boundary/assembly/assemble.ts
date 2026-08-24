@@ -27,8 +27,9 @@ import { declarationsOf } from "@engine/reactions/authoring/partitions";
 import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
 import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
-import { rolesOf } from "@engine/reactions/concepts/introspect";
+import { actionNameOf, conceptNameOf, rolesOf } from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
+import type { ActionRecord } from "@engine/reactions/runtime/actions";
 import type { InstrumentedConcept, QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 import {
   MemoryStore,
@@ -66,6 +67,7 @@ import { isRelationView } from "@engine/reads/lines";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalValue } from "@engine/utils/canonical-json";
 import { logger } from "@engine/utils/logger";
+import { globalRegistry } from "@engine/utils/global-registry";
 import { ordinal } from "@engine/utils/ordinal";
 import { createRedactor } from "@engine/utils/redaction";
 import type { RedactionPolicy } from "@engine/utils/redaction";
@@ -370,6 +372,13 @@ function isWalkable(value: unknown): value is Record<string, unknown> {
 }
 
 /** Report the names of reactions that both answer one request. */
+type EngineObserverFilter = (record: ActionRecord, stored: ActionRecord | undefined) => boolean;
+const engineObserverFilters = globalRegistry<WeakMap<EngineObserver, EngineObserverFilter>>(
+  "@mit-sdg/sync-engine/internal-engine-observer-filters",
+  () => new WeakMap(),
+  (value): value is WeakMap<EngineObserver, EngineObserverFilter> => value instanceof WeakMap,
+);
+
 const respondRaceObserver: EngineObserver = {
   onAction(ev) {
     if (ev.concept !== "RequestBoundary" || ev.action !== "respond") return;
@@ -670,6 +679,14 @@ export function assemble<T extends Record<string, ConceptClass>>(
 
   engine.registerReactions(boundaryOutcomes);
   engine.addObserver(respondRaceObserver);
+  engineObserverFilters.set(respondRaceObserver, (record, stored) => {
+    if (conceptNameOf(record.concept) !== "RequestBoundary") return false;
+    if (actionNameOf(record.action) !== "respond") return false;
+    const outcome = stored?.outcome ?? record.outcome;
+    return (
+      outcome?.kind === "error" && (outcome.error as { error?: unknown }).error === "NOT_PENDING"
+    );
+  });
 
   const endpointPaths = new Set(endpoints.map(({ path }) => path));
   const invoker = createInvoker({
