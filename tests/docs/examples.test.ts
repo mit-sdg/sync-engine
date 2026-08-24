@@ -139,11 +139,11 @@ describe("executable documentation examples", () => {
           join(project, "package.json"),
           `${JSON.stringify({
             name: "workshop-app",
-            packageManager: "bun@1.3.14",
+            packageManager: "bun@1.4.0",
             dependencies: { "@mit-sdg/sync-engine": manifest.version },
             devDependencies: {
               typescript: "^6.0.0",
-              "@types/bun": "^1.3.0",
+              "@types/bun": "^1.4.0",
               "@types/node": "^24.0.0",
             },
             scripts: {

@@ -20,6 +20,9 @@ Use Bun for installation and package scripts. Do not replace these commands
 with `npm`, `npx`, or `bun test`; the repository scripts use Vite+ and include
 project-specific configuration.
 
+Run `bun run benchmark:http` for the informational HTTP handler microbenchmark.
+It reports warm, in-process samples and is not a correctness or CI gate.
+
 ## Checks by change type
 
 | Change                           | Required checks                                                                        |

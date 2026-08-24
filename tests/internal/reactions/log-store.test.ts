@@ -5,6 +5,7 @@
  * mutation), indexed reads, firing records, and automatic window retention.
  */
 
+import type { EventEmitter } from "node:events";
 import { describe, expect, test } from "vite-plus/test";
 import { vocabulary } from "@sync-engine/advanced";
 import { earlier, reaction, when } from "@sync-engine/language";
@@ -743,7 +744,8 @@ describe("log store: firings are introspectable after a live run", () => {
   test("rejects a native Promise return and consumes its rejection", async () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
-    process.on("unhandledRejection", onUnhandled);
+    const processEvents: EventEmitter = process;
+    processEvents.on("unhandledRejection", onUnhandled);
     try {
       const store = new MemoryStore("keepAll", {
         append: (() => Promise.reject(new Error("sink rejected"))) as never,
@@ -756,7 +758,7 @@ describe("log store: firings are introspectable after a live run", () => {
       await new Promise((resolve) => setImmediate(resolve));
       expect(unhandled).toEqual([]);
     } finally {
-      process.off("unhandledRejection", onUnhandled);
+      processEvents.off("unhandledRejection", onUnhandled);
     }
   });
 
