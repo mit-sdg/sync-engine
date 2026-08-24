@@ -225,9 +225,9 @@ shows a checked browser application lifecycle.
 
 `responseHeaders` adds static or per-response headers. The callback receives the
 request, resolved path, status, and optional correlation id. The handler drops
-`Set-Cookie`, `Cache-Control`, every `Access-Control-*` header, and `Vary` from
-this option; policy-owned headers remain authoritative. A throw or rejected
-promise produces an opaque `INTERNAL_ERROR`/500 response.
+cookie, cache, CORS, representation, redirect, and HTTP framing or hop-by-hop
+headers from this option; policy-owned headers remain authoritative. A throw or
+rejected promise produces an opaque `INTERNAL_ERROR`/500 response.
 
 ```ts
 const handler = createHttpHandler({
@@ -277,7 +277,8 @@ segment does not match. `redirect` names a response field holding an absolute UR
 answers `302`; `status` alone answers that status with the JSON body; a route states one of
 them. `GET` only, parameter names may not repeat, and two routes may not share a method and
 shape. The endpoint keeps its `POST` path. A direct route carries no cookies and skips the
-request-origin check, so it cannot serve an endpoint that issues or clears one.
+request-origin check, so it cannot serve a protected, issuing, or clearing endpoint in a
+cookie binding. Malformed percent encoding does not match a direct route.
 
 ### Custom transport
 
@@ -304,11 +305,12 @@ The host owns listener and process lifecycle, static or SPA routing, TLS, proxy
 configuration, and traffic controls. Application code defines credentials,
 authentication, and authorization.
 
-The package does not provide a Node cookie jar, retries, idempotency, rollback,
-persistence, or cancellation of accepted application work. It buffers JSON
-request and response bodies. Resource-oriented REST routing, streaming, and
-arbitrary framework adapters are unsupported. Generated TypeScript does not
-provide runtime validation.
+The package does not provide a Node cookie jar, retries, redirects, idempotency,
+rollback, persistence, or cancellation of accepted application work. The client
+rejects Fetch redirects rather than forwarding configured headers or replaying a
+request. It buffers JSON request and response bodies. Resource-oriented REST
+routing, streaming, and arbitrary framework adapters are unsupported. Generated
+TypeScript does not provide runtime validation.
 
 The handler and client have no disposal method. The host closes listeners, Fetch
 agents, gateways, stores, and other resources. Handler calls and client header

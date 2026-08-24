@@ -168,6 +168,31 @@ describe("assembly execution lifecycle", () => {
     expect(idle).toBe(true);
   });
 
+  test("releases direct-root admission when opening the occurrence flow fails", async () => {
+    class WorkingConcept {
+      run(_: Empty) {
+        return { ok: true };
+      }
+    }
+    let first = true;
+    const app = assemble({
+      vocabulary: vocabulary({ concepts: { Working: WorkingConcept }, computations: {} }),
+      composition: {},
+      executionLimits: limits({ maxActiveRootFlows: 1 }),
+      clock() {
+        if (first) {
+          first = false;
+          throw new Error("clock unavailable");
+        }
+        return new Date();
+      },
+    });
+
+    await expect(app.concepts.Working.run({})).rejects.toThrow("clock unavailable");
+    await expect(app.concepts.Working.run({})).resolves.toEqual({ ok: true });
+    await expect(app.whenIdle()).resolves.toBeUndefined();
+  });
+
   test("direct query roots are fresh and rejected after drain", async () => {
     class CachedConcept {
       static readonly queries = { _value: "many" } as const;
@@ -424,11 +449,13 @@ describe("assembly execution lifecycle", () => {
       vocabulary: words,
       composition: { matrix },
       executionLimits: limits({ maxRowsPerEvaluation: 5 }),
+      retention: { window: 0 },
     });
 
     await expect(app.concepts.Matrix._large({})).rejects.toThrow("row limit");
     await expect(app.form(matrix({}))).rejects.toThrow("row limit");
     expect(app.concepts.Matrix.rightReads).toBe(2);
+    expect((app.engine.Action.store as MemoryStore).integrityFailures).toEqual([]);
   });
 
   test("stops repeated earlier expansion at the first over-limit cross-product frame", async () => {

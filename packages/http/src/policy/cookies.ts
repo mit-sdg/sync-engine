@@ -66,6 +66,9 @@ export function normalizeCookies(
     }
     const path = binding.path ?? "/";
     assertPortableRoutePath(path, `httpPolicy: cookie "${key}" path`);
+    if (path.includes(";")) {
+      throw new Error(`httpPolicy: cookie "${key}" field path must not contain ';'.`);
+    }
     if (binding.domain !== undefined) {
       if (
         binding.domain === "" ||
@@ -195,7 +198,7 @@ export function validateCookieBindings(
   const endpoints = new Map(wire.endpoints.map((endpoint) => [endpoint.path, endpoint]));
   const knownPaths = new Set([...Object.keys(routes), ...endpoints.keys()]);
   const owners = new Map<string, string>();
-  return Object.freeze(
+  const validated = Object.freeze(
     cookieBindingFacts(policy).map((factsForBinding) => {
       const { binding, key } = factsForBinding;
       for (const path of [...factsForBinding.issuePaths, ...factsForBinding.clearPaths]) {
@@ -247,6 +250,15 @@ export function validateCookieBindings(
       });
     }),
   );
+  const guarded = policy.direct?.find((route) =>
+    validated.some((binding) => binding.touchedPaths.has(route.endpoint)),
+  );
+  if (guarded !== undefined) {
+    throw new Error(
+      `httpPolicy: direct route ${guarded.path} serves cookie-bound endpoint ${guarded.endpoint}; a direct route carries no cookies.`,
+    );
+  }
+  return validated;
 }
 
 export function omitTopLevel(type: WireType, omitted: ReadonlySet<string>): WireType {

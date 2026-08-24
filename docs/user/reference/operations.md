@@ -164,10 +164,11 @@ Ordinary assembly retains the 100 most recent settled flows by default.
 `{ window: number }`. Manual `createEngine(...)` defaults to `"keepAll"`.
 
 Window enforcement runs only after a flow settles and never evicts active flows,
-so active work can exceed the configured window. `{ window: 0 }` evicts each flow
-after settlement. There is no manual prune operation or hard retained-byte
-limit. Retention affects the internal index only; it does not remove output
-already sent to a `LogSink`.
+so active work can exceed the configured window. Direct query and former roots
+that record execution-limit evidence also settle that evidence into the window.
+`{ window: 0 }` evicts each flow after settlement. There is no manual prune
+operation or hard retained-byte limit. Retention affects the internal index
+only; it does not remove output already sent to a `LogSink`.
 
 ## Operational observation
 

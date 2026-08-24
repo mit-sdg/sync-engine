@@ -287,6 +287,7 @@ export class Reacting {
         this.assertRows(flowToken, count),
       );
     } finally {
+      this.Action.store.flowSettled(flowToken);
       this.execution?.flowSettled?.(flowToken);
     }
   }

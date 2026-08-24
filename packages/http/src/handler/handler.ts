@@ -5,6 +5,7 @@ import { validateCookieBindings, type ValidatedCookieBinding } from "../policy/c
 import { matchDirectRoute, type CompiledDirectRoute } from "../policy/direct.ts";
 import { requireHttpPolicy } from "../policy/normalize.ts";
 import type { HttpPolicy } from "../policy/types.ts";
+import { cancelReadable } from "../stream.ts";
 import { clearedCookie, cookieValue, issuedCookie } from "./cookie-runtime.ts";
 import { preflightAllowed, withCors } from "./cors.ts";
 import {
@@ -141,6 +142,7 @@ export function createHttpHandler(
       ? options.responseHeaders
       : new Headers(options.responseHeaders);
   const basePath = policy.basePath ?? "";
+  const applicationPaths = new Set(Object.keys(options.application.publicInterface.routes));
   const directRoutes = policy.direct as readonly CompiledDirectRoute[] | undefined;
   const maxBodyBytes = policy.limits?.requestBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const preflightPaths =
@@ -169,13 +171,20 @@ export function createHttpHandler(
         preflight,
       );
     };
-    const invalid = () => finish(publicJson({ error: "INVALID_REQUEST" }, 400));
+    const discardUnreadBody = (): void => {
+      if (!request.bodyUsed) cancelReadable(request.body);
+    };
+    const finishUnread = (response: Response, preflight = false): Promise<Response> => {
+      discardUnreadBody();
+      return finish(response, preflight);
+    };
+    const invalid = () => finishUnread(publicJson({ error: "INVALID_REQUEST" }, 400));
     if (request.method === "OPTIONS" && policy.browser !== undefined) {
       const accepted =
         path !== undefined &&
         preflightPaths?.has(path) === true &&
         preflightAllowed(request, policy.browser);
-      return finish(
+      return finishUnread(
         accepted ? new Response(null, { status: 204 }) : publicJson({ error: "FORBIDDEN" }, 403),
         true,
       );
@@ -183,8 +192,9 @@ export function createHttpHandler(
     const direct =
       path === undefined ? undefined : matchDirectRoute(directRoutes, request.method, path);
     if (direct === undefined && request.method !== "POST") return invalid();
-    if (path === undefined) return finish(publicJson({ error: "NOT_FOUND" }, 404));
+    if (path === undefined) return finishUnread(publicJson({ error: "NOT_FOUND" }, 404));
     if (direct !== undefined) {
+      discardUnreadBody();
       let served: InvocationResult;
       try {
         served = await binding.invoker.invoke(direct.route.endpoint, direct.input as never, {
@@ -200,8 +210,11 @@ export function createHttpHandler(
       }
       return finish(directResponse(direct.route, served.value));
     }
+    if (!applicationPaths.has(path)) {
+      return finishUnread(publicJson({ error: "NOT_FOUND" }, 404));
+    }
     if (originRejected(request, path, cookies, policy)) {
-      return finish(publicJson({ error: "FORBIDDEN" }, 403));
+      return finishUnread(publicJson({ error: "FORBIDDEN" }, 403));
     }
     const contentType = request.headers.get("Content-Type");
     if (contentType !== null && !/^application\/json(?:\s*;|$)/i.test(contentType)) {

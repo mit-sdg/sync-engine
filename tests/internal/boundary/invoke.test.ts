@@ -191,6 +191,21 @@ describe("createInvoker", () => {
     ).toBe(false);
   });
 
+  test("classifies an abort by its signal rather than its caller-supplied reason", async () => {
+    const { invoker } = setup();
+    const controller = new AbortController();
+    const pending = invoker.invoke("/unanswered" as never, {} as never, {
+      signal: controller.signal,
+      timeoutMs: 5_000,
+    });
+    setTimeout(() => controller.abort(new DOMException("caller reason", "TimeoutError")), 1);
+
+    expect(await pending).toEqual({
+      ok: false,
+      error: { kind: "framework", code: FrameworkErrorCode.ABORTED },
+    });
+  });
+
   test("two concurrent requests receive independent responses", async () => {
     const { invoker } = setup();
 

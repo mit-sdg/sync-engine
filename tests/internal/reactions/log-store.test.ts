@@ -204,6 +204,25 @@ describe("log store: window retention", () => {
     expect(store.reactionFailures).toEqual([]);
   });
 
+  test("applies the window to settled read failures without action records", () => {
+    const store = new MemoryStore({ window: 0 });
+    store.append({
+      kind: "integrity-failure",
+      at: 1,
+      failure: {
+        kind: "execution-limit",
+        flow: "read-flow",
+        limit: "rows",
+        errorClass: "ExecutionLimitExceeded",
+        at: 1,
+      },
+    });
+
+    store.flowSettled("read-flow");
+
+    expect(store.integrityFailures).toEqual([]);
+  });
+
   test("retains only the newest settled flows", () => {
     const store = new MemoryStore({ window: 1 });
     const log = new ActionConcept(store);

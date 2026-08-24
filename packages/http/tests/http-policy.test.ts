@@ -329,6 +329,14 @@ describe("httpPolicy", () => {
         },
       }),
     ).toThrow(/__Host- prefix with an incompatible domain or path/);
+    expect(() =>
+      sessionPolicy({
+        requestOrigins: false,
+        cookies: {
+          session: { ...sessionCookie, path: "/;SameSite=None" },
+        },
+      }),
+    ).toThrow(/field path must not contain/);
   });
 
   test("validates limits, headers, duplicate bindings, and endpoint declarations", () => {
@@ -436,6 +444,22 @@ describe("application-bound policy validation", () => {
         }),
       }),
     ).toThrow(/endpoint "\/overlap" is protected by cookies "session" and "token"/);
+  });
+
+  test("rejects direct routes to cookie-protected endpoints", () => {
+    const application = applicationWith();
+    const gateway = createGateway({ application });
+    const policy = sessionPolicy({
+      direct: [{ method: "GET", path: "/me/{session}", endpoint: "/me", status: 200 }],
+    });
+    const binding = bindTransport({ application, gateway });
+
+    expect(() => createHttpHandler({ application, gateway, policy })).toThrow(
+      /serves cookie-bound endpoint \/me/,
+    );
+    expect(() => httpWire({ name: "ProtectedDirect", policy }).project(binding)).toThrow(
+      /serves cookie-bound endpoint \/me/,
+    );
   });
 
   test("handler and projection reject the same invalid assembly-policy pairing", () => {
@@ -621,7 +645,7 @@ describe("HTTP handler", () => {
     expect((await preflight("https://app.test", "POST", "authorization")).status).toBe(403);
   });
 
-  test("rejects malformed JSON and cancels an oversized streamed body", async () => {
+  test("rejects malformed JSON and UTF-8 and cancels an oversized streamed body", async () => {
     const application = applicationWith();
     const gateway = createGateway({ application });
     const handler = createHttpHandler({ application, gateway });
@@ -633,6 +657,26 @@ describe("HTTP handler", () => {
       }),
     );
     expect(malformed.status).toBe(400);
+
+    let invalidUtf8Canceled = false;
+    const invalidUtf8Stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d]));
+      },
+      cancel() {
+        invalidUtf8Canceled = true;
+      },
+    });
+    const invalidUtf8 = await handler(
+      new Request("https://api.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: invalidUtf8Stream,
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+    );
+    expect(invalidUtf8.status).toBe(400);
+    expect(invalidUtf8Canceled).toBe(true);
 
     let canceled = false;
     const stream = new ReadableStream<Uint8Array>({
@@ -652,6 +696,53 @@ describe("HTTP handler", () => {
       } as RequestInit & { duplex: "half" }),
     );
     expect(oversized.status).toBe(400);
+    expect(canceled).toBe(true);
+  });
+
+  test("settles body reads when the request is aborted", async () => {
+    const application = applicationWith();
+    const gateway = createGateway({ application });
+    const handler = createHttpHandler({ application, gateway });
+    const controller = new AbortController();
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        canceled = true;
+      },
+    });
+    const pending = handler(
+      new Request("https://api.test/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: stream,
+        duplex: "half",
+        signal: controller.signal,
+      } as RequestInit & { duplex: "half" }),
+    );
+
+    controller.abort();
+    expect((await pending).status).toBe(400);
+    expect(canceled).toBe(true);
+  });
+
+  test("rejects unknown routes without consuming their bodies", async () => {
+    const application = applicationWith();
+    const gateway = createGateway({ application });
+    const handler = createHttpHandler({ application, gateway });
+    let canceled = false;
+    const request = new Request("https://api.test/unknown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: new ReadableStream<Uint8Array>({
+        cancel() {
+          canceled = true;
+        },
+      }),
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    const response = await handler(request);
+
+    expect(response.status).toBe(404);
     expect(canceled).toBe(true);
   });
 
@@ -681,14 +772,22 @@ describe("HTTP handler", () => {
       responseHeaders: {
         "Access-Control-Allow-Origin": "https://evil.test",
         "Cache-Control": "public",
+        "Content-Length": "1",
+        "Content-Type": "text/html",
+        Location: "https://evil.test",
         "Set-Cookie": "stolen=yes",
+        "Transfer-Encoding": "chunked",
         "X-Version": "1",
       },
     });
     const response = await handler(post("/login", { origin: "https://app.test" }));
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://app.test");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Type")).toBe("application/json");
+    expect(response.headers.get("Content-Length")).not.toBe("1");
+    expect(response.headers.get("Location")).toBeNull();
     expect(response.headers.get("Set-Cookie")).toContain("__Host-session=");
+    expect(response.headers.get("Transfer-Encoding")).toBeNull();
     expect(response.headers.get("X-Version")).toBe("1");
 
     expect(() =>

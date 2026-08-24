@@ -3,7 +3,13 @@ import type { ValidatedCookieBinding } from "../policy/cookies.ts";
 const MAX_COOKIE_BYTES = 4096;
 
 export function cookieValue(header: string | null, name: string): string | undefined {
-  if (header === null || new TextEncoder().encode(header).byteLength > 16_384) return undefined;
+  if (
+    header === null ||
+    header.length > 16_384 ||
+    new TextEncoder().encode(header).byteLength > 16_384
+  ) {
+    return undefined;
+  }
   let found: string | undefined;
   for (const item of header.split(";")) {
     const separator = item.indexOf("=");
@@ -34,7 +40,13 @@ export function issuedCookie(
   sourceExpiry: unknown,
   now = Date.now(),
 ): string | undefined {
-  if (typeof value !== "string" || /[^\u0020-\u007e]/.test(value)) return undefined;
+  if (
+    typeof value !== "string" ||
+    value.length > MAX_COOKIE_BYTES ||
+    /[^\u0020-\u007e]/.test(value)
+  ) {
+    return undefined;
+  }
   const expires = sourceExpiry instanceof Date ? sourceExpiry : new Date(String(sourceExpiry));
   if (Number.isNaN(expires.getTime()) || expires.getTime() <= now) return undefined;
   const serialized =

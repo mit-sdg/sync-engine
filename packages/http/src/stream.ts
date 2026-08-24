@@ -1,5 +1,7 @@
 export type CappedTextRead = { ok: true; text: string } | { ok: false } | { aborted: true };
 
+const MAX_PENDING_TEXT_PARTS = 1_024;
+
 type Cancelable = { cancel(reason?: unknown): Promise<void> };
 
 export function cancelReadable(readable: Cancelable | null, reason?: unknown): void {
@@ -62,8 +64,16 @@ export async function readCappedUtf8Stream(
   if (stream === null) return { ok: true, text: "" };
 
   const reader = stream.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   const parts: string[] = [];
+  let pendingParts: string[] = [];
+  const append = (part: string): void => {
+    if (part === "") return;
+    pendingParts.push(part);
+    if (pendingParts.length < MAX_PENDING_TEXT_PARTS) return;
+    parts.push(pendingParts.join(""));
+    pendingParts = [];
+  };
   let bytes = 0;
   try {
     while (true) {
@@ -85,10 +95,14 @@ export async function readCappedUtf8Stream(
         cancelReadable(reader);
         return { ok: false };
       }
-      parts.push(decoder.decode(chunk.value, { stream: true }));
+      append(decoder.decode(chunk.value, { stream: true }));
     }
-    parts.push(decoder.decode());
+    append(decoder.decode());
+    if (pendingParts.length > 0) parts.push(pendingParts.join(""));
     return { ok: true, text: parts.join("") };
+  } catch (error) {
+    cancelReadable(reader, error);
+    throw error;
   } finally {
     reader.releaseLock();
   }
