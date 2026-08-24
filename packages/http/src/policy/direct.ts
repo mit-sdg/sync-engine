@@ -34,8 +34,8 @@ export function compileDirectRoutes(
         `httpPolicy: direct route ${route.path} must state redirect or status; a direct route without either is a POST endpoint.`,
       );
     }
-    const segments = route.path.split("/").slice(1);
-    const parameters = segments.map((segment) => segment.match(SEGMENT)?.[1]);
+    const segments = Object.freeze(route.path.split("/").slice(1));
+    const parameters = Object.freeze(segments.map((segment) => segment.match(SEGMENT)?.[1]));
     const named = parameters.filter((name): name is string => name !== undefined);
     if (new Set(named).size !== named.length) {
       throw new Error(`httpPolicy: direct route ${route.path} repeats a parameter name.`);
@@ -73,7 +73,12 @@ export function matchDirectRoute(
         matched = false;
         break;
       }
-      input[name] = decodeURIComponent(part);
+      try {
+        input[name] = decodeURIComponent(part);
+      } catch {
+        matched = false;
+        break;
+      }
     }
     if (matched) return { route, input };
   }

@@ -240,6 +240,7 @@ export class MemoryStore {
   readonly integrityFailures: IntegrityFailureRecord[] = [];
   /** Derived index folded from firing entries: record id → reactions that consumed it. */
   private consumedIndex: Map<string, Set<string>> = new Map();
+  private failureFlows = new Set<string>();
   private settledFlowOrder = new Set<string>();
 
   constructor(
@@ -301,9 +302,11 @@ export class MemoryStore {
       }
       case "reaction-failure":
         this.reactionFailures.push(entry.failure);
+        this.failureFlows.add(entry.failure.flow);
         return;
       case "integrity-failure":
         this.integrityFailures.push(entry.failure);
+        this.failureFlows.add(entry.failure.flow);
         return;
     }
   }
@@ -333,11 +336,12 @@ export class MemoryStore {
     }
     this.dropFlowEntries(this.reactionFailures, flow);
     this.dropFlowEntries(this.integrityFailures, flow);
+    this.failureFlows.delete(flow);
     this.settledFlowOrder.delete(flow);
   }
 
   flowSettled(flow: string): void {
-    if (!this.flowIndex.has(flow)) return;
+    if (!this.flowIndex.has(flow) && !this.failureFlows.has(flow)) return;
     this.settledFlowOrder.delete(flow);
     this.settledFlowOrder.add(flow);
     this.enforceWindow();

@@ -440,6 +440,9 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
       try {
         throw settled.error;
       } catch (err) {
+        if (isAborted(invokeOpts.signal)) {
+          return settle(frameworkError(FrameworkErrorCode.ABORTED));
+        }
         if (err instanceof DOMException) {
           if (err.name === "TimeoutError") {
             return settle(frameworkError(FrameworkErrorCode.TIMED_OUT));
@@ -447,9 +450,6 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
           if (err.name === "AbortError") {
             return settle(frameworkError(FrameworkErrorCode.ABORTED));
           }
-        }
-        if (isAborted(invokeOpts.signal)) {
-          return settle(frameworkError(FrameworkErrorCode.ABORTED));
         }
         return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
       }

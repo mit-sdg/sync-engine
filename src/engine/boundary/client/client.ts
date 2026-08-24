@@ -128,6 +128,19 @@ type PathChain<
     ? { [K in S]: Endpoint<C, FullPath, TError> }
     : {};
 
+type ContainsPathSegment<
+  P extends string,
+  Segment extends string,
+> = P extends `/${infer First}/${infer Rest}`
+  ? First extends Segment
+    ? true
+    : ContainsPathSegment<`/${Rest}`, Segment>
+  : P extends `/${infer Last}`
+    ? Last extends Segment
+      ? true
+      : false
+    : false;
+
 type AllPathChains<
   C extends ContractShape,
   TError,
@@ -135,7 +148,9 @@ type AllPathChains<
 > = P extends unknown
   ? P extends "/then" | `/then/${string}`
     ? {}
-    : PathChain<P, C, TError, P>
+    : ContainsPathSegment<P, "inspect" | "toJSON" | "toString" | "valueOf"> extends true
+      ? {}
+      : PathChain<P, C, TError, P>
   : never;
 
 /**
@@ -148,15 +163,19 @@ type RemainderPathChain<
   TError = ClientError,
 > = P extends "/then" | `/then/${string}`
   ? {}
-  : P extends `/${infer First}/${infer Rest}`
-    ? { [K in First]: { [R in Rest]: Endpoint<C, P, TError> } }
-    : {};
+  : ContainsPathSegment<P, "inspect" | "toJSON" | "toString" | "valueOf"> extends true
+    ? {}
+    : P extends `/${infer First}/${infer Rest}`
+      ? { [K in First]: { [R in Rest]: Endpoint<C, P, TError> } }
+      : {};
 
 /**
  * The full client type for a contract `C`. Both calling styles coexist because
  * the contract paths (`/group/method`) cleanly split into a flat index and an
  * arbitrarily-deep grouped tree. Paths rooted at `/then` are indexed-only so
- * the root client cannot be mistaken for a promise.
+ * the root client cannot be mistaken for a promise. Paths containing
+ * `inspect`, `toJSON`, `toString`, or `valueOf` segments are indexed-only so
+ * inspection and coercion cannot issue a request.
  */
 export type Client<C extends ContractShape, TError = ClientError> = IndexedClient<C, TError> &
   GroupedClient<C, TError>;
@@ -184,9 +203,21 @@ function makeProxy(
 ): unknown {
   return new Proxy(() => undefined, {
     get(_target, prop) {
+      if (prop === Symbol.toPrimitive) return () => "[sync-engine client]";
+      if (prop === Symbol.toStringTag) return "SyncEngineClient";
       // The root client must not be thenable, but nested `then` is a valid
-      // endpoint path segment (for example, `/auth/then`).
-      if (typeof prop !== "string" || (prop === "then" && segments.length === 0)) return undefined;
+      // endpoint path segment (for example, `/auth/then`). No proxy level
+      // answers methods that serialization or primitive coercion invokes.
+      if (
+        typeof prop !== "string" ||
+        prop === "inspect" ||
+        prop === "toJSON" ||
+        prop === "toString" ||
+        prop === "valueOf" ||
+        (prop === "then" && segments.length === 0)
+      ) {
+        return undefined;
+      }
       return makeProxy([...segments, prop], call);
     },
     apply(_target, _thisArg, args) {

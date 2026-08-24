@@ -12,6 +12,7 @@ export async function readRequestText(
       request.body,
       maxBytes,
       declared === null ? undefined : Number(declared),
+      request.signal,
     );
     return "aborted" in result ? { ok: false } : result;
   } catch {

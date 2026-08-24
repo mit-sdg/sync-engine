@@ -51,6 +51,7 @@ describe("createHttpClient", () => {
         method: "POST",
         body: JSON.stringify({ username: "alice", password: "secret" }),
         headers: expect.objectContaining({ "Content-Type": "application/json" }),
+        redirect: "error",
       }),
     );
     expect(result).toEqual({ token: "abc123" });
@@ -250,6 +251,31 @@ describe("createHttpClient", () => {
       error: HttpClientErrorCode.BAD_JSON,
       detail: expect.stringContaining("Invalid JSON"),
     });
+  });
+
+  test("a response rejects malformed UTF-8 and cancels its stream", async () => {
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new Uint8Array([0x7b, 0x22, 0x74, 0x6f, 0x6b, 0x65, 0x6e, 0x22, 0x3a, 0x22, 0xff]),
+        );
+        controller.enqueue(new Uint8Array([0x22, 0x7d]));
+      },
+      cancel() {
+        canceled = true;
+      },
+    });
+    const fetch = vi.fn(() =>
+      Promise.resolve(new Response(stream)),
+    ) as unknown as typeof globalThis.fetch;
+    const client = makeClient(fetch);
+
+    await expect(client.auth.login({ username: "a", password: "b" })).resolves.toEqual({
+      error: HttpClientErrorCode.BAD_JSON,
+      detail: expect.stringContaining("Failed to read response body"),
+    });
+    expect(canceled).toBe(true);
   });
 
   test("a non-2xx body without an error envelope returns BAD_STATUS", async () => {

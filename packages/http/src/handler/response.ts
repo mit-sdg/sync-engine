@@ -13,7 +13,23 @@ export type HttpResponseHeaders =
   | HttpHeadersInit
   | ((context: HttpResponseHeadersContext) => HttpHeadersInit | PromiseLike<HttpHeadersInit>);
 
-const RESERVED_RESPONSE_HEADERS = new Set(["set-cookie", "cache-control", "vary"]);
+const RESERVED_RESPONSE_HEADERS = new Set([
+  "cache-control",
+  "connection",
+  "content-encoding",
+  "content-length",
+  "content-type",
+  "keep-alive",
+  "location",
+  "proxy-connection",
+  "refresh",
+  "set-cookie",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "vary",
+]);
 
 export function isReservedResponseHeader(name: string): boolean {
   const lower = name.toLowerCase();

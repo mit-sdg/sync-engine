@@ -184,6 +184,7 @@ export function instrumentConcept<T extends object>(
                   }
                   return result;
                 } finally {
+                  state.actions.store.flowSettled(flowToken);
                   state.execution?.flowSettled?.(flowToken);
                 }
               };
@@ -260,7 +261,13 @@ export function instrumentConcept<T extends object>(
         }
         invalidate();
 
-        const matchingInput = state.actions._beginMatchingInput({ id, flow: flowToken, input });
+        let matchingInput: Record<string, unknown>;
+        try {
+          matchingInput = state.actions._beginMatchingInput({ id, flow: flowToken, input });
+        } catch (error) {
+          if (directRoot) state.execution?.abandon?.(flowToken);
+          throw error;
+        }
         const record: ActionRecord = {
           id,
           action: instrumented as InstrumentedAction,

@@ -106,19 +106,21 @@ async function readResponseBody(
   maxBytes: number | undefined,
   signal: AbortSignal | undefined,
 ): Promise<CappedTextRead> {
-  if (maxBytes === undefined) {
+  if (maxBytes === undefined && response.body === undefined) {
     return raceAbort(
       Promise.resolve(response.text()).then((text) => ({ ok: true as const, text })),
       signal,
-      () => {
-        cancelReadable(response.body, signal?.reason);
-        return { aborted: true as const };
-      },
+      () => ({ aborted: true as const }),
     );
   }
-  const declared = response.headers.get("Content-Length");
+  const declared = maxBytes === undefined ? null : response.headers.get("Content-Length");
   const declaredBytes = declared !== null && /^\d+$/.test(declared) ? Number(declared) : undefined;
-  return readCappedUtf8Stream(response.body, maxBytes, declaredBytes, signal);
+  return readCappedUtf8Stream(
+    response.body,
+    maxBytes ?? Number.MAX_SAFE_INTEGER,
+    declaredBytes,
+    signal,
+  );
 }
 
 interface RequestControl {
@@ -208,6 +210,7 @@ async function httpRequest(
           headers: { "Content-Type": "application/json", ...resolvedHeaders.headers },
           body: JSON.stringify(body ?? {}),
           credentials: credentials ?? "same-origin",
+          redirect: "error",
           signal,
         }),
       );
@@ -229,7 +232,10 @@ async function httpRequest(
         ? interruptedError(control)
         : { error: HttpClientErrorCode.NETWORK_ERROR };
     }
-    if (isAborted(signal)) return interruptedError(control);
+    if (isAborted(signal)) {
+      cancelReadable(response.body, signal?.reason);
+      return interruptedError(control);
+    }
 
     let text: string;
     try {

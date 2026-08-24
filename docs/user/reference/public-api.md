@@ -494,7 +494,11 @@ endpoint call accepts an optional second `ClientCallOptions` argument:
 or cancellation of accepted server work.
 A `Client<Contract>` supports grouped access such as
 `client.rooms.get(input)` and indexed access such as
-`client["/rooms/get"]`, followed by the input call.
+`client["/rooms/get"]`, followed by the input call. A path rooted at `then` or
+containing an `inspect`, `toJSON`, `toString`, or `valueOf` segment remains
+available through indexed access only; Promise assimilation, serialization,
+inspection, and primitive coercion therefore cannot invoke an endpoint
+implicitly.
 
 `ContractShape` is the path-to-input/output/error record accepted by every
 constructor. `ClientError` is `{ error: FrameworkErrorCode; detail?:

@@ -11,6 +11,11 @@ type TestApi = {
   "/auth/then": { input: { code: string }; output: { ok: boolean } };
   "/then": { input: { code: string }; output: { ok: boolean } };
   "/then/continue": { input: { code: string }; output: { ok: boolean } };
+  "/toJSON": { input: Record<string, never>; output: { ok: boolean } };
+  "/auth/toJSON": { input: Record<string, never>; output: { ok: boolean } };
+  "/inspect": { input: Record<string, never>; output: { ok: boolean } };
+  "/toString": { input: Record<string, never>; output: { ok: boolean } };
+  "/valueOf": { input: Record<string, never>; output: { ok: boolean } };
 };
 
 function fakeTransport(response?: unknown): ClientTransport {
@@ -118,6 +123,42 @@ describe("createClient (transport-agnostic)", () => {
     // Accessing .then should not trigger a transport call (proxy handles it)
     const value = (client as Record<string, unknown>)["then"];
     expect(value).toBeUndefined();
+  });
+
+  test("JSON serialization cannot invoke a client endpoint", async () => {
+    const transport = fakeTransport({ ok: true });
+    const client = createClient<TestApi>({ transport });
+    type HasGroupedRootToJson = "toJSON" extends keyof typeof client ? true : false;
+    type HasGroupedNestedToJson = "toJSON" extends keyof typeof client.auth ? true : false;
+    type HasGroupedInspect = "inspect" extends keyof typeof client ? true : false;
+    type HasGroupedToString = "toString" extends keyof typeof client ? true : false;
+    type HasGroupedValueOf = "valueOf" extends keyof typeof client ? true : false;
+    const hasGroupedRootToJson: HasGroupedRootToJson = false;
+    const hasGroupedNestedToJson: HasGroupedNestedToJson = false;
+    const hasGroupedInspect: HasGroupedInspect = false;
+    const hasGroupedToString: HasGroupedToString = false;
+    const hasGroupedValueOf: HasGroupedValueOf = false;
+
+    expect(hasGroupedRootToJson).toBe(false);
+    expect(hasGroupedNestedToJson).toBe(false);
+    expect(hasGroupedInspect).toBe(false);
+    expect(hasGroupedToString).toBe(false);
+    expect(hasGroupedValueOf).toBe(false);
+    expect(JSON.stringify({ client, auth: client.auth })).toBe("{}");
+    expect(String(client)).toBe("[sync-engine client]");
+    expect(Object.prototype.toString.call(client)).toBe("[object SyncEngineClient]");
+    expect(transport).not.toHaveBeenCalled();
+
+    await client["/toJSON"]();
+    await client["/auth/toJSON"]();
+    await client["/inspect"]();
+    await client["/toString"]();
+    await client["/valueOf"]();
+    expect(transport).toHaveBeenNthCalledWith(1, { path: "/toJSON", input: {} });
+    expect(transport).toHaveBeenNthCalledWith(2, { path: "/auth/toJSON", input: {} });
+    expect(transport).toHaveBeenNthCalledWith(3, { path: "/inspect", input: {} });
+    expect(transport).toHaveBeenNthCalledWith(4, { path: "/toString", input: {} });
+    expect(transport).toHaveBeenNthCalledWith(5, { path: "/valueOf", input: {} });
   });
 
   test("grouped paths can use then as a nested endpoint segment", async () => {

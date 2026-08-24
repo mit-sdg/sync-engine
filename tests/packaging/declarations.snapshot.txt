@@ -582,12 +582,13 @@ type PathChain<P extends string, C extends ContractShape, TError = ClientError, 
 } : P extends `/${infer S}` ? {
     [K in S]: Endpoint<C, FullPath, TError>;
 } : {};
-type AllPathChains<C extends ContractShape, TError, P extends keyof C & string = keyof C & string> = P extends unknown ? P extends "/then" | `/then/${string}` ? {} : PathChain<P, C, TError, P> : never;
+type ContainsPathSegment<P extends string, Segment extends string> = P extends `/${infer First}/${infer Rest}` ? First extends Segment ? true : ContainsPathSegment<`/${Rest}`, Segment> : P extends `/${infer Last}` ? Last extends Segment ? true : false : false;
+type AllPathChains<C extends ContractShape, TError, P extends keyof C & string = keyof C & string> = P extends unknown ? P extends "/then" | `/then/${string}` ? {} : ContainsPathSegment<P, "inspect" | "toJSON" | "toString" | "valueOf"> extends true ? {} : PathChain<P, C, TError, P> : never;
 /**
  * The first segment as a property and the remaining path as one key:
  * `client.roster["sections/create"](...)`.
  */
-type RemainderPathChain<P extends keyof C & string, C extends ContractShape, TError = ClientError> = P extends "/then" | `/then/${string}` ? {} : P extends `/${infer First}/${infer Rest}` ? {
+type RemainderPathChain<P extends keyof C & string, C extends ContractShape, TError = ClientError> = P extends "/then" | `/then/${string}` ? {} : ContainsPathSegment<P, "inspect" | "toJSON" | "toString" | "valueOf"> extends true ? {} : P extends `/${infer First}/${infer Rest}` ? {
     [K in First]: {
         [R in Rest]: Endpoint<C, P, TError>;
     };
@@ -596,7 +597,9 @@ type RemainderPathChain<P extends keyof C & string, C extends ContractShape, TEr
  * The full client type for a contract `C`. Both calling styles coexist because
  * the contract paths (`/group/method`) cleanly split into a flat index and an
  * arbitrarily-deep grouped tree. Paths rooted at `/then` are indexed-only so
- * the root client cannot be mistaken for a promise.
+ * the root client cannot be mistaken for a promise. Paths containing
+ * `inspect`, `toJSON`, `toString`, or `valueOf` segments are indexed-only so
+ * inspection and coercion cannot issue a request.
  */
 export type Client<C extends ContractShape, TError = ClientError> = IndexedClient<C, TError> & GroupedClient<C, TError>;
 /**
@@ -2287,6 +2290,7 @@ export declare class MemoryStore {
     readonly integrityFailures: IntegrityFailureRecord[];
     /** Derived index folded from firing entries: record id → reactions that consumed it. */
     private consumedIndex;
+    private failureFlows;
     private settledFlowOrder;
     constructor(policy?: RetentionPolicy, sink?: LogSink | undefined);
     append(entry: StoreEntry): void;

@@ -150,12 +150,14 @@ describe("direct routes", () => {
     expect(await response.json()).toEqual({ error: "NOT_FOUND" });
   });
 
-  test("decodes a path parameter and rejects an empty one", async () => {
+  test("decodes a path parameter and rejects empty or malformed encodings", async () => {
     const handler = handlerWith([
       { method: "GET", path: "/{code}", endpoint: "/report", status: 200 },
     ]);
     expect((await handler(get("/%61bc"))).status).toBe(200);
-    expect((await handler(get("/"))).status).toBe(400);
+    for (const path of ["/", "/%", "/%zz", "/%FF", "/%E0%A4%A"]) {
+      expect((await handler(get(path))).status).toBe(400);
+    }
   });
 
   test("leaves POST endpoints reachable and other methods refused", async () => {
@@ -171,6 +173,17 @@ describe("direct routes", () => {
     expect(
       (await handler(new Request("https://links.test/abc", { method: "DELETE" }))).status,
     ).toBe(400);
+  });
+
+  test("freezes compiled route matching data", () => {
+    const policy = httpPolicy({ direct: [follow] });
+    const compiled = policy.direct?.[0] as HttpDirectRoute & {
+      segments: readonly string[];
+      parameters: readonly (string | undefined)[];
+    };
+
+    expect(Object.isFrozen(compiled.segments)).toBe(true);
+    expect(Object.isFrozen(compiled.parameters)).toBe(true);
   });
 
   test("refuses a declaration that cannot be served", () => {

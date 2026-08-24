@@ -45,8 +45,9 @@ Each `{name}` segment fills the endpoint input of that name, percent-decoded, an
 segment does not match. `redirect` names a response field carrying an absolute URL and
 answers `302` by default; `status` alone answers that status with the JSON body. A route
 must state one of them. Only `GET` is supported, parameter names may not repeat, and two
-routes may not share a method and shape. POST/JSON remains the default for everything
-else, and a declared route does not remove its endpoint's POST path.
+routes may not share a method and shape. Malformed percent encoding does not match.
+POST/JSON remains the default for everything else, and a declared route does not remove
+its endpoint's POST path.
 
 ### `httpPolicy`
 
@@ -168,8 +169,9 @@ JavaScript-style `input`, and at least one issue declaration. Issue `value` and
 `expires` fields must be valid and distinct. Issue paths must be distinct,
 clear paths must be distinct, and one binding cannot issue and clear on the same
 path. Effective cookie names and logical inputs must be unique across bindings.
-Cookie paths use the portable route-path grammar. Domains must be plain domain
-names without a leading dot.
+Cookie paths use the portable route-path grammar and cannot contain `;`, which
+delimits cookie attributes. Domains must be plain domain names without a leading
+dot.
 
 Cookies always include `HttpOnly` and `Secure`. These attributes cannot be
 overridden. `path` defaults to `/`; `domain` defaults to absent. A cookie whose
@@ -190,9 +192,10 @@ when `httpWire(...).project` projects one:
 - issue and clear paths must name application endpoints;
 - the bound input must be required by at least one endpoint;
 - an endpoint cannot mention the bound input without requiring it;
-- two cookies cannot protect the same endpoint; and
+- two cookies cannot protect the same endpoint;
 - every issue endpoint output alternative must contain the declared value and
-  expiry fields.
+  expiry fields; and
+- a direct route cannot serve a protected, issuing, or clearing endpoint.
 
 ## `handler`
 
@@ -231,17 +234,19 @@ handling only under a browser policy. Every other method returns
 `INVALID_REQUEST`/400; the handler does not emit an `Allow` header.
 
 Routing uses `URL.pathname` after removing `basePath`. Query parameters do not
-select a route. A path outside the base or a request for the base itself returns
-`NOT_FOUND`/404. A present `Content-Type` must be `application/json`, optionally
-with parameters; omission is accepted. An empty body becomes `{}`. Malformed,
+select a route. A path outside the base, a request for the base itself, or an
+unknown POST path returns `NOT_FOUND`/404 without buffering a request body and
+cancels the unread stream. Other rejections before body reading do the same. A
+present `Content-Type` must be `application/json`, optionally with parameters;
+omission is accepted. An empty body becomes `{}`. Malformed JSON or UTF-8,
 unreadable, aborted, or oversized bodies return `INVALID_REQUEST`/400.
 
 The handler buffers at most `limits.requestBodyBytes` request bytes, default
 1,048,576. A numeric `Content-Length` larger than the limit fails before full
-buffering; streamed bytes are counted independently. The handler passes
-`Request.signal` and the effective correlation id to invocation. Abort stops
-waiting but does not establish rollback or cancellation of accepted application
-work.
+buffering; streamed bytes are counted independently. `Request.signal` stops a
+pending body read and is passed with the effective correlation id to invocation.
+Abort stops waiting but does not establish rollback or cancellation of accepted
+application work.
 
 A successful invocation returns status 200 and a JSON body. Serialization uses
 core portable JSON serialization. An invocation throw, invalid cookie issue
@@ -307,11 +312,13 @@ must be valid and must not be reserved by HTTP policy.
 
 `responseHeaders` may be static or computed asynchronously. An invalid static
 header initializer throws during handler construction. A provider runs for
-handled successes and failures. The handler drops `Set-Cookie`, `Cache-Control`,
-`Vary`, and every `Access-Control-*` header from its result. A provider throw,
-rejection, or invalid returned initializer replaces the response with
-`INTERNAL_ERROR`/500; CORS and correlation are then applied to that failure
-response.
+handled successes and failures. The handler drops cookie, cache, CORS,
+representation, redirect, framing, and hop-by-hop headers from its result. This
+includes `Set-Cookie`, `Cache-Control`, `Content-Type`, `Content-Encoding`,
+`Content-Length`, `Location`, `Vary`, every `Access-Control-*` header, and
+connection-specific fields. A provider throw, rejection, or invalid returned
+initializer replaces the response with `INTERNAL_ERROR`/500; CORS and
+correlation are then applied to that failure response.
 
 Wrap the Fetch handler for preprocessing or response decoration. Wrappers are
 outside the package's security boundary and can invalidate header and error
@@ -353,25 +360,26 @@ Options are resolved when the client or transport is constructed. Later changes
 to `API_BASE_URL` do not alter the instance. The transport sends `POST`, adds
 `Content-Type: application/json`, serializes `input ?? {}`, and passes the
 configured credentials mode. Extra headers are merged afterward and may replace
-`Content-Type`.
+`Content-Type`. Fetch redirects are rejected rather than followed, so configured
+headers are not forwarded and the POST is not replayed at another URL.
 
 `HeadersOption` providers receive `HttpRequestContext`: path, effective signal,
 and the call's timeout and correlation id when supplied. The package does not
 create a correlation request header. Header providers for concurrent calls may
 run concurrently.
 
-An empty response body becomes `{}`. A nonempty body must parse as JSON;
-response `Content-Type` is not consulted. A non-2xx JSON object with an `error`
-property is returned as the server result. A non-2xx response without that
-envelope returns `BAD_STATUS`.
+An empty response body becomes `{}`. A nonempty body must be valid UTF-8 and
+parse as JSON; response `Content-Type` is not consulted. A non-2xx JSON object
+with an `error` property is returned as the server result. A non-2xx response
+without that envelope returns `BAD_STATUS`.
 
-| `HttpClientErrorCode`      | Condition                                                        |
-| -------------------------- | ---------------------------------------------------------------- |
-| `HEADER_RESOLUTION_FAILED` | The header provider threw or rejected.                           |
-| `NETWORK_ERROR`            | Fetch failed before a response was obtained.                     |
-| `BAD_JSON`                 | The response body could not be read or parsed.                   |
-| `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope.                 |
-| `RESPONSE_TOO_LARGE`       | Declared or streamed response bytes exceeded `maxResponseBytes`. |
+| `HttpClientErrorCode`      | Condition                                                          |
+| -------------------------- | ------------------------------------------------------------------ |
+| `HEADER_RESOLUTION_FAILED` | The header provider threw or rejected.                             |
+| `NETWORK_ERROR`            | Fetch failed before a response was obtained, including a redirect. |
+| `BAD_JSON`                 | The response body could not be read or parsed.                     |
+| `BAD_STATUS`               | A non-2xx response lacked a JSON error envelope.                   |
+| `RESPONSE_TOO_LARGE`       | Declared or streamed response bytes exceeded `maxResponseBytes`.   |
 
 Abort and timeout use core error codes `ABORTED` and `TIMED_OUT`. `timeoutMs`
 must be a positive finite integer no greater than 2,147,483,647; another value
