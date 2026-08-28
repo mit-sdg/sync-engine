@@ -15,7 +15,7 @@
     "prepack": "bun ../../scripts/build.ts"
   },
   "engines": {
-    "bun": ">=1.3.14 <1.4",
+    "bun": ">=1.4.0 <1.5",
     "node": ">=24 <25"
   }
 }

@@ -726,7 +726,7 @@ async function verifyCatalogAlone(artifacts: ReadonlyMap<string, PackedWorkspace
     version: "1.0.0",
     private: true,
     type: "module",
-    packageManager: "bun@1.3.14",
+    packageManager: "bun@1.4.0",
     dependencies: { [catalog.workspace.packageName]: tarballSpecifier(consumer, catalog.tarball) },
   });
   run("bun", ["install", "--ignore-scripts", "--no-cache"], consumer);
@@ -774,7 +774,7 @@ async function verifySkillAlone(artifacts: ReadonlyMap<string, PackedWorkspace>)
     version: "1.0.0",
     private: true,
     type: "module",
-    packageManager: "bun@1.3.14",
+    packageManager: "bun@1.4.0",
     dependencies: {
       [skill.workspace.packageName]: tarballSpecifier(consumer, skill.tarball),
       [analysis.workspace.packageName]: tarballSpecifier(consumer, analysis.tarball),
@@ -948,7 +948,7 @@ async function verifySetupAndExamples(
     version: "1.0.0",
     private: true,
     type: "module",
-    packageManager: "bun@1.3.14",
+    packageManager: "bun@1.4.0",
     scripts: {
       generate: "sync-engine artifacts pin",
       check:

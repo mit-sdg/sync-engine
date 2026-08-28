@@ -19,7 +19,7 @@ async function project(manifest: Manifest = {}): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "sync-engine-setup-"));
   await writeFile(
     join(root, "package.json"),
-    `${JSON.stringify({ name: "fixture", packageManager: "bun@1.3.14", ...manifest }, null, 2)}\n`,
+    `${JSON.stringify({ name: "fixture", packageManager: "bun@1.4.0", ...manifest }, null, 2)}\n`,
   );
   return root;
 }
@@ -126,7 +126,7 @@ describe("sync-engine setup", () => {
       dependencies: { "@mit-sdg/sync-engine": version, other: "1.2.3" },
       devDependencies: {
         typescript: "^6.0.0",
-        "@types/bun": "^1.3.0",
+        "@types/bun": "^1.4.0",
         "@types/node": "^24.0.0",
       },
       scripts: {
@@ -325,7 +325,7 @@ describe("sync-engine setup", () => {
       expect(manifest).toMatchObject({
         private: true,
         type: "module",
-        packageManager: "bun@1.3.14",
+        packageManager: "bun@1.4.0",
       });
       expect(result.written).toEqual([
         ".gitignore",

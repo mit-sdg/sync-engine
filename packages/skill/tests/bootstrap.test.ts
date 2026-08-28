@@ -21,7 +21,7 @@ import { rejectedValue } from "./test-support.ts";
 const fixtureRoot = resolve("packages/skill/tests/fixtures/bootstrap");
 const releasePath = resolve(fixtureRoot, "release.json");
 const releaseVersion = "1.2.3-beta.4";
-const bunVersion = "1.3.14";
+const bunVersion = "1.4.0";
 const temporary: string[] = [];
 
 const runtime = { bun: bunVersion, node: "24.0.0" } as const;
@@ -269,11 +269,11 @@ describe("bootstrap", () => {
     const root = resolve(fixtureRoot, "runtime-app");
     const bunMismatch = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files, runtime: { bun: "1.3.13", node: "24.0.0" } },
+      { files, runtime: { bun: "1.3.14", node: "24.0.0" } },
     );
     expect(bunMismatch).toMatchObject({
       state: "failed",
-      error: "Running Bun 1.3.13 does not match 1.3.14",
+      error: "Running Bun 1.3.14 does not match 1.4.0",
     });
 
     const nodeMismatch = await planBootstrap(

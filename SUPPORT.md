@@ -65,7 +65,7 @@ The supported core runtime and toolchain ranges are:
 | Surface                                | Supported range     |
 | -------------------------------------- | ------------------- |
 | Built ESM library                      | Node.js `>=24 <25`  |
-| Core CLI, setup, scripts, and examples | Bun `>=1.3.14 <1.4` |
+| Core CLI, setup, scripts, and examples | Bun `>=1.4.0 <1.5`  |
 | Type checking and generated TypeScript | TypeScript `>=6 <7` |
 
 CI runs on current GitHub-hosted Linux, macOS, and Windows images. Filesystems,

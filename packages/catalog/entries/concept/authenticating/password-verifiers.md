@@ -8,7 +8,7 @@ its observable behavior.
 ## Shipped strategy
 
 The default `argon2idPasswordVerifier` uses `@node-rs/argon2` 2.0.2. The catalog
-pins that dependency because its N-API build loads on the supported Bun 1.3 and
+pins that dependency because its N-API build loads on the supported Bun 1.4 and
 Node.js 24 runtime lines and supplies binaries for the Linux, macOS, and Windows
 platforms used by this project's CI. An application must verify that one of the
 package's published native targets covers its deployment platform.

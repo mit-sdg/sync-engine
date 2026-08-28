@@ -136,7 +136,7 @@ describe("release source facts", () => {
     ).toEqual({
       skill: currentVersion,
       toolchain: {
-        bun: "1.3.14",
+        bun: "1.4.0",
         node: ">=24 <25",
         typescript: ">=6 <7",
       },
@@ -359,7 +359,7 @@ describe("release source facts", () => {
       "bun engine",
       "package.json",
       (manifest: Record<string, any>): void => {
-        manifest.engines.bun = ">=1.3.14";
+        manifest.engines.bun = ">=1.4.0";
       },
       "engines.bun must support exactly one minor",
     ],
@@ -375,7 +375,7 @@ describe("release source facts", () => {
       "package manager",
       "package.json",
       (manifest: Record<string, any>): void => {
-        manifest.packageManager = "bun@1.3.15";
+        manifest.packageManager = "bun@1.4.1";
       },
       "packageManager must pin the minimum supported Bun version",
     ],

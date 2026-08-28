@@ -228,6 +228,17 @@ function sinkEntry(entry: StoreEntry): LogEntry {
   return snapshot as unknown as LogEntry;
 }
 
+const firingsByConsumedByStore = new WeakMap<object, Map<string, Set<FiringRecord>>>();
+
+function firingConsumptionIndex(store: object): Map<string, Set<FiringRecord>> {
+  let index = firingsByConsumedByStore.get(store);
+  if (index === undefined) {
+    index = new Map();
+    firingsByConsumedByStore.set(store, index);
+  }
+  return index;
+}
+
 /** The core in-memory occurrence index. */
 export class MemoryStore {
   readonly actions: Map<string, ActionRecord> = new Map();
@@ -297,6 +308,10 @@ export class MemoryStore {
           const consumers = this.consumedIndex.get(recordId) ?? new Set();
           consumers.add(entry.firing.reaction);
           this.consumedIndex.set(recordId, consumers);
+          const firingIndex = firingConsumptionIndex(this);
+          const reverse = firingIndex.get(recordId) ?? new Set();
+          reverse.add(entry.firing);
+          firingIndex.set(recordId, reverse);
         }
         return;
       }
@@ -385,32 +400,48 @@ export class MemoryStore {
     for (const record of records) {
       this.actions.delete(record.id);
       this.consumedIndex.delete(record.id);
+      firingConsumptionIndex(this).delete(record.id);
     }
   }
 
-  /** Remove firings whose consumed occurrences are all evicted and rebuild retained consumption. */
+  /** Remove firings whose retained consumed occurrences are all being evicted. */
   private dropFiringsFor(records: Iterable<ActionRecord>): void {
     const ids = new Set([...records].map((record) => record.id));
     if (ids.size === 0) return;
 
-    for (const [reaction, firings] of this.firings) {
-      const retained = firings.filter(
-        (firing) =>
-          !firing.consumed.some((id) => ids.has(id)) ||
-          firing.consumed.some((id) => !ids.has(id) && this.actions.has(id)),
-      );
-      if (retained.length === 0) this.firings.delete(reaction);
-      else if (retained.length !== firings.length) this.firings.set(reaction, retained);
+    const firingIndex = firingConsumptionIndex(this);
+    const candidates = new Set<FiringRecord>();
+    for (const id of ids) {
+      for (const firing of firingIndex.get(id) ?? []) candidates.add(firing);
     }
 
-    this.consumedIndex.clear();
-    for (const [reaction, firings] of this.firings) {
-      for (const firing of firings) {
+    const removedByReaction = new Map<string, Set<FiringRecord>>();
+    for (const firing of candidates) {
+      if (firing.consumed.some((id) => !ids.has(id) && this.actions.has(id))) continue;
+      const removed = removedByReaction.get(firing.reaction) ?? new Set<FiringRecord>();
+      removed.add(firing);
+      removedByReaction.set(firing.reaction, removed);
+    }
+
+    for (const [reaction, removed] of removedByReaction) {
+      const retained = (this.firings.get(reaction) ?? []).filter((firing) => !removed.has(firing));
+      if (retained.length === 0) this.firings.delete(reaction);
+      else this.firings.set(reaction, retained);
+
+      for (const firing of removed) {
         for (const id of firing.consumed) {
-          if (ids.has(id) || !this.actions.has(id)) continue;
-          const consumers = this.consumedIndex.get(id) ?? new Set<string>();
-          consumers.add(reaction);
-          this.consumedIndex.set(id, consumers);
+          if (ids.has(id)) continue;
+          const reverse = firingIndex.get(id);
+          reverse?.delete(firing);
+          if (reverse?.size === 0) firingIndex.delete(id);
+          const consumers = this.consumedIndex.get(id);
+          if (
+            consumers?.has(reaction) === true &&
+            ![...(reverse ?? [])].some((candidate) => candidate.reaction === reaction)
+          ) {
+            consumers.delete(reaction);
+            if (consumers.size === 0) this.consumedIndex.delete(id);
+          }
         }
       }
     }

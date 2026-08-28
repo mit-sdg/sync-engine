@@ -5,6 +5,7 @@
  * mutation), indexed reads, firing records, and automatic window retention.
  */
 
+import type { EventEmitter } from "node:events";
 import { describe, expect, test } from "vite-plus/test";
 import { vocabulary } from "@sync-engine/advanced";
 import { earlier, reaction, when } from "@sync-engine/language";
@@ -251,6 +252,69 @@ describe("log store: window retention", () => {
     expect([...store.flowIndex.keys()]).toEqual(["second-flow"]);
     expect([...store.actions.values()].map((entry) => entry.input.name)).toEqual(["second"]);
     expect(store.reactionFailures.map((failure) => failure.flow)).toEqual(["second-flow"]);
+  });
+
+  test("updates firing indexes incrementally when a firing spans retained flows", () => {
+    const store = new MemoryStore({ window: 1 });
+    const first = record({ id: "first", flow: "first" });
+    const second = record({ id: "second", flow: "second" });
+    store.append({ kind: "invocation", at: 1, record: first });
+    store.append({ kind: "invocation", at: 2, record: second });
+    store.append({
+      kind: "firing",
+      at: 3,
+      firing: {
+        id: "shared",
+        reaction: "Shared",
+        flow: "second",
+        bindings: {},
+        consumed: [first.id, second.id],
+        produced: [],
+        at: 3,
+      },
+    });
+    store.append({
+      kind: "firing",
+      at: 4,
+      firing: {
+        id: "first-only",
+        reaction: "FirstOnly",
+        flow: "first",
+        bindings: {},
+        consumed: [first.id],
+        produced: [],
+        at: 4,
+      },
+    });
+
+    store.flowSettled("first");
+    store.flowSettled("second");
+
+    expect(store.firingsByReaction("Shared").map(({ id }) => id)).toEqual(["shared"]);
+    expect(store.firingsByReaction("FirstOnly")).toEqual([]);
+    expect(store.hasConsumed(first.id, "Shared")).toBe(false);
+    expect(store.hasConsumed(second.id, "Shared")).toBe(true);
+
+    const third = record({ id: "third", flow: "third" });
+    store.append({ kind: "invocation", at: 5, record: third });
+    store.append({
+      kind: "firing",
+      at: 6,
+      firing: {
+        id: "third-only",
+        reaction: "Shared",
+        flow: "third",
+        bindings: {},
+        consumed: [third.id],
+        produced: [],
+        at: 6,
+      },
+    });
+    store.flowSettled("third");
+
+    expect(store.firingsByReaction("Shared").map(({ id }) => id)).toEqual(["third-only"]);
+    expect(store.hasConsumed(second.id, "Shared")).toBe(false);
+    expect(store.hasConsumed(third.id, "Shared")).toBe(true);
   });
 
   test("rejects invalid windows", () => {
@@ -743,7 +807,8 @@ describe("log store: firings are introspectable after a live run", () => {
   test("rejects a native Promise return and consumes its rejection", async () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
-    process.on("unhandledRejection", onUnhandled);
+    const processEvents: EventEmitter = process;
+    processEvents.on("unhandledRejection", onUnhandled);
     try {
       const store = new MemoryStore("keepAll", {
         append: (() => Promise.reject(new Error("sink rejected"))) as never,
@@ -756,7 +821,7 @@ describe("log store: firings are introspectable after a live run", () => {
       await new Promise((resolve) => setImmediate(resolve));
       expect(unhandled).toEqual([]);
     } finally {
-      process.off("unhandledRejection", onUnhandled);
+      processEvents.off("unhandledRejection", onUnhandled);
     }
   });
 
