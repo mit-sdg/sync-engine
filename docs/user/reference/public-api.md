@@ -38,7 +38,7 @@ generated-assembly compatibility, and format-version rules. The
 | `now`                  | `now(variable)`                                                                                 |
 | `view`                 | `view(name, (input, output, free) => where(...))`                                               |
 | `count`                | `count(query, input, outputVariable)`                                                           |
-| `compute`              | `compute(namedComputation, input, output)`                                                      |
+| `compute`              | `compute(namedComputation, input, outputVariable \| outputPattern)`                             |
 | `former`               | `former(name, (input, free) => form(...) \| where(...).form(...))`                              |
 | `form`                 | `form({ ...shape })`                                                                            |
 | `each`                 | `each(readLine).where(...).arranged(...).form(...)` or a fold                                   |
@@ -90,6 +90,19 @@ View and former builders receive binding bags. Reading a property, including by
 destructuring, declares a stable logic variable in that input, output, or
 free-binding partition. Completed views and formers take one object-shaped input
 mapping.
+
+`compute(...)` binds any complete result to one variable. When the awaited
+result is a record-shaped, non-array object, an output pattern may instead bind
+or test several fields, including nested fields. TypeScript checks the pattern against the
+computation's return type, and generated wire provenance follows each field's
+return-type path.
+
+A `form({ ... })` entry accepts a bound variable, another formed node, or
+portable JSON literal data. Literal objects and arrays are copied into the
+former IR and do not require a computation. Non-finite numbers, `undefined`,
+class instances, functions, symbols, and cyclic values are not portable former
+literals.
+
 `.splicing(...uses)` merges one or more record-rooted former fragments into a
 host record. Each variable referenced by a fragment input must already be bound;
 literal inputs are accepted. Fragment keys must not collide with host or

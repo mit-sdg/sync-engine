@@ -89,6 +89,10 @@ export function operationFootprint(
       return footprint(names(input));
     }
     case "compute":
+      return footprint(
+        names(op.in),
+        typeof op.out === "string" || typeof op.out === "symbol" ? [op.out] : names(op.out),
+      );
     case "count":
       return footprint(names(op.in), [op.out]);
     case "now":

@@ -294,6 +294,17 @@ describe("renderWhereOp", () => {
     ).toBe("slug is slugOf (title)");
   });
 
+  test("compute renders projected outputs as named slots", () => {
+    expect(
+      renderWhereOp({
+        op: "compute",
+        computation: "describe",
+        in: { value: { $var: "value" } },
+        out: { label: { $var: "label" }, rank: { $var: "rank" } },
+      }),
+    ).toBe("(label, rank) is describe (value)");
+  });
+
   test("custom renders as an explicit opaque line", () => {
     expect(
       renderWhereOp({

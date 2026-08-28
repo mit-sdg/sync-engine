@@ -1093,7 +1093,7 @@ export interface WireRenderOptions {
 }
 declare const WIRE_HELPERS: {
     readonly ApplicationConceptSet: "";
-    readonly AtPath: "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : never : T;";
+    readonly AtPath: "type AtPath<T, P extends readonly string[]> = P extends readonly [infer H extends string, ...infer R extends string[]] ? H extends keyof T ? AtPath<T[H], R> : H extends `${number}` ? T extends readonly (infer Item)[] ? AtPath<Item, R> : never : never : T;";
     readonly QueryRow: "type QueryRow<T> = T extends readonly (infer Row)[] ? Row : T;";
     readonly AllOf: "type AllOf<T extends readonly unknown[]> = T extends readonly [infer Head, ...infer Rest] ? Head & AllOf<Rest> : unknown;";
     readonly OneOf: "type OneOf<T extends readonly unknown[]> = T[number];";
@@ -3240,7 +3240,7 @@ export declare function serializeFormer(ref: FormerRef, authored?: AuthoredDecla
  * registers, evaluates, exports, and renders.
  */
 import type { Mapping } from "../reactions/types.ts";
-import type { FormerNodeIR } from "./ir.ts";
+import type { FormerNodeIR, JsonLiteral } from "./ir.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 import type { FindOp, WhereOp } from "./where-ops.ts";
 /** How a comprehension orders what it kept. */
@@ -3287,13 +3287,21 @@ interface LeafNode {
     readonly node: "leaf";
     readonly var: symbol;
 }
+export interface LiteralNode {
+    readonly node: "literal";
+    readonly value: JsonLiteral;
+}
 export interface FormerCallNode {
     readonly node: "former";
     readonly use: FormerUse;
 }
-export type FormerNode = LeafNode | RecordNode | FormerCallNode | EachNode | CountNode | FirstNode | DistinctNode;
-/** What a record entry accepts: a leaf, a smaller shape, or a named former. */
-export type FormerEntry = symbol | FormerNode | FusedFormer | FormerUse;
+export type FormerNode = LeafNode | LiteralNode | RecordNode | FormerCallNode | EachNode | CountNode | FirstNode | DistinctNode;
+/** Portable constant data accepted directly by a formed record entry. */
+export type FormerLiteral = null | boolean | number | string | readonly FormerLiteral[] | {
+    readonly [key: string]: FormerLiteral;
+};
+/** What a record entry accepts: a leaf, literal, smaller shape, or named former. */
+export type FormerEntry = symbol | FormerLiteral | FormerNode | FusedFormer | FormerUse;
 export declare function brandNode<T extends object>(node: T): T;
 export declare function isFormerNode(value: unknown): value is FormerNode;
 export declare function isFormerUse(value: unknown): value is FormerUse;
@@ -3572,7 +3580,7 @@ export type WhereOpIR = ({
     op: "compute";
     computation: string;
     in: PatternIR;
-    out: string;
+    out: string | PatternIR;
 } | {
     op: "custom";
     fnRef: string;
@@ -3649,9 +3657,15 @@ export interface SpliceIR {
     in: PatternIR;
     whether?: true;
 }
+export type JsonLiteral = null | boolean | number | string | JsonLiteral[] | {
+    [key: string]: JsonLiteral;
+};
 export type FormerNodeIR = {
     node: "leaf";
     var: string;
+} | {
+    node: "literal";
+    value: JsonLiteral;
 } | {
     node: "record";
     where?: FormerWhereOpIR[];
@@ -4635,12 +4649,12 @@ interface HoldsOp {
     readonly op: "holds";
     readonly fused: FusedComputation;
 }
-/** A vocabulary-owned calculation; exactly one result, bound to one variable. */
+/** A vocabulary-owned calculation, bound whole or projected through an output pattern. */
 interface ComputeOp {
     readonly op: "compute";
     readonly computation: ComputationRef;
     readonly in: Mapping;
-    readonly out: symbol;
+    readonly out: symbol | Mapping;
 }
 /** An opaque escape with a declared positional footprint. */
 export interface CustomOp {
@@ -4687,8 +4701,16 @@ export declare function no(line: ReadLine): NoOp;
 export declare function whether(line: ViewReadLine): WhetherOp;
 export declare function whether(line: ReadLine): WhetherOp;
 export declare function whether(fused: FusedFormer): FormerUse;
-/** Bind one variable to one calculation declared by the assembled vocabulary. */
+type ComputationOutput<Fn extends ComputationFn> = Awaited<ReturnType<Fn>>;
+type ProjectedOutputValue<Value> = Value | symbol | (Value extends readonly (infer Item)[] ? readonly ProjectedOutputValue<Item>[] : Value extends object ? {
+    readonly [Key in keyof Value]?: ProjectedOutputValue<Value[Key]>;
+} : never);
+type ComputationOutputPattern<Fn extends ComputationFn> = ComputationOutput<Fn> extends readonly unknown[] ? never : ComputationOutput<Fn> extends object ? {
+    readonly [Key in keyof ComputationOutput<Fn>]?: ProjectedOutputValue<ComputationOutput<Fn>[Key]>;
+} : never;
+/** Bind a calculation's whole result, or project a record result through an output pattern. */
 export declare function compute<Fn extends ComputationFn, const Input extends InputPattern<ComputationInput<Fn>>, Out extends symbol>(computation: ComputationRef<Fn>, input: ExactPattern<ComputationInput<Fn>, Input>, out: Out): ComputeOp;
+export declare function compute<Fn extends ComputationFn, const Input extends InputPattern<ComputationInput<Fn>>, const Output extends ComputationOutputPattern<Fn>>(computation: ComputationRef<Fn>, input: ExactPattern<ComputationInput<Fn>, Input>, output: ExactPattern<ComputationOutput<Fn>, Output>): ComputeOp;
 /**
  * An opaque function with a declared footprint:
  * which variables it reads (positional args) and which it writes (one value

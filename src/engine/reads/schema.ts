@@ -22,6 +22,7 @@ import type {
 type FieldKind =
   | "query" // a { concept, query } reference
   | "pattern" // a PatternIR of ValueIR leaves
+  | "patternOrVarName" // a projected output pattern or legacy scalar result name
   | "varName" // one bound-variable name
   | "varNames" // a positional variable-name list
   | "computationName" // an installed calculation, by name
@@ -43,7 +44,7 @@ const OP_FIELDS: Readonly<Record<string, FieldTable>> = {
   whether: { query: "query", view: "viewName", in: "pattern", out: "pattern", not: "pattern" },
   no: { query: "query", view: "viewName", in: "pattern", out: "pattern" },
   count: { query: "query", in: "pattern", out: "varName" },
-  compute: { computation: "computationName", in: "pattern", out: "varName" },
+  compute: { computation: "computationName", in: "pattern", out: "patternOrVarName" },
   holds: { computation: "computationName", in: "pattern" },
   custom: { in: "varNames", out: "varNames" },
   earlier: { when: "trigger" },
@@ -53,6 +54,7 @@ const OP_FIELDS: Readonly<Record<string, FieldTable>> = {
 /** The former-node vocabulary: every reference-carrying field, per variant. */
 const FORMER_NODE_FIELDS: Readonly<Record<FormerNodeIR["node"], FieldTable>> = {
   leaf: { var: "varName" },
+  literal: {},
   record: { where: "ops", entries: "nodeMap", splices: "splices" },
   former: { former: "fragmentName", in: "pattern" },
   each: {
@@ -99,6 +101,10 @@ function foldField(value: unknown, kind: FieldKind, fold: IRFold): void {
       return;
     case "pattern":
       fold.pattern?.(value as PatternIR);
+      return;
+    case "patternOrVarName":
+      if (typeof value === "string") fold.varName?.(value);
+      else fold.pattern?.(value as PatternIR);
       return;
     case "varName":
       fold.varName?.(value as string);

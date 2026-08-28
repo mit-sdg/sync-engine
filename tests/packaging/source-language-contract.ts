@@ -1,5 +1,17 @@
 import { vocabulary } from "@sync-engine/advanced";
-import { count, now, reaction, returned, when, where } from "@sync-engine/language";
+import { conceptSet } from "@sync-engine/assembly";
+import type { RegisteredConcept } from "@sync-engine/assembly";
+import {
+  compute,
+  count,
+  form,
+  former,
+  now,
+  reaction,
+  returned,
+  when,
+  where,
+} from "@sync-engine/language";
 
 class OneAnswer {
   start(_: Record<string, never>) {
@@ -31,6 +43,12 @@ class QueriedConcept {
   }
 
   _numberKey(_: { key: number }): { value: string }[] {
+    return [];
+  }
+}
+
+class GenericValue<Value> {
+  _values(_: Record<string, never>): Array<{ value: Value }> {
     return [];
   }
 }
@@ -83,6 +101,53 @@ const words = vocabulary({
 });
 const { OneAnswer: Answering } = words.concepts;
 const { QueriedConcept: Looking } = words.concepts;
+
+const specializedWords = vocabulary({
+  concepts: { StringValues: GenericValue<string> },
+  computations: {},
+});
+specializedWords.concepts.StringValues._values({}).is({ value: "typed" });
+// @ts-expect-error A TypeScript instantiation expression preserves the selected external value type.
+specializedWords.concepts.StringValues._values({}).is({ value: 42 });
+
+function registeredGenericContract(
+  registration: RegisteredConcept<typeof GenericValue<string>>,
+): void {
+  const registeredWords = conceptSet({ StringValues: registration });
+  registeredWords.concepts.StringValues._values({}).is({ value: "typed" });
+  // @ts-expect-error conceptSet preserves a registration's specialized constructor type.
+  registeredWords.concepts.StringValues._values({}).is({ value: 42 });
+}
+void registeredGenericContract;
+
+const calculations = vocabulary({
+  concepts: {},
+  computations: {
+    describe: ({ value }: { value: number }) => ({ label: String(value), doubled: value * 2 }),
+  },
+}).computations;
+const computationLabel = Symbol("computation-label");
+const computationDoubled = Symbol("computation-doubled");
+compute(
+  calculations.describe,
+  { value: 2 },
+  { label: computationLabel, doubled: computationDoubled },
+);
+// @ts-expect-error Projected computation outputs reject fields absent from the return type.
+compute(calculations.describe, { value: 2 }, { missing: computationLabel });
+
+const arrayCalculation = vocabulary({
+  concepts: {},
+  computations: { list: () => [{ label: "item" }] },
+}).computations.list;
+// @ts-expect-error A top-level array result must be bound whole to one variable.
+compute(arrayCalculation, {}, [{ label: computationLabel }]);
+
+former("literal fields ()", () =>
+  form({ status: "unknown", retryable: false, policy: { mode: "safe" }, tags: [] }),
+);
+// @ts-expect-error Former literals must be portable JSON data.
+former("nonportable literal ()", () => form({ createdAt: new Date() }));
 
 const countResult = Symbol("count-result");
 count(Looking._answer, { key: "present" }, countResult);

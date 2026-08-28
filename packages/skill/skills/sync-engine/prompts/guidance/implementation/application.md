@@ -22,6 +22,19 @@ const posting = registerConcept({
 export const applicationConceptSet = conceptSet({ Posting: posting });
 ```
 
+When a generic concept class represents an authored external type, name the
+application-specific class and register that name:
+
+```ts
+const Examining = ExaminingConcept<ExaminationOutcome>;
+const examining = registerConcept({ class: Examining, spec });
+```
+
+The instantiation expression preserves concrete action and query signatures, including
+generated wire projections, without creating a wrapper or subclass. The authored
+`Outcome is ExaminationOutcome` binding remains a separate semantic contract; keep the
+source specialization aligned with it.
+
 Register every selected static instance exactly once under its authored identity. Never
 reuse one raw instance under two names or invent storage for an authored instance. For
 default-constructible concepts, assemble the registered set with explicit fresh

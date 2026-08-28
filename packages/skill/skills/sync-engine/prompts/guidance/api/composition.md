@@ -75,6 +75,10 @@ former(name, (input, free) => where(...).form({ ...shape }));
 | `.first(value)`    | value from the first row after arrangement | `null`          |
 | `.distinct(value)` | first-seen distinct values                 | `[]`            |
 
+- A `form({ ...shape })` entry may be a bound variable, another formed node, or portable
+  JSON literal data. Use literals directly for constant fields and structures; do not add a
+  computation solely to produce a constant. Functions, symbols, `undefined`, non-finite
+  numbers, class instances, and cyclic values are not portable literals.
 - `form({ ...shape }).splicing(...formerUses)` merges record-rooted fragments into a host
   record. Every variable a fragment input references must already be bound, and fragment
   keys must not collide with host or earlier-fragment keys. A plain optional fragment drops
@@ -83,13 +87,16 @@ former(name, (input, free) => where(...).form({ ...shape }));
   complete input mapping; undeclared fields are rejected recursively.
 - `compute(named, input, output)` is a condition line inside `where(...)`. It runs a pure
   function supplied as `conceptSet`'s optional second argument and exposed as
-  `set.computations`; it never takes a bare function. Write
-  `conceptSet({ ... }, { isLive: ({ now, expiresAt }) => now < expiresAt })`, then
-  `compute(set.computations.isLive, { now, expiresAt }, live)`, binding one output variable.
-  A no-input computation uses `{}`. Test a computed boolean with
-  `is.among(live, [true])` or `is.among(live, [false])`; `is` is not itself callable and
-  has no `eq`, `same`, or `equal` member. Build the computation record before the set;
-  references from separate sets do not mix.
+  `set.computations`; it never takes a bare function. A variable output binds the complete
+  result. For a record-shaped, non-array result, an object output pattern binds or tests
+  several fields, including nested fields, and each variable remains wire-traceable through
+  its return-type path. Write
+  `conceptSet({ ... }, { describe: ({ value }) => ({ label: String(value), rank: 1 }) })`,
+  then `compute(set.computations.describe, { value }, { label, rank })`. A no-input
+  computation uses `{}`. Test a computed boolean with `is.among(live, [true])` or
+  `is.among(live, [false])`; `is` is not itself callable and has no `eq`, `same`, or
+  `equal` member. Build the computation record before the set; references from separate
+  sets do not mix.
 - A query's `"one" | "optional" | "many"` promise links to a record return for `"one"` and
   an array of records otherwise, at type level and at runtime.
 

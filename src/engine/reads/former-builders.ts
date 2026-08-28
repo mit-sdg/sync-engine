@@ -33,6 +33,7 @@ import {
   useFormer,
 } from "./former-nodes.ts";
 import type { Mapping } from "@engine/reactions/types";
+import { canonicalValue } from "@engine/utils/canonical-json";
 import { assertFormerBindings } from "./former-bindings.ts";
 import { operationFootprint, symbolsInMapping } from "./operation-footprint.ts";
 import { lowerFormerBody } from "./former-lowering.ts";
@@ -68,6 +69,50 @@ export interface FormNode extends RecordNode {
   splicing(...uses: readonly (FusedFormer | FormerUse)[]): FormNode;
 }
 
+function assertPortableLiteral(value: unknown, seen: WeakSet<object> = new WeakSet()): void {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError("non-finite number");
+    return;
+  }
+  if (typeof value !== "object") throw new TypeError(`non-JSON ${typeof value}`);
+  if (seen.has(value)) throw new TypeError("cycle");
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null && !Array.isArray(value)) {
+    throw new TypeError("non-plain object");
+  }
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) throw new TypeError("sparse array");
+        assertPortableLiteral(value[index], seen);
+      }
+      for (const key of Reflect.ownKeys(value)) {
+        if (key === "length") continue;
+        if (
+          typeof key !== "string" ||
+          !/^(0|[1-9]\d*)$/u.test(key) ||
+          Number(key) >= value.length
+        ) {
+          throw new TypeError("non-index array property");
+        }
+      }
+      return;
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") throw new TypeError("symbol key");
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+        throw new TypeError("non-data property");
+      }
+      assertPortableLiteral(descriptor.value, seen);
+    }
+  } finally {
+    seen.delete(value);
+  }
+}
+
 function entryNode(key: string, value: FormerEntry): FormerNode {
   if (typeof value === "symbol") return brandNode({ node: "leaf" as const, var: value });
   if (isFormerNode(value)) return value;
@@ -75,7 +120,16 @@ function entryNode(key: string, value: FormerEntry): FormerNode {
   if (use !== undefined) {
     return brandNode({ node: "former" as const, use } satisfies FormerCallNode);
   }
-  throw new Error(`form(...): entry "${key}" must be a bound name or a formed value.`);
+  try {
+    assertPortableLiteral(value);
+    const literal = canonicalValue(value);
+    if (literal !== undefined) return brandNode({ node: "literal" as const, value: literal });
+  } catch {
+    // The form-specific diagnostic below is more useful than a canonical JSON path here.
+  }
+  throw new Error(
+    `form(...): entry "${key}" must be a bound name, portable JSON literal, or formed value.`,
+  );
 }
 
 function buildForm(entries: Record<string, FormerEntry>, conditions: readonly WhereOp[]): FormNode {
@@ -344,6 +398,8 @@ function symbolsUsed(node: FormerNode, into: Set<symbol>): void {
   switch (node.node) {
     case "leaf":
       into.add(node.var);
+      return;
+    case "literal":
       return;
     case "record":
       for (const op of node.where) fromOp(op);

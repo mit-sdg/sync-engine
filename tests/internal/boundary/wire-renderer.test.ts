@@ -324,6 +324,31 @@ describe("wire TypeScript renderer", () => {
     expect(anchored).not.toContain("type OneOf<");
   });
 
+  test("resolves numeric projection paths through array element types", async () => {
+    const source = renderWireTypes(
+      wireWithOutput(
+        reference({
+          source: "computation-output",
+          computation: "describe",
+          path: ["items", "0", "id"],
+        }),
+      ),
+      {
+        moduleName: "ArrayWire",
+        conceptSet: { from: "./concepts.ts", export: "applicationConceptSet" },
+      },
+    );
+
+    await typecheck({
+      "array.ts": `${source}\nconst value: ArrayWire["/value"]["output"] = "item";\nvoid value;\n`,
+      "concepts.ts": `
+export declare const applicationConceptSet: {
+  computations: { describe: { fn(): { items: readonly { id: string }[] } } };
+};
+`,
+    });
+  });
+
   test("emits exactly the helpers used by sparse and appended contracts", async () => {
     const conceptSet = { from: "./concepts.ts", export: "applicationConceptSet" };
     const empty = renderWireTypes(wireWithOutput(reference()), {

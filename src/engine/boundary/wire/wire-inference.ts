@@ -1,6 +1,13 @@
 /** Infer wire types for endpoint inputs, response values, and former trees. */
 
-import type { AppIR, FormerIR, FormerNodeIR, PatternIR, ValueIR } from "@engine/reads/ir";
+import type {
+  AppIR,
+  FormerIR,
+  FormerNodeIR,
+  JsonLiteral,
+  PatternIR,
+  ValueIR,
+} from "@engine/reads/ir";
 import { asMarker } from "@engine/reads/ir";
 import type { InputContractDecl } from "../protocol/endpoints.ts";
 import {
@@ -164,6 +171,26 @@ function inferValueWireType(
   return inferPatternWireType(value as PatternIR, formers, env, views, visiting);
 }
 
+function inferLiteralWireType(value: JsonLiteral): WireType {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return { kind: "literal", value };
+  }
+  if (Array.isArray(value)) {
+    return { kind: "array", of: unionWireTypes(value.map(inferLiteralWireType)) };
+  }
+  return {
+    kind: "object",
+    fields: Object.entries(value)
+      .map(([key, field]) => ({ key, type: inferLiteralWireType(field) }))
+      .sort((left, right) => ordinal(left.key, right.key)),
+  };
+}
+
 /** Walk a former with the variable origins and optionality established by its reads. */
 function inferFormerWireType(
   node: FormerNodeIR,
@@ -180,6 +207,8 @@ function inferFormerWireType(
       const inferred = referenceWireType(source);
       return source.maybe ? nullableWireType(inferred) : inferred;
     }
+    case "literal":
+      return inferLiteralWireType(node.value);
     case "count": {
       const local = sharedChildEnv(env);
       applyOpsProvenance(local, [node.from], views, `${site} count source`);

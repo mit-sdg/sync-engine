@@ -10,6 +10,7 @@ import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
 import type { ReadEnv } from "./definition-registry.ts";
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { setOwn } from "@engine/utils/own-property";
+import { canonicalValue } from "@engine/utils/canonical-json";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;
@@ -114,6 +115,7 @@ function blankNode(
 ): unknown {
   switch (node.node) {
     case "leaf":
+    case "literal":
     case "first":
     case "former":
       return null;
@@ -170,6 +172,8 @@ async function evalNode(
       const value = Object.hasOwn(frame, node.var) ? frame[node.var] : null;
       return value === undefined ? null : value;
     }
+    case "literal":
+      return canonicalValue(node.value);
     case "record": {
       const matches = await applyWhereOps(new Frames(frame), node.where ?? [], env, assertRows);
       if (matches.length === 0) return DROP_ROW;

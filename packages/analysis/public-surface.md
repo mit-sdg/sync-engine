@@ -72,7 +72,10 @@ not substituted for authored design identities. `indexApplication()` builds the
 deterministic inventory and possible-impact graph from an exact V1 manifest,
 including authored instance/definition provenance, normalized external bindings, and
 SSF type inventories including aliases. Core validation independently rederives those
-inventories from included specifications before analysis uses the manifest. The beta V1 schema is the replaced static-instance schema. Older
+inventories from included specifications before analysis uses the manifest. A projected
+`compute` output retains the computation-use edge regardless of how many return fields it
+binds, while a portable literal former node introduces no dependency edge. The beta V1
+schema is the replaced static-instance schema. Older
 application manifests are rejected; analysis has no compatibility
 decoder. `traceApplicationImpact()` performs bounded deterministic traversal
 and reports explicit incompleteness when limits or unknown seeds prevent a
