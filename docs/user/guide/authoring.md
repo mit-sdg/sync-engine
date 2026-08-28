@@ -66,9 +66,11 @@ Declare concept-external parameters in the sole `types` fence. The fence may be
 empty: concept-owned identities, conventional values, and refinements used in
 State or operation signatures are not additional Types declarations. Put one
 SSF `state` fence in State. `check-design` parses its bounded structural
-declarations, including owned identities, subsets, aliases, the subset graph, and name
-uniqueness. Put invariant prose on a `Rule:` line and review it manually, since the
-parser makes no claim about it.
+declarations, including owned identities, subsets, aliases, field-level `unique`
+constraints, the subset graph, and name uniqueness. Express field uniqueness with
+`unique` after `optional` and before an explicit field name; put invariants SSF cannot
+express on a `Rule:` line and review them manually, since the parser makes no claim about
+rule prose.
 Express enforced refinements in the owning action branches. Declare at least one
 structured action with explicit branches, and put
 the sole `queries` fence in Queries even when it is empty. Do not add subsection

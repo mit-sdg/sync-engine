@@ -97,6 +97,7 @@ export function resolveGrammar(
       name: field.name,
       inferredName: field.inferredName,
       optional: field.optional,
+      unique: field.unique,
       value: fieldType(field.value, facts, external),
       span: field.span,
     })),

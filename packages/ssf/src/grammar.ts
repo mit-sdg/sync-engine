@@ -177,7 +177,12 @@ function parseField(line: SourceLine): ParsedField | undefined {
   const optionalIndex = authored.findIndex(
     (token, index) => index >= first && token.text === "optional",
   );
-  const tokens = authored.filter((_, index) => index >= first && index !== optionalIndex);
+  const uniqueIndex = authored.findIndex(
+    (token, index) => index >= first && token.text === "unique",
+  );
+  const tokens = authored.filter(
+    (_, index) => index >= first && index !== optionalIndex && index !== uniqueIndex,
+  );
   const explicitName =
     tokens[0]?.text !== "set" &&
     tokens[0]?.text !== "seq" &&
@@ -212,12 +217,19 @@ function parseField(line: SourceLine): ParsedField | undefined {
         : undefined;
   const name = explicitName ? tokens[0]?.text : inferredFieldName(inferred?.text ?? "");
   const nameSpan = explicitName ? tokens[0]?.span : inferred?.span;
-  if (name === "" || nameSpan === undefined || value === undefined) return undefined;
+  if (
+    name === "" ||
+    nameSpan === undefined ||
+    value === undefined ||
+    (uniqueIndex >= 0 && !explicitName)
+  )
+    return undefined;
   return {
     name,
     nameSpan,
     inferredName: !explicitName,
     optional: optionalIndex >= 0,
+    unique: uniqueIndex >= 0,
     value,
     span: lineSpan(line),
   };
@@ -381,35 +393,60 @@ function fieldDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
   const indentation = line.text.slice(0, (tokens[0]?.span.start.offset ?? line.start) - line.start);
   const hasArticle = tokens[0]?.text === "a" || tokens[0]?.text === "an";
   const optionalIndex = tokens.findIndex(({ text }) => text === "optional");
-  if (optionalIndex < 0) return undefined;
-  const optionalToken = tokens[optionalIndex]!;
-  if (tokens.some(({ text }) => text === "set" || text === "seq"))
-    return error({
-      code: "SSF_OPTIONAL_COLLECTION",
-      message: "SSF collections are never optional; an empty collection represents absence.",
-      suggestion: "Remove `optional` from this field.",
-      span: optionalToken.span,
-    });
-  const expectedOptionalIndex = hasArticle ? 1 : 0;
-  if (optionalIndex !== expectedOptionalIndex) {
-    const withoutOptional = tokens
-      .filter((_, index) => index !== optionalIndex)
+  const uniqueIndex = tokens.findIndex(({ text }) => text === "unique");
+  if (optionalIndex >= 0) {
+    const optionalToken = tokens[optionalIndex]!;
+    if (tokens.some(({ text }) => text === "set" || text === "seq"))
+      return error({
+        code: "SSF_OPTIONAL_COLLECTION",
+        message: "SSF collections are never optional; an empty collection represents absence.",
+        suggestion: "Remove `optional` from this field.",
+        span: optionalToken.span,
+      });
+    const expectedOptionalIndex = hasArticle ? 1 : 0;
+    if (optionalIndex !== expectedOptionalIndex) {
+      const withoutOptional = tokens
+        .filter((_, index) => index !== optionalIndex)
+        .map(({ text }) => text);
+      if (hasArticle) withoutOptional[0] = "an";
+      withoutOptional.splice(expectedOptionalIndex, 0, "optional");
+      return error({
+        code: "SSF_MISPLACED_OPTIONAL",
+        message:
+          "The `optional` modifier must precede `unique` or the field name and follow the article when present.",
+        suggestion: `${indentation}${withoutOptional.join(" ")}`,
+        span: optionalToken.span,
+      });
+    }
+    if (tokens[0]?.text === "a")
+      return error({
+        code: "SSF_ARTICLE",
+        message: "Use `an` before `optional`.",
+        suggestion: `${indentation}${correctedTokens(tokens, new Map([[0, "an"]]))}`,
+        span: tokens[0].span,
+      });
+  }
+  if (uniqueIndex < 0) return undefined;
+  const uniqueToken = tokens[uniqueIndex]!;
+  const expectedUniqueIndex = (hasArticle ? 1 : 0) + (optionalIndex >= 0 ? 1 : 0);
+  if (uniqueIndex !== expectedUniqueIndex) {
+    const withoutUnique = tokens
+      .filter((_, index) => index !== uniqueIndex)
       .map(({ text }) => text);
-    if (hasArticle) withoutOptional[0] = "an";
-    withoutOptional.splice(expectedOptionalIndex, 0, "optional");
+    withoutUnique.splice(expectedUniqueIndex, 0, "unique");
     return error({
-      code: "SSF_MISPLACED_OPTIONAL",
+      code: "SSF_MISPLACED_UNIQUE",
       message:
-        "The `optional` modifier must precede the field name and follow the article when present.",
-      suggestion: `${indentation}${withoutOptional.join(" ")}`,
-      span: optionalToken.span,
+        "The `unique` modifier must precede the field name and follow the article and `optional` when present.",
+      suggestion: `${indentation}${withoutUnique.join(" ")}`,
+      span: uniqueToken.span,
     });
   }
-  if (tokens[0]?.text === "a")
+  if (optionalIndex < 0 && tokens[0]?.text === "an")
     return error({
       code: "SSF_ARTICLE",
-      message: "Use `an` before `optional`.",
-      suggestion: `${indentation}${correctedTokens(tokens, new Map([[0, "an"]]))}`,
+      message: "Use `a` before `unique`.",
+      suggestion: `${indentation}${correctedTokens(tokens, new Map([[0, "a"]]))}`,
       span: tokens[0].span,
     });
   return undefined;

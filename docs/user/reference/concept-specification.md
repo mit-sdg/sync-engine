@@ -155,8 +155,8 @@ concept-specification IR.
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
 The parser recognizes set, sequence, element, subset, alias, and field declarations
-together with their multiplicities, identifiers, articles, and subset graph. Declared
-names are taken as written.
+together with their multiplicities, identifiers, articles, field-level `unique`
+constraints, and subset graph. Declared names are taken as written.
 
 Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
 the declaration, are joined when they form a singular and plural pair. Irregular pairs
@@ -171,10 +171,12 @@ self-parenting, and cycles fail with source-located diagnostics.
 
 Declaration and alias names are unique across the fence and share that namespace with
 external parameters and SSF primitives. Field names are unique within their declaration,
-and enumeration values within their enumeration.
+and enumeration values within their enumeration. Prefix an explicitly named field with
+`unique` to require distinct values among members of that declaration. Put `unique`
+after `optional`.
 
-Invariant prose goes on a `Rule:` line, at the top level or indented under a
-declaration. The parser retains the line and makes no claim about it, while every other
+Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or
+indented under a declaration. The parser retains the line and makes no claim about it, while every other
 nonblank line must parse as a declaration, alias, or field. Field value names stay open,
 because they may denote conventional or concept-local refinement types: an unrecognized
 name is retained and classified as unresolved rather than rejected, and becomes owned

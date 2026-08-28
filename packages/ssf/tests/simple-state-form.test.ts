@@ -377,6 +377,63 @@ Rule: at most one Item has each title`;
   });
 });
 
+describe("unique fields", () => {
+  test("parses uniqueness on required and optional scalar fields", () => {
+    const parsed = parseSimpleStateForm(`a set of Accounts with
+  a unique handle String
+  an optional unique email String`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      { name: "handle", optional: false, unique: true },
+      { name: "email", optional: true, unique: true },
+    ]);
+  });
+
+  test("requires a unique field to have an explicit name", () => {
+    expect(
+      parseSimpleStateForm(`a set of Accounts with\n  a unique Person`).diagnostics,
+    ).toMatchObject([{ code: "SSF_MALFORMED_FIELD" }]);
+  });
+
+  test("records ordinary fields as non-unique", () => {
+    const parsed = parseSimpleStateForm(`a set of Items with
+  a title String`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.fields[0]).toMatchObject({ unique: false });
+  });
+
+  test.each([
+    ["after the field name", "a code unique String", "a unique code String"],
+    [
+      "after an optional field name",
+      "an optional code unique String",
+      "an optional unique code String",
+    ],
+  ])("diagnoses unique %s", (_, field, suggestion) => {
+    const parsed = parseSimpleStateForm(`a set of Items with\n  ${field}`);
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_MISPLACED_UNIQUE", suggestion: `  ${suggestion}` },
+    ]);
+  });
+
+  test("requires the article that agrees with the first modifier", () => {
+    expect(
+      parseSimpleStateForm(`a set of Items with\n  an unique code String`).diagnostics,
+    ).toMatchObject([{ code: "SSF_ARTICLE", suggestion: "  a unique code String" }]);
+  });
+
+  test("parses uniqueness on a collection field", () => {
+    const parsed = parseSimpleStateForm(`a set of Teams with
+  a unique members set of Person`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.fields[0]).toMatchObject({
+      name: "members",
+      unique: true,
+      value: { kind: "collection", multiplicity: "set" },
+    });
+  });
+});
+
 describe("collection fields", () => {
   test("parses named and enum set/sequence elements with optional collection `of`", () => {
     const parsed = parseSimpleStateForm(
@@ -1024,7 +1081,7 @@ describe("repository SSF corpus", () => {
       {
         name: { text: "Items", referenceKind: "owned" },
         fields: [
-          { name: "title", inferredName: false, value: { kind: "named" } },
+          { name: "title", inferredName: false, unique: true, value: { kind: "named" } },
           {
             name: "item",
             inferredName: true,
@@ -1075,9 +1132,7 @@ describe("repository SSF corpus", () => {
         target: { text: "Items", referenceKind: "owned" },
       },
     ]);
-    expect(parsed.document.rules).toMatchObject([
-      { text: "Rule: at most one Item has each owner and title pair" },
-    ]);
+    expect(parsed.document.rules).toMatchObject([{ text: "Rule: an Item's owner must be active" }]);
     expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
       "Completed",
       "Item",

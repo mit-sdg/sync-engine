@@ -2,12 +2,13 @@
 
 Simple State Form (SSF) is the State language for a concept specification: a small
 English-like notation for declaring the facts a concept owns. Write one declaration,
-alias, or rule per top-level line, and put a declaration's fields on the following
-indented lines. All of it lives inside the concept's `state` fence.
+alias, or rule per top-level line, and put a declaration's fields and uniqueness
+constraints on the following indented lines. All of it lives inside the concept's
+`state` fence.
 
 ```state
 a set of Items with
-  a title String
+  a unique title String
   an optional owner Person
   a watchers set of Person
   a status of OPEN or DONE
@@ -19,8 +20,6 @@ an element Settings with
   a retentionDays Number
 
 alias WorkItem for Items
-
-Rule: at most one Item has each title
 ```
 
 ## Grammar
@@ -31,9 +30,10 @@ setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
 declarationBody := (INDENT (field | ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] (requiredField | optional optionalField)
+field := [a|an] (requiredField | optional optionalField | unique uniqueField | optional unique uniqueField)
 requiredField := inferredField | fieldName (scalar|collection)
 optionalField := named | fieldName scalar
+uniqueField := fieldName (scalar|collection)
 inferredField := named | (set|seq) [of] named
 scalar := named | enum
 named := Type | Parameter | primitive
@@ -74,9 +74,9 @@ a set of Items with
   a flags set of VISIBLE or HIDDEN
 ```
 
-An indented field may omit its article. `optional` comes before the field name, and
-directly after the article when there is one: `an optional owner Person`. Collections
-are never optional; an empty collection represents absence.
+An indented field may omit its article. `optional` comes directly after the article when
+there is one, and `unique` comes after `optional`: `an optional unique owner Person`.
+Collections are never optional; an empty collection represents absence.
 
 Omit the field name when a scalar or collection supplies a single named type. SSF
 lowercases the first character of that spelling:
@@ -89,6 +89,18 @@ an element Example with
 
 These fields are named `profile` and `options`. An enumeration always needs a written
 name. Field names, written or inferred, are unique within their declaration.
+
+Prefix a field with `unique` when its values must be unique among members of that
+declaration. A unique field must write its field name explicitly:
+
+```state
+a set of Items with
+  a unique title String
+```
+
+The constraint applies to the declaration carrying the field. A `unique` field on a
+subset constrains only members of that subset. An `optional unique` field may be absent
+from multiple members; values that are present remain unique.
 
 A collection uses `set` or `seq` with an optional `of`, and holds scalars rather than
 further collections. Named-type unions are not part of SSF: `or` separates enumeration
@@ -164,7 +176,7 @@ Prose the notation cannot express goes on a `Rule:` line, either at the top leve
 indented under a declaration:
 
 ```state
-Rule: at most one Item has each title
+Rule: an Item's owner must be active
 ```
 
 SSF keeps the line as written and makes no claim about it, even when the text resembles
@@ -180,6 +192,6 @@ line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
 `sequence`, and `sequences` are reported as near misses for `seq`, and `singleton` for
 `element`.
 
-SSF proves the structural declarations, their graph, and the owned type names they
-establish. It does not prove rule text or refinement meaning, and says nothing about
-behavior, storage layout, or implementation.
+SSF proves the structural declarations, their graph, field uniqueness constraints, and
+the owned type names they establish. It does not prove rule text or refinement meaning,
+and says nothing about behavior, storage layout, or implementation.

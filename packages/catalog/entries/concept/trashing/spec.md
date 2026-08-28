@@ -22,12 +22,10 @@ external Item
 
 ```state
 a set of Dispositions with
-  an item Item
+  a unique item Item
   a status DispositionStatus
   an optional trashedAt DateTime
   an optional purgedAt DateTime
-
-Rule: at most one Disposition has each Item
 ```
 
 ## Actions

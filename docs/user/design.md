@@ -184,9 +184,9 @@ formats are implementation choices unless they alter the observable contract.
 The required `State` fence uses Simple State Form (SSF): set, sequence, singleton,
 and subset declarations with indented relation fields; implicit set identity rather
 than synthetic ID fields; capitalized types, lowercase field names, uppercase
-enumeration values, and SSF primitives. A bounded structural parser checks these
-declarations, checks the subset graph, and inventories the type names a concept owns,
-including aliases. That inventory lets config-based checking prove qualified
+enumeration values, SSF primitives, and `unique` fields. A bounded structural parser
+checks these declarations and the subset graph, and inventories the type names a concept
+owns, including aliases. That inventory lets config-based checking prove qualified
 external-binding targets. See
 [`State`](reference/concept-specification.md#state).
 
@@ -194,8 +194,9 @@ The parser does not interpret `Rule:` prose, derive a storage schema, prove acti
 conditions or effects, or compare persistence with State; every other State line must
 parse. Names introduced by State and conventional names used
 in operation signatures do not require declarations in the external-only Types fence.
-Record owned facts in State and put each enforced invariant or value refinement in the
-action branch that checks it. Where a concept needs a synonym, declare it with
+Record owned facts and field uniqueness constraints in State and put each enforced
+invariant or value refinement in the action branch that checks it. Where a concept needs
+a synonym, declare it with
 `alias Alias for Target`, which qualified bindings may target; do not invent other alias
 syntax or chain one external onto another.
 

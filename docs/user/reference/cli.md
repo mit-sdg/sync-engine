@@ -140,7 +140,8 @@ Application-design documents use the same parser and assembly-independent valida
 config-based `check`. Before assembly, `check-design` proves only these form properties:
 
 - SSF declarations, aliases, and fields parse canonically, including articles,
-  multiplicity, `optional`, `with`, identifiers, the subset graph, and name uniqueness;
+  multiplicity, `optional`, field-level `unique`, `with`, identifiers, the subset graph,
+  and name uniqueness;
   every line either parses or is a `Rule:` line, whose prose stays opaque;
 - typed `reaction:`, `view:`, and `former:` links contain exact, non-wildcard dotted
   paths, and `computation:` links contain exact computation names;

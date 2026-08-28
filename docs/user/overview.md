@@ -73,9 +73,10 @@ definition may be instantiated several times.
 
 A strict specification has ordered Purpose, Principle, Types, State, Actions,
 and Queries sections. Types declares only opaque external parameters. State uses
-SSF. A bounded structural parser inventories the declarations, subsets, and aliases a
-concept owns, and checks its subset graph and name uniqueness. Invariants live on
-`Rule:` lines and stay opaque; every other line has to parse.
+SSF. A bounded structural parser inventories the declarations, subsets, aliases, and
+field-level uniqueness constraints a concept owns, and checks its subset graph and name
+uniqueness. Invariants SSF cannot express live on `Rule:` lines and stay opaque; every
+other line has to parse.
 Actions use explicit `where`/`then` branches and terminal returns or refusals;
 queries select `one`, `optional`, or `many`, return named rows, and explain their
 answers in an indented body. See [Concept

@@ -82,9 +82,10 @@ blank fence lines do not shift them. Keep this parser as the one implementation 
 both repair diagnostics and checked-model owned-name extraction; do not recreate a
 parser under `src/engine/tooling`.
 
-The parser handles set, sequence, element, subset, alias, and field declarations and
-keeps their spellings as authored. Named State field references and parsed action and
-query type expressions supply alias candidates. A candidate joins an owner only when
+The parser handles set, sequence, element, subset, alias, and field declarations,
+including field-level uniqueness constraints, and keeps their spellings as authored.
+Named State field references and parsed action and query type expressions supply alias
+candidates. A candidate joins an owner only when
 `plur` relates the two authored spellings and neither side has a second match; the
 pluralizer's output is never inserted, no transitive closure runs, and external,
 primitive, element, already-declared, ambiguous, and explicitly aliased candidates are
@@ -96,15 +97,16 @@ Subset parents resolve after declarations and aliases are parsed, which lets for
 references, alias parents, and valid chains work, while unresolved, external, primitive,
 invalid-alias, duplicate, ambiguous, self, and cyclic parents fail at their authored
 spans. Alias parent edges normalize to their targets before cycle validation. Type
-names, declaration-local field names, and enumeration values have separate uniqueness
-scopes.
+names, declaration-local field names, and enumeration values have separate name
+uniqueness scopes. A field's `unique` modifier records distinct values within the field's
+declaration.
 
 State field value names stay open: the parser classifies owned, external, primitive, and
 unresolved references, and an unresolved conventional or refinement name remains legal.
 Only the plural join or an alias makes such a reference owned. Every nonblank line in the
 fence must parse or begin with `Rule:`; malformed lines produce diagnostics, and rule
 text stays opaque. The concept IR preserves the complete normalized State-fence text and
-has no separate prose field. The parser does not prove that text, field refinements,
+has no separate prose field. The parser does not prove rule text, field refinements,
 conditions, effects, query meaning, storage layout, State/storage agreement, or
 implementation semantics.
 

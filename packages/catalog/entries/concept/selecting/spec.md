@@ -26,12 +26,10 @@ external Item
 
 ```state
 a set of Selections with
-  a scope Scope
+  a unique scope Scope
   an item Item
 
 a Current set of Selections
-
-Rule: at most one current Selection has each Scope
 ```
 
 ## Actions

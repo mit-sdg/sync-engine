@@ -5526,7 +5526,7 @@ export interface SsfToken {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_OPTIONAL" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT";
+export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_OPTIONAL" | "SSF_MISPLACED_UNIQUE" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT";
 interface SsfDiagnosticDetail {
     readonly severity: "error" | "advice";
     readonly code: SsfDiagnosticCode;
@@ -5575,6 +5575,7 @@ export interface SsfField {
     readonly name: string;
     readonly inferredName: boolean;
     readonly optional: boolean;
+    readonly unique: boolean;
     readonly value: SsfFieldType;
     readonly span: SsfSpan;
 }
@@ -5658,6 +5659,7 @@ export interface ParsedField {
     readonly nameSpan: SsfSpan;
     readonly inferredName: boolean;
     readonly optional: boolean;
+    readonly unique: boolean;
     readonly value: ParsedFieldType;
     readonly span: SsfSpan;
 }

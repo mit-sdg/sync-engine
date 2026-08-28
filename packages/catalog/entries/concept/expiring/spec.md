@@ -23,10 +23,8 @@ external Subject
 
 ```state
 a set of Deadlines with
-  a subject Subject
+  a unique subject Subject
   an expiresAt DateTime
-
-Rule: at most one Deadline has each subject
 ```
 
 ## Actions

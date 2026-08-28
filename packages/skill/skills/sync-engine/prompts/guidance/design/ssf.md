@@ -6,9 +6,10 @@ setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
 declarationBody := (INDENT (field|ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] (requiredField|optional optionalField)
+field := [a|an] (requiredField|optional optionalField|unique uniqueField|optional unique uniqueField)
 requiredField := inferredField|fieldName (scalar|collection)
 optionalField := named|fieldName scalar
+uniqueField := fieldName (scalar|collection)
 inferredField := named|(set|seq) [of] named
 scalar := named|enum
 named := Type|Parameter|primitive
@@ -45,14 +46,15 @@ Structures, aliases, externals, and primitives share one State namespace. Keep
 fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
 legal conventional/refinement reference, not an owned binding target.
 
-Collections are never `optional` (empty means absent) or nested; named-type unions are
-invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
-identity; they classify parent members, may overlap, and add relations. `element` has one
+Put `unique` after `optional` and before an explicit field name when its values must be
+unique among members of that declaration. Collections are never `optional` (empty means
+absent) or nested; named-type unions are invalid. Sets and sequences introduce
+identities—never add ID fields. Subsets add no identity; they classify parent members, may overlap, and add relations. `element` has one
 member. Which side declares a relation implies no storage, navigation, or ownership.
 
 ```state
 a set of Items with
-  a title String
+  a unique title String
   an Item
   an optional owner Person
   a watchers set of Person
@@ -67,5 +69,5 @@ an element Settings with
 
 alias WorkItem for Items
 
-Rule: at most one Item has each owner and title pair
+Rule: an Item's owner must be active
 ```
