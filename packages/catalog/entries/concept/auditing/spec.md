@@ -41,8 +41,8 @@ a set of Entries with
   a detail String
   a target Target
   a recordedAt DateTime
+  unique trail and event
 
-Rule: within one Trail at most one Entry has each event
 Rule: within one Trail the positions are 1 through the number of Entries
 ```
 

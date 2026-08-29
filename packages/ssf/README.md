@@ -13,6 +13,11 @@ a set of Items with
   a watchers set of Person
   a status of OPEN or DONE
 
+a set of Votes with
+  an item Item
+  a voter Voter
+  unique item and voter
+
 a Completed set of Items with
   a completedAt DateTime
 
@@ -28,10 +33,11 @@ alias WorkItem for Items
 document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
-declarationBody := (INDENT (field | ruleLine))+
+declarationBody := (INDENT (field | uniqueLine | ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
 field := [a|an] modifier* fieldName (scalar|collection)
 modifier := optional | unique
+uniqueLine := unique fieldName (and fieldName)+
 scalar := named | enum
 named := Type | Parameter | primitive
 enum := of values
@@ -74,7 +80,12 @@ a set of Items with
 An indented field may omit its article, and `a` and `an` both read. The modifiers
 `optional` and `unique` go between the article and the field name, each at most once and
 in either order. Collections are never optional; an empty collection represents absence.
-Field names are unique within their declaration.
+Field names are unique within their declaration. A collection uses `set` or `seq` with an
+optional `of`, and holds scalars rather than further collections. Named-type unions are
+not part of SSF: `or` separates enumeration values, which are unique within their
+enumeration.
+
+## Uniqueness
 
 Prefix a field with `unique` when its values must be unique among members of that
 declaration:
@@ -84,19 +95,32 @@ a set of Items with
   a unique title String
 ```
 
-The constraint applies to the declaration carrying the field. A `unique` field on a
-subset constrains only members of that subset. An `optional unique` field may be absent
-from multiple members; values that are present remain unique. A `unique` collection field
-compares the whole collection, so no two members hold the same set or the same sequence:
+When it is a _combination_ of fields that must be unique, put `unique` on its own line
+and join the field names with `and`:
+
+```state
+a set of Votes with
+  an item Item
+  a voter Voter
+  a direction Direction
+  unique item and voter
+```
+
+No two Votes share both an item and a voter, though many Votes share either one. A
+constraint line names two or more fields; the one-field case is the modifier above, so
+there is one way to write each. Field order does not distinguish a combination, and a
+declaration may carry several.
+
+The constraint applies to the declaration carrying it. A `unique` field or line on a
+subset constrains only members of that subset, and may name the parent's fields as well
+as the subset's own. An `optional unique` field may be absent from multiple members;
+values that are present remain unique. A `unique` collection field compares the whole
+collection, so no two members hold the same set or the same sequence:
 
 ```state
 a set of Conversations with
   a unique participants set of Person
 ```
-
-A collection uses `set` or `seq` with an optional `of`, and holds scalars rather than
-further collections. Named-type unions are not part of SSF: `or` separates enumeration
-values, which are unique within their enumeration.
 
 ## Aliases
 
@@ -184,6 +208,6 @@ line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
 `sequence`, and `sequences` are reported as near misses for `seq`, and `singleton` for
 `element`.
 
-SSF proves the structural declarations, their graph, field uniqueness constraints, and
-the owned type names they establish. It does not prove rule text or refinement meaning,
+SSF proves the structural declarations, their graph, the uniqueness constraints and the
+fields they name, and the owned type names they establish. It does not prove rule text or refinement meaning,
 and says nothing about behavior, storage layout, or implementation.

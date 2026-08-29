@@ -38,6 +38,76 @@ function cycleMembers(parentBySubset: ReadonlyMap<string, string>): ReadonlySet<
   return cyclic;
 }
 
+/** Field names a declaration constrains: its own, then every ancestor's up the subset chain. */
+function constrainableFieldNames(
+  declaration: ParsedDeclaration,
+  byName: ReadonlyMap<string, ParsedDeclaration>,
+  parentBySubset: ReadonlyMap<string, string>,
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  const visited = new Set<string>();
+  let cursor: ParsedDeclaration | undefined = declaration;
+  while (cursor !== undefined && !visited.has(cursor.name.text)) {
+    visited.add(cursor.name.text);
+    for (const field of cursor.fields) names.add(field.name);
+    const parent = parentBySubset.get(cursor.name.text);
+    cursor = parent === undefined ? undefined : byName.get(parent);
+  }
+  return names;
+}
+
+/** Report uniqueness constraints that name an unavailable field or repeat a combination. */
+function validateUniqueConstraints(
+  declarations: readonly ParsedDeclaration[],
+  uniqueDeclarations: ReadonlyMap<string, ParsedDeclaration>,
+  parentBySubset: ReadonlyMap<string, string>,
+  diagnostics: SsfDiagnostic[],
+): void {
+  for (const declaration of declarations) {
+    const available = constrainableFieldNames(declaration, uniqueDeclarations, parentBySubset);
+    const combinations = new Set<string>();
+    for (const constraint of declaration.constraints) {
+      const named = new Set<string>();
+      for (const field of constraint.fields) {
+        if (!available.has(field.text))
+          diagnostics.push(
+            error({
+              code: "SSF_UNKNOWN_UNIQUE_FIELD",
+              message: `Uniqueness constraint names ${JSON.stringify(field.text)}, which is not a field of declaration ${JSON.stringify(declaration.name.text)}.`,
+              suggestion:
+                "Name only fields of this declaration or of a declaration it is a subset of.",
+              span: field.span,
+            }),
+          );
+        else if (named.has(field.text))
+          diagnostics.push(
+            error({
+              code: "SSF_DUPLICATE_UNIQUE",
+              message: `Uniqueness constraint names field ${JSON.stringify(field.text)} more than once.`,
+              suggestion: "Name each field once; a combination constrains distinct fields.",
+              span: field.span,
+            }),
+          );
+        named.add(field.text);
+      }
+      const combination = constraint.fields
+        .map(({ text }) => text)
+        .sort()
+        .join(" and ");
+      if (combinations.has(combination))
+        diagnostics.push(
+          error({
+            code: "SSF_DUPLICATE_UNIQUE",
+            message: `Declaration ${JSON.stringify(declaration.name.text)} constrains the combination ${JSON.stringify(combination)} more than once.`,
+            suggestion: "State each unique combination once; field order does not distinguish it.",
+            span: constraint.span,
+          }),
+        );
+      combinations.add(combination);
+    }
+  }
+}
+
 /** Resolve order-independent alias and subset graphs and report every invalid edge. */
 export function validateTypeGraph(
   declarations: readonly ParsedDeclaration[],
@@ -78,8 +148,7 @@ export function validateTypeGraph(
             error({
               code: "SSF_DUPLICATE_FIELD",
               message: `Field ${JSON.stringify(field.name)} occurs more than once in declaration ${JSON.stringify(name)}.`,
-              suggestion:
-                "Use a unique effective field name within this declaration, including inferred names.",
+              suggestion: "Use a unique field name within this declaration.",
               span: field.nameSpan,
             }),
           );
@@ -213,6 +282,8 @@ export function validateTypeGraph(
       parentBySubset.set(declaration.name.text, parent);
     }
   }
+
+  validateUniqueConstraints(declarations, uniqueDeclarations, parentBySubset, diagnostics);
 
   const cyclicNames = cycleMembers(parentBySubset);
   for (const declaration of declarations) {

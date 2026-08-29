@@ -8,6 +8,7 @@ import {
   type ParsedFieldType,
   type ParsedNamed,
   type ParsedReference,
+  type ParsedUniqueConstraint,
   type SourceLine,
   type SsfDiagnostic,
   type SsfMultiplicity,
@@ -101,6 +102,7 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
       ? {}
       : { parent: { text: parentToken.text, span: parentToken.span } }),
     fields: [],
+    constraints: [],
     rules: [],
     span: lineSpan(line),
     signatureSpan: lineSpan(line),
@@ -241,6 +243,22 @@ function parseField(line: SourceLine): ParsedField | undefined {
   return parsed === undefined ? undefined : { ...parsed, span: lineSpan(line) };
 }
 
+/** Parse `unique fieldName and fieldName ...`, the constraint form over two or more fields. */
+function parseUniqueConstraint(line: SourceLine): ParsedUniqueConstraint | undefined {
+  const tokens = line.tokens;
+  if (tokens[0]?.text !== "unique") return undefined;
+  const fields: ParsedReference[] = [];
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    if (index % 2 === 1) {
+      if (!FIELD_NAME.test(token.text)) return undefined;
+      fields.push({ text: token.text, span: token.span });
+    } else if (token.text !== "and") return undefined;
+  }
+  if (fields.length < 2 || tokens.length !== fields.length * 2) return undefined;
+  return { fields, span: lineSpan(line) };
+}
+
 function ruleMarker(line: SourceLine): string | undefined {
   if (line.tokens.length < 2) return undefined;
   const first = line.tokens[0]?.text;
@@ -260,15 +278,19 @@ function nearMissRuleDiagnostic(line: SourceLine, marker: string): SsfDiagnostic
   });
 }
 
-function orphanedLineDiagnostic(line: SourceLine, marker?: string): SsfDiagnostic {
+function orphanedLineDiagnostic(
+  line: SourceLine,
+  marker?: string,
+  body: "field" | "uniqueness constraint" = "field",
+): SsfDiagnostic {
   const nearMiss = marker !== undefined && marker !== RULE_MARKER;
-  const subject = marker === undefined ? "valid SSF field" : `indented \`${marker}\` line`;
+  const subject = marker === undefined ? `valid SSF ${body}` : `indented \`${marker}\` line`;
   return error({
     code: "SSF_ORPHANED_LINE",
     message: `This ${subject} has no enclosing SSF declaration${nearMiss ? ` and does not use the exact \`${RULE_MARKER}\` marker` : ""}.`,
     suggestion:
       marker === undefined
-        ? "Add an enclosing declaration ending in `with` before this field."
+        ? `Add an enclosing declaration ending in \`with\` before this ${body}.`
         : nearMiss
           ? `Add an enclosing declaration and use \`${RULE_MARKER}\`; or unindent the corrected line to make it a top-level rule.`
           : "Add an enclosing declaration before this line, or remove its indentation to make it a top-level rule.",
@@ -314,6 +336,7 @@ function canonicalStructural(structural: SsfMultiplicity): "element" | "seq" | "
 function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[] {
   const diagnostics: SsfDiagnostic[] = [];
   const hasFields = declaration.fields.length > 0;
+  const hasBody = hasFields || declaration.constraints.length > 0;
   const tokens = declaration.signature.tokens;
   const authored = words(declaration.signature);
   const canonical = canonicalStructural(declaration.multiplicity);
@@ -325,7 +348,7 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   const subsetMissingArticle =
     declaration.declarationKind === "subset" && declaration.structuralIndex === 1;
   if (collectionHasArticle) replacements.set(0, articleFor(declaration.multiplicity));
-  const canonicalLine = `${correctedTokens(tokens, replacements)}${hasFields && !declaration.hasWith ? " with" : ""}`;
+  const canonicalLine = `${correctedTokens(tokens, replacements)}${hasBody && !declaration.hasWith ? " with" : ""}`;
   const subsetArticleSuggestion = `Use \`a ${canonicalLine}\` or \`an ${canonicalLine}\`.`;
   const structuralToken = tokens[declaration.structuralIndex];
 
@@ -380,12 +403,12 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
       }),
     );
   }
-  if (hasFields && !declaration.hasWith) {
+  if (hasBody && !declaration.hasWith) {
     const end = declaration.signatureSpan.end;
     diagnostics.push(
       error({
         code: "SSF_MISSING_WITH",
-        message: "A declaration with indented fields must include `with`.",
+        message: "A declaration with an indented body must include `with`.",
         suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
         span: span(end, end),
       }),
@@ -407,6 +430,14 @@ function repairedLine(line: SourceLine, tokens: readonly SsfToken[]): string {
 function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
   const tokens = line.tokens;
   const article = articleLength(tokens);
+  if (tokens[0]?.text === "unique" && tokens.length === 2 && FIELD_NAME.test(tokens[1]!.text))
+    return error({
+      code: "SSF_MALFORMED_FIELD",
+      message: "A uniqueness constraint names two or more fields joined by `and`.",
+      suggestion:
+        "Name the rest of the combination with `and`, or mark the field `unique` where it is declared.",
+      span: lineSpan(line),
+    });
   let start = article;
   while (fieldModifier(tokens[start]?.text) !== undefined) start += 1;
   const structural = tokens[start]?.text === "set" || tokens[start]?.text === "seq";
@@ -487,14 +518,21 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
     }
     if (indented) {
       const field = parseField(line);
-      if (field === undefined) {
+      const constraint = field === undefined ? parseUniqueConstraint(line) : undefined;
+      if (field !== undefined) {
+        if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
+        else {
+          current.fields.push(field);
+          const diagnostic = fieldDiagnostic(line, field);
+          if (diagnostic !== undefined) diagnostics.push(diagnostic);
+        }
+      } else if (constraint !== undefined) {
+        if (current === undefined)
+          diagnostics.push(orphanedLineDiagnostic(line, undefined, "uniqueness constraint"));
+        else current.constraints.push(constraint);
+      } else {
         diagnostics.push(fieldFailureDiagnostic(line));
         if (current !== undefined) current.hasMalformedField = true;
-      } else if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
-      else {
-        current.fields.push(field);
-        const diagnostic = fieldDiagnostic(line, field);
-        if (diagnostic !== undefined) diagnostics.push(diagnostic);
       }
       if (current !== undefined) current.span = span(current.span.start, lineSpan(line).end);
       continue;

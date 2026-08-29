@@ -33,8 +33,7 @@ a set of Alerts with
   a cause Cause
   a raisedAt DateTime
   an open Flag
-
-Rule: at most one Alert has each recipient and cause pair
+  unique recipient and cause
 ```
 
 ## Actions

@@ -68,8 +68,9 @@ State or operation signatures are not additional Types declarations. Put one
 SSF `state` fence in State. `check-design` parses its bounded structural
 declarations, including owned identities, subsets, aliases, field-level `unique`
 constraints, the subset graph, and name uniqueness. Express field uniqueness with
-`unique` before the field name; put invariants SSF cannot express on a `Rule:` line and
-review them manually, since the parser makes no claim about rule prose.
+`unique` before the field name, and a unique combination with a `unique` line joining
+field names with `and`; put invariants SSF cannot express on a `Rule:` line and review
+them manually, since the parser makes no claim about rule prose.
 Express enforced refinements in the owning action branches. Declare at least one
 structured action with explicit branches, and put
 the sole `queries` fence in Queries even when it is empty. Do not add subsection

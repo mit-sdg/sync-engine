@@ -4,10 +4,11 @@
 document := (setDecl|subsetDecl|aliasDecl|ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
-declarationBody := (INDENT (field|ruleLine))+
+declarationBody := (INDENT (field|uniqueLine|ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
 field := [a|an] modifier* fieldName (scalar|collection)
 modifier := optional|unique
+uniqueLine := unique fieldName (and fieldName)+
 scalar := named|enum
 named := Type|Parameter|primitive
 enum := of values
@@ -43,10 +44,13 @@ fieldNames unique per declaration, VALUEs per enum. An unresolved field value is
 legal conventional/refinement reference, not an owned binding target.
 
 Mark a field `unique` when its values must be unique among members of that declaration; a
-unique collection field compares the whole collection. Write each modifier at most once,
-in either order, between any article and the fieldName; `a` and `an` both read.
-Collections are never `optional` (empty means absent) or nested; named-type unions are
-invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
+unique collection field compares the whole collection. Constrain a combination with a
+`unique` line naming two or more fields—never one, which the modifier already says.
+Order does not distinguish a combination; a declaration may carry several. A subset's
+constraints bind only its own members and may name ancestor fields. Write each modifier
+at most once, in either order, between any article and the fieldName; `a` and `an` both
+read. Collections are never `optional` (empty means absent) or nested; named-type unions
+are invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
 identity; they classify parent members, may overlap, and add relations. `element` has one
 member. Which side declares a relation implies no storage, navigation, or ownership.
 
@@ -58,6 +62,11 @@ a set of Items with
   a watchers set of Person
   an updates seq of Updates
   a status of OPEN or DONE
+
+a set of Votes with
+  an item Item
+  a voter Voter
+  unique item and voter
 
 a Completed set of Items with
   a completedAt DateTime

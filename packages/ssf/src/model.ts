@@ -27,6 +27,7 @@ export type SsfDiagnosticCode =
   | "SSF_DUPLICATE_DECLARATION"
   | "SSF_DUPLICATE_ENUM_VALUE"
   | "SSF_DUPLICATE_FIELD"
+  | "SSF_DUPLICATE_UNIQUE"
   | "SSF_INVALID_ALIAS_TARGET"
   | "SSF_INVALID_EXTERNAL_NAME"
   | "SSF_INVALID_SUBSET_PARENT"
@@ -40,7 +41,8 @@ export type SsfDiagnosticCode =
   | "SSF_OPTIONAL_COLLECTION"
   | "SSF_ORPHANED_LINE"
   | "SSF_SUBSET_CYCLE"
-  | "SSF_SUBSET_SELF_PARENT";
+  | "SSF_SUBSET_SELF_PARENT"
+  | "SSF_UNKNOWN_UNIQUE_FIELD";
 
 interface SsfDiagnosticDetail {
   readonly severity: "error" | "advice";
@@ -105,6 +107,13 @@ export interface SsfField {
   readonly span: SsfSpan;
 }
 
+/** A uniqueness constraint over a combination of two or more of a declaration's fields. */
+export interface SsfUniqueConstraint {
+  readonly kind: "unique";
+  readonly fields: readonly string[];
+  readonly span: SsfSpan;
+}
+
 export type SsfMultiplicity = "element" | "sequence" | "set";
 
 export interface SsfRuleLine {
@@ -120,6 +129,7 @@ export interface SsfDeclaration {
   readonly multiplicity: SsfMultiplicity;
   readonly parent?: SsfTypeReference;
   readonly fields: readonly SsfField[];
+  readonly constraints: readonly SsfUniqueConstraint[];
   readonly rules: readonly SsfRuleLine[];
   readonly span: SsfSpan;
   readonly signatureSpan: SsfSpan;
@@ -206,12 +216,18 @@ export interface ParsedField {
   readonly span: SsfSpan;
 }
 
+export interface ParsedUniqueConstraint {
+  readonly fields: readonly ParsedReference[];
+  readonly span: SsfSpan;
+}
+
 export interface ParsedDeclaration {
   readonly name: ParsedReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
   readonly parent?: ParsedReference;
   readonly fields: ParsedField[];
+  readonly constraints: ParsedUniqueConstraint[];
   readonly rules: SsfRuleLine[];
   span: SsfSpan;
   readonly signatureSpan: SsfSpan;

@@ -448,6 +448,138 @@ describe("unique fields", () => {
   });
 });
 
+describe("unique combinations", () => {
+  test("parses a constraint line over two or more fields", () => {
+    const parsed = parseSimpleStateForm(`a set of Votes with
+  an item Item
+  a voter Voter
+  a direction Direction
+  unique item and voter
+  unique item and voter and direction`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.constraints).toMatchObject([
+      { kind: "unique", fields: ["item", "voter"], span: { start: { line: 5 } } },
+      { fields: ["item", "voter", "direction"] },
+    ]);
+    expect(parsed.document.declarations[0]?.fields.map(({ unique }) => unique)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  test("keeps a named value on the line a field", () => {
+    const parsed = parseSimpleStateForm(`a set of Items with
+  unique title String`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]).toMatchObject({
+      fields: [{ name: "title", unique: true }],
+      constraints: [],
+    });
+  });
+
+  test("rejects a constraint over one field, which the modifier already says", () => {
+    expect(
+      validateSimpleStateForm(`a set of Items with\n  a title String\n  unique title`),
+    ).toMatchObject([
+      {
+        code: "SSF_MALFORMED_FIELD",
+        message: "A uniqueness constraint names two or more fields joined by `and`.",
+      },
+    ]);
+  });
+
+  test.each([
+    ["a missing separator", "unique item voter"],
+    ["a trailing separator", "unique item and"],
+    ["an uppercase name", "unique item and Voter"],
+  ])("rejects %s", (_, constraint) => {
+    expect(
+      validateSimpleStateForm(`a set of Votes with\n  an item Item\n  ${constraint}`).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(["SSF_MALFORMED_FIELD"]);
+  });
+
+  test("reports a name that is not a field of the declaration", () => {
+    expect(
+      validateSimpleStateForm(`a set of Votes with\n  an item Item\n  unique item and voter`),
+    ).toMatchObject([
+      {
+        code: "SSF_UNKNOWN_UNIQUE_FIELD",
+        message:
+          'Uniqueness constraint names "voter", which is not a field of declaration "Votes".',
+        span: { start: { line: 3, column: 19 } },
+      },
+    ]);
+  });
+
+  test("reports a repeated name and a repeated combination", () => {
+    expect(
+      validateSimpleStateForm(`a set of Votes with
+  an item Item
+  a voter Voter
+  unique item and item
+  unique item and voter
+  unique voter and item`).map(({ code, message }) => [code, message]),
+    ).toEqual([
+      ["SSF_DUPLICATE_UNIQUE", 'Uniqueness constraint names field "item" more than once.'],
+      [
+        "SSF_DUPLICATE_UNIQUE",
+        'Declaration "Votes" constrains the combination "item and voter" more than once.',
+      ],
+    ]);
+  });
+
+  test("resolves a subset constraint against its own and its ancestors' fields", () => {
+    const parsed = parseSimpleStateForm(`a set of Invitations with
+  a target Target
+  an invitee Person
+
+a Pending set of Invitations with
+  a note String
+  unique target and invitee
+  unique target and note`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[1]?.constraints).toHaveLength(2);
+  });
+
+  test("does not resolve a constraint against an unrelated declaration's fields", () => {
+    expect(
+      validateSimpleStateForm(`a set of Invitations with
+  a target Target
+
+a set of Reviews with
+  a subject Subject
+  unique subject and target`).map(({ code }) => code),
+    ).toEqual(["SSF_UNKNOWN_UNIQUE_FIELD"]);
+  });
+
+  test("needs `with` for a body that is only a constraint, and a field besides", () => {
+    expect(
+      validateSimpleStateForm(`a set of Votes\n  unique item and voter`).map(({ code }) => code),
+    ).toEqual(["SSF_MISSING_WITH", "SSF_UNKNOWN_UNIQUE_FIELD", "SSF_UNKNOWN_UNIQUE_FIELD"]);
+    expect(
+      validateSimpleStateForm(`a set of Votes with\n  unique item and voter`).map(
+        ({ code }) => code,
+      ),
+    ).toEqual([
+      "SSF_MALFORMED_DECLARATION",
+      "SSF_UNKNOWN_UNIQUE_FIELD",
+      "SSF_UNKNOWN_UNIQUE_FIELD",
+    ]);
+  });
+
+  test("reports an orphaned constraint as a constraint", () => {
+    expect(validateSimpleStateForm("  unique item and voter")).toMatchObject([
+      {
+        code: "SSF_ORPHANED_LINE",
+        message: "This valid SSF uniqueness constraint has no enclosing SSF declaration.",
+      },
+    ]);
+  });
+});
+
 describe("collection fields", () => {
   test("parses named and enum set/sequence elements with optional collection `of`", () => {
     const parsed = parseSimpleStateForm(
@@ -1124,6 +1256,14 @@ describe("repository SSF corpus", () => {
         ],
       },
       {
+        name: { text: "Votes", referenceKind: "owned" },
+        fields: [
+          { name: "item", value: { reference: { text: "Item", normalized: "Items" } } },
+          { name: "voter", value: { reference: { referenceKind: "unresolved" } } },
+        ],
+        constraints: [{ kind: "unique", fields: ["item", "voter"] }],
+      },
+      {
         name: { text: "Completed", referenceKind: "owned" },
         declarationKind: "subset",
         fields: [{ name: "completedAt" }],
@@ -1146,6 +1286,7 @@ describe("repository SSF corpus", () => {
       "Item",
       "Items",
       "Settings",
+      "Votes",
       "WorkItem",
     ]);
   });

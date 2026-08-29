@@ -100,6 +100,11 @@ export function resolveGrammar(
       value: fieldType(field.value, facts, external),
       span: field.span,
     })),
+    constraints: declaration.constraints.map((constraint) => ({
+      kind: "unique" as const,
+      fields: constraint.fields.map(({ text }) => text),
+      span: constraint.span,
+    })),
     rules: declaration.rules,
     span: declaration.span,
     signatureSpan: declaration.signatureSpan,

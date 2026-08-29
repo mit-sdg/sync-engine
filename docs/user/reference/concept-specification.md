@@ -155,8 +155,8 @@ concept-specification IR.
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
 The parser recognizes set, sequence, element, subset, alias, and field declarations
-together with their multiplicities, identifiers, articles, field-level `unique`
-constraints, and subset graph. Declared names are taken as written.
+together with their multiplicities, identifiers, articles, uniqueness constraints, and
+subset graph. Declared names are taken as written.
 
 Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
 the declaration, are joined when they form a singular and plural pair. Irregular pairs
@@ -173,8 +173,11 @@ Declaration and alias names are unique across the fence and share that namespace
 external parameters and SSF primitives. Field names are unique within their declaration,
 and enumeration values within their enumeration. Prefix a field with `unique` to require
 distinct values among members of that declaration; a unique collection field compares the
-whole collection. Every field writes a lowercase name before its value, and `optional`
-and `unique` sit between any article and that name in either order.
+whole collection. Require a _combination_ to be distinct with a `unique` line naming two
+or more fields, such as `unique item and voter`; a subset's constraints bind only its own
+members and may name its ancestors' fields. Every field writes a lowercase name before
+its value, and `optional` and `unique` sit between any article and that name in either
+order.
 
 Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or
 indented under a declaration. The parser retains the line and makes no claim about it, while every other
