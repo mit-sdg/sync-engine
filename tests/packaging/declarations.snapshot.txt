@@ -5526,7 +5526,7 @@ export interface SsfToken {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_OPTIONAL" | "SSF_MISPLACED_UNIQUE" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT";
+export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_MODIFIER" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT";
 interface SsfDiagnosticDetail {
     readonly severity: "error" | "advice";
     readonly code: SsfDiagnosticCode;
@@ -5573,7 +5573,6 @@ export type SsfFieldType = SsfNamedFieldType | SsfEnumerationFieldType | SsfColl
 export interface SsfField {
     readonly kind: "field";
     readonly name: string;
-    readonly inferredName: boolean;
     readonly optional: boolean;
     readonly unique: boolean;
     readonly value: SsfFieldType;
@@ -5657,7 +5656,6 @@ export type ParsedFieldType = ParsedNamed | ParsedEnumeration | {
 export interface ParsedField {
     readonly name: string;
     readonly nameSpan: SsfSpan;
-    readonly inferredName: boolean;
     readonly optional: boolean;
     readonly unique: boolean;
     readonly value: ParsedFieldType;
@@ -5690,7 +5688,6 @@ export declare const FIELD_NAME: RegExp;
 export declare const ENUM_VALUE: RegExp;
 export declare const PRIMITIVES: readonly ["Date", "DateTime", "Flag", "Number", "String"];
 export declare const PRIMITIVE_NAMES: ReadonlySet<string>;
-export declare function inferredFieldName(type: string): string;
 
 === dist/engine/tooling/ssf-package/resolution.d.ts ===
 import type { GrammarResult } from "./grammar.ts";

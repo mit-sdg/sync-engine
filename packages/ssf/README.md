@@ -30,11 +30,8 @@ setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
 declarationBody := (INDENT (field | ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] (requiredField | optional optionalField | unique uniqueField | optional unique uniqueField)
-requiredField := inferredField | fieldName (scalar|collection)
-optionalField := named | fieldName scalar
-uniqueField := fieldName (scalar|collection)
-inferredField := named | (set|seq) [of] named
+field := [a|an] modifier* fieldName (scalar|collection)
+modifier := optional | unique
 scalar := named | enum
 named := Type | Parameter | primitive
 enum := of values
@@ -62,7 +59,7 @@ parent cycles.
 
 ## Fields
 
-A field may carry an explicit lowercase name before its value:
+A field writes a lowercase name before its value:
 
 ```state
 a set of Items with
@@ -74,24 +71,13 @@ a set of Items with
   a flags set of VISIBLE or HIDDEN
 ```
 
-An indented field may omit its article. `optional` comes directly after the article when
-there is one, and `unique` comes after `optional`: `an optional unique owner Person`.
-Collections are never optional; an empty collection represents absence.
-
-Omit the field name when a scalar or collection supplies a single named type. SSF
-lowercases the first character of that spelling:
-
-```state
-an element Example with
-  a Profile
-  a set of Options
-```
-
-These fields are named `profile` and `options`. An enumeration always needs a written
-name. Field names, written or inferred, are unique within their declaration.
+An indented field may omit its article, and `a` and `an` both read. The modifiers
+`optional` and `unique` go between the article and the field name, each at most once and
+in either order. Collections are never optional; an empty collection represents absence.
+Field names are unique within their declaration.
 
 Prefix a field with `unique` when its values must be unique among members of that
-declaration. A unique field must write its field name explicitly:
+declaration:
 
 ```state
 a set of Items with
@@ -100,7 +86,13 @@ a set of Items with
 
 The constraint applies to the declaration carrying the field. A `unique` field on a
 subset constrains only members of that subset. An `optional unique` field may be absent
-from multiple members; values that are present remain unique.
+from multiple members; values that are present remain unique. A `unique` collection field
+compares the whole collection, so no two members hold the same set or the same sequence:
+
+```state
+a set of Conversations with
+  a unique participants set of Person
+```
 
 A collection uses `set` or `seq` with an optional `of`, and holds scalars rather than
 further collections. Named-type unions are not part of SSF: `or` separates enumeration

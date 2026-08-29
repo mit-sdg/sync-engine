@@ -120,7 +120,7 @@ describe("generic design guidance", () => {
     expect(review).toContain("core-owned\n`RequestBoundary`");
     const normalizedReference = reference.replace(/\s+/g, " ");
     expect(normalizedReference).toContain(
-      "Prefix an explicitly named field with `unique` to require distinct values among members of that declaration.",
+      "Prefix a field with `unique` to require distinct values among members of that declaration; a unique collection field compares the whole collection.",
     );
     expect(normalizedReference).toContain(
       "Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or indented under a declaration",

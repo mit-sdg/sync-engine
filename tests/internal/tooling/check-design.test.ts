@@ -339,7 +339,7 @@ Comments.User is Person
     const root = await fixture({ "broken.md": malformed });
     try {
       await expect(checkDesignFiles(["broken.md"], root)).rejects.toThrow(
-        /broken\.md:.*\[SSF_NEAR_MISS_KEYWORD\].*suggestion: a seq of Notes with.*\[SSF_MISSING_WITH\].*suggestion: a seq of Notes with.*\[SSF_MISPLACED_OPTIONAL\].*suggestion:   an optional discardedAt DateTime/s,
+        /broken\.md:.*\[SSF_NEAR_MISS_KEYWORD\].*suggestion: a seq of Notes with.*\[SSF_MISSING_WITH\].*suggestion: a seq of Notes with.*\[SSF_MISPLACED_MODIFIER\].*suggestion:   a optional discardedAt DateTime/s,
       );
     } finally {
       await rm(root, { recursive: true, force: true });

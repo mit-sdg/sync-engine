@@ -6,11 +6,8 @@ setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
 subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
 declarationBody := (INDENT (field|ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] (requiredField|optional optionalField|unique uniqueField|optional unique uniqueField)
-requiredField := inferredField|fieldName (scalar|collection)
-optionalField := named|fieldName scalar
-uniqueField := fieldName (scalar|collection)
-inferredField := named|(set|seq) [of] named
+field := [a|an] modifier* fieldName (scalar|collection)
+modifier := optional|unique
 scalar := named|enum
 named := Type|Parameter|primitive
 enum := of values
@@ -22,8 +19,7 @@ ruleLine := Rule: TEXT
 
 Start Type, Subtype, Alias, and Parameter uppercase ASCII and fieldName lowercase;
 continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
-with uppercase ASCII letters, digits, or `_` only. Omit fieldName only for `named` or an
-inferred named collection, never an enum; SSF lowercases its first character.
+with uppercase ASCII letters, digits, or `_` only. Always write fieldName.
 
 Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
 indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
@@ -46,19 +42,21 @@ Structures, aliases, externals, and primitives share one State namespace. Keep
 fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
 legal conventional/refinement reference, not an owned binding target.
 
-Put `unique` after `optional` and before an explicit field name when its values must be
-unique among members of that declaration. Collections are never `optional` (empty means
-absent) or nested; named-type unions are invalid. Sets and sequences introduce
-identities—never add ID fields. Subsets add no identity; they classify parent members, may overlap, and add relations. `element` has one
+Mark a field `unique` when its values must be unique among members of that declaration; a
+unique collection field compares the whole collection. Write each modifier at most once,
+in either order, between any article and the fieldName; `a` and `an` both read.
+Collections are never `optional` (empty means absent) or nested; named-type unions are
+invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
+identity; they classify parent members, may overlap, and add relations. `element` has one
 member. Which side declares a relation implies no storage, navigation, or ownership.
 
 ```state
 a set of Items with
   a unique title String
-  an Item
+  an item Item
   an optional owner Person
   a watchers set of Person
-  a seq of Updates
+  an updates seq of Updates
   a status of OPEN or DONE
 
 a Completed set of Items with

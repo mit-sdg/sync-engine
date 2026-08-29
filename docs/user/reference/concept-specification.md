@@ -171,9 +171,10 @@ self-parenting, and cycles fail with source-located diagnostics.
 
 Declaration and alias names are unique across the fence and share that namespace with
 external parameters and SSF primitives. Field names are unique within their declaration,
-and enumeration values within their enumeration. Prefix an explicitly named field with
-`unique` to require distinct values among members of that declaration. Put `unique`
-after `optional`.
+and enumeration values within their enumeration. Prefix a field with `unique` to require
+distinct values among members of that declaration; a unique collection field compares the
+whole collection. Every field writes a lowercase name before its value, and `optional`
+and `unique` sit between any article and that name in either order.
 
 Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or
 indented under a declaration. The parser retains the line and makes no claim about it, while every other

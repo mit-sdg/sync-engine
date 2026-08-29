@@ -95,7 +95,6 @@ export function resolveGrammar(
     fields: declaration.fields.map((field) => ({
       kind: "field",
       name: field.name,
-      inferredName: field.inferredName,
       optional: field.optional,
       unique: field.unique,
       value: fieldType(field.value, facts, external),

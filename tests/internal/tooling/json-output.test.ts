@@ -210,12 +210,12 @@ describe("versioned JSON validation output", () => {
         suggestion: "a seq of Notes with",
       }),
       expect.objectContaining({
-        code: "SSF_MISPLACED_OPTIONAL",
+        code: "SSF_MISPLACED_MODIFIER",
         severity: "error",
         path: documentLabel(invalidStatePath, invalidStatePath),
         line: 22,
         column: 17,
-        suggestion: "  an optional discardedAt DateTime",
+        suggestion: "  a optional discardedAt DateTime",
       }),
     ]);
   }, 30_000);

@@ -195,7 +195,7 @@ a set of Items with
   test("separates valid orphaned body lines from malformed fields", () => {
     const parsed = parseSimpleStateForm(`  Rule: orphan
   owner String
-  a Profile
+  a profile Profile
   owner`);
     expect(parsed.diagnostics).toMatchObject([
       {
@@ -355,24 +355,34 @@ Rule: at most one Item has each title`;
     ]);
   });
 
-  test("infers field names but retains unresolved State value names as authored references", () => {
+  test("retains unresolved State value names as authored references", () => {
     const parsed = parseSimpleStateForm(`a set of Questions with
-  a Profile
-  a set of Options
+  a profile Profile
+  an options set of Options
   a status StatusCode`);
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      {
-        name: "profile",
-        inferredName: true,
-        value: { reference: { referenceKind: "unresolved" } },
-      },
-      {
-        name: "options",
-        inferredName: true,
-        value: { element: { reference: { referenceKind: "unresolved" } } },
-      },
+      { name: "profile", value: { reference: { referenceKind: "unresolved" } } },
+      { name: "options", value: { element: { reference: { referenceKind: "unresolved" } } } },
       { name: "status", value: { reference: { referenceKind: "unresolved" } } },
+    ]);
+  });
+
+  test.each([
+    ["a scalar value", "a Profile", "  a profile Profile"],
+    ["a named collection", "a set of Options", "  a options set of Options"],
+    ["a sequence", "an seq of Updates", "  an updates seq of Updates"],
+  ])("suggests a lowercase name for %s written without one", (_, field, suggestion) => {
+    expect(parseSimpleStateForm(`a set of Questions with\n  ${field}`).diagnostics).toMatchObject([
+      { code: "SSF_MALFORMED_FIELD", suggestion },
+    ]);
+  });
+
+  test("does not invent a name for an unnamed enumeration", () => {
+    expect(
+      parseSimpleStateForm(`a set of Questions with\n  a set of OPEN or DONE`).diagnostics,
+    ).toMatchObject([
+      { code: "SSF_MALFORMED_FIELD", suggestion: expect.not.stringContaining("dONE") },
     ]);
   });
 });
@@ -389,9 +399,22 @@ describe("unique fields", () => {
     ]);
   });
 
-  test("requires a unique field to have an explicit name", () => {
+  test("accepts the modifiers in either order under either article", () => {
+    const parsed = parseSimpleStateForm(`a set of Accounts with
+  a optional unique handle String
+  an unique optional email String
+  unique nickname String`);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]?.fields).toMatchObject([
+      { name: "handle", optional: true, unique: true },
+      { name: "email", optional: true, unique: true },
+      { name: "nickname", optional: false, unique: true },
+    ]);
+  });
+
+  test("rejects a repeated modifier", () => {
     expect(
-      parseSimpleStateForm(`a set of Accounts with\n  a unique Person`).diagnostics,
+      parseSimpleStateForm(`a set of Accounts with\n  a unique unique handle String`).diagnostics,
     ).toMatchObject([{ code: "SSF_MALFORMED_FIELD" }]);
   });
 
@@ -403,23 +426,14 @@ describe("unique fields", () => {
   });
 
   test.each([
-    ["after the field name", "a code unique String", "a unique code String"],
-    [
-      "after an optional field name",
-      "an optional code unique String",
-      "an optional unique code String",
-    ],
-  ])("diagnoses unique %s", (_, field, suggestion) => {
+    ["unique after the field name", "a code unique String", "a unique code String"],
+    ["unique after the value", "a code String unique", "a unique code String"],
+    ["optional after the field name", "a code optional String", "a optional code String"],
+  ])("diagnoses %s", (_, field, suggestion) => {
     const parsed = parseSimpleStateForm(`a set of Items with\n  ${field}`);
     expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_MISPLACED_UNIQUE", suggestion: `  ${suggestion}` },
+      { code: "SSF_MISPLACED_MODIFIER", suggestion: `  ${suggestion}` },
     ]);
-  });
-
-  test("requires the article that agrees with the first modifier", () => {
-    expect(
-      parseSimpleStateForm(`a set of Items with\n  an unique code String`).diagnostics,
-    ).toMatchObject([{ code: "SSF_ARTICLE", suggestion: "  a unique code String" }]);
   });
 
   test("parses uniqueness on a collection field", () => {
@@ -694,7 +708,7 @@ a set of Thesis`);
 
   test("does not count explicit aliases against owner-side automatic uniqueness", () => {
     const parsed = parseSimpleStateForm(`a set of Items with
-  an Item
+  a related Item
 
 alias WorkItem for Items
 
@@ -965,10 +979,10 @@ alias Spare for Person`,
     ]);
   });
 
-  test("rejects duplicate explicit and inferred effective field names only within a declaration", () => {
+  test("rejects duplicate field names only within a declaration", () => {
     const parsed = parseSimpleStateForm(`a set of First with
   a profile String
-  a Profile
+  a profile Profile
 
 a set of Second with
   a profile String`);
@@ -1046,7 +1060,7 @@ a element Settings with
     expect(validateSimpleStateForm(source)).toMatchObject([
       { code: "SSF_NEAR_MISS_KEYWORD", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISSING_WITH", suggestion: "a seq of Sessions with" },
-      { code: "SSF_MISPLACED_OPTIONAL", suggestion: "  an optional revokedAt DateTime" },
+      { code: "SSF_MISPLACED_MODIFIER", suggestion: "  a optional revokedAt DateTime" },
       { code: "SSF_OPTIONAL_COLLECTION" },
       { code: "SSF_ARTICLE", suggestion: "an element Settings with" },
     ]);
@@ -1081,10 +1095,9 @@ describe("repository SSF corpus", () => {
       {
         name: { text: "Items", referenceKind: "owned" },
         fields: [
-          { name: "title", inferredName: false, unique: true, value: { kind: "named" } },
+          { name: "title", unique: true, value: { kind: "named" } },
           {
             name: "item",
-            inferredName: true,
             value: {
               kind: "named",
               reference: { text: "Item", normalized: "Items", referenceKind: "owned" },
@@ -1095,14 +1108,9 @@ describe("repository SSF corpus", () => {
             optional: true,
             value: { reference: { text: "Person", referenceKind: "external" } },
           },
-          {
-            name: "watchers",
-            inferredName: false,
-            value: { kind: "collection", multiplicity: "set" },
-          },
+          { name: "watchers", value: { kind: "collection", multiplicity: "set" } },
           {
             name: "updates",
-            inferredName: true,
             value: {
               kind: "collection",
               multiplicity: "sequence",

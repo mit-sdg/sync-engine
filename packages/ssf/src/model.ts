@@ -34,8 +34,7 @@ export type SsfDiagnosticCode =
   | "SSF_MALFORMED_DECLARATION"
   | "SSF_MALFORMED_FIELD"
   | "SSF_MISSING_WITH"
-  | "SSF_MISPLACED_OPTIONAL"
-  | "SSF_MISPLACED_UNIQUE"
+  | "SSF_MISPLACED_MODIFIER"
   | "SSF_NAME_COLLISION"
   | "SSF_NEAR_MISS_KEYWORD"
   | "SSF_OPTIONAL_COLLECTION"
@@ -100,7 +99,6 @@ export type SsfFieldType = SsfNamedFieldType | SsfEnumerationFieldType | SsfColl
 export interface SsfField {
   readonly kind: "field";
   readonly name: string;
-  readonly inferredName: boolean;
   readonly optional: boolean;
   readonly unique: boolean;
   readonly value: SsfFieldType;
@@ -202,7 +200,6 @@ export type ParsedFieldType =
 export interface ParsedField {
   readonly name: string;
   readonly nameSpan: SsfSpan;
-  readonly inferredName: boolean;
   readonly optional: boolean;
   readonly unique: boolean;
   readonly value: ParsedFieldType;
