@@ -223,6 +223,18 @@ describe("formers: definition", () => {
     expect(named.promise).toBe("one");
   });
 
+  test("rejects nonportable literal entries", () => {
+    expect(() => former("dated ()", () => form({ createdAt: new Date() as never }))).toThrow(
+      "portable JSON literal",
+    );
+
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => former("cyclic literal ()", () => form({ value: cyclic as never }))).toThrow(
+      "portable JSON literal",
+    );
+  });
+
   test("a selection cannot be optional", () => {
     expect(() =>
       former("all conversations", (_inputs, { conversation }) =>
@@ -303,6 +315,48 @@ describe("formers: definition", () => {
 // ── Evaluation: the board — form, comprehension, arranged ───────────────
 
 describe("formers: evaluation", () => {
+  test("forms portable literal fields without a computation", async () => {
+    const { reacting } = setup();
+    const constants = former("constant presentation ()", () =>
+      form({
+        status: "unknown",
+        retryable: false,
+        attempts: 0,
+        tags: [],
+        policy: { mode: "safe", limit: 3 },
+        missing: null,
+      }),
+    );
+
+    const first = (await reacting.form(constants({}))) as {
+      status: string;
+      retryable: boolean;
+      attempts: number;
+      tags: string[];
+      policy: { mode: string; limit: number };
+      missing: null;
+    };
+    expect(first).toEqual({
+      status: "unknown",
+      retryable: false,
+      attempts: 0,
+      tags: [],
+      policy: { limit: 3, mode: "safe" },
+      missing: null,
+    });
+
+    first.tags.push("mutated");
+    first.policy.limit = 99;
+    expect(await reacting.form(constants({}))).toEqual({
+      status: "unknown",
+      retryable: false,
+      attempts: 0,
+      tags: [],
+      policy: { limit: 3, mode: "safe" },
+      missing: null,
+    });
+  });
+
   test("forms a record whose key contains an ordered list", async () => {
     const { reacting, Threading } = setup();
     await seedThread(Threading);

@@ -92,7 +92,9 @@ function construeOp(op: WhereOpIR | ViewOpIR, opens: readonly string[], env: Rea
       parts.push("tests — drops the case when it does not hold");
       break;
     case "compute":
-      parts.push(`computes (${op.out})`);
+      parts.push(
+        `computes (${typeof op.out === "string" ? op.out : varNamesInPattern(op.out).join(", ")})`,
+      );
       break;
     case "count":
       parts.push(`counts into (${op.out}) — always fills`);

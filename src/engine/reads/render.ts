@@ -194,7 +194,8 @@ export function renderWhereOp(op: WhereOpIR | ViewOpIR): string {
     case "compute": {
       const input = renderRoles(op.in);
       const applied = input === "" ? op.computation : `${op.computation} (${input})`;
-      return `${op.out} is ${applied}`;
+      const output = typeof op.out === "string" ? op.out : `(${renderRoles(op.out)})`;
+      return `${output} is ${applied}`;
     }
     case "custom": {
       const reads = op.in.length === 0 ? "" : ` reads (${op.in.join(", ")})`;
@@ -259,12 +260,18 @@ function renderFormerNode(node: FormerNodeIR, indent: number): string[] {
   switch (node.node) {
     case "leaf":
       return [`${pad}${node.var}`];
+    case "literal":
+      return [`${pad}${JSON.stringify(node.value)}`];
     case "record": {
       const lines = [`${pad}a record of`];
       for (const op of node.where ?? []) lines.push(`${pad}  where ${renderWhereOp(op)}`);
       for (const [key, child] of Object.entries(node.entries)) {
         if (child.node === "leaf") {
           lines.push(key === child.var ? `${pad}  ${key}` : `${pad}  ${key}: ${child.var}`);
+          continue;
+        }
+        if (child.node === "literal") {
+          lines.push(`${pad}  ${key}: ${JSON.stringify(child.value)}`);
           continue;
         }
         const rendered = renderFormerNode(child, indent + 1);

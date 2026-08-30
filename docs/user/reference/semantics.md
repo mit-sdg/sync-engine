@@ -419,7 +419,9 @@ Production handles absence and plurality in three ways:
 Without `.arranged(...)`, a selection retains source-row order. A view-level
 `count(query, input, output)` binds `0` when the query returns no rows.
 
-Record entries may read named formers directly, plainly or under `whether`,
+Record entries may contain portable JSON literals directly. A literal is part
+of the registered former IR and needs no read or computation to bind it.
+Record entries may also read named formers directly, plainly or under `whether`,
 so absence is declared once at the source and every reader chooses how to
 handle it. The engine evaluates a former when asked; it does not store the
 formed result as concept state or turn it into an occurrence.
@@ -639,9 +641,10 @@ With a [generated wire contract](../guide/authoring.md#7-check-and-generate)
 and concept-set type anchor, endpoint leaves refer to concept action parameters,
 action results, query rows, and registered vocabulary computation parameters
 and awaited results. A variable used in a `compute(...)` input follows the
-corresponding path in the computation function's input parameter. Its output
-variable follows the awaited return type, whether the operation binds that
-variable or constrains an existing binding. Constraints on one binding
+corresponding path in the computation function's input parameter. A single
+output variable follows the complete awaited return type. An object output
+pattern may bind or constrain several variables; each variable follows its
+field path in the awaited return type. Constraints on one binding
 intersect; alternatives remain unions. Built-in standard relations and
 `custom(...)` do not invent concept-set signature anchors.
 

@@ -25,6 +25,8 @@ function encodeFormerNode(node: FormerNode, vars: PatternVariables): FormerNodeI
   switch (node.node) {
     case "leaf":
       return { node: "leaf", var: vars.nameOf(node.var) };
+    case "literal":
+      return { node: "literal", value: node.value };
     case "record": {
       const entries: Record<string, FormerNodeIR> = {};
       for (const [key, child] of node.entries) {

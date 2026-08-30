@@ -61,12 +61,12 @@ interface HoldsOp {
   readonly fused: FusedComputation;
 }
 
-/** A vocabulary-owned calculation; exactly one result, bound to one variable. */
+/** A vocabulary-owned calculation, bound whole or projected through an output pattern. */
 interface ComputeOp {
   readonly op: "compute";
   readonly computation: ComputationRef;
   readonly in: Mapping;
-  readonly out: symbol;
+  readonly out: symbol | Mapping;
 }
 
 /** An opaque escape with a declared positional footprint. */
@@ -190,7 +190,27 @@ export function whether(line: ReadLine | FusedFormer): WhetherOp | FormerUse {
   return brandOp({ op: "whether" as const, ...refOf(line), in: line.in, out: line.out });
 }
 
-/** Bind one variable to one calculation declared by the assembled vocabulary. */
+type ComputationOutput<Fn extends ComputationFn> = Awaited<ReturnType<Fn>>;
+type ProjectedOutputValue<Value> =
+  | Value
+  | symbol
+  | (Value extends readonly (infer Item)[]
+      ? readonly ProjectedOutputValue<Item>[]
+      : Value extends object
+        ? { readonly [Key in keyof Value]?: ProjectedOutputValue<Value[Key]> }
+        : never);
+type ComputationOutputPattern<Fn extends ComputationFn> =
+  ComputationOutput<Fn> extends readonly unknown[]
+    ? never
+    : ComputationOutput<Fn> extends object
+      ? {
+          readonly [Key in keyof ComputationOutput<Fn>]?: ProjectedOutputValue<
+            ComputationOutput<Fn>[Key]
+          >;
+        }
+      : never;
+
+/** Bind a calculation's whole result, or project a record result through an output pattern. */
 export function compute<
   Fn extends ComputationFn,
   const Input extends InputPattern<ComputationInput<Fn>>,
@@ -199,12 +219,28 @@ export function compute<
   computation: ComputationRef<Fn>,
   input: ExactPattern<ComputationInput<Fn>, Input>,
   out: Out,
+): ComputeOp;
+export function compute<
+  Fn extends ComputationFn,
+  const Input extends InputPattern<ComputationInput<Fn>>,
+  const Output extends ComputationOutputPattern<Fn>,
+>(
+  computation: ComputationRef<Fn>,
+  input: ExactPattern<ComputationInput<Fn>, Input>,
+  output: ExactPattern<ComputationOutput<Fn>, Output>,
+): ComputeOp;
+export function compute(
+  computation: ComputationRef,
+  input: Mapping,
+  out: symbol | Mapping,
 ): ComputeOp {
   if (typeof computation !== "function" || computation.source !== "vocabulary") {
     throw new Error("compute(...) requires a computation from vocabulary(...).computations.");
   }
-  if (typeof out !== "symbol") {
-    throw new Error("compute(computation, in, out) binds its one result to a single variable.");
+  if (typeof out !== "symbol" && (out === null || typeof out !== "object" || Array.isArray(out))) {
+    throw new Error(
+      "compute(computation, in, out) binds its result to one variable or a record output pattern.",
+    );
   }
   return brandOp({ op: "compute" as const, computation, in: input, out });
 }

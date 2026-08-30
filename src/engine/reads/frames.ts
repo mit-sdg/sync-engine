@@ -13,7 +13,8 @@
  */
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { structurallyEqual } from "./value-equality.ts";
-import { hasMarkerKey, isVarIR } from "./ir.ts";
+import { asMarker, hasMarkerKey, isVarIR } from "./ir.ts";
+import { isPlainMapping } from "./matchers.ts";
 import { setOwn } from "@engine/utils/own-property";
 
 /**
@@ -110,6 +111,41 @@ export function bindInputMapping(frame: Frame, input: Mapping): Mapping {
   return bound;
 }
 
+function unifyOutputMapping(pattern: Mapping, value: unknown, frame: Frame): boolean {
+  if (!isPlainMapping(value)) return false;
+  return Object.entries(pattern).every(
+    ([childKey, child]) =>
+      Object.hasOwn(value, childKey) &&
+      unifyOutputPattern(child, (value as Mapping)[childKey], frame),
+  );
+}
+
+function unifyOutputPattern(pattern: unknown, value: unknown, frame: Frame): boolean {
+  const key = varKeyOf(pattern);
+  if (key !== undefined) {
+    if (Object.hasOwn(frame, key)) return structurallyEqual(frame[key], value);
+    setOwn(frame, key, value);
+    return true;
+  }
+  if (Array.isArray(pattern)) {
+    return (
+      Array.isArray(value) &&
+      pattern.length === value.length &&
+      pattern.every((item, index) => unifyOutputPattern(item, value[index], frame))
+    );
+  }
+  if (isPlainMapping(pattern)) {
+    const marker = asMarker(pattern);
+    if (marker === null) return unifyOutputMapping(pattern, value, frame);
+    // `$lit` escapes only this object's marker-looking key. Values beneath
+    // that key remain patterns, including nested `$var` bindings.
+    if (marker.tag === "$lit" && isPlainMapping(marker.payload)) {
+      return unifyOutputMapping(marker.payload, value, frame);
+    }
+  }
+  return structurallyEqual(readPatternValue(pattern, frame).value, value);
+}
+
 /**
  * Expand one source frame by a query's result rows into the accumulator.
  *
@@ -137,14 +173,7 @@ export function expandOutputRows(
         break;
       }
       const rowValue = (row as Record<string, unknown>)[outputKey];
-      const key = varKeyOf(pattern);
-      if (key !== undefined) {
-        if (Object.hasOwn(newFrame, key) && !structurallyEqual(newFrame[key], rowValue)) {
-          unifies = false;
-          break;
-        }
-        setOwn(newFrame, key, rowValue);
-      } else if (!structurallyEqual(readPatternValue(pattern, frame).value, rowValue)) {
+      if (!unifyOutputPattern(pattern, rowValue, newFrame)) {
         unifies = false;
         break;
       }

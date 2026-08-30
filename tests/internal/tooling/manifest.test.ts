@@ -386,6 +386,26 @@ describe("application manifest", () => {
     expect(fallbacks[0]?.endpoint?.path).toBe("/filtering-compute");
   });
 
+  test("treats projected computation outputs as potentially dropping", () => {
+    const projected = vocabulary({
+      concepts: {},
+      computations: {
+        maybeValue: (): { value?: string } => ({}),
+      },
+    });
+    const Projected = endpoint("/projected-compute", ({ value }) =>
+      receive({})
+        .where(compute(projected.computations.maybeValue, {}, { value }))
+        .then(respond({ value })),
+    );
+
+    const diagnostics = applicationManifest(
+      assemble({ vocabulary: projected, composition: { Projected } }),
+    ).diagnostics;
+
+    expect(diagnostics.map(({ code }) => code)).toEqual(["MISSING_ENDPOINT_FALLBACK"]);
+  });
+
   test("strict wire leaves anchor variables used only by vocabulary computations", () => {
     const setup = vocabulary({
       concepts: {},
@@ -1256,6 +1276,30 @@ describe("application manifest", () => {
     expect(() => validateApplicationManifest(inventoryTampered)).toThrow(
       /\$\.digest.*canonical digest/,
     );
+  });
+
+  test("round-trips projected computation outputs and literal former nodes", () => {
+    const manifest = applicationManifest(application());
+    manifest.application.formers.push({
+      name: "defaults",
+      ins: [],
+      bindings: [],
+      promise: "one",
+      body: {
+        node: "record",
+        entries: { status: { node: "literal", value: "unknown" } },
+      },
+    });
+    manifest.application.reactions[0].where.push({
+      op: "compute",
+      computation: "normalize",
+      in: { item: { $var: "value" } },
+      out: { normalized: { $var: "normalized" } },
+    });
+    manifest.computations.push({ name: "normalize", source: "vocabulary", inputs: ["item"] });
+    const sealed = reseal(manifest);
+
+    expect(parseApplicationManifest(renderApplicationManifest(sealed))).toEqual(sealed);
   });
 
   test("rejects old manifest JSON rather than decoding it", () => {

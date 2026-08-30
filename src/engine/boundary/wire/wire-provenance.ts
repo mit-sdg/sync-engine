@@ -119,9 +119,20 @@ function constrainPattern(
       }
       return;
     }
-    if (Array.isArray(value) || typeof value !== "object" || value === null) return;
+    if (Array.isArray(value)) {
+      value.forEach((nested, index) => visit(nested, at(current, String(index))));
+      return;
+    }
+    if (typeof value !== "object" || value === null) return;
     const marker = asMarker(value);
-    if (marker !== null) return;
+    if (marker !== null) {
+      if (marker.tag === "$lit" && isPlainObject(marker.payload)) {
+        for (const [key, nested] of Object.entries(marker.payload)) {
+          visit(nested as ValueIR, at(current, key));
+        }
+      }
+      return;
+    }
     for (const [key, nested] of Object.entries(value)) visit(nested, at(current, key));
   };
   for (const [key, value] of Object.entries(pattern)) visit(value, at(origin, key));
@@ -280,7 +291,9 @@ export function applyOpsProvenance(
         // sides can anchor to the registered function signature. `holds`
         // also represents generic standard relations and remains unanchored.
         constrainPattern(env, op.in, computationOrigin("computation-input", op.computation), site);
-        addOrigin(cell(env, op.out), computationOrigin("computation-output", op.computation), site);
+        const outputOrigin = computationOrigin("computation-output", op.computation);
+        if (typeof op.out === "string") addOrigin(cell(env, op.out), outputOrigin, site);
+        else constrainPattern(env, op.out, outputOrigin, site);
         break;
       }
       case "custom":

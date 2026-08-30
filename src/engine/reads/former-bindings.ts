@@ -39,6 +39,7 @@ export function assertFormerBindings(
     }
     return;
   }
+  if (node.node === "literal") return;
   if (node.node === "record") {
     const scheduled = scheduleBlock(node.where ?? [], inherited, `Former "${site}"`);
     if (node.where !== undefined) node.where.splice(0, node.where.length, ...scheduled.ordered);

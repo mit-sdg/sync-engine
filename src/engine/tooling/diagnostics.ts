@@ -116,7 +116,17 @@ function operationsMayDrop(trigger: ActionTriggerIR, operations: readonly WhereO
       case "whether":
         for (const value of Object.values(operation.out)) addVariables(value, bound);
         break;
-      case "compute":
+      case "compute": {
+        if (typeof operation.out !== "string") {
+          // A projected result can reject the frame when the returned object
+          // omits a stated field or fails any nested structural constraint.
+          if (Object.keys(operation.out).length > 0) return true;
+          break;
+        }
+        if (bound.has(operation.out)) return true;
+        bound.add(operation.out);
+        break;
+      }
       case "now":
         if (bound.has(operation.out)) return true;
         bound.add(operation.out);

@@ -146,6 +146,7 @@ export class ViewFormerValidator {
           this.definitions.resolver.computation(op.computation, `${kind} "${site}"`, true);
         }
         this.assertPatternUsable(op.in, site, kind);
+        if (typeof op.out !== "string") this.assertPatternUsable(op.out, site, kind);
         break;
       }
       case "custom":
