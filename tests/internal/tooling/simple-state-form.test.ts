@@ -6,19 +6,23 @@ import {
 } from "@engine/tooling/simple-state-form";
 import { describe, expect, test } from "vite-plus/test";
 
+const FIXTURE_TYPES = ["Person", "Profile", "Operation", "Group"] as const;
+
 function validate(body: string) {
   const scanned = scanDesignMarkdown(`\`\`\`state\n${body}\n\`\`\`\n`, "concept.md");
   const fence = scanned.fences[0];
   if (fence === undefined) throw new Error("test fixture has no state fence");
-  return validateSimpleStateForm(fence);
-}
-
-function errorsIn(body: string) {
-  return validate(body).filter(({ severity }) => severity === "error");
+  return validateSimpleStateForm(fence, {
+    externalTypes: FIXTURE_TYPES.map((name) => ({
+      name,
+      explanation: "",
+      location: { line: 1, column: 1 },
+    })),
+  });
 }
 
 function issue(body: string, code: SimpleStateFormIssueCode, suggestion: string): void {
-  expect(errorsIn(body)).toMatchObject([{ code, suggestion }]);
+  expect(validate(body)).toMatchObject([{ code, suggestion }]);
 }
 
 describe("limited Simple State Form validation", () => {
@@ -180,7 +184,7 @@ a set of Sessions with
     ["marked no-state prose", "Rule: no durable state"],
     ["marked function state", "Rule: a read function\nRule: read () -> DateTime"],
   ])("accepts %s", (_name, body) => {
-    expect(errorsIn(body)).toEqual([]);
+    expect(validate(body)).toEqual([]);
   });
 
   test("rejects an unmarked colon dialect", () => {
@@ -215,7 +219,7 @@ a set of Sessions with
 
   test("reports malformed structural declarations and fields while accepting a rule", () => {
     expect(
-      errorsIn(
+      validate(
         "set Items\n\na set of Items with garbage\n\na set of Accounts with\n  an account String\n  a owner\n\nRule: at most one Item has each owner",
       ).map(({ code }) => code),
     ).toEqual(["SSF_ARTICLE", "SSF_MALFORMED_DECLARATION", "SSF_MALFORMED_FIELD"]);
@@ -236,7 +240,7 @@ a set of Sessions with
 
   test("batches independent issues in source order", () => {
     expect(
-      errorsIn(
+      validate(
         "a sequence of Sessions\n  a revokedAt optional DateTime\n\na set of Groups with\n  an optional members seq of Person",
       ).map(({ code }) => code),
     ).toEqual([

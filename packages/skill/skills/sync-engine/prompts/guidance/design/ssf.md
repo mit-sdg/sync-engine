@@ -24,11 +24,11 @@ with uppercase ASCII letters, digits, or `_` only. Always write fieldName.
 
 Declare every type in the Types fence: `external Name` for an application-supplied
 parameter, `Name is A or B` for an enumeration, `opaque Name` when the representation is
-deliberately the implementer's. A State field name that is none of these, nor owned, nor
-primitive, draws `SSF_UNDECLARED_TYPE` advice; the same unresolved name anywhere in an
-action or query signature is an error, including inside a type argument or union. Never
-name a type for a primitive—write the primitive on the field and state what narrows it
-where it is enforced.
+deliberately the implementer's. A name that is none of these, nor owned, nor primitive, fails
+with `SSF_UNDECLARED_TYPE`, in a State field or anywhere in an action or query signature,
+including inside a type argument or union. Owned, external, concept-local, and primitive
+names are one namespace. Never name a type for a primitive—write the primitive on the
+field and state what narrows it where it is enforced.
 
 Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
 indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level

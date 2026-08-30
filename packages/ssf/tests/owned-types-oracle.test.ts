@@ -165,8 +165,12 @@ function memberTypeEvidence(markdown: string): string[] {
 
 function expectAgreement(label: string, source: string, options: OracleOptions = {}): void {
   const parsed = parseSimpleStateForm(source, options);
+  // The oracle compares ownership. An undeclared name is by definition not owned, so its
+  // diagnostic is orthogonal here and fixtures may leave alias candidates undeclared.
   expect(
-    parsed.diagnostics.filter(({ severity }) => severity === "error"),
+    parsed.diagnostics.filter(
+      ({ severity, code }) => severity === "error" && code !== "SSF_UNDECLARED_TYPE",
+    ),
     label,
   ).toEqual([]);
   expect(ownedTypeNameSpellings(parsed.document.inventory), label).toEqual(

@@ -8,10 +8,6 @@ import {
 import { sourceLines, tokenizeSimpleStateForm } from "../src/source.ts";
 import { describe, expect, test } from "vite-plus/test";
 
-function errorsOf(diagnostics: readonly { severity: string }[]): readonly unknown[] {
-  return diagnostics.filter(({ severity }) => severity === "error");
-}
-
 function stateFence(markdown: string): string {
   const match = /```state\r?\n([\s\S]*?)\r?\n```/.exec(markdown);
   if (match?.[1] === undefined) throw new Error("fixture has no State fence");
@@ -360,10 +356,13 @@ Rule: at most one Item has each title`;
   });
 
   test("derives a regular alias only from an exact authored field type", () => {
-    const parsed = parseSimpleStateForm(`a set of Accounts with
+    const parsed = parseSimpleStateForm(
+      `a set of Accounts with
   an account Account
-  a usernames set of Username`);
-    expect(errorsOf(parsed.diagnostics)).toEqual([]);
+  a usernames set of Username`,
+      { externalTypes: ["Username"] },
+    );
+    expect(parsed.diagnostics).toEqual([]);
     expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Account", "Accounts"]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
       {
@@ -371,18 +370,22 @@ Rule: at most one Item has each title`;
           reference: { text: "Account", normalized: "Accounts", referenceKind: "owned" },
         },
       },
-      { value: { element: { reference: { text: "Username", referenceKind: "unresolved" } } } },
+      { value: { element: { reference: { text: "Username", referenceKind: "external" } } } },
     ]);
   });
 
-  test("retains unresolved State value names as authored references", () => {
+  test("reports an undeclared State value name and retains it as authored", () => {
     const parsed = parseSimpleStateForm(`a set of Questions with
   a profile Profile
   an options set of Options
   a status StatusCode`);
-    expect(errorsOf(parsed.diagnostics)).toEqual([]);
+    expect(parsed.diagnostics).toMatchObject([
+      { severity: "error", code: "SSF_UNDECLARED_TYPE", span: { start: { line: 2 } } },
+      { code: "SSF_UNDECLARED_TYPE", span: { start: { line: 3 } } },
+      { code: "SSF_UNDECLARED_TYPE", span: { start: { line: 4 } } },
+    ]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
-      { name: "profile", value: { reference: { referenceKind: "unresolved" } } },
+      { name: "profile", value: { reference: { text: "Profile", referenceKind: "unresolved" } } },
       { name: "options", value: { element: { reference: { referenceKind: "unresolved" } } } },
       { name: "status", value: { reference: { referenceKind: "unresolved" } } },
     ]);
@@ -457,9 +460,12 @@ describe("unique fields", () => {
   });
 
   test("parses uniqueness on a collection field", () => {
-    const parsed = parseSimpleStateForm(`a set of Teams with
-  a unique members set of Person`);
-    expect(errorsOf(parsed.diagnostics)).toEqual([]);
+    const parsed = parseSimpleStateForm(
+      `a set of Teams with
+  a unique members set of Person`,
+      { externalTypes: ["Person"] },
+    );
+    expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations[0]?.fields[0]).toMatchObject({
       name: "members",
       unique: true,
@@ -1118,11 +1124,11 @@ alias Spare for Person`,
   test("rejects duplicate field names only within a declaration", () => {
     const parsed = parseSimpleStateForm(`a set of First with
   a profile String
-  a profile Profile
+  a profile String
 
 a set of Second with
   a profile String`);
-    expect(errorsOf(parsed.diagnostics)).toMatchObject([
+    expect(parsed.diagnostics).toMatchObject([
       { code: "SSF_DUPLICATE_FIELD", span: { start: { line: 3 } } },
     ]);
   });
@@ -1158,6 +1164,27 @@ alias Human for People`).document.inventory;
     expect(codes(source, external as string[])).toContain("SSF_INVALID_ALIAS_TARGET");
   });
 
+  test("rejects a declaration that collides with a concept-local type", () => {
+    expect(
+      parseSimpleStateForm("a set of Statuses with\n  a name String", {
+        localTypes: [{ name: "Statuses", values: ["OPEN", "DONE"] }],
+      }).diagnostics,
+    ).toMatchObject([
+      {
+        code: "SSF_NAME_COLLISION",
+        message: 'Structural declaration "Statuses" collides with a concept-local type.',
+      },
+    ]);
+  });
+
+  test("keeps an alias out of the concept-local namespace", () => {
+    expect(
+      parseSimpleStateForm("a set of Items with\n  a name String\n\nalias Status for Items", {
+        localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }],
+      }).diagnostics,
+    ).toMatchObject([{ code: "SSF_ALIAS_NAME_COLLISION" }]);
+  });
+
   test.each([
     ["a set of Items\n\nalias Items for Items", []],
     ["a set of Items\n\nalias Person for Items", ["Person"]],
@@ -1184,7 +1211,7 @@ a set of Groups with
 
 a element Settings with
   a retentionDays Number`;
-    expect(errorsOf(validateSimpleStateForm(source))).toMatchObject([
+    expect(validateSimpleStateForm(source, { externalTypes: ["Person"] })).toMatchObject([
       { code: "SSF_NEAR_MISS_KEYWORD", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISSING_WITH", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISPLACED_MODIFIER", suggestion: "  a optional revokedAt DateTime" },

@@ -403,25 +403,44 @@ Comments.User is Person
     );
   });
 
-  test("reports automatic-alias advice without failing the design check", async () => {
+  test("fails an ambiguous automatic alias and keeps the advice that explains it", async () => {
     const ambiguous = concept
       .replace(
         "a set of Notes with\n  an author Person\n  a text String",
         "a set of Axes with\n  a short Ax\n  an anatomical Axis",
       )
       .replaceAll(": Note", ": Axes");
-    expect(specificationOwnedTypeNames(parseSpec(ambiguous).specification!)).toEqual(["Axes"]);
     const root = await fixture({ "advice.md": ambiguous });
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      await expect(checkDesignFiles(["advice.md"], root)).resolves.toEqual([
-        { path: "advice.md", kind: "concept" },
-      ]);
+      // Neither candidate joins one-to-one, so neither resolves and the check fails. The
+      // advice names the ambiguity, which the undeclared-type error alone would not.
+      await expect(checkDesignFiles(["advice.md"], root)).rejects.toThrow(
+        /\[SSF_UNDECLARED_TYPE\] Type "Ax"/,
+      );
       expect(warning).toHaveBeenCalledWith(
         expect.stringContaining("[SSF_AMBIGUOUS_AUTOMATIC_ALIAS]"),
       );
     } finally {
       warning.mockRestore();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves an ambiguous candidate once an explicit alias declares it", async () => {
+    const resolved = concept
+      .replace(
+        "a set of Notes with\n  an author Person\n  a text String",
+        "a set of Axes with\n  a short Ax\n\nalias Ax for Axes",
+      )
+      .replaceAll(": Note", ": Axes");
+    expect(specificationOwnedTypeNames(parseSpec(resolved).specification!)).toEqual(["Ax", "Axes"]);
+    const root = await fixture({ "resolved.md": resolved });
+    try {
+      await expect(checkDesignFiles(["resolved.md"], root)).resolves.toEqual([
+        { path: "resolved.md", kind: "concept" },
+      ]);
+    } finally {
       await rm(root, { recursive: true, force: true });
     }
   });

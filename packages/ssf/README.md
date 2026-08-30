@@ -144,8 +144,10 @@ Write an SSF primitive directly instead of declaring another name for it; constr
 that narrow a primitive belong where they are enforced. Refining an identity is what a
 subset already does.
 
-SSF itself takes these names as given; the concept parser owns the `types` fence and
-reports its own form, duplicate, and collision diagnostics.
+Declaration, alias, external, concept-local, and primitive names are one namespace: a
+Types declaration may not shadow a primitive, and a State declaration may not shadow a
+Types name. The concept parser owns the `types` fence and reports its form, duplicate,
+and primitive-collision diagnostics; SSF reports collisions it can see against State.
 
 ## Subset conditions
 
@@ -211,10 +213,10 @@ their declaration, and enumeration values to their enumeration.
 ## What a field value may name
 
 A field value may name an identity the concept owns, an external parameter, a
-concept-local enumeration or opaque type, or an SSF primitive. An unrecognized State
-name is retained as unresolved and draws `SSF_UNDECLARED_TYPE` advice. Action and query
-signature types resolve against that same closed universe; an unrecognized signature
-name is an error, including when it is nested inside a type argument or union.
+concept-local enumeration or opaque type, or an SSF primitive. An unrecognized State name is retained as
+unresolved and fails with `SSF_UNDECLARED_TYPE`. Action and query signature types resolve
+against that same closed universe and fail the same way, including when the name is
+nested inside a type argument or union.
 
 Ownership matters where something is proved against it. Subset parents and alias targets
 resolve within the same State, and an application's qualified binding target names an

@@ -195,7 +195,8 @@ export function validateTypeGraph(
 ): ResolutionFacts {
   const declarationGroups = groupsOf(declarations, ({ name }) => name.text);
   const aliasGroups = groupsOf(aliases, ({ name }) => name.text);
-  const occupied = new Set([...declarationGroups.keys(), ...external, ...PRIMITIVES]);
+  const local = new Set(localTypes.map(({ name }) => name));
+  const occupied = new Set([...declarationGroups.keys(), ...external, ...local, ...PRIMITIVES]);
 
   for (const [name, group] of declarationGroups) {
     for (const declaration of group.slice(1))
@@ -208,13 +209,20 @@ export function validateTypeGraph(
         }),
       );
     for (const declaration of group) {
-      if (external.has(name) || PRIMITIVE_NAMES.has(name))
+      const collision = external.has(name)
+        ? "an external type"
+        : local.has(name)
+          ? "a concept-local type"
+          : PRIMITIVE_NAMES.has(name)
+            ? "an SSF primitive"
+            : undefined;
+      if (collision !== undefined)
         diagnostics.push(
           error({
             code: "SSF_NAME_COLLISION",
-            message: `Structural declaration ${JSON.stringify(name)} collides with ${external.has(name) ? "an external type" : "an SSF primitive"}.`,
+            message: `Structural declaration ${JSON.stringify(name)} collides with ${collision}.`,
             suggestion:
-              "Rename the structural declaration; owned, external, and primitive names are one exact namespace.",
+              "Rename the structural declaration; owned, external, concept-local, and primitive names are one exact namespace.",
             span: declaration.name.span,
           }),
         );

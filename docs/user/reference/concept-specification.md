@@ -146,9 +146,10 @@ new name for it, and state narrowing constraints where they are enforced.
 
 Every State field and every named type in an action or query signature resolves to a
 concept-owned identity, an external parameter, a concept-local enumeration or opaque
-type, or an SSF primitive. An unresolved State field draws `SSF_UNDECLARED_TYPE` advice;
-an unresolved signature name is an error and fails checking. The check descends into
-nested type arguments and unions. Version 1 parses type-expression shape without
+type, or an SSF primitive. An unresolved name fails with `SSF_UNDECLARED_TYPE`,
+whether it appears in a State field or a signature, and the check descends into nested
+type arguments and unions. Owned, external, concept-local, and primitive names share one
+namespace, so a Types declaration may not shadow a primitive or a State declaration. Version 1 parses type-expression shape without
 claiming semantic equivalence with an implementation language.
 
 ## `State`

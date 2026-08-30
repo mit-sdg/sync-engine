@@ -66,7 +66,9 @@ Declare every type a concept names in the sole `types` fence, apart from the ide
 State itself declares and the SSF primitives. Use `external Name` for a parameter each
 application supplies, `Name is A or B` for an enumeration, and `opaque Name` where the
 representation is deliberately the implementer's. Write a primitive on the field rather
-than naming a type for it, and state what narrows the value where it is enforced. A State field naming none of these draws `SSF_UNDECLARED_TYPE` advice.
+than naming a type for it, and state what narrows the value where it is enforced. A State field or signature type naming none of these fails with
+`SSF_UNDECLARED_TYPE`, and these names share one namespace with the concept's owned
+identities and the SSF primitives.
 Put one SSF `state` fence in State. `check-design` parses its bounded structural
 declarations, including owned identities, subsets and their conditions, aliases,
 uniqueness constraints, the subset graph, and name uniqueness. Express field uniqueness

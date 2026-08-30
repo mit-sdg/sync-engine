@@ -888,6 +888,10 @@ const TYPES_ENUM_VALUE = /^[A-Z][A-Z0-9_]*$/;
 const TYPES_FORMS =
   "a Types declaration must be `external Name`, `opaque Name`, or `Name is` two or more values";
 
+function isPrimitive(name: string): boolean {
+  return SSF_PRIMITIVES.includes(name as (typeof SSF_PRIMITIVES)[number]);
+}
+
 /** Parse one Types line into an external parameter or a concept-local enumeration or opaque type. */
 function typeDeclarationOf(
   group: DeclarationGroup,
@@ -898,24 +902,29 @@ function typeDeclarationOf(
   const located = (name: string): SpecLocation => at(group.signature, text.indexOf(name) + 1);
 
   const external = TYPES_EXTERNAL.exec(text);
-  if (external !== null) {
-    const name = external[1]!;
-    return { form: "external", name, explanation, location: located(name) };
-  }
-  const opaque = TYPES_OPAQUE.exec(text);
-  if (opaque !== null) {
-    const name = opaque[1]!;
-    return { form: "local", kind: "opaque", name, explanation, location: located(name) };
-  }
-  const local = TYPES_LOCAL.exec(text);
-  if (local === null) {
+  const opaque = external === null ? TYPES_OPAQUE.exec(text) : null;
+  const local = external === null && opaque === null ? TYPES_LOCAL.exec(text) : null;
+  const name = (external ?? opaque ?? local)?.[1];
+  if (name === undefined) {
     report("CONCEPT_SPEC_DECLARATION", TYPES_FORMS, at(group.signature));
     return undefined;
   }
-  const name = local[1]!;
   const location = located(name);
-  const rest = local[2]!.trim();
-  if (SSF_PRIMITIVES.includes(rest as (typeof SSF_PRIMITIVES)[number])) {
+  // SSF reports an external colliding with a primitive against its own namespace; a
+  // concept-local name never reaches SSF as a declaration, so it is checked here.
+  if (external !== null) return { form: "external", name, explanation, location };
+  if (isPrimitive(name)) {
+    report(
+      "CONCEPT_SPEC_DECLARATION",
+      `the type "${name}" collides with the SSF primitive of the same name`,
+      location,
+    );
+    return undefined;
+  }
+  if (opaque !== null) return { form: "local", kind: "opaque", name, explanation, location };
+
+  const rest = local![2]!.trim();
+  if (isPrimitive(rest)) {
     report(
       "CONCEPT_SPEC_DECLARATION",
       `"${rest}" is an SSF primitive; use ${rest} on the field rather than naming "${name}" for it, and state what narrows it where it is enforced`,

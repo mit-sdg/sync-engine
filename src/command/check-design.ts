@@ -172,6 +172,12 @@ async function inspectDesignFiles(
         });
         const stateIssues = parsedState.issues;
         const stateErrors = stateIssues.filter(({ severity }) => severity === "error");
+        // Advice explains why a name failed to resolve, so it is most useful beside an error.
+        const stateAdvice = stateIssues.filter(({ severity }) => severity === "advice");
+        if (stateAdvice.length > 0) {
+          advice.push(stateAdvice);
+          diagnostics.push(...simpleStateFormDiagnostics(stateAdvice));
+        }
         if (stateErrors.length > 0) {
           failures.push(
             `Design document ${label} is invalid: ${describeSimpleStateFormIssues(stateErrors)}`,
@@ -194,11 +200,6 @@ async function inspectDesignFiles(
           );
           diagnostics.push(...signatureTypeDiagnostics(label, signatureIssues));
           continue;
-        }
-        const stateAdvice = stateIssues.filter(({ severity }) => severity === "advice");
-        if (stateAdvice.length > 0) {
-          advice.push(stateAdvice);
-          diagnostics.push(...simpleStateFormDiagnostics(stateAdvice));
         }
         checked.push({ path: label, kind: "concept" });
         continue;
