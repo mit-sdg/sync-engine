@@ -62,16 +62,18 @@ with this exact top-level structure:
 ## Queries
 ```
 
-Declare concept-external parameters in the sole `types` fence. The fence may be
-empty: concept-owned identities, conventional values, and refinements used in
-State or operation signatures are not additional Types declarations. Put one
-SSF `state` fence in State. `check-design` parses its bounded structural
-declarations, including owned identities, subsets, aliases, field-level `unique`
-constraints, the subset graph, and name uniqueness. Express field uniqueness with
-`unique` before the field name, and a unique combination with a `unique` line joining
-field names with `and`; put invariants SSF cannot express on a `Rule:` line and review
-them manually, since the parser makes no claim about rule prose.
-Express enforced refinements in the owning action branches. Declare at least one
+Declare every type a concept names in the sole `types` fence, apart from the identities
+State itself declares and the SSF primitives. Use `external Name` for a parameter each
+application supplies, `Name is String` to refine a primitive, `Name is A or B` for an
+enumeration, and `opaque Name` where the representation is deliberately the
+implementer's. A State field naming none of these draws `SSF_UNDECLARED_TYPE` advice.
+Put one SSF `state` fence in State. `check-design` parses its bounded structural
+declarations, including owned identities, subsets and their conditions, aliases,
+uniqueness constraints, the subset graph, and name uniqueness. Express field uniqueness
+with `unique` before the field name, and a unique combination with a `unique` line
+joining field names with `and`; put invariants SSF cannot express on a `Rule:` line and
+review them manually, since the parser makes no claim about rule prose.
+Express the rules that narrow a refinement in the owning action branches. Declare at least one
 structured action with explicit branches, and put
 the sole `queries` fence in Queries even when it is empty. Do not add subsection
 headings, fenced blocks in Purpose or Principle, application typed links, or

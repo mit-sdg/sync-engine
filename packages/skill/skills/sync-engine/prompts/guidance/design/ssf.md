@@ -3,24 +3,29 @@
 ```text
 document := (setDecl|subsetDecl|aliasDecl|ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
+subsetDecl := (a|an) Subtype (element|set) [of] Parent [condition] [with] declarationBody?
+condition := where fieldName is VALUE (or VALUE)*
 declarationBody := (INDENT (field|uniqueLine|ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] modifier* fieldName (scalar|collection)
+field := [a|an] modifier* fieldName (named|collection)
 modifier := optional|unique
-uniqueLine := unique fieldName (and fieldName)+
-scalar := named|enum
-named := Type|Parameter|primitive
-enum := of values
-collection := (set|seq) [of] (named|values)
-values := VALUE (or VALUE)+
+uniqueLine := unique fieldName (and fieldName)*
+named := Type|Parameter|Local|primitive
+collection := (set|seq) [of] named
 primitive := Number|String|Flag|Date|DateTime
 ruleLine := Rule: TEXT
+
+typesLine := (external Name|opaque Name|Name is (primitive|VALUE (or VALUE)+)) [INDENT TEXT]
 ```
 
-Start Type, Subtype, Alias, and Parameter uppercase ASCII and fieldName lowercase;
+Start Type, Subtype, Alias, Parameter, and Local uppercase ASCII and fieldName lowercase;
 continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
 with uppercase ASCII letters, digits, or `_` only. Always write fieldName.
+
+Declare every type the Types fence: `external Name` for an application-supplied
+parameter, `Name is String` for a refinement of a primitive, `Name is A or B` for an
+enumeration, `opaque Name` when the representation is deliberately the implementer's.
+A name that is none of these, nor owned, nor primitive, draws `SSF_UNDECLARED_TYPE`.
 
 Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
 indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
@@ -44,10 +49,12 @@ fieldNames unique per declaration, VALUEs per enum. An unresolved field value is
 legal conventional/refinement reference, not an owned binding target.
 
 Mark a field `unique` when its values must be unique among members of that declaration; a
-unique collection field compares the whole collection. Constrain a combination with a
-`unique` line naming two or more fields—never one, which the modifier already says.
-Order does not distinguish a combination; a declaration may carry several. A subset's
-constraints bind only its own members and may name ancestor fields. Write each modifier
+unique collection field compares the whole collection. A `unique` line names the fields of
+one constraint; the modifier is shorthand for a line naming that field alone, so use the
+line where the field is inherited rather than declared. Order does not distinguish a
+combination; a declaration may carry several. A subset's constraints bind only its own
+members and may name ancestor fields. Condition a subset on a field whose type is a
+declared enumeration to state which members it classifies. Write each modifier
 at most once, in either order, between any article and the fieldName; `a` and `an` both
 read. Collections are never `optional` (empty means absent) or nested; named-type unions
 are invalid. Sets and sequences introduce identities—never add ID fields. Subsets add no
@@ -60,15 +67,15 @@ a set of Items with
   an item Item
   an optional owner Person
   a watchers set of Person
-  an updates seq of Updates
-  a status of OPEN or DONE
+  an updates seq of Update
+  a status Status
 
 a set of Votes with
   an item Item
   a voter Voter
   unique item and voter
 
-a Completed set of Items with
+a Completed set of Items where status is DONE with
   a completedAt DateTime
 
 an element Settings with

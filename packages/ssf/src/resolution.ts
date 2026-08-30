@@ -19,40 +19,79 @@ function typeReference(
   reference: ParsedReference,
   facts: ResolutionFacts,
   external: ReadonlySet<string>,
-): SsfTypeReference {
+  local: ReadonlySet<string>,
+): SsfTypeReference | undefined {
   const aliasTarget = facts.validAliases.get(reference.text);
   const owned = facts.validStructuralNames.has(reference.text) ? reference.text : aliasTarget;
+  const referenceKind: SsfTypeReference["referenceKind"] | undefined = PRIMITIVE_NAMES.has(
+    reference.text,
+  )
+    ? "primitive"
+    : external.has(reference.text)
+      ? "external"
+      : owned !== undefined
+        ? "owned"
+        : local.has(reference.text)
+          ? "local"
+          : undefined;
+  return referenceKind === undefined
+    ? undefined
+    : {
+        text: reference.text,
+        normalized: owned ?? reference.text,
+        referenceKind,
+        span: reference.span,
+      };
+}
+
+/** A name no kind claims. Structural uses already diagnose; field values draw advice below. */
+function unresolved(reference: ParsedReference): SsfTypeReference {
   return {
     text: reference.text,
-    normalized: owned ?? reference.text,
-    referenceKind: PRIMITIVE_NAMES.has(reference.text)
-      ? "primitive"
-      : external.has(reference.text)
-        ? "external"
-        : owned !== undefined
-          ? "owned"
-          : "unresolved",
+    normalized: reference.text,
+    referenceKind: "unresolved",
     span: reference.span,
   };
 }
 
-function fieldType(
-  value: ParsedFieldType,
+function structuralReference(
+  reference: ParsedReference,
   facts: ResolutionFacts,
   external: ReadonlySet<string>,
+  local: ReadonlySet<string>,
+): SsfTypeReference {
+  return typeReference(reference, facts, external, local) ?? unresolved(reference);
+}
+
+function resolveReference(
+  reference: ParsedReference,
+  facts: ResolutionFacts,
+  external: ReadonlySet<string>,
+  local: ReadonlySet<string>,
+  diagnostics: SsfDiagnostic[],
+): SsfTypeReference {
+  const resolved = typeReference(reference, facts, external, local);
+  if (resolved !== undefined) return resolved;
+  diagnostics.push({
+    severity: "advice",
+    code: "SSF_UNDECLARED_TYPE",
+    message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
+    suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is <primitive or values>\`, or \`opaque ${reference.text}\`.`,
+    span: reference.span,
+  });
+  return unresolved(reference);
+}
+
+function fieldType(
+  value: ParsedFieldType,
+  resolve: (reference: ParsedReference) => SsfTypeReference,
 ): SsfFieldType {
-  if (value.kind === "named")
-    return { kind: "named", reference: typeReference(value.reference, facts, external) };
-  if (value.kind === "enumeration")
-    return { kind: "enumeration", values: value.values, span: value.span };
+  if (value.kind === "named") return { kind: "named", reference: resolve(value.reference) };
   return {
     kind: "collection",
     multiplicity: value.multiplicity,
     span: value.span,
-    element:
-      value.element.kind === "named"
-        ? { kind: "named", reference: typeReference(value.element.reference, facts, external) }
-        : { kind: "enumeration", values: value.element.values, span: value.element.span },
+    element: { kind: "named", reference: resolve(value.element.reference) },
   };
 }
 
@@ -61,6 +100,7 @@ export function resolveGrammar(
   options: SsfParseOptions,
 ): { document: SsfDocument; diagnostics: readonly SsfDiagnostic[] } {
   const external = new Set(options.externalTypes ?? []);
+  const local = new Set((options.localTypes ?? []).map(({ name }) => name));
   const diagnostics: SsfDiagnostic[] = [...grammar.diagnostics];
   for (const name of external) {
     const invalidName = !TYPE_NAME.test(name);
@@ -82,22 +122,34 @@ export function resolveGrammar(
     grammar.aliases,
     external,
     options.evidenceTypeNames ?? [],
+    options.localTypes ?? [],
     diagnostics,
   );
+  const structural = (reference: ParsedReference): SsfTypeReference =>
+    structuralReference(reference, facts, external, local);
+  const resolve = (reference: ParsedReference): SsfTypeReference =>
+    resolveReference(reference, facts, external, local, diagnostics);
   const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => ({
     kind: "declaration",
-    name: typeReference(declaration.name, facts, external),
+    name: structural(declaration.name),
     declarationKind: declaration.declarationKind,
     multiplicity: declaration.multiplicity,
-    ...(declaration.parent === undefined
+    ...(declaration.parent === undefined ? {} : { parent: structural(declaration.parent) }),
+    ...(declaration.condition === undefined
       ? {}
-      : { parent: typeReference(declaration.parent, facts, external) }),
+      : {
+          condition: {
+            field: declaration.condition.field.text,
+            values: declaration.condition.values.map(({ text }) => text),
+            span: declaration.condition.span,
+          },
+        }),
     fields: declaration.fields.map((field) => ({
       kind: "field",
       name: field.name,
       optional: field.optional,
       unique: field.unique,
-      value: fieldType(field.value, facts, external),
+      value: fieldType(field.value, resolve),
       span: field.span,
     })),
     constraints: declaration.constraints.map((constraint) => ({
@@ -111,8 +163,8 @@ export function resolveGrammar(
   }));
   const aliases: SsfAlias[] = grammar.aliases.map((alias) => ({
     kind: "alias",
-    name: typeReference(alias.name, facts, external),
-    target: typeReference(alias.target, facts, external),
+    name: structural(alias.name),
+    target: structural(alias.target),
     span: alias.span,
   }));
   const statements: SsfStatement[] = [...declarations, ...aliases, ...grammar.rules].sort(

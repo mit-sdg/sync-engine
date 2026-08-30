@@ -3,11 +3,11 @@ import {
   error,
   type ParsedAlias,
   type ParsedDeclaration,
-  type ParsedEnumeration,
   type ParsedField,
   type ParsedFieldType,
   type ParsedNamed,
   type ParsedReference,
+  type ParsedSubsetCondition,
   type ParsedUniqueConstraint,
   type SourceLine,
   type SsfDiagnostic,
@@ -90,9 +90,33 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     return undefined;
 
   const consumed = parentIndex ?? nameIndex;
-  const trailing = authored.slice(consumed + 1);
-  const hasWith = trailing[0] === "with";
-  if (trailing.length > 1 || (trailing.length > 0 && !hasWith)) return undefined;
+  let trailing = consumed + 1;
+  let condition: ParsedSubsetCondition | undefined;
+  if (declarationKind === "subset" && authored[trailing] === "where") {
+    const where = line.tokens[trailing]!;
+    const field = line.tokens[trailing + 1];
+    if (field === undefined || !FIELD_NAME.test(field.text) || authored[trailing + 2] !== "is")
+      return undefined;
+    const values: ParsedReference[] = [];
+    let cursor = trailing + 3;
+    for (; cursor < line.tokens.length; cursor += 1) {
+      const token = line.tokens[cursor]!;
+      if ((cursor - trailing - 3) % 2 === 0) {
+        if (!ENUM_VALUE.test(token.text)) break;
+        values.push({ text: token.text, span: token.span });
+      } else if (token.text !== "or") break;
+    }
+    const last = values.at(-1);
+    if (last === undefined || cursor - trailing - 3 !== values.length * 2 - 1) return undefined;
+    condition = {
+      field: { text: field.text, span: field.span },
+      values,
+      span: span(where.span.start, last.span.end),
+    };
+    trailing = cursor;
+  }
+  const hasWith = authored[trailing] === "with";
+  if (authored.length > trailing + (hasWith ? 1 : 0)) return undefined;
 
   return {
     name: { text: nameToken.text, span: nameToken.span },
@@ -101,6 +125,7 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     ...(parentToken === undefined
       ? {}
       : { parent: { text: parentToken.text, span: parentToken.span } }),
+    ...(condition === undefined ? {} : { condition }),
     fields: [],
     constraints: [],
     rules: [],
@@ -129,42 +154,6 @@ function parseAlias(line: SourceLine): ParsedAlias | undefined {
     target: { text: tokens[3].text, span: tokens[3].span },
     span: lineSpan(line),
   };
-}
-
-function enumerationValues(
-  tokens: readonly SsfToken[],
-  start: number,
-): ParsedEnumeration | undefined {
-  const first = tokens[start];
-  if (first === undefined) return undefined;
-  const values: ParsedReference[] = [];
-  for (let index = start; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (token === undefined) return undefined;
-    if ((index - start) % 2 === 0) {
-      if (!ENUM_VALUE.test(token.text)) return undefined;
-      values.push({ text: token.text, span: token.span });
-    } else if (token.text !== "or") return undefined;
-  }
-  if (values.length < 2 || tokens.length - start !== values.length * 2 - 1) return undefined;
-  return {
-    kind: "enumeration",
-    values: values.map(({ text }) => text),
-    valueReferences: values,
-    span: span(first.span.start, tokens.at(-1)?.span.end ?? first.span.end),
-  };
-}
-
-function scalarEnumeration(
-  tokens: readonly SsfToken[],
-  start: number,
-): ParsedEnumeration | undefined {
-  const marker = tokens[start];
-  if (marker?.text !== "of") return undefined;
-  const parsed = enumerationValues(tokens, start + 1);
-  return parsed === undefined
-    ? undefined
-    : { ...parsed, span: span(marker.span.start, parsed.span.end) };
 }
 
 function namedType(token: SsfToken | undefined): ParsedNamed | undefined {
@@ -213,11 +202,8 @@ function parseFieldTokens(authored: readonly SsfToken[]): Omit<ParsedField, "spa
   if (structural === "set" || structural === "seq") {
     let elementStart = 2;
     if (tokens[elementStart]?.text === "of") elementStart += 1;
-    const element = enumerationValues(tokens, elementStart) ?? namedType(tokens[elementStart]);
-    if (
-      element !== undefined &&
-      (element.kind === "enumeration" || elementStart + 1 === tokens.length)
-    )
+    const element = namedType(tokens[elementStart]);
+    if (element !== undefined && elementStart + 1 === tokens.length)
       value = {
         kind: "collection",
         multiplicity: structural === "set" ? "set" : "sequence",
@@ -225,8 +211,7 @@ function parseFieldTokens(authored: readonly SsfToken[]): Omit<ParsedField, "spa
         span: span(tokens[1]!.span.start, tokens.at(-1)!.span.end),
       };
   } else {
-    value = scalarEnumeration(tokens, 1) ?? namedType(tokens[1]);
-    if (value?.kind === "named" && tokens.length !== 2) value = undefined;
+    value = tokens.length === 2 ? namedType(tokens[1]) : undefined;
   }
   if (value === undefined) return undefined;
   return {
@@ -243,7 +228,7 @@ function parseField(line: SourceLine): ParsedField | undefined {
   return parsed === undefined ? undefined : { ...parsed, span: lineSpan(line) };
 }
 
-/** Parse `unique fieldName and fieldName ...`, the constraint form over two or more fields. */
+/** Parse `unique fieldName (and fieldName)*`; the field modifier is shorthand for one name. */
 function parseUniqueConstraint(line: SourceLine): ParsedUniqueConstraint | undefined {
   const tokens = line.tokens;
   if (tokens[0]?.text !== "unique") return undefined;
@@ -255,7 +240,7 @@ function parseUniqueConstraint(line: SourceLine): ParsedUniqueConstraint | undef
       fields.push({ text: token.text, span: token.span });
     } else if (token.text !== "and") return undefined;
   }
-  if (fields.length < 2 || tokens.length !== fields.length * 2) return undefined;
+  if (fields.length === 0 || tokens.length !== fields.length * 2) return undefined;
   return { fields, span: lineSpan(line) };
 }
 
@@ -393,12 +378,13 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
       );
     }
   }
-  if (declaration.hasWith && declaration.fields.length === 0 && !declaration.hasMalformedField) {
+  if (declaration.hasWith && !hasBody && !declaration.hasMalformedField) {
     diagnostics.push(
       error({
         code: "SSF_MALFORMED_DECLARATION",
-        message: "A declaration ending in `with` must have at least one indented field.",
-        suggestion: "Remove `with` or add at least one indented field.",
+        message:
+          "A declaration ending in `with` must have at least one indented field or constraint.",
+        suggestion: "Remove `with` or add an indented field or uniqueness constraint.",
         span: tokens.at(-1)?.span ?? declaration.signatureSpan,
       }),
     );
@@ -430,14 +416,6 @@ function repairedLine(line: SourceLine, tokens: readonly SsfToken[]): string {
 function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
   const tokens = line.tokens;
   const article = articleLength(tokens);
-  if (tokens[0]?.text === "unique" && tokens.length === 2 && FIELD_NAME.test(tokens[1]!.text))
-    return error({
-      code: "SSF_MALFORMED_FIELD",
-      message: "A uniqueness constraint names two or more fields joined by `and`.",
-      suggestion:
-        "Name the rest of the combination with `and`, or mark the field `unique` where it is declared.",
-      span: lineSpan(line),
-    });
   let start = article;
   while (fieldModifier(tokens[start]?.text) !== undefined) start += 1;
   const structural = tokens[start]?.text === "set" || tokens[start]?.text === "seq";
@@ -445,11 +423,7 @@ function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
   if (source !== undefined && TYPE_NAME.test(source.text)) {
     const name = { ...source, text: `${source.text[0]!.toLowerCase()}${source.text.slice(1)}` };
     const withName = [...tokens.slice(0, start), name, ...tokens.slice(start)];
-    const repaired = parseFieldTokens(withName)?.value;
-    if (
-      repaired?.kind === "named" ||
-      (repaired?.kind === "collection" && repaired.element.kind === "named")
-    )
+    if (parseFieldTokens(withName) !== undefined)
       return error({
         code: "SSF_MALFORMED_FIELD",
         message: "An SSF field needs a lowercase name before its value.",

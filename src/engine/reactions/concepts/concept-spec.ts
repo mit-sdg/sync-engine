@@ -6,6 +6,7 @@ import type {
   ConceptSpecificationIR,
   SpecificationActionIR,
   SpecificationExternalTypeIR,
+  SpecificationLocalTypeIR,
   SpecificationFieldIR,
   SpecificationLocationIR,
   SpecificationQueryIR,
@@ -16,6 +17,7 @@ import type {
 } from "@engine/reads/ir";
 import type { QueryPromise } from "@engine/reads/query-metadata";
 import { isDesignIdentifier } from "@engine/utils/design-identifiers";
+import { SSF_PRIMITIVES } from "@ssf";
 
 export type SpecLocation = SpecificationLocationIR;
 export type SpecType = SpecificationTypeIR;
@@ -25,6 +27,11 @@ export type SpecRefusal = SpecificationRefusalIR;
 export type SpecAction = SpecificationActionIR;
 export type SpecQuery = SpecificationQueryIR;
 export type SpecExternalType = SpecificationExternalTypeIR;
+export type SpecLocalType = SpecificationLocalTypeIR;
+
+type SpecTypeDeclaration =
+  | (SpecExternalType & { readonly form: "external" })
+  | (SpecLocalType & { readonly form: "local" });
 export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
 
@@ -874,31 +881,80 @@ function parseEach<T extends { readonly name: string; readonly location: SpecLoc
   return { values, groups };
 }
 
-function externalTypesOf(
+const TYPES_EXTERNAL = /^external\s+([A-Za-z_][A-Za-z0-9_]*)$/;
+const TYPES_OPAQUE = /^opaque\s+([A-Za-z_][A-Za-z0-9_]*)$/;
+const TYPES_LOCAL = /^([A-Za-z_][A-Za-z0-9_]*)\s+is\s+(\S.*)$/;
+const TYPES_ENUM_VALUE = /^[A-Z][A-Z0-9_]*$/;
+const TYPES_FORMS =
+  "a Types declaration must be `external Name`, `opaque Name`, or `Name is` a primitive or two or more values";
+
+/** Parse one Types line into an external parameter or a concept-local refinement, enum, or opaque. */
+function typeDeclarationOf(
+  group: DeclarationGroup,
+  report: ConceptSpecDiagnosticReporter,
+): SpecTypeDeclaration | undefined {
+  const text = group.signature.text;
+  const explanation = bodyOf(group.body);
+  const located = (name: string): SpecLocation => at(group.signature, text.indexOf(name) + 1);
+
+  const external = TYPES_EXTERNAL.exec(text);
+  if (external !== null) {
+    const name = external[1]!;
+    return { form: "external", name, explanation, location: located(name) };
+  }
+  const opaque = TYPES_OPAQUE.exec(text);
+  if (opaque !== null) {
+    const name = opaque[1]!;
+    return { form: "local", kind: "opaque", name, explanation, location: located(name) };
+  }
+  const local = TYPES_LOCAL.exec(text);
+  if (local === null) {
+    report("CONCEPT_SPEC_DECLARATION", TYPES_FORMS, at(group.signature));
+    return undefined;
+  }
+  const name = local[1]!;
+  const location = located(name);
+  const rest = local[2]!.trim();
+  if (SSF_PRIMITIVES.includes(rest as (typeof SSF_PRIMITIVES)[number]))
+    return { form: "local", kind: "refinement", name, base: rest, explanation, location };
+
+  const values = rest.split(/\s+or\s+/);
+  if (values.length < 2 || !values.every((value) => TYPES_ENUM_VALUE.test(value))) {
+    report(
+      "CONCEPT_SPEC_DECLARATION",
+      `the type "${name}" must refine an SSF primitive (${SSF_PRIMITIVES.join(", ")}) or list two or more uppercase values joined by "or"`,
+      location,
+    );
+    return undefined;
+  }
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      report(
+        "CONCEPT_SPEC_DUPLICATE_DECLARATION",
+        `the value "${value}" is listed twice in "${name}"`,
+        location,
+      );
+      return undefined;
+    }
+    seen.add(value);
+  }
+  return { form: "local", kind: "enumeration", name, values, explanation, location };
+}
+
+function conceptTypesOf(
   fence: readonly SourceLine[],
   report: ConceptSpecDiagnosticReporter,
-): ParsedDeclarations<SpecExternalType> {
-  return parseEach(
-    fence,
-    (group) => {
-      const match = /^external\s+([A-Za-z_][A-Za-z0-9_]*)$/.exec(group.signature.text);
-      if (match === null) {
-        report(
-          "CONCEPT_SPEC_DECLARATION",
-          "a Types declaration must be `external Name`",
-          at(group.signature),
-        );
-        return undefined;
-      }
-      return {
-        name: match[1],
-        explanation: bodyOf(group.body),
-        location: at(group.signature, group.signature.text.indexOf(match[1]) + 1),
-      };
-    },
-    "external type",
-    report,
-  );
+): { externalTypes: SpecExternalType[]; localTypes: SpecLocalType[] } {
+  const { values } = parseEach(fence, typeDeclarationOf, "type", report);
+  const externalTypes: SpecExternalType[] = [];
+  const localTypes: SpecLocalType[] = [];
+  for (const value of values) {
+    const { form, ...declaration } = value;
+    if (form === "external") externalTypes.push(declaration as SpecExternalType);
+    else localTypes.push(declaration as SpecLocalType);
+  }
+  return { externalTypes, localTypes };
 }
 
 const sourceDigests = new WeakMap<ConceptSpec, string>();
@@ -972,8 +1028,8 @@ export function parseSpec(markdown: string): ConceptSpecParseResult {
       ? undefined
       : fencedSection(document.sections.Queries, "queries", report);
 
-  const externalTypes =
-    typesFence === undefined ? undefined : externalTypesOf(typesFence.contents, report).values;
+  const conceptTypes =
+    typesFence === undefined ? undefined : conceptTypesOf(typesFence.contents, report);
   const stateBody =
     stateFence === undefined
       ? undefined
@@ -999,7 +1055,7 @@ export function parseSpec(markdown: string): ConceptSpecParseResult {
     document.definitionName === undefined ||
     purpose === undefined ||
     principle === undefined ||
-    externalTypes === undefined ||
+    conceptTypes === undefined ||
     stateBody === undefined ||
     actions === undefined ||
     queries === undefined
@@ -1013,7 +1069,8 @@ export function parseSpec(markdown: string): ConceptSpecParseResult {
     definitionName: document.definitionName,
     purpose,
     principle,
-    externalTypes,
+    externalTypes: conceptTypes.externalTypes,
+    localTypes: conceptTypes.localTypes,
     state: {
       body: stateBody.body,
       location: stateBody.location,

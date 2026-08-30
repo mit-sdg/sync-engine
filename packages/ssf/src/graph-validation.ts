@@ -1,6 +1,13 @@
 import { automaticAliasCandidates } from "./automatic-aliases.ts";
 import { PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
-import { error, type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic } from "./model.ts";
+import {
+  error,
+  type ParsedAlias,
+  type ParsedDeclaration,
+  type ParsedField,
+  type SsfDiagnostic,
+  type SsfLocalType,
+} from "./model.ts";
 
 export interface ResolutionFacts {
   readonly validStructuralNames: ReadonlySet<string>;
@@ -38,22 +45,22 @@ function cycleMembers(parentBySubset: ReadonlyMap<string, string>): ReadonlySet<
   return cyclic;
 }
 
-/** Field names a declaration constrains: its own, then every ancestor's up the subset chain. */
-function constrainableFieldNames(
+/** Fields a declaration may name: its own, then every ancestor's up the subset chain. */
+function constrainableFields(
   declaration: ParsedDeclaration,
   byName: ReadonlyMap<string, ParsedDeclaration>,
   parentBySubset: ReadonlyMap<string, string>,
-): ReadonlySet<string> {
-  const names = new Set<string>();
+): ReadonlyMap<string, ParsedField> {
+  const fields = new Map<string, ParsedField>();
   const visited = new Set<string>();
   let cursor: ParsedDeclaration | undefined = declaration;
   while (cursor !== undefined && !visited.has(cursor.name.text)) {
     visited.add(cursor.name.text);
-    for (const field of cursor.fields) names.add(field.name);
+    for (const field of cursor.fields) if (!fields.has(field.name)) fields.set(field.name, field);
     const parent = parentBySubset.get(cursor.name.text);
     cursor = parent === undefined ? undefined : byName.get(parent);
   }
-  return names;
+  return fields;
 }
 
 /** Report uniqueness constraints that name an unavailable field or repeat a combination. */
@@ -64,7 +71,7 @@ function validateUniqueConstraints(
   diagnostics: SsfDiagnostic[],
 ): void {
   for (const declaration of declarations) {
-    const available = constrainableFieldNames(declaration, uniqueDeclarations, parentBySubset);
+    const available = constrainableFields(declaration, uniqueDeclarations, parentBySubset);
     const combinations = new Set<string>();
     for (const constraint of declaration.constraints) {
       const named = new Set<string>();
@@ -108,12 +115,82 @@ function validateUniqueConstraints(
   }
 }
 
+/** Report subset conditions whose field is unavailable or whose value the field cannot hold. */
+function validateSubsetConditions(
+  declarations: readonly ParsedDeclaration[],
+  uniqueDeclarations: ReadonlyMap<string, ParsedDeclaration>,
+  parentBySubset: ReadonlyMap<string, string>,
+  localTypes: readonly SsfLocalType[],
+  diagnostics: SsfDiagnostic[],
+): void {
+  const valuesByType = new Map(
+    localTypes.flatMap(({ name, values }) =>
+      values === undefined ? [] : [[name, values] as const],
+    ),
+  );
+  for (const declaration of declarations) {
+    const { condition } = declaration;
+    if (condition === undefined) continue;
+    const field = constrainableFields(declaration, uniqueDeclarations, parentBySubset).get(
+      condition.field.text,
+    );
+    if (field === undefined) {
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_CONDITION",
+          message: `Subset condition names ${JSON.stringify(condition.field.text)}, which is not a field of ${JSON.stringify(declaration.name.text)} or of a declaration it is a subset of.`,
+          suggestion: "Condition a subset on a field its members carry.",
+          span: condition.field.span,
+        }),
+      );
+      continue;
+    }
+    const typeName = field.value.kind === "named" ? field.value.reference.text : undefined;
+    const values = typeName === undefined ? undefined : valuesByType.get(typeName);
+    if (values === undefined) {
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_CONDITION",
+          message: `Subset condition tests field ${JSON.stringify(condition.field.text)}, whose type ${JSON.stringify(typeName ?? "collection")} is not a declared enumeration.`,
+          suggestion:
+            "Condition a subset on a field whose type the Types fence declares as `Name is A or B`.",
+          span: condition.field.span,
+        }),
+      );
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const tested of condition.values) {
+      if (!values.includes(tested.text))
+        diagnostics.push(
+          error({
+            code: "SSF_INVALID_SUBSET_CONDITION",
+            message: `Subset condition tests for ${JSON.stringify(tested.text)}, which is not a value of ${JSON.stringify(typeName)}.`,
+            suggestion: `Use one of: ${values.join(", ")}.`,
+            span: tested.span,
+          }),
+        );
+      else if (seen.has(tested.text))
+        diagnostics.push(
+          error({
+            code: "SSF_INVALID_SUBSET_CONDITION",
+            message: `Subset condition tests for ${JSON.stringify(tested.text)} more than once.`,
+            suggestion: "List each value once.",
+            span: tested.span,
+          }),
+        );
+      seen.add(tested.text);
+    }
+  }
+}
+
 /** Resolve order-independent alias and subset graphs and report every invalid edge. */
 export function validateTypeGraph(
   declarations: readonly ParsedDeclaration[],
   aliases: readonly ParsedAlias[],
   external: ReadonlySet<string>,
   evidenceTypeNames: readonly string[],
+  localTypes: readonly SsfLocalType[],
   diagnostics: SsfDiagnostic[],
 ): ResolutionFacts {
   const declarationGroups = groupsOf(declarations, ({ name }) => name.text);
@@ -153,25 +230,6 @@ export function validateTypeGraph(
             }),
           );
         seenFields.add(field.name);
-        const enumeration =
-          field.value.kind === "enumeration"
-            ? field.value
-            : field.value.kind === "collection" && field.value.element.kind === "enumeration"
-              ? field.value.element
-              : undefined;
-        const seenValues = new Set<string>();
-        for (const value of enumeration?.valueReferences ?? []) {
-          if (seenValues.has(value.text))
-            diagnostics.push(
-              error({
-                code: "SSF_DUPLICATE_ENUM_VALUE",
-                message: `Enumeration value ${JSON.stringify(value.text)} occurs more than once in this field.`,
-                suggestion: "List each enumeration value exactly once in this field.",
-                span: value.span,
-              }),
-            );
-          seenValues.add(value.text);
-        }
       }
     }
   }
@@ -284,6 +342,13 @@ export function validateTypeGraph(
   }
 
   validateUniqueConstraints(declarations, uniqueDeclarations, parentBySubset, diagnostics);
+  validateSubsetConditions(
+    declarations,
+    uniqueDeclarations,
+    parentBySubset,
+    localTypes,
+    diagnostics,
+  );
 
   const cyclicNames = cycleMembers(parentBySubset);
   for (const declaration of declarations) {

@@ -15,7 +15,12 @@ authenticates Ari, returning the account reference, which is the username `ari`.
 ## Types
 
 ```types
-
+Username is String
+  A login name, unique among accounts.
+Salt is String
+  Random per-account input to the password verifier.
+opaque Secret
+  A password verifier; its representation is the implementer's choice.
 ```
 
 ## State

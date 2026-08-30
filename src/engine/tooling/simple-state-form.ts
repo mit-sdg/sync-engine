@@ -7,12 +7,13 @@ import {
   type SsfPosition,
   type SsfSpan,
 } from "@ssf";
-import type { SpecificationExternalTypeIR } from "@engine/reads/ir";
+import type { SpecificationExternalTypeIR, SpecificationLocalTypeIR } from "@engine/reads/ir";
 import type { DesignSourceLocation, MarkdownFence } from "./markdown-design-source.ts";
 
 export type SimpleStateFormIssueCode = SsfDiagnostic["code"];
-export type SimpleStateFormOptions = Omit<SsfParseOptions, "externalTypes"> & {
+export type SimpleStateFormOptions = Omit<SsfParseOptions, "externalTypes" | "localTypes"> & {
   readonly externalTypes?: readonly SpecificationExternalTypeIR[];
+  readonly localTypes?: readonly SpecificationLocalTypeIR[];
 };
 
 interface SimpleStateFormIssueDetail {
@@ -59,6 +60,14 @@ function packageOptions(options: SimpleStateFormOptions): SsfParseOptions {
     ...(options.evidenceTypeNames === undefined
       ? {}
       : { evidenceTypeNames: options.evidenceTypeNames }),
+    ...(options.localTypes === undefined
+      ? {}
+      : {
+          localTypes: options.localTypes.map((type) => ({
+            name: type.name,
+            ...(type.kind === "enumeration" ? { values: type.values } : {}),
+          })),
+        }),
   };
 }
 

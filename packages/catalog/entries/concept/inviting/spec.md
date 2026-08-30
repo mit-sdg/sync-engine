@@ -19,6 +19,9 @@ external Target
   The object to which participation is invited.
 external Person
   The external identity of an inviter or invitee.
+
+InvitationStatus is PENDING or ACCEPTED or DECLINED or REVOKED
+  Whether the invitee has decided, or the inviter has withdrawn the offer.
 ```
 
 ## State
@@ -32,7 +35,8 @@ a set of Invitations with
   an issuedAt DateTime
   an optional decidedAt DateTime
 
-Rule: at most one pending Invitation has each target and invitee pair
+a Pending set of Invitations where status is PENDING with
+  unique target and invitee
 ```
 
 ## Actions

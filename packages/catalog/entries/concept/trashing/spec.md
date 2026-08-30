@@ -16,6 +16,9 @@ later trash are refused because purge is permanent.
 ```types
 external Item
   The object whose removal disposition is tracked.
+
+DispositionStatus is KEPT or TRASHED or PURGED
+  Where the item currently sits.
 ```
 
 ## State

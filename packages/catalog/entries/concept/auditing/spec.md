@@ -27,6 +27,11 @@ external Actor
   The identity attributed with an action.
 external Target
   The object affected by an action.
+
+Position is Number
+  A one-based index within one trail.
+Count is Number
+  A number of entries, never negative.
 ```
 
 ## State

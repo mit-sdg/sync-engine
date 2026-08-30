@@ -1273,6 +1273,7 @@ describe("application impact analysis", () => {
       actions: parsed.actions,
       state: parsed.state,
       externalTypes: parsed.externalTypes,
+      localTypes: parsed.localTypes,
       principle: parsed.principle,
       purpose: parsed.purpose,
       definitionName: parsed.definitionName,

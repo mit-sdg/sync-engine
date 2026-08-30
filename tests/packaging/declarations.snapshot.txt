@@ -1531,7 +1531,7 @@ export {};
 
 === dist/engine/reactions/concepts/concept-spec.d.ts ===
 /** Parse the complete version-1 authored contract of one concept definition. */
-import type { ConceptSpecificationIR, SpecificationActionIR, SpecificationExternalTypeIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationStateIR, SpecificationTypeIR } from "../../reads/ir.ts";
+import type { ConceptSpecificationIR, SpecificationActionIR, SpecificationExternalTypeIR, SpecificationLocalTypeIR, SpecificationFieldIR, SpecificationLocationIR, SpecificationQueryIR, SpecificationRefusalIR, SpecificationResultIR, SpecificationStateIR, SpecificationTypeIR } from "../../reads/ir.ts";
 export type SpecLocation = SpecificationLocationIR;
 export type SpecType = SpecificationTypeIR;
 export type SpecField = SpecificationFieldIR;
@@ -1540,6 +1540,7 @@ export type SpecRefusal = SpecificationRefusalIR;
 export type SpecAction = SpecificationActionIR;
 export type SpecQuery = SpecificationQueryIR;
 export type SpecExternalType = SpecificationExternalTypeIR;
+export type SpecLocalType = SpecificationLocalTypeIR;
 export type SpecState = SpecificationStateIR;
 export type ConceptSpec = ConceptSpecificationIR;
 export type ConceptSpecDiagnosticCode = "CONCEPT_SPEC_INVALID_INPUT" | "CONCEPT_SPEC_APPLICATION_CONSTRUCT" | "CONCEPT_SPEC_DOCUMENT_STRUCTURE" | "CONCEPT_SPEC_PROSE_SECTION" | "CONCEPT_SPEC_FENCE" | "CONCEPT_SPEC_DECLARATION" | "CONCEPT_SPEC_SIGNATURE" | "CONCEPT_SPEC_DUPLICATE_DECLARATION" | "CONCEPT_SPEC_ACTION_BRANCH";
@@ -3844,6 +3845,21 @@ export interface SpecificationExternalTypeIR {
     explanation: string;
     location: SpecificationLocationIR;
 }
+/** One concept-local type declared in the Types fence beside its external parameters. */
+export type SpecificationLocalTypeIR = {
+    name: string;
+    /** Optional reader-facing explanation, normalized from its indented lines. */
+    explanation: string;
+    location: SpecificationLocationIR;
+} & ({
+    kind: "refinement";
+    base: string;
+} | {
+    kind: "enumeration";
+    values: readonly string[];
+} | {
+    kind: "opaque";
+});
 /** Simple State Form source retained from the State fence. */
 export interface SpecificationStateIR {
     /** Normalized fence contents, privately validated against the version-1 SSF grammar. */
@@ -3860,6 +3876,7 @@ export interface ConceptSpecificationIR {
     purpose: string;
     principle: string;
     externalTypes: readonly SpecificationExternalTypeIR[];
+    localTypes: readonly SpecificationLocalTypeIR[];
     state: SpecificationStateIR;
     actions: readonly SpecificationActionIR[];
     queries: readonly SpecificationQueryIR[];
@@ -5431,11 +5448,12 @@ export declare function indentedBody(lines: readonly DesignSourceLine[]): string
 
 === dist/engine/tooling/simple-state-form.d.ts ===
 import { type SsfDiagnostic, type SsfDocument, type SsfParseOptions, type SsfPosition, type SsfSpan } from "./ssf-package/index.js";
-import type { SpecificationExternalTypeIR } from "../reads/ir.ts";
+import type { SpecificationExternalTypeIR, SpecificationLocalTypeIR } from "../reads/ir.ts";
 import type { DesignSourceLocation, MarkdownFence } from "./markdown-design-source.ts";
 export type SimpleStateFormIssueCode = SsfDiagnostic["code"];
-export type SimpleStateFormOptions = Omit<SsfParseOptions, "externalTypes"> & {
+export type SimpleStateFormOptions = Omit<SsfParseOptions, "externalTypes" | "localTypes"> & {
     readonly externalTypes?: readonly SpecificationExternalTypeIR[];
+    readonly localTypes?: readonly SpecificationLocalTypeIR[];
 };
 interface SimpleStateFormIssueDetail {
     readonly severity: SsfDiagnostic["severity"];
@@ -5495,17 +5513,18 @@ export interface GrammarResult {
 export declare function parseGrammar(lines: readonly SourceLine[]): GrammarResult;
 
 === dist/engine/tooling/ssf-package/graph-validation.d.ts ===
-import { type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic } from "./model.ts";
+import { type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic, type SsfLocalType } from "./model.ts";
 export interface ResolutionFacts {
     readonly validStructuralNames: ReadonlySet<string>;
     readonly validAliases: ReadonlyMap<string, string>;
 }
 /** Resolve order-independent alias and subset graphs and report every invalid edge. */
-export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, evidenceTypeNames: readonly string[], diagnostics: SsfDiagnostic[]): ResolutionFacts;
+export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, evidenceTypeNames: readonly string[], localTypes: readonly SsfLocalType[], diagnostics: SsfDiagnostic[]): ResolutionFacts;
 
 === dist/engine/tooling/ssf-package/index.d.ts ===
+export { PRIMITIVES as SSF_PRIMITIVES } from "./names.ts";
 export { ownedTypeNameSpellings, parseSimpleStateForm, validateSimpleStateForm, } from "./simple-state-form.ts";
-export type { SsfDiagnostic, SsfDocument, SsfParseOptions, SsfPosition, SsfSpan } from "./model.ts";
+export type { SsfDiagnostic, SsfDocument, SsfLocalType, SsfParseOptions, SsfPosition, SsfSpan, } from "./model.ts";
 
 === dist/engine/tooling/ssf-package/model.d.ts ===
 export interface SsfPosition {
@@ -5526,7 +5545,7 @@ export interface SsfToken {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_ENUM_VALUE" | "SSF_DUPLICATE_FIELD" | "SSF_DUPLICATE_UNIQUE" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_MODIFIER" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_SUBSET_SELF_PARENT" | "SSF_UNKNOWN_UNIQUE_FIELD";
+export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_FIELD" | "SSF_DUPLICATE_UNIQUE" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_MODIFIER" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_INVALID_SUBSET_CONDITION" | "SSF_SUBSET_SELF_PARENT" | "SSF_UNDECLARED_TYPE" | "SSF_UNKNOWN_UNIQUE_FIELD";
 interface SsfDiagnosticDetail {
     readonly severity: "error" | "advice";
     readonly code: SsfDiagnosticCode;
@@ -5549,7 +5568,11 @@ export interface SsfTypeName {
     /** Exact owned structural name used for declaration and reference joins. */
     readonly normalized: string;
 }
-export type SsfReferenceKind = "external" | "owned" | "primitive" | "unresolved";
+/**
+ * `unresolved` is no longer a silent category: a field value that lands there always
+ * carries `SSF_UNDECLARED_TYPE`, and every other case already has its own diagnostic.
+ */
+export type SsfReferenceKind = "external" | "local" | "owned" | "primitive" | "unresolved";
 export interface SsfTypeReference extends SsfTypeName {
     readonly referenceKind: SsfReferenceKind;
     readonly span: SsfSpan;
@@ -5558,18 +5581,13 @@ export interface SsfNamedFieldType {
     readonly kind: "named";
     readonly reference: SsfTypeReference;
 }
-export interface SsfEnumerationFieldType {
-    readonly kind: "enumeration";
-    readonly values: readonly string[];
-    readonly span: SsfSpan;
-}
 export interface SsfCollectionFieldType {
     readonly kind: "collection";
     readonly multiplicity: "set" | "sequence";
-    readonly element: SsfNamedFieldType | SsfEnumerationFieldType;
+    readonly element: SsfNamedFieldType;
     readonly span: SsfSpan;
 }
-export type SsfFieldType = SsfNamedFieldType | SsfEnumerationFieldType | SsfCollectionFieldType;
+export type SsfFieldType = SsfNamedFieldType | SsfCollectionFieldType;
 export interface SsfField {
     readonly kind: "field";
     readonly name: string;
@@ -5590,12 +5608,19 @@ export interface SsfRuleLine {
     readonly text: string;
     readonly span: SsfSpan;
 }
+/** A subset's membership test: the field and the declared value its members carry. */
+export interface SsfSubsetCondition {
+    readonly field: string;
+    readonly values: readonly string[];
+    readonly span: SsfSpan;
+}
 export interface SsfDeclaration {
     readonly kind: "declaration";
     readonly name: SsfTypeReference;
     readonly declarationKind: "collection" | "subset";
     readonly multiplicity: SsfMultiplicity;
     readonly parent?: SsfTypeReference;
+    readonly condition?: SsfSubsetCondition;
     readonly fields: readonly SsfField[];
     readonly constraints: readonly SsfUniqueConstraint[];
     readonly rules: readonly SsfRuleLine[];
@@ -5623,9 +5648,17 @@ export interface SsfDocument {
     readonly rules: readonly SsfRuleLine[];
     readonly inventory: SsfTypeInventory;
 }
+/** One concept-local type declared in the Types fence: a refinement, enumeration, or opaque. */
+export interface SsfLocalType {
+    readonly name: string;
+    /** Declared values, for an enumeration; absent for a refinement or an opaque type. */
+    readonly values?: readonly string[];
+}
 export interface SsfParseOptions {
     /** External parameter names in SSF `TYPE_NAME` form. */
     readonly externalTypes?: readonly string[];
+    /** Concept-local types declared in the Types fence. */
+    readonly localTypes?: readonly SsfLocalType[];
     /** Exact type spellings authored in action/query parameter and result expressions. */
     readonly evidenceTypeNames?: readonly string[];
 }
@@ -5644,20 +5677,14 @@ export interface ParsedReference {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export interface ParsedEnumeration {
-    readonly kind: "enumeration";
-    readonly values: readonly string[];
-    readonly valueReferences: readonly ParsedReference[];
-    readonly span: SsfSpan;
-}
 export interface ParsedNamed {
     readonly kind: "named";
     readonly reference: ParsedReference;
 }
-export type ParsedFieldType = ParsedNamed | ParsedEnumeration | {
+export type ParsedFieldType = ParsedNamed | {
     readonly kind: "collection";
     readonly multiplicity: "set" | "sequence";
-    readonly element: ParsedNamed | ParsedEnumeration;
+    readonly element: ParsedNamed;
     readonly span: SsfSpan;
 };
 export interface ParsedField {
@@ -5672,11 +5699,17 @@ export interface ParsedUniqueConstraint {
     readonly fields: readonly ParsedReference[];
     readonly span: SsfSpan;
 }
+export interface ParsedSubsetCondition {
+    readonly field: ParsedReference;
+    readonly values: readonly ParsedReference[];
+    readonly span: SsfSpan;
+}
 export interface ParsedDeclaration {
     readonly name: ParsedReference;
     readonly declarationKind: "collection" | "subset";
     readonly multiplicity: SsfMultiplicity;
     readonly parent?: ParsedReference;
+    readonly condition?: ParsedSubsetCondition;
     readonly fields: ParsedField[];
     readonly constraints: ParsedUniqueConstraint[];
     readonly rules: SsfRuleLine[];

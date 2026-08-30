@@ -11,14 +11,14 @@ a set of Items with
   a unique title String
   an optional owner Person
   a watchers set of Person
-  a status of OPEN or DONE
+  a status Status
 
 a set of Votes with
   an item Item
   a voter Voter
   unique item and voter
 
-a Completed set of Items with
+a Completed set of Items where status is DONE with
   a completedAt DateTime
 
 an element Settings with
@@ -32,17 +32,15 @@ alias WorkItem for Items
 ```text
 document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
+subsetDecl := (a|an) Subtype (element|set) [of] Parent [condition] [with] declarationBody?
+condition := where fieldName is VALUE (or VALUE)*
 declarationBody := (INDENT (field | uniqueLine | ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] modifier* fieldName (scalar|collection)
+field := [a|an] modifier* fieldName (named|collection)
 modifier := optional | unique
-uniqueLine := unique fieldName (and fieldName)+
-scalar := named | enum
-named := Type | Parameter | primitive
-enum := of values
-collection := (set|seq) [of] (named|values)
-values := VALUE (or VALUE)+
+uniqueLine := unique fieldName (and fieldName)*
+named := Type | Parameter | Local | primitive
+collection := (set|seq) [of] named
 primitive := Number | String | Flag | Date | DateTime
 ruleLine := Rule: TEXT
 ```
@@ -73,8 +71,8 @@ a set of Items with
   an optional owner Person
   a members set of Person
   a history seq of Event
-  a status of OPEN or DONE
-  a flags set of VISIBLE or HIDDEN
+  a status Status
+  a flags set of Visibility
 ```
 
 An indented field may omit its article, and `a` and `an` both read. The modifiers
@@ -106,10 +104,10 @@ a set of Votes with
   unique item and voter
 ```
 
-No two Votes share both an item and a voter, though many Votes share either one. A
-constraint line names two or more fields; the one-field case is the modifier above, so
-there is one way to write each. Field order does not distinguish a combination, and a
-declaration may carry several.
+No two Votes share both an item and a voter, though many Votes share either one. The
+modifier is shorthand for a line naming that one field, so write the modifier where the
+field is declared and the line where it is inherited. Field order does not distinguish a
+combination, and a declaration may carry several.
 
 The constraint applies to the declaration carrying it. A `unique` field or line on a
 subset constrains only members of that subset, and may name the parent's fields as well
@@ -121,6 +119,55 @@ collection, so no two members hold the same set or the same sequence:
 a set of Conversations with
   a unique participants set of Person
 ```
+
+## Declared types
+
+Every name a field value uses resolves to one of five things: an identity this State
+owns, an external parameter, an SSF primitive, a concept-local type, or nothing — and
+nothing draws `SSF_UNDECLARED_TYPE`. Concept-local types are declared beside the external
+parameters in the concept's `types` fence:
+
+```types
+external Person
+  The person who authors a note.
+
+Username is String
+  A login name, unique among accounts.
+
+Status is OPEN or DONE
+  Whether the item is still open.
+
+opaque Secret
+  A password verifier; its representation is the implementer's choice.
+```
+
+`Name is <primitive>` refines a primitive; the rules that narrow it live in the action
+branches, not here. `Name is A or B` is an enumeration, and its values are the ones a
+subset condition may test. `opaque Name` says the representation is deliberately the
+implementer's business — the explicit way to opt out rather than the accidental one.
+Refining an _identity_ is what a subset already does, so a refinement base is a primitive.
+
+SSF itself takes these names as given; the concept parser owns the `types` fence and
+reports its own form, duplicate, and collision diagnostics.
+
+## Subset conditions
+
+A subset may state which members it classifies by testing a field against declared
+enumeration values:
+
+```state
+a set of Invitations with
+  a target Target
+  an invitee Person
+  a status InvitationStatus
+
+a Pending set of Invitations where status is PENDING with
+  unique target and invitee
+```
+
+The field resolves against the subset and its ancestors, and every tested value has to
+be one the field's enumeration declares. A condition on a field whose type is not a
+declared enumeration fails, as does an unknown value.
 
 ## Aliases
 

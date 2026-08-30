@@ -151,6 +151,7 @@ async function inspectDesignFiles(
             ? []
             : validateSimpleStateForm(stateFence, {
                 externalTypes: parsed.specification.externalTypes,
+                localTypes: parsed.specification.localTypes,
                 evidenceTypeNames: specificationTypeNameEvidence(parsed.specification),
               });
         const stateErrors = stateIssues.filter(({ severity }) => severity === "error");

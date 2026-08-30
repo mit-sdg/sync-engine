@@ -19,6 +19,9 @@ external Subject
   The object submitted for review.
 external Person
   The external identity of a requester or reviewer.
+
+ReviewStatus is PENDING or APPROVED or REJECTED
+  Whether the reviewer has decided.
 ```
 
 ## State
@@ -33,7 +36,8 @@ a set of Reviews with
   an optional decidedAt DateTime
   an optional reason String
 
-Rule: at most one pending Review has each Subject
+a Pending set of Reviews where status is PENDING with
+  unique subject
 ```
 
 ## Actions

@@ -18,6 +18,11 @@ external Item
   The object receiving votes.
 external Voter
   The identity expressing one current preference.
+
+Direction is UP or DOWN
+  Which way a voter has cast the vote.
+Integer is Number
+  A whole score, positive or negative.
 ```
 
 ## State

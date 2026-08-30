@@ -45,6 +45,10 @@ export function specificationOwnedTypeNames(
 ): readonly string[] {
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
+    localTypes: specification.localTypes.map((type) => ({
+      name: type.name,
+      ...(type.kind === "enumeration" ? { values: type.values } : {}),
+    })),
     evidenceTypeNames: specificationTypeNameEvidence(specification),
   });
   const errors = parsed.diagnostics.filter(({ severity }) => severity === "error");
@@ -652,6 +656,7 @@ function assertSpecification(
     "purpose",
     "principle",
     "externalTypes",
+    "localTypes",
     "state",
     "actions",
     "queries",
@@ -671,6 +676,25 @@ function assertSpecification(
     assertLocation(item.location, `${externalPath}.location`);
   }
   uniqueFieldIndexes(data.externalTypes, `${path}.externalTypes`, "name");
+  for (const [index, local] of array(data.localTypes, `${path}.localTypes`).entries()) {
+    const localPath = `${path}.localTypes[${index}]`;
+    const kind = (local as DataRecord | undefined)?.["kind"];
+    const item = shape(local, localPath, [
+      "kind",
+      "name",
+      "explanation",
+      "location",
+      ...(kind === "refinement" ? ["base"] : kind === "enumeration" ? ["values"] : []),
+    ]);
+    if (kind !== "refinement" && kind !== "enumeration" && kind !== "opaque")
+      fail(`${localPath}.kind`, 'expected "refinement", "enumeration", or "opaque"');
+    designIdentifier(item.name, `${localPath}.name`);
+    string(item.explanation, `${localPath}.explanation`);
+    assertLocation(item.location, `${localPath}.location`);
+    if (kind === "refinement") designIdentifier(item.base, `${localPath}.base`);
+    if (kind === "enumeration") uniqueNonemptyStrings(item.values, `${localPath}.values`);
+  }
+  uniqueFieldIndexes(data.localTypes, `${path}.localTypes`, "name");
   const state = shape(data.state, `${path}.state`, ["body", "location"]);
   string(state.body, `${path}.state.body`);
   assertLocation(state.location, `${path}.state.location`);

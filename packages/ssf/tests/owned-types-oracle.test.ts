@@ -12,6 +12,7 @@ type Multiplicity = "element" | "sequence" | "set";
 
 interface OracleOptions {
   readonly externalTypes?: readonly string[];
+  readonly localTypes?: readonly { readonly name: string; readonly values?: readonly string[] }[];
   readonly evidenceTypeNames?: readonly string[];
 }
 
@@ -140,6 +141,18 @@ function externalTypes(markdown: string): string[] {
   );
 }
 
+function localTypes(markdown: string): { name: string; values?: readonly string[] }[] {
+  const match = /```types\r?\n([\s\S]*?)\r?\n```/.exec(markdown);
+  const body = match?.[1] ?? "";
+  return [
+    ...[...body.matchAll(/^opaque ([A-Z][A-Za-z0-9_]*)$/gm)].map(([, name]) => ({ name: name! })),
+    ...[...body.matchAll(/^([A-Z][A-Za-z0-9_]*) is (\S.*)$/gm)].map(([, name, rest]) => {
+      const values = rest!.split(/\s+or\s+/);
+      return values.length > 1 ? { name: name!, values } : { name: name! };
+    }),
+  ];
+}
+
 function memberTypeEvidence(markdown: string): string[] {
   return [...markdown.matchAll(/```(?:actions|queries)\r?\n([\s\S]*?)\r?\n```/g)].flatMap(
     ([, body]) =>
@@ -202,6 +215,7 @@ a set of Thesis`;
       const markdown = await readFile(path, "utf8");
       expectAgreement(path, stateFence(markdown), {
         externalTypes: externalTypes(markdown),
+        localTypes: localTypes(markdown),
         evidenceTypeNames: memberTypeEvidence(markdown),
       });
     }

@@ -25,13 +25,13 @@ external Subject
 ```state
 a set of Sessions with
   a subject Subject
-  an expiresAt Time
+  an expiresAt DateTime
 ```
 
 ## Actions
 
 ```actions
-start (subject: Subject) : return (session: Session, expiresAt: Time)
+start (subject: Subject) : return (session: Session, expiresAt: DateTime)
   where true
   then
     delete every expired session
@@ -63,7 +63,7 @@ end (session: Session) : return (ended: Flag)
 ## Queries
 
 ```queries
-_active (session: Session) : optional (subject: Subject, expiresAt: Time)
+_active (session: Session) : optional (subject: Subject, expiresAt: DateTime)
   answers no row for an unknown, ended, or expired Session
   does not delete an expired Session
 ```

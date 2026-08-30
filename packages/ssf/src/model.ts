@@ -25,7 +25,6 @@ export type SsfDiagnosticCode =
   | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS"
   | "SSF_ARTICLE"
   | "SSF_DUPLICATE_DECLARATION"
-  | "SSF_DUPLICATE_ENUM_VALUE"
   | "SSF_DUPLICATE_FIELD"
   | "SSF_DUPLICATE_UNIQUE"
   | "SSF_INVALID_ALIAS_TARGET"
@@ -41,7 +40,9 @@ export type SsfDiagnosticCode =
   | "SSF_OPTIONAL_COLLECTION"
   | "SSF_ORPHANED_LINE"
   | "SSF_SUBSET_CYCLE"
+  | "SSF_INVALID_SUBSET_CONDITION"
   | "SSF_SUBSET_SELF_PARENT"
+  | "SSF_UNDECLARED_TYPE"
   | "SSF_UNKNOWN_UNIQUE_FIELD";
 
 interface SsfDiagnosticDetail {
@@ -71,7 +72,11 @@ export interface SsfTypeName {
   readonly normalized: string;
 }
 
-export type SsfReferenceKind = "external" | "owned" | "primitive" | "unresolved";
+/**
+ * `unresolved` is no longer a silent category: a field value that lands there always
+ * carries `SSF_UNDECLARED_TYPE`, and every other case already has its own diagnostic.
+ */
+export type SsfReferenceKind = "external" | "local" | "owned" | "primitive" | "unresolved";
 
 export interface SsfTypeReference extends SsfTypeName {
   readonly referenceKind: SsfReferenceKind;
@@ -83,20 +88,14 @@ export interface SsfNamedFieldType {
   readonly reference: SsfTypeReference;
 }
 
-export interface SsfEnumerationFieldType {
-  readonly kind: "enumeration";
-  readonly values: readonly string[];
-  readonly span: SsfSpan;
-}
-
 export interface SsfCollectionFieldType {
   readonly kind: "collection";
   readonly multiplicity: "set" | "sequence";
-  readonly element: SsfNamedFieldType | SsfEnumerationFieldType;
+  readonly element: SsfNamedFieldType;
   readonly span: SsfSpan;
 }
 
-export type SsfFieldType = SsfNamedFieldType | SsfEnumerationFieldType | SsfCollectionFieldType;
+export type SsfFieldType = SsfNamedFieldType | SsfCollectionFieldType;
 
 export interface SsfField {
   readonly kind: "field";
@@ -122,12 +121,20 @@ export interface SsfRuleLine {
   readonly span: SsfSpan;
 }
 
+/** A subset's membership test: the field and the declared value its members carry. */
+export interface SsfSubsetCondition {
+  readonly field: string;
+  readonly values: readonly string[];
+  readonly span: SsfSpan;
+}
+
 export interface SsfDeclaration {
   readonly kind: "declaration";
   readonly name: SsfTypeReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
   readonly parent?: SsfTypeReference;
+  readonly condition?: SsfSubsetCondition;
   readonly fields: readonly SsfField[];
   readonly constraints: readonly SsfUniqueConstraint[];
   readonly rules: readonly SsfRuleLine[];
@@ -160,9 +167,18 @@ export interface SsfDocument {
   readonly inventory: SsfTypeInventory;
 }
 
+/** One concept-local type declared in the Types fence: a refinement, enumeration, or opaque. */
+export interface SsfLocalType {
+  readonly name: string;
+  /** Declared values, for an enumeration; absent for a refinement or an opaque type. */
+  readonly values?: readonly string[];
+}
+
 export interface SsfParseOptions {
   /** External parameter names in SSF `TYPE_NAME` form. */
   readonly externalTypes?: readonly string[];
+  /** Concept-local types declared in the Types fence. */
+  readonly localTypes?: readonly SsfLocalType[];
   /** Exact type spellings authored in action/query parameter and result expressions. */
   readonly evidenceTypeNames?: readonly string[];
 }
@@ -185,13 +201,6 @@ export interface ParsedReference {
   readonly span: SsfSpan;
 }
 
-export interface ParsedEnumeration {
-  readonly kind: "enumeration";
-  readonly values: readonly string[];
-  readonly valueReferences: readonly ParsedReference[];
-  readonly span: SsfSpan;
-}
-
 export interface ParsedNamed {
   readonly kind: "named";
   readonly reference: ParsedReference;
@@ -199,11 +208,10 @@ export interface ParsedNamed {
 
 export type ParsedFieldType =
   | ParsedNamed
-  | ParsedEnumeration
   | {
       readonly kind: "collection";
       readonly multiplicity: "set" | "sequence";
-      readonly element: ParsedNamed | ParsedEnumeration;
+      readonly element: ParsedNamed;
       readonly span: SsfSpan;
     };
 
@@ -221,11 +229,18 @@ export interface ParsedUniqueConstraint {
   readonly span: SsfSpan;
 }
 
+export interface ParsedSubsetCondition {
+  readonly field: ParsedReference;
+  readonly values: readonly ParsedReference[];
+  readonly span: SsfSpan;
+}
+
 export interface ParsedDeclaration {
   readonly name: ParsedReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
   readonly parent?: ParsedReference;
+  readonly condition?: ParsedSubsetCondition;
   readonly fields: ParsedField[];
   readonly constraints: ParsedUniqueConstraint[];
   readonly rules: SsfRuleLine[];

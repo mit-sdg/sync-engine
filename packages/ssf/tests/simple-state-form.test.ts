@@ -8,6 +8,10 @@ import {
 import { sourceLines, tokenizeSimpleStateForm } from "../src/source.ts";
 import { describe, expect, test } from "vite-plus/test";
 
+function errorsOf(diagnostics: readonly { severity: string }[]): readonly unknown[] {
+  return diagnostics.filter(({ severity }) => severity === "error");
+}
+
 function stateFence(markdown: string): string {
   const match = /```state\r?\n([\s\S]*?)\r?\n```/.exec(markdown);
   if (match?.[1] === undefined) throw new Error("fixture has no State fence");
@@ -19,6 +23,17 @@ function externalTypes(markdown: string): string[] {
   return [...(match?.[1] ?? "").matchAll(/^external ([A-Z][A-Za-z0-9_]*)$/gm)].map(
     (declaration) => declaration[1] ?? "",
   );
+}
+
+function localTypes(markdown: string): { name: string; values?: readonly string[] }[] {
+  const body = /```types\r?\n([\s\S]*?)\r?\n```/.exec(markdown)?.[1] ?? "";
+  return [
+    ...[...body.matchAll(/^opaque ([A-Z][A-Za-z0-9_]*)$/gm)].map(([, name]) => ({ name: name! })),
+    ...[...body.matchAll(/^([A-Z][A-Za-z0-9_]*) is (\S.*)$/gm)].map(([, name, rest]) => {
+      const values = rest!.split(/\s+or\s+/);
+      return values.length > 1 ? { name: name!, values } : { name: name! };
+    }),
+  ];
 }
 
 function memberTypeEvidence(markdown: string): string[] {
@@ -258,8 +273,9 @@ Rule: top-level
     expect(ruleOnly.diagnostics).toMatchObject([
       {
         code: "SSF_MALFORMED_DECLARATION",
-        message: "A declaration ending in `with` must have at least one indented field.",
-        suggestion: "Remove `with` or add at least one indented field.",
+        message:
+          "A declaration ending in `with` must have at least one indented field or constraint.",
+        suggestion: "Remove `with` or add an indented field or uniqueness constraint.",
       },
     ]);
     expect(ruleOnly.document.declarations[0]).toMatchObject({
@@ -294,9 +310,9 @@ describe("structural parsing and explicit aliases", () => {
   a title String
   an optional owner Person
   a watchers set of Person
-  a status of OPEN or DONE
+  a status Status
 
-an Open set of Items
+an Open set of Items where status is OPEN
 
 an element Settings with
   a retentionDays Number
@@ -304,7 +320,10 @@ an element Settings with
 alias Item for Items
 
 Rule: at most one Item has each title`;
-    const parsed = parseSimpleStateForm(source, { externalTypes: ["Person"] });
+    const parsed = parseSimpleStateForm(source, {
+      externalTypes: ["Person"],
+      localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }],
+    });
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations).toHaveLength(3);
     expect(parsed.document.aliases).toMatchObject([
@@ -319,12 +338,13 @@ Rule: at most one Item has each title`;
         { name: "title", value: { reference: { referenceKind: "primitive" } } },
         { name: "owner", optional: true, value: { reference: { referenceKind: "external" } } },
         { name: "watchers", value: { element: { reference: { referenceKind: "external" } } } },
-        { name: "status", value: { values: ["OPEN", "DONE"] } },
+        { name: "status", value: { reference: { referenceKind: "local" } } },
       ],
     });
     expect(parsed.document.declarations[1]).toMatchObject({
       name: { text: "Open", referenceKind: "owned" },
       parent: { text: "Items", referenceKind: "owned" },
+      condition: { field: "status", values: ["OPEN"] },
     });
     expect(parsed.document.rules).toMatchObject([
       { text: "Rule: at most one Item has each title" },
@@ -343,7 +363,7 @@ Rule: at most one Item has each title`;
     const parsed = parseSimpleStateForm(`a set of Accounts with
   an account Account
   a usernames set of Username`);
-    expect(parsed.diagnostics).toEqual([]);
+    expect(errorsOf(parsed.diagnostics)).toEqual([]);
     expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Account", "Accounts"]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
       {
@@ -360,7 +380,7 @@ Rule: at most one Item has each title`;
   a profile Profile
   an options set of Options
   a status StatusCode`);
-    expect(parsed.diagnostics).toEqual([]);
+    expect(errorsOf(parsed.diagnostics)).toEqual([]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
       { name: "profile", value: { reference: { referenceKind: "unresolved" } } },
       { name: "options", value: { element: { reference: { referenceKind: "unresolved" } } } },
@@ -439,7 +459,7 @@ describe("unique fields", () => {
   test("parses uniqueness on a collection field", () => {
     const parsed = parseSimpleStateForm(`a set of Teams with
   a unique members set of Person`);
-    expect(parsed.diagnostics).toEqual([]);
+    expect(errorsOf(parsed.diagnostics)).toEqual([]);
     expect(parsed.document.declarations[0]?.fields[0]).toMatchObject({
       name: "members",
       unique: true,
@@ -448,14 +468,21 @@ describe("unique fields", () => {
   });
 });
 
+const CONSTRAINED = {
+  externalTypes: ["Item", "Voter", "Direction", "Target", "Person", "Subject"],
+} as const;
+
 describe("unique combinations", () => {
   test("parses a constraint line over two or more fields", () => {
-    const parsed = parseSimpleStateForm(`a set of Votes with
+    const parsed = parseSimpleStateForm(
+      `a set of Votes with
   an item Item
   a voter Voter
   a direction Direction
   unique item and voter
-  unique item and voter and direction`);
+  unique item and voter and direction`,
+      CONSTRAINED,
+    );
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations[0]?.constraints).toMatchObject([
       { kind: "unique", fields: ["item", "voter"], span: { start: { line: 5 } } },
@@ -469,8 +496,11 @@ describe("unique combinations", () => {
   });
 
   test("keeps a named value on the line a field", () => {
-    const parsed = parseSimpleStateForm(`a set of Items with
-  unique title String`);
+    const parsed = parseSimpleStateForm(
+      `a set of Items with
+  unique title String`,
+      CONSTRAINED,
+    );
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations[0]).toMatchObject({
       fields: [{ name: "title", unique: true }],
@@ -478,15 +508,18 @@ describe("unique combinations", () => {
     });
   });
 
-  test("rejects a constraint over one field, which the modifier already says", () => {
-    expect(
-      validateSimpleStateForm(`a set of Items with\n  a title String\n  unique title`),
-    ).toMatchObject([
-      {
-        code: "SSF_MALFORMED_FIELD",
-        message: "A uniqueness constraint names two or more fields joined by `and`.",
-      },
-    ]);
+  test("names one field where a subset has no field of its own to modify", () => {
+    const parsed = parseSimpleStateForm(
+      `a set of Reviews with
+  a subject Subject
+  a status Status
+
+a Pending set of Reviews where status is PENDING with
+  unique subject`,
+      { externalTypes: ["Subject"], localTypes: [{ name: "Status", values: ["PENDING", "DONE"] }] },
+    );
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[1]?.constraints).toMatchObject([{ fields: ["subject"] }]);
   });
 
   test.each([
@@ -495,15 +528,19 @@ describe("unique combinations", () => {
     ["an uppercase name", "unique item and Voter"],
   ])("rejects %s", (_, constraint) => {
     expect(
-      validateSimpleStateForm(`a set of Votes with\n  an item Item\n  ${constraint}`).map(
-        ({ code }) => code,
-      ),
+      validateSimpleStateForm(
+        `a set of Votes with\n  an item Item\n  ${constraint}`,
+        CONSTRAINED,
+      ).map(({ code }) => code),
     ).toEqual(["SSF_MALFORMED_FIELD"]);
   });
 
   test("reports a name that is not a field of the declaration", () => {
     expect(
-      validateSimpleStateForm(`a set of Votes with\n  an item Item\n  unique item and voter`),
+      validateSimpleStateForm(
+        `a set of Votes with\n  an item Item\n  unique item and voter`,
+        CONSTRAINED,
+      ),
     ).toMatchObject([
       {
         code: "SSF_UNKNOWN_UNIQUE_FIELD",
@@ -516,12 +553,15 @@ describe("unique combinations", () => {
 
   test("reports a repeated name and a repeated combination", () => {
     expect(
-      validateSimpleStateForm(`a set of Votes with
+      validateSimpleStateForm(
+        `a set of Votes with
   an item Item
   a voter Voter
   unique item and item
   unique item and voter
-  unique voter and item`).map(({ code, message }) => [code, message]),
+  unique voter and item`,
+        CONSTRAINED,
+      ).map(({ code, message }) => [code, message]),
     ).toEqual([
       ["SSF_DUPLICATE_UNIQUE", 'Uniqueness constraint names field "item" more than once.'],
       [
@@ -532,42 +572,46 @@ describe("unique combinations", () => {
   });
 
   test("resolves a subset constraint against its own and its ancestors' fields", () => {
-    const parsed = parseSimpleStateForm(`a set of Invitations with
+    const parsed = parseSimpleStateForm(
+      `a set of Invitations with
   a target Target
   an invitee Person
 
 a Pending set of Invitations with
   a note String
   unique target and invitee
-  unique target and note`);
+  unique target and note`,
+      CONSTRAINED,
+    );
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations[1]?.constraints).toHaveLength(2);
   });
 
   test("does not resolve a constraint against an unrelated declaration's fields", () => {
     expect(
-      validateSimpleStateForm(`a set of Invitations with
+      validateSimpleStateForm(
+        `a set of Invitations with
   a target Target
 
 a set of Reviews with
   a subject Subject
-  unique subject and target`).map(({ code }) => code),
+  unique subject and target`,
+        CONSTRAINED,
+      ).map(({ code }) => code),
     ).toEqual(["SSF_UNKNOWN_UNIQUE_FIELD"]);
   });
 
-  test("needs `with` for a body that is only a constraint, and a field besides", () => {
+  test("accepts a constraint as a whole body, but still needs `with`", () => {
     expect(
-      validateSimpleStateForm(`a set of Votes\n  unique item and voter`).map(({ code }) => code),
-    ).toEqual(["SSF_MISSING_WITH", "SSF_UNKNOWN_UNIQUE_FIELD", "SSF_UNKNOWN_UNIQUE_FIELD"]);
-    expect(
-      validateSimpleStateForm(`a set of Votes with\n  unique item and voter`).map(
+      validateSimpleStateForm(`a set of Votes\n  unique item and voter`, CONSTRAINED).map(
         ({ code }) => code,
       ),
-    ).toEqual([
-      "SSF_MALFORMED_DECLARATION",
-      "SSF_UNKNOWN_UNIQUE_FIELD",
-      "SSF_UNKNOWN_UNIQUE_FIELD",
-    ]);
+    ).toEqual(["SSF_MISSING_WITH", "SSF_UNKNOWN_UNIQUE_FIELD", "SSF_UNKNOWN_UNIQUE_FIELD"]);
+    expect(
+      validateSimpleStateForm(`a set of Votes with\n  unique item and voter`, CONSTRAINED).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(["SSF_UNKNOWN_UNIQUE_FIELD", "SSF_UNKNOWN_UNIQUE_FIELD"]);
   });
 
   test("reports an orphaned constraint as a constraint", () => {
@@ -581,11 +625,9 @@ a set of Reviews with
 });
 
 describe("collection fields", () => {
-  test("parses named and enum set/sequence elements with optional collection `of`", () => {
+  test("parses named set and sequence elements with an optional collection `of`", () => {
     const parsed = parseSimpleStateForm(
       `a set of Palettes with
-  a flags set of RED or BLUE
-  a modes seq ACTIVE or PAUSED
   a watchers set of Person
   a reviewers seq Person`,
       { externalTypes: ["Person"] },
@@ -593,51 +635,28 @@ describe("collection fields", () => {
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations[0]?.fields).toMatchObject([
       {
-        name: "flags",
+        name: "watchers",
         value: {
           kind: "collection",
           multiplicity: "set",
-          element: {
-            kind: "enumeration",
-            values: ["RED", "BLUE"],
-            span: {
-              start: { line: 2, column: 18 },
-              end: { line: 2, column: 29 },
-            },
-          },
-          span: { start: { line: 2, column: 11 }, end: { line: 2, column: 29 } },
+          element: { reference: { text: "Person", referenceKind: "external" } },
         },
-      },
-      {
-        name: "modes",
-        value: {
-          kind: "collection",
-          multiplicity: "sequence",
-          element: {
-            kind: "enumeration",
-            values: ["ACTIVE", "PAUSED"],
-            span: {
-              start: { line: 3, column: 15 },
-              end: { line: 3, column: 31 },
-            },
-          },
-        },
-      },
-      {
-        name: "watchers",
-        value: { element: { reference: { text: "Person", referenceKind: "external" } } },
       },
       {
         name: "reviewers",
-        value: { element: { reference: { text: "Person", referenceKind: "external" } } },
+        value: {
+          kind: "collection",
+          multiplicity: "sequence",
+          element: { reference: { text: "Person", referenceKind: "external" } },
+        },
       },
     ]);
   });
 
   test.each([
-    ["enum values without an explicit field name", "a set of RED or BLUE", 23],
-    ["a doubled collection `of`", "a flags set of of RED or BLUE", 32],
-    ["a scalar enum without its `of` marker", "a status RED or BLUE", 23],
+    ["an inline enumeration, which now belongs in the Types fence", "a status of OPEN or DONE", 27],
+    ["an inline collection enumeration", "a flags set of RED or BLUE", 29],
+    ["a doubled collection `of`", "a flags set of of Person", 27],
   ])("rejects %s", (_, field, column) => {
     const parsed = parseSimpleStateForm(`a set of Palettes with
   a name String
@@ -652,8 +671,6 @@ describe("collection fields", () => {
 
   test.each([
     ["nested collections", "a tags set of set of String", 30],
-    ["single-value enums", "a status of OPEN", 19],
-    ["enums with a trailing `or`", "a status of OPEN or CLOSED or", 32],
     ["named-type unions", "a owner Person or Group", 26],
   ])("rejects %s as the only declaration field", (_, field, column) => {
     const parsed = parseSimpleStateForm(`a set of Items with
@@ -678,8 +695,9 @@ describe("collection fields", () => {
     expect(parsed.diagnostics).toMatchObject([
       {
         code: "SSF_MALFORMED_DECLARATION",
-        message: "A declaration ending in `with` must have at least one indented field.",
-        suggestion: "Remove `with` or add at least one indented field.",
+        message:
+          "A declaration ending in `with` must have at least one indented field or constraint.",
+        suggestion: "Remove `with` or add an indented field or uniqueness constraint.",
         span: {
           start: { line: 1, column: 16 },
           end: { line: 1, column: 20 },
@@ -704,20 +722,6 @@ describe("collection fields", () => {
     ]);
     expect(parsed.document.declarations[0]?.rules).toMatchObject([
       { text: "  Rule: each item may have a note", span: { start: { line: 4, column: 1 } } },
-    ]);
-  });
-
-  test("locates duplicate values in collection enums", () => {
-    const parsed = parseSimpleStateForm(`a set of Palettes with
-  a flags set of RED or RED`);
-    expect(parsed.diagnostics).toMatchObject([
-      {
-        code: "SSF_DUPLICATE_ENUM_VALUE",
-        span: {
-          start: { line: 2, column: 25 },
-          end: { line: 2, column: 28 },
-        },
-      },
     ]);
   });
 });
@@ -779,7 +783,7 @@ describe("safe automatic aliases", () => {
     const parsed = parseSimpleStateForm("a set of Ax\n\na set of Axis", {
       evidenceTypeNames: ["Axes"],
     });
-    expect(parsed.diagnostics).toMatchObject([
+    expect(parsed.diagnostics.filter(({ code }) => code !== "SSF_UNDECLARED_TYPE")).toMatchObject([
       {
         severity: "advice",
         code: "SSF_AMBIGUOUS_AUTOMATIC_ALIAS",
@@ -795,7 +799,7 @@ describe("safe automatic aliases", () => {
     const parsed = parseSimpleStateForm(`a set of Axes with
   a short Ax
   an anatomical Axis`);
-    expect(parsed.diagnostics).toMatchObject([
+    expect(parsed.diagnostics.filter(({ code }) => code !== "SSF_UNDECLARED_TYPE")).toMatchObject([
       {
         severity: "advice",
         code: "SSF_AMBIGUOUS_AUTOMATIC_ALIAS",
@@ -817,7 +821,7 @@ describe("safe automatic aliases", () => {
   a shared Theses
 
 a set of Thesis`);
-    expect(parsed.diagnostics).toMatchObject([
+    expect(parsed.diagnostics.filter(({ code }) => code !== "SSF_UNDECLARED_TYPE")).toMatchObject([
       {
         severity: "advice",
         code: "SSF_AMBIGUOUS_AUTOMATIC_ALIAS",
@@ -1118,17 +1122,8 @@ alias Spare for Person`,
 
 a set of Second with
   a profile String`);
-    expect(parsed.diagnostics).toMatchObject([
+    expect(errorsOf(parsed.diagnostics)).toMatchObject([
       { code: "SSF_DUPLICATE_FIELD", span: { start: { line: 3 } } },
-    ]);
-  });
-
-  test("rejects repeated enum values but permits the same value in distinct fields", () => {
-    const parsed = parseSimpleStateForm(`a set of Items with
-  a status of OPEN or OPEN
-  a mode of OPEN or CLOSED`);
-    expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_DUPLICATE_ENUM_VALUE", span: { start: { line: 2, column: 23 } } },
     ]);
   });
 });
@@ -1189,7 +1184,7 @@ a set of Groups with
 
 a element Settings with
   a retentionDays Number`;
-    expect(validateSimpleStateForm(source)).toMatchObject([
+    expect(errorsOf(validateSimpleStateForm(source))).toMatchObject([
       { code: "SSF_NEAR_MISS_KEYWORD", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISSING_WITH", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISPLACED_MODIFIER", suggestion: "  a optional revokedAt DateTime" },
@@ -1221,7 +1216,11 @@ describe("repository SSF corpus", () => {
       resolve(root, "packages/skill/skills/sync-engine/prompts/guidance/design/ssf.md"),
       "utf8",
     );
-    const parsed = parseSimpleStateForm(stateFence(markdown), { externalTypes: ["Person"] });
+    const parsed = parseSimpleStateForm(stateFence(markdown), {
+      externalTypes: ["Person", "Voter", "Update"],
+      localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }],
+      evidenceTypeNames: ["Item"],
+    });
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.document.declarations).toMatchObject([
       {
@@ -1246,26 +1245,24 @@ describe("repository SSF corpus", () => {
             value: {
               kind: "collection",
               multiplicity: "sequence",
-              element: { reference: { text: "Updates", referenceKind: "unresolved" } },
+              element: { reference: { text: "Update", referenceKind: "external" } },
             },
           },
-          {
-            name: "status",
-            value: { kind: "enumeration", values: ["OPEN", "DONE"] },
-          },
+          { name: "status", value: { reference: { text: "Status", referenceKind: "local" } } },
         ],
       },
       {
         name: { text: "Votes", referenceKind: "owned" },
         fields: [
           { name: "item", value: { reference: { text: "Item", normalized: "Items" } } },
-          { name: "voter", value: { reference: { referenceKind: "unresolved" } } },
+          { name: "voter", value: { reference: { referenceKind: "external" } } },
         ],
         constraints: [{ kind: "unique", fields: ["item", "voter"] }],
       },
       {
         name: { text: "Completed", referenceKind: "owned" },
         declarationKind: "subset",
+        condition: { field: "status", values: ["DONE"] },
         fields: [{ name: "completedAt" }],
       },
       {
@@ -1314,6 +1311,7 @@ describe("repository SSF corpus", () => {
       if (!markdown.includes("```state")) continue;
       const parsed = parseSimpleStateForm(stateFence(markdown), {
         externalTypes: externalTypes(markdown),
+        localTypes: localTypes(markdown),
         evidenceTypeNames: memberTypeEvidence(markdown),
       });
       expect(

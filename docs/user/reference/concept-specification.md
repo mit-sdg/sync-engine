@@ -141,8 +141,9 @@ Other names in State, action signatures, and query signatures are descriptive
 vocabulary, not declarations that must be repeated in Types. A name may identify
 concept-owned state, a conventional value such as `String` or `Flag`, or a
 refinement whose accepted values are established by action conditions and
-refusals. Version 1 parses type-expression shape but neither defines a primitive
-type universe nor requires every named type to have a declaration.
+refusals. Version 1 parses type-expression shape without claiming semantic equivalence with an
+implementation language. A State field value that names none of the declared, owned, or
+primitive types draws `SSF_UNDECLARED_TYPE` advice.
 
 ## `State`
 

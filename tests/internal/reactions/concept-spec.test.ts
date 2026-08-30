@@ -258,7 +258,39 @@ describe("concept specification document structure", () => {
 });
 
 describe("Types and State", () => {
-  test("parses only external types and retains optional indented explanations", () => {
+  test("parses external, refinement, enumeration, and opaque types with explanations", () => {
+    const declared = validSpecification(
+      specification({
+        types:
+          "external Person\nUsername is String\n  A login name.\nStatus is OPEN or DONE\nopaque Secret",
+      }),
+    );
+    expect(declared.externalTypes).toMatchObject([{ name: "Person" }]);
+    expect(declared.localTypes).toMatchObject([
+      { kind: "refinement", name: "Username", base: "String", explanation: "A login name." },
+      { kind: "enumeration", name: "Status", values: ["OPEN", "DONE"] },
+      { kind: "opaque", name: "Secret", explanation: "" },
+    ]);
+    expect(validSpecification(specification({ types: "" })).localTypes).toEqual([]);
+    for (const types of ["Username is Person", "Status is OPEN", "Status is OPEN or done"])
+      expect(diagnosticsFor(specification({ types }))).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining("must refine an SSF primitive"),
+          }),
+        ]),
+      );
+    expect(diagnosticsFor(specification({ types: "Status is OPEN or OPEN" }))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "CONCEPT_SPEC_DUPLICATE_DECLARATION",
+          message: expect.stringContaining('the value "OPEN" is listed twice'),
+        }),
+      ]),
+    );
+  });
+
+  test("parses external types and retains optional indented explanations", () => {
     expect(validSpecification(specification()).externalTypes).toMatchObject([
       {
         name: "Person",
@@ -282,7 +314,7 @@ describe("Types and State", () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: "CONCEPT_SPEC_DUPLICATE_DECLARATION",
-          message: expect.stringContaining('external type "Person" is declared twice'),
+          message: expect.stringContaining('the type "Person" is declared twice'),
         }),
       ]),
     );
