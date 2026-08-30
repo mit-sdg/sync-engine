@@ -263,7 +263,9 @@ export function validateTypeGraph(
     ),
   );
   const eligible = new Map(
-    [...uniqueDeclarations].filter(([name]) => !external.has(name) && !PRIMITIVE_NAMES.has(name)),
+    [...uniqueDeclarations].filter(
+      ([name]) => !external.has(name) && !local.has(name) && !PRIMITIVE_NAMES.has(name),
+    ),
   );
 
   // Explicit aliases take precedence over automatic evidence. Both maps initially
@@ -326,18 +328,20 @@ export function validateTypeGraph(
     }
     if (parent === undefined) {
       const category = external.has(authoredParent)
-        ? "external type"
-        : PRIMITIVE_NAMES.has(authoredParent)
-          ? "SSF primitive"
-          : aliasGroups.has(authoredParent)
-            ? "invalid alias"
-            : declarationGroups.has(authoredParent)
-              ? "ambiguous duplicate declaration"
-              : "unresolved name";
+        ? "an external type"
+        : local.has(authoredParent)
+          ? "a concept-local type"
+          : PRIMITIVE_NAMES.has(authoredParent)
+            ? "an SSF primitive"
+            : aliasGroups.has(authoredParent)
+              ? "an invalid alias"
+              : declarationGroups.has(authoredParent)
+                ? "an ambiguous duplicate declaration"
+                : "an unresolved name";
       diagnostics.push(
         error({
           code: "SSF_INVALID_SUBSET_PARENT",
-          message: `Subset parent ${JSON.stringify(authoredParent)} is an ${category}; a parent must be an exact owned structural declaration or explicit alias.`,
+          message: `Subset parent ${JSON.stringify(authoredParent)} is ${category}; a parent must be an exact owned structural declaration or explicit alias.`,
           suggestion:
             "Declare the parent as a unique identity or subset, or use an exact explicit alias for one.",
           span: declaration.parent.span,
@@ -434,11 +438,13 @@ export function validateTypeGraph(
         ? "another alias (alias chains are not allowed)"
         : external.has(target)
           ? "an external type"
-          : PRIMITIVE_NAMES.has(target)
-            ? "a primitive"
-            : declarationGroups.has(target)
-              ? "an invalid or ambiguous structural declaration"
-              : "an unresolved name";
+          : local.has(target)
+            ? "a concept-local type"
+            : PRIMITIVE_NAMES.has(target)
+              ? "a primitive"
+              : declarationGroups.has(target)
+                ? "an invalid or ambiguous structural declaration"
+                : "an unresolved name";
       diagnostics.push(
         error({
           code: "SSF_INVALID_ALIAS_TARGET",

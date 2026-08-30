@@ -69,7 +69,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
     lines
       .map(structuralDeclaration)
       .filter((item): item is readonly [string, Multiplicity] => item !== undefined)
-      .filter(([name]) => !external.has(name) && !PRIMITIVES.has(name)),
+      .filter(([name]) => !external.has(name) && !local.has(name) && !PRIMITIVES.has(name)),
   );
   const explicitAliases = lines.flatMap((line): Array<readonly [string, string]> => {
     const words = line.trim().split(/\s+/);
@@ -89,6 +89,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
       declarations.has(target) &&
       !declarations.has(name) &&
       !external.has(name) &&
+      !local.has(name) &&
       !PRIMITIVES.has(name)
     ) {
       owned.add(name);

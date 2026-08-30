@@ -1199,16 +1199,17 @@ alias Human for People`).document.inventory;
   });
 
   test("rejects a declaration that collides with a concept-local type", () => {
-    expect(
-      parseSimpleStateForm("a set of Statuses with\n  a name String", {
-        localTypes: [{ name: "Statuses", values: ["OPEN", "DONE"] }],
-      }).diagnostics,
-    ).toMatchObject([
+    const parsed = parseSimpleStateForm("a set of Statuses with\n  a name String", {
+      localTypes: [{ name: "Statuses", values: ["OPEN", "DONE"] }],
+    });
+    expect(parsed.diagnostics).toMatchObject([
       {
         code: "SSF_NAME_COLLISION",
         message: 'Structural declaration "Statuses" collides with a concept-local type.',
       },
     ]);
+    expect(parsed.document.declarations[0]?.name.referenceKind).toBe("local");
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([]);
   });
 
   test("keeps a concept-local name out of the automatic alias inventory", () => {
@@ -1235,6 +1236,20 @@ alias Human for People`).document.inventory;
         localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }],
       }).diagnostics,
     ).toMatchObject([{ code: "SSF_ALIAS_NAME_COLLISION" }]);
+  });
+
+  test.each([
+    ["a Pending set of Status", "SSF_INVALID_SUBSET_PARENT", "Subset parent"],
+    ["alias State for Status", "SSF_INVALID_ALIAS_TARGET", "Alias target"],
+  ])("identifies a concept-local structural target: %s", (source, code, subject) => {
+    expect(
+      parseSimpleStateForm(source, { localTypes: [{ name: "Status" }] }).diagnostics,
+    ).toMatchObject([
+      {
+        code,
+        message: expect.stringContaining(`${subject} "Status" is a concept-local type;`),
+      },
+    ]);
   });
 
   test.each([
