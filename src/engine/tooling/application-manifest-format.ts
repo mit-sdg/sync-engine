@@ -738,6 +738,14 @@ function assertSpecification(
   const state = shape(data.state, `${path}.state`, ["body", "location"]);
   string(state.body, `${path}.state.body`);
   assertLocation(state.location, `${path}.state.location`);
+  // A manifest is read independently of the parser that wrote it, so every specification
+  // re-proves its State against its own Types fence. The checked-design branch separately
+  // compares the derived inventory; this proves the State is one a parser could produce.
+  try {
+    specificationOwnedTypeNames(data as unknown as ConceptSpecificationIR);
+  } catch (error) {
+    fail(`${path}.state`, error instanceof Error ? error.message : "declares invalid SSF State");
+  }
   const parsedActions = array(data.actions, `${path}.actions`);
   if (parsedActions.length === 0) fail(`${path}.actions`, "expected at least one action");
   for (const [index, action] of parsedActions.entries()) {

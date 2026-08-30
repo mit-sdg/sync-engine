@@ -1348,6 +1348,22 @@ _get(value: String) : optional (result: String)
       ];
     };
     const localPath = "$.concepts[1].specification.localTypes[0]";
+    // Every specification re-proves its State, not only a checked design copy.
+    rejects((manifest) => {
+      const target = example(manifest).specification! as unknown as Record<string, unknown>;
+      const state = target["state"] as Record<string, unknown>;
+      target["localTypes"] = [
+        { kind: "opaque", name: "Notes", explanation: "", location: { line: 1, column: 1 } },
+      ];
+      state["body"] = "a set of Notes";
+    }, "$.concepts[1].specification.state");
+    rejects((manifest) => {
+      const target = example(manifest).specification! as unknown as Record<string, unknown>;
+      target["externalTypes"] = [
+        { name: "String", explanation: "", location: { line: 1, column: 1 } },
+      ];
+    }, "$.concepts[1].specification.state");
+
     rejects(withLocalType({ kind: "opaque", name: "String" }), `${localPath}.name`);
     rejects(withLocalType({ kind: "opaque", name: "mood" }), `${localPath}.name`);
     rejects(

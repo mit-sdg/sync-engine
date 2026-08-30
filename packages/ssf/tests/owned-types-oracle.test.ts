@@ -42,8 +42,12 @@ function stateFieldType(line: string): string | undefined {
   if (!/^[ \t]/.test(line)) return undefined;
   const original = line.trim().split(/\s+/);
   const first = original[0] === "a" || original[0] === "an" ? 1 : 0;
-  const optional = original.indexOf("optional", first);
-  const words = original.filter((_, index) => index >= first && index !== optional);
+  const modifiers = new Set(
+    original.flatMap((word, index) =>
+      index >= first && (word === "optional" || word === "unique") ? [index] : [],
+    ),
+  );
+  const words = original.filter((_, index) => index >= first && !modifiers.has(index));
   let value = 0;
   if (words[0] !== "set" && words[0] !== "seq" && FIELD_NAME.test(words[0] ?? "")) value = 1;
   if (words[value] === "set" || words[value] === "seq") {

@@ -77,7 +77,9 @@ a set of Items with
 
 An indented field may omit its article, and `a` and `an` both read. The modifiers
 `optional` and `unique` go between the article and the field name, each at most once and
-in either order. Collections are never optional; an empty collection represents absence.
+in either order. Because a field's own name is read after them, `optional` and `unique`
+cannot themselves name a field, and neither can `set` or `seq`; every other lowercase
+name is free. Collections are never optional; an empty collection represents absence.
 Field names are unique within their declaration. A collection uses `set` or `seq` with an
 optional `of`, and holds scalars rather than further collections. Named-type unions are
 not part of SSF: `or` separates enumeration values, which are unique within their
@@ -207,7 +209,7 @@ or `_`. Enumeration values begin with an uppercase letter and otherwise use uppe
 letters, digits, and `_`.
 
 Declaration and alias names are unique across a concept's State and share that namespace
-with the concept's external parameters and the SSF primitives. Field names are local to
+with the concept's external parameters, its concept-local types, and the SSF primitives. Field names are local to
 their declaration, and enumeration values to their enumeration.
 
 ## What a field value may name

@@ -178,7 +178,7 @@ Parents that name an external parameter or primitive, unresolved or duplicate na
 self-parenting, and cycles fail with source-located diagnostics.
 
 Declaration and alias names are unique across the fence and share that namespace with
-external parameters and SSF primitives. Field names are unique within their declaration,
+external parameters, concept-local types, and SSF primitives. Field names are unique within their declaration,
 and enumeration values within their enumeration. Prefix a field with `unique` to require
 distinct values among members of that declaration; a unique collection field compares the
 whole collection. Require a _combination_ to be distinct with a `unique` line naming two

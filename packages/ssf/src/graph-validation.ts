@@ -72,7 +72,10 @@ function validateUniqueConstraints(
 ): void {
   for (const declaration of declarations) {
     const available = constrainableFields(declaration, uniqueDeclarations, parentBySubset);
-    const combinations = new Set<string>();
+    // The modifier is the one-field line, so it occupies that combination already.
+    const combinations = new Set(
+      declaration.fields.filter(({ unique }) => unique).map(({ name }) => name),
+    );
     for (const constraint of declaration.constraints) {
       const named = new Set<string>();
       for (const field of constraint.fields) {

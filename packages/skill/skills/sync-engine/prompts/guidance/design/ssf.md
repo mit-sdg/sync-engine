@@ -47,7 +47,8 @@ subset, or either alias; forward chains work. Unresolved, external, primitive, a
 invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
 rejected.
 
-Structures, aliases, externals, local types, and primitives share one type universe.
+Structures, aliases, externals, local types, and primitives share one type universe. A
+field cannot be named `optional`, `unique`, `set`, or `seq`.
 Keep fieldNames unique per declaration and VALUEs per enum. Resolve State first so
 signature evidence can establish a plural join, then reject every signature name absent
 from the resolved owned inventory, externals, local types, and primitives.

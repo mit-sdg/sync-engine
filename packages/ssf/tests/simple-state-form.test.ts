@@ -391,6 +391,26 @@ Rule: at most one Item has each title`;
     ]);
   });
 
+  test("suggests a repair that is itself valid, or none at all", () => {
+    // A misplaced modifier and a missing name are repaired together rather than in turn.
+    const [misordered] = parseSimpleStateForm(`a set of Items with\n  a String unique`).diagnostics;
+    expect(misordered).toMatchObject({
+      code: "SSF_MALFORMED_FIELD",
+      suggestion: "  a unique string String",
+    });
+    expect(
+      parseSimpleStateForm(`a set of Items with\n${misordered!.suggestion}`).diagnostics,
+    ).toEqual([]);
+    // No repair exists for an optional collection, so none is offered.
+    expect(
+      parseSimpleStateForm(`a set of Items with\n  a optional set of Person`, {
+        externalTypes: ["Person"],
+      }).diagnostics,
+    ).toMatchObject([
+      { code: "SSF_MALFORMED_FIELD", suggestion: expect.not.stringContaining("optional person") },
+    ]);
+  });
+
   test.each([
     ["a scalar value", "a Profile", "  a profile Profile"],
     ["a named collection", "a set of Options", "  a options set of Options"],
@@ -555,6 +575,19 @@ a Pending set of Reviews where status is PENDING with
         span: { start: { line: 3, column: 19 } },
       },
     ]);
+  });
+
+  test("treats the modifier as the one-field line it stands for", () => {
+    expect(
+      validateSimpleStateForm(`a set of Items with\n  a unique item String\n  unique item`).map(
+        ({ code }) => code,
+      ),
+    ).toEqual(["SSF_DUPLICATE_UNIQUE"]);
+    expect(
+      validateSimpleStateForm(
+        `a set of Items with\n  a unique members seq of String\n  unique members`,
+      ).map(({ code }) => code),
+    ).toEqual(["SSF_DUPLICATE_UNIQUE"]);
   });
 
   test("reports a repeated name and a repeated combination", () => {

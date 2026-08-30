@@ -412,7 +412,28 @@ function repairedLine(line: SourceLine, tokens: readonly SsfToken[]): string {
   return `${indentation}${tokens.map(({ text }) => text).join(" ")}`;
 }
 
-/** Diagnose an indented line parseField rejected, suggesting the field name it omits. */
+/** Order a field's tokens canonically: the article, then its modifiers, then the rest. */
+function canonicalFieldTokens(
+  tokens: readonly SsfToken[],
+  field: Omit<ParsedField, "span">,
+): readonly SsfToken[] {
+  const article = articleLength(tokens);
+  const indexes = modifierIndexes(tokens, article);
+  return [
+    ...tokens.slice(0, article),
+    ...FIELD_MODIFIERS.filter((modifier) => field[modifier]).map((modifier) => ({
+      ...tokens[indexes[0]!]!,
+      text: modifier,
+    })),
+    ...tokens.filter((_, index) => index >= article && !indexes.includes(index)),
+  ];
+}
+
+/**
+ * Diagnose an indented line parseField rejected, suggesting the field name it omits. The
+ * suggestion is a complete repair or none: a line that still needs correcting is worse
+ * guidance than the general message, so it is only offered once it parses and passes.
+ */
 function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
   const tokens = line.tokens;
   const article = articleLength(tokens);
@@ -422,16 +443,29 @@ function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
   const source = structural ? tokens.at(-1) : tokens[start];
   if (source !== undefined && TYPE_NAME.test(source.text)) {
     const name = { ...source, text: `${source.text[0]!.toLowerCase()}${source.text.slice(1)}` };
-    const withName = [...tokens.slice(0, start), name, ...tokens.slice(start)];
-    if (parseFieldTokens(withName) !== undefined)
+    const named = parseFieldTokens([...tokens.slice(0, start), name, ...tokens.slice(start)]);
+    const repaired =
+      named === undefined
+        ? undefined
+        : canonicalFieldTokens([...tokens.slice(0, start), name, ...tokens.slice(start)], named);
+    if (repaired !== undefined && fieldViolation(parseFieldTokens(repaired)) === undefined)
       return error({
         code: "SSF_MALFORMED_FIELD",
         message: "An SSF field needs a lowercase name before its value.",
-        suggestion: repairedLine(line, withName),
+        suggestion: repairedLine(line, repaired),
         span: source.span,
       });
   }
   return malformedLineDiagnostic(line, "field");
+}
+
+/** The notation's own rule on a field the grammar accepts: a collection is never optional. */
+function fieldViolation(
+  field: Omit<ParsedField, "span"> | undefined,
+): "optional-collection" | undefined {
+  return field?.optional === true && field.value.kind === "collection"
+    ? "optional-collection"
+    : undefined;
 }
 
 /** Diagnose a parsed field whose modifiers the grammar accepts but the notation does not. */
@@ -439,7 +473,7 @@ function fieldDiagnostic(line: SourceLine, field: ParsedField): SsfDiagnostic | 
   const tokens = line.tokens;
   const article = articleLength(tokens);
   const indexes = modifierIndexes(tokens, article);
-  if (field.optional && field.value.kind === "collection")
+  if (fieldViolation(field) === "optional-collection")
     return error({
       code: "SSF_OPTIONAL_COLLECTION",
       message: "SSF collections are never optional; an empty collection represents absence.",
@@ -448,18 +482,10 @@ function fieldDiagnostic(line: SourceLine, field: ParsedField): SsfDiagnostic | 
     });
   const misplaced = indexes.find((index, position) => index !== article + position);
   if (misplaced === undefined) return undefined;
-  const canonical = FIELD_MODIFIERS.filter((modifier) => field[modifier]).map((modifier) => ({
-    ...tokens[misplaced]!,
-    text: modifier,
-  }));
   return error({
     code: "SSF_MISPLACED_MODIFIER",
     message: `The \`${tokens[misplaced]!.text}\` modifier must come before the field name.`,
-    suggestion: repairedLine(line, [
-      ...tokens.slice(0, article),
-      ...canonical,
-      ...tokens.filter((_, index) => index >= article && !indexes.includes(index)),
-    ]),
+    suggestion: repairedLine(line, canonicalFieldTokens(tokens, field)),
     span: tokens[misplaced]!.span,
   });
 }
