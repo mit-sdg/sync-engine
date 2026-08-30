@@ -64,9 +64,9 @@ with this exact top-level structure:
 
 Declare every type a concept names in the sole `types` fence, apart from the identities
 State itself declares and the SSF primitives. Use `external Name` for a parameter each
-application supplies, `Name is String` to refine a primitive, `Name is A or B` for an
-enumeration, and `opaque Name` where the representation is deliberately the
-implementer's. A State field naming none of these draws `SSF_UNDECLARED_TYPE` advice.
+application supplies, `Name is A or B` for an enumeration, and `opaque Name` where the
+representation is deliberately the implementer's. Write a primitive on the field rather
+than naming a type for it, and state what narrows the value where it is enforced. A State field naming none of these draws `SSF_UNDECLARED_TYPE` advice.
 Put one SSF `state` fence in State. `check-design` parses its bounded structural
 declarations, including owned identities, subsets and their conditions, aliases,
 uniqueness constraints, the subset graph, and name uniqueness. Express field uniqueness

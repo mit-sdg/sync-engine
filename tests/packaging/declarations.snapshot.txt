@@ -3852,9 +3852,6 @@ export type SpecificationLocalTypeIR = {
     explanation: string;
     location: SpecificationLocationIR;
 } & ({
-    kind: "refinement";
-    base: string;
-} | {
     kind: "enumeration";
     values: readonly string[];
 } | {

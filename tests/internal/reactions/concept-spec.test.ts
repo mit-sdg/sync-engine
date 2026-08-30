@@ -258,28 +258,38 @@ describe("concept specification document structure", () => {
 });
 
 describe("Types and State", () => {
-  test("parses external, refinement, enumeration, and opaque types with explanations", () => {
+  test("parses external, enumeration, and opaque types with explanations", () => {
     const declared = validSpecification(
       specification({
-        types:
-          "external Person\nUsername is String\n  A login name.\nStatus is OPEN or DONE\nopaque Secret",
+        types: "external Person\nStatus is OPEN or DONE\n  Whether it is done.\nopaque Secret",
       }),
     );
     expect(declared.externalTypes).toMatchObject([{ name: "Person" }]);
     expect(declared.localTypes).toMatchObject([
-      { kind: "refinement", name: "Username", base: "String", explanation: "A login name." },
-      { kind: "enumeration", name: "Status", values: ["OPEN", "DONE"] },
+      {
+        kind: "enumeration",
+        name: "Status",
+        values: ["OPEN", "DONE"],
+        explanation: "Whether it is done.",
+      },
       { kind: "opaque", name: "Secret", explanation: "" },
     ]);
     expect(validSpecification(specification({ types: "" })).localTypes).toEqual([]);
-    for (const types of ["Username is Person", "Status is OPEN", "Status is OPEN or done"])
+    for (const types of ["Status is Person", "Status is OPEN", "Status is OPEN or done"])
       expect(diagnosticsFor(specification({ types }))).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            message: expect.stringContaining("must refine an SSF primitive"),
+            message: expect.stringContaining("must list two or more uppercase values"),
           }),
         ]),
       );
+    expect(diagnosticsFor(specification({ types: "Username is String" }))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining('"String" is an SSF primitive; use String on the field'),
+        }),
+      ]),
+    );
     expect(diagnosticsFor(specification({ types: "Status is OPEN or OPEN" }))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

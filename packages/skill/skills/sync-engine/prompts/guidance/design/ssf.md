@@ -15,17 +15,18 @@ collection := (set|seq) [of] named
 primitive := Number|String|Flag|Date|DateTime
 ruleLine := Rule: TEXT
 
-typesLine := (external Name|opaque Name|Name is (primitive|VALUE (or VALUE)+)) [INDENT TEXT]
+typesLine := (external Name|opaque Name|Name is VALUE (or VALUE)+) [INDENT TEXT]
 ```
 
 Start Type, Subtype, Alias, Parameter, and Local uppercase ASCII and fieldName lowercase;
 continue both with ASCII letters, digits, or `_`. Start VALUE uppercase and continue
 with uppercase ASCII letters, digits, or `_` only. Always write fieldName.
 
-Declare every type the Types fence: `external Name` for an application-supplied
-parameter, `Name is String` for a refinement of a primitive, `Name is A or B` for an
-enumeration, `opaque Name` when the representation is deliberately the implementer's.
-A name that is none of these, nor owned, nor primitive, draws `SSF_UNDECLARED_TYPE`.
+Declare every type in the Types fence: `external Name` for an application-supplied
+parameter, `Name is A or B` for an enumeration, `opaque Name` when the representation is
+deliberately the implementer's. A name that is none of these, nor owned, nor primitive,
+draws `SSF_UNDECLARED_TYPE`. Never name a type for a primitive—write the primitive on the
+field and state what narrows it where it is enforced.
 
 Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
 indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level

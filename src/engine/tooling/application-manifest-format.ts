@@ -684,14 +684,13 @@ function assertSpecification(
       "name",
       "explanation",
       "location",
-      ...(kind === "refinement" ? ["base"] : kind === "enumeration" ? ["values"] : []),
+      ...(kind === "enumeration" ? ["values"] : []),
     ]);
-    if (kind !== "refinement" && kind !== "enumeration" && kind !== "opaque")
-      fail(`${localPath}.kind`, 'expected "refinement", "enumeration", or "opaque"');
+    if (kind !== "enumeration" && kind !== "opaque")
+      fail(`${localPath}.kind`, 'expected "enumeration" or "opaque"');
     designIdentifier(item.name, `${localPath}.name`);
     string(item.explanation, `${localPath}.explanation`);
     assertLocation(item.location, `${localPath}.location`);
-    if (kind === "refinement") designIdentifier(item.base, `${localPath}.base`);
     if (kind === "enumeration") uniqueNonemptyStrings(item.values, `${localPath}.values`);
   }
   uniqueFieldIndexes(data.localTypes, `${path}.localTypes`, "name");

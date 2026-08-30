@@ -122,10 +122,10 @@ a set of Conversations with
 
 ## Declared types
 
-Every name a field value uses resolves to one of five things: an identity this State
-owns, an external parameter, an SSF primitive, a concept-local type, or nothing — and
-nothing draws `SSF_UNDECLARED_TYPE`. Concept-local types are declared beside the external
-parameters in the concept's `types` fence:
+Every name a field value uses resolves to one of four things: an identity this State
+owns, an external parameter, an SSF primitive, or a concept-local type — and a name that
+resolves to none of them draws `SSF_UNDECLARED_TYPE`. Concept-local types are declared
+beside the external parameters in the concept's `types` fence:
 
 ```types
 external Person

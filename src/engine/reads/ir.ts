@@ -420,11 +420,7 @@ export type SpecificationLocalTypeIR = {
   /** Optional reader-facing explanation, normalized from its indented lines. */
   explanation: string;
   location: SpecificationLocationIR;
-} & (
-  | { kind: "refinement"; base: string }
-  | { kind: "enumeration"; values: readonly string[] }
-  | { kind: "opaque" }
-);
+} & ({ kind: "enumeration"; values: readonly string[] } | { kind: "opaque" });
 
 /** Simple State Form source retained from the State fence. */
 export interface SpecificationStateIR {

@@ -886,9 +886,9 @@ const TYPES_OPAQUE = /^opaque\s+([A-Za-z_][A-Za-z0-9_]*)$/;
 const TYPES_LOCAL = /^([A-Za-z_][A-Za-z0-9_]*)\s+is\s+(\S.*)$/;
 const TYPES_ENUM_VALUE = /^[A-Z][A-Z0-9_]*$/;
 const TYPES_FORMS =
-  "a Types declaration must be `external Name`, `opaque Name`, or `Name is` a primitive or two or more values";
+  "a Types declaration must be `external Name`, `opaque Name`, or `Name is` two or more values";
 
-/** Parse one Types line into an external parameter or a concept-local refinement, enum, or opaque. */
+/** Parse one Types line into an external parameter or a concept-local enumeration or opaque type. */
 function typeDeclarationOf(
   group: DeclarationGroup,
   report: ConceptSpecDiagnosticReporter,
@@ -915,14 +915,19 @@ function typeDeclarationOf(
   const name = local[1]!;
   const location = located(name);
   const rest = local[2]!.trim();
-  if (SSF_PRIMITIVES.includes(rest as (typeof SSF_PRIMITIVES)[number]))
-    return { form: "local", kind: "refinement", name, base: rest, explanation, location };
-
+  if (SSF_PRIMITIVES.includes(rest as (typeof SSF_PRIMITIVES)[number])) {
+    report(
+      "CONCEPT_SPEC_DECLARATION",
+      `"${rest}" is an SSF primitive; use ${rest} on the field rather than naming "${name}" for it, and state what narrows it where it is enforced`,
+      location,
+    );
+    return undefined;
+  }
   const values = rest.split(/\s+or\s+/);
   if (values.length < 2 || !values.every((value) => TYPES_ENUM_VALUE.test(value))) {
     report(
       "CONCEPT_SPEC_DECLARATION",
-      `the type "${name}" must refine an SSF primitive (${SSF_PRIMITIVES.join(", ")}) or list two or more uppercase values joined by "or"`,
+      `the type "${name}" must list two or more uppercase values joined by "or"`,
       location,
     );
     return undefined;

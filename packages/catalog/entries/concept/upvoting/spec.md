@@ -21,8 +21,6 @@ external Voter
 
 Direction is UP or DOWN
   Which way a voter has cast the vote.
-Integer is Number
-  A whole score, positive or negative.
 ```
 
 ## State
@@ -33,6 +31,8 @@ a set of Votes with
   a voter Voter
   a direction Direction
   unique item and voter
+
+Rule: a score is a whole number, positive or negative
 ```
 
 ## Actions
@@ -80,7 +80,7 @@ unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
 _vote (item: Item, voter: Voter) : optional (direction: Direction)
   answers the Voter's current Vote direction for the Item
   answers no row when the voter has not voted on the item
-_score (item: Item) : one (score: Integer)
+_score (item: Item) : one (score: Number)
   answers the number of up Votes minus the number of down Votes
   answers 0 for an Item with no Votes
 ```
