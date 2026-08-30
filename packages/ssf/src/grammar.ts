@@ -297,8 +297,10 @@ function malformedLineDiagnostic(
   const field = kind === "field";
   return error({
     code: field ? "SSF_MALFORMED_FIELD" : "SSF_MALFORMED_DECLARATION",
-    message: `This ${field ? "indented" : "top-level"} line is not ${field ? "an SSF field or" : "an SSF declaration, alias, or"} \`${RULE_MARKER}\` line.`,
-    suggestion: `Use a complete ${field ? "field" : "declaration or alias"}, or prefix prose with the exact \`${RULE_MARKER}\` marker.`,
+    message: `This ${field ? "indented" : "top-level"} line is not ${field ? "an SSF field, uniqueness constraint, or" : "an SSF declaration, alias, or"} \`${RULE_MARKER}\` line.`,
+    suggestion: field
+      ? `Use a complete field, a \`unique fieldName (and fieldName)*\` constraint, or prefix prose with the exact \`${RULE_MARKER}\` marker.`
+      : `Use a complete declaration or alias, or prefix prose with the exact \`${RULE_MARKER}\` marker.`,
     span: lineSpan(line),
   });
 }

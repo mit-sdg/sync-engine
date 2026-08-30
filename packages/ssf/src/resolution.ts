@@ -76,7 +76,7 @@ function resolveReference(
     error({
       code: "SSF_UNDECLARED_TYPE",
       message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
-      suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is <VALUE_A or VALUE_B>\`, or \`opaque ${reference.text}\`.`,
+      suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
       span: reference.span,
     }),
   );

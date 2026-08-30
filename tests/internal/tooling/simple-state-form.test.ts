@@ -196,7 +196,8 @@ a set of Sessions with
       },
       {
         code: "SSF_MALFORMED_FIELD",
-        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
+        suggestion:
+          "Use a complete field, a `unique fieldName (and fieldName)*` constraint, or prefix prose with the exact `Rule:` marker.",
       },
     ]);
   });

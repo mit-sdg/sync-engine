@@ -83,7 +83,7 @@ describe("specification signature type validation", () => {
           severity: "error",
           code: "SSF_UNDECLARED_TYPE",
           message: `Type ${JSON.stringify(name)} is not owned, external, concept-local, or an SSF primitive.`,
-          suggestion: `Declare it in the Types fence as \`external ${name}\`, \`${name} is <VALUE_A or VALUE_B>\`, or \`opaque ${name}\`.`,
+          suggestion: `Declare it in the Types fence as \`external ${name}\`, \`${name} is VALUE_A or VALUE_B\`, or \`opaque ${name}\`.`,
           location: {
             line: before.split("\n").length,
             column: offset - before.lastIndexOf("\n"),

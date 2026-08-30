@@ -193,8 +193,8 @@ external-binding targets. See
 The parser does not interpret `Rule:` prose, derive a storage schema, prove action
 conditions or effects, or compare persistence with State; every other State line must
 parse. Beyond the identities State declares and the SSF primitives, every type a concept
-names belongs in the Types fence, as an external parameter, a refinement of a primitive,
-an enumeration, or an explicitly opaque type. Record owned facts and uniqueness
+names belongs in the Types fence, as an external parameter, an enumeration, or an
+explicitly opaque type; a value that is a primitive writes the primitive. Record owned facts and uniqueness
 constraints in State and put each enforced invariant or value refinement in the action
 branch that checks it. Where a concept needs
 a synonym, declare it with

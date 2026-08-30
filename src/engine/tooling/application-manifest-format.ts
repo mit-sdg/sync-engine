@@ -54,8 +54,10 @@ export function specificationOwnedTypeNames(
   });
   const errors = parsed.diagnostics.filter(({ severity }) => severity === "error");
   if (errors.length > 0) {
+    // Advice explains why a name failed to resolve, so it travels with the failure here
+    // exactly as it does through `check-design`, and every repair keeps its suggestion.
     throw new Error(
-      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${errors
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
         .map((diagnostic) => {
           const location =
             diagnostic.span === undefined
@@ -65,7 +67,7 @@ export function specificationOwnedTypeNames(
                   line: specification.state.location.line + diagnostic.span.start.line - 1,
                   column: specification.state.location.column + diagnostic.span.start.column - 1,
                 };
-          return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}`;
+          return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}\n  suggestion: ${diagnostic.suggestion}`;
         })
         .join("\n")}`,
     );

@@ -52,8 +52,8 @@ gets a diagnostic that names its source location.
 
 A top-level declaration uses `a set of Items`, `a seq of Items`, or `an element
 Settings`. The `of` after a structural keyword is optional. A declaration with fields
-ends its first line with `with` and needs at least one field; an attached `Rule:` line
-does not count as one.
+ends its first line with `with` and needs at least one field or uniqueness constraint.
+A `Rule:` line attaches to a declaration without `with` and satisfies neither.
 
 A subset such as `a Completed set of Items` classifies members of an existing parent. It
 may use `set` or `element`, but not `seq`. The parent is a declaration, another subset,

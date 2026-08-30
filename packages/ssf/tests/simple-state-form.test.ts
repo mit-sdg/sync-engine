@@ -196,7 +196,7 @@ a set of Items with
       },
       {
         code: "SSF_MALFORMED_FIELD",
-        message: "This indented line is not an SSF field or `Rule:` line.",
+        message: "This indented line is not an SSF field, uniqueness constraint, or `Rule:` line.",
         span: { start: { line: 5, column: 1 } },
       },
     ]);
@@ -718,8 +718,9 @@ describe("collection fields", () => {
     expect(parsed.diagnostics).toMatchObject([
       {
         code: "SSF_MALFORMED_FIELD",
-        message: "This indented line is not an SSF field or `Rule:` line.",
-        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
+        message: "This indented line is not an SSF field, uniqueness constraint, or `Rule:` line.",
+        suggestion:
+          "Use a complete field, a `unique fieldName (and fieldName)*` constraint, or prefix prose with the exact `Rule:` marker.",
         span: {
           start: { line: 2, column: 1 },
           end: { line: 2, column },

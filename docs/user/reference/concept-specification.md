@@ -181,9 +181,10 @@ Declaration and alias names are unique across the fence and share that namespace
 external parameters, concept-local types, and SSF primitives. Field names are unique within their declaration,
 and enumeration values within their enumeration. Prefix a field with `unique` to require
 distinct values among members of that declaration; a unique collection field compares the
-whole collection. Require a _combination_ to be distinct with a `unique` line naming two
-or more fields, such as `unique item and voter`; a subset's constraints bind only its own
-members and may name its ancestors' fields. Every field writes a lowercase name before
+whole collection. Require a _combination_ to be distinct with a `unique` line joining
+field names with `and`, such as `unique item and voter`. The modifier is shorthand for a
+line naming one field, so the line form is what a subset uses to constrain a field it
+inherits rather than declares; a subset's constraints bind only its own members. Every field writes a lowercase name before
 its value, and `optional` and `unique` sit between any article and that name in either
 order.
 

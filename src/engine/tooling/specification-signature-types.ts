@@ -27,7 +27,7 @@ export function validateSpecificationSignatureTypes(
       severity: "error" as const,
       code: "SSF_UNDECLARED_TYPE" as const,
       message: `Type ${JSON.stringify(name)} is not owned, external, concept-local, or an SSF primitive.`,
-      suggestion: `Declare it in the Types fence as \`external ${name}\`, \`${name} is <VALUE_A or VALUE_B>\`, or \`opaque ${name}\`.`,
+      suggestion: `Declare it in the Types fence as \`external ${name}\`, \`${name} is VALUE_A or VALUE_B\`, or \`opaque ${name}\`.`,
       location,
     }));
 }

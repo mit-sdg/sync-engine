@@ -101,22 +101,23 @@ names, declaration-local field names, and enumeration values have separate name
 uniqueness scopes. A field's `unique` modifier records distinct values within the field's
 declaration.
 
-State field value names stay open: the parser classifies owned, external, primitive, and
-unresolved references, and an unresolved conventional or refinement name remains legal.
-Only the plural join or an alias makes such a reference owned. Every nonblank line in the
+State field value names are closed: the parser classifies owned, external, concept-local,
+primitive, and unresolved references, and an unresolved name fails with
+`SSF_UNDECLARED_TYPE`. Only the plural join or an alias makes a reference owned. Every nonblank line in the
 fence must parse or begin with `Rule:`; malformed lines produce diagnostics, and rule
 text stays opaque. The concept IR preserves the complete normalized State-fence text and
-has no separate prose field. The parser does not prove rule text, field refinements,
-conditions, effects, query meaning, storage layout, State/storage agreement, or
-implementation semantics.
+has no separate prose field. The parser does not prove rule text, the meaning a
+concept-local type carries, conditions, effects, query meaning, storage layout,
+State/storage agreement, or implementation semantics.
 
 Config-based binding validation uses only the derived owned-name inventory. A qualified
 target must name a declaration or alias of the selected target instance's definition; an
 external, primitive, ambiguous, or unresolved name is invalid. Checked manifests persist
 the sorted inventory, and their codec rederives it independently from the included State
 and operation types, requires canonical equality, and validates every qualified target
-against the derived fact. Operation types need not occur in State: conventional and
-refinement names remain valid, and only a unique plural pair affects ownership.
+against the derived fact. Operation types need not occur in State, but each resolves
+against the same closed universe once evidence has joined singular and plural spellings,
+and only a unique plural pair affects ownership.
 
 ## Static source agreement
 

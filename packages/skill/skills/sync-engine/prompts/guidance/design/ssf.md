@@ -32,8 +32,8 @@ field and state what narrows it where it is enforced.
 
 Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
 indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
-rule ends the preceding declaration body. End a first line with `with` only when a real
-field follows; a `Rule:` line does not count.
+rule ends the preceding declaration body. End a first line with `with` only when a field
+or `unique` line follows, and always then; a `Rule:` line attaches without `with`.
 
 SSF owns structures, subsets, and accepted aliases. Named State fields and
 action/query signatures supply alias candidates; SSF invents none. Vendored

@@ -106,7 +106,7 @@ export interface SsfField {
   readonly span: SsfSpan;
 }
 
-/** A uniqueness constraint over a combination of two or more of a declaration's fields. */
+/** A uniqueness constraint over one or more of a declaration's fields. */
 export interface SsfUniqueConstraint {
   readonly kind: "unique";
   readonly fields: readonly string[];
