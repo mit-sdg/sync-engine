@@ -140,6 +140,12 @@ function fixture(): ApplicationManifestV1 {
               out: {},
             },
             { op: "holds", computation: "ge", in: { left: 1, right: 0 } },
+            {
+              op: "compute",
+              computation: "unused vocabulary",
+              in: { value: "selection" },
+              out: { normalized: { $var: "normalized" } },
+            },
           ],
           then: [],
         },
@@ -179,7 +185,10 @@ function fixture(): ApplicationManifestV1 {
                 out: { selected: { $var: "selected" } },
               },
             ],
-            entries: { selected: { node: "leaf", var: "selected" } },
+            entries: {
+              selected: { node: "leaf", var: "selected" },
+              status: { node: "literal", value: "current" },
+            },
           },
         },
       ],
@@ -780,6 +789,12 @@ describe("application impact analysis", () => {
     expect(index.inventory).toContainEqual({
       kind: "computation",
       computation: "unused vocabulary",
+    });
+    expect(index.edges).toContainEqual({
+      from: { kind: "computation", computation: "unused vocabulary" },
+      to: { kind: "reaction", reaction: "ObserveCurrent" },
+      relation: "computation-use",
+      certainty: "structural",
     });
     expect(Object.isFrozen(index)).toBe(true);
     expect(Object.isFrozen(index.edges)).toBe(true);

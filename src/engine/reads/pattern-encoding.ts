@@ -167,7 +167,7 @@ export function encodeWhereOp(op: AnyWhereOp, vars: PatternVariables): WhereOpIR
           op: "compute" as const,
           computation: op.computation.computationName,
           in: encodePattern(op.in, vars),
-          out: vars.nameOf(op.out),
+          out: typeof op.out === "symbol" ? vars.nameOf(op.out) : encodePattern(op.out, vars),
         },
         op.computation,
       );

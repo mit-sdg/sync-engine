@@ -95,6 +95,27 @@ The strict config check traces that import and rejects dynamic or unresolvable
 specification construction. The H1 names the reusable definition; the
 `conceptSet` key names each application instance.
 
+When a generic concept class represents an external type, first give the
+application-specific class a name, then register it:
+
+```ts no-check
+const Examining = ExaminingConcept<ExaminationOutcome>;
+
+export const examining = registerConcept({
+  class: Examining,
+  spec,
+});
+```
+
+`ExaminingConcept<ExaminationOutcome>` is a TypeScript instantiation expression.
+It uses the same constructor at runtime while preserving `ExaminationOutcome`
+in the registered action and query signatures. Generated
+wire types can therefore project fields from that type. The corresponding
+`Outcome is ExaminationOutcome` declaration in `design/types.md` remains a
+semantic design binding: it neither performs this specialization nor proves
+that source and design agree. Keep both declarations aligned; the current
+checker validates each contract independently.
+
 Before implementation, verify the draft grammar without loading an application:
 
 ```sh

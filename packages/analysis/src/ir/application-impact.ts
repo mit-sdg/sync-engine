@@ -543,6 +543,7 @@ export function indexApplicationWithController(
   ): void => {
     switch (node.node) {
       case "leaf":
+      case "literal":
         return;
       case "record":
         for (const operation of node.where ?? []) addRead(owner, operation, "structural");

@@ -9,7 +9,7 @@ import { brand, FormerUseBrand, hasBrand } from "./brands.ts";
 import { objectRef } from "./sentence.ts";
 import type { Mapping } from "@engine/reactions/types";
 import { liveOf } from "./ir.ts";
-import type { FormerNodeIR } from "./ir.ts";
+import type { FormerNodeIR, JsonLiteral } from "./ir.ts";
 import type { QueryPromise } from "./query-metadata.ts";
 import type { FindOp, WhereOp } from "./where-ops.ts";
 
@@ -65,6 +65,11 @@ interface LeafNode {
   readonly var: symbol;
 }
 
+export interface LiteralNode {
+  readonly node: "literal";
+  readonly value: JsonLiteral;
+}
+
 export interface FormerCallNode {
   readonly node: "former";
   readonly use: FormerUse;
@@ -72,6 +77,7 @@ export interface FormerCallNode {
 
 export type FormerNode =
   | LeafNode
+  | LiteralNode
   | RecordNode
   | FormerCallNode
   | EachNode
@@ -79,8 +85,17 @@ export type FormerNode =
   | FirstNode
   | DistinctNode;
 
-/** What a record entry accepts: a leaf, a smaller shape, or a named former. */
-export type FormerEntry = symbol | FormerNode | FusedFormer | FormerUse;
+/** Portable constant data accepted directly by a formed record entry. */
+export type FormerLiteral =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly FormerLiteral[]
+  | { readonly [key: string]: FormerLiteral };
+
+/** What a record entry accepts: a leaf, literal, smaller shape, or named former. */
+export type FormerEntry = symbol | FormerLiteral | FormerNode | FusedFormer | FormerUse;
 
 const FormerNodeBrand: unique symbol = Symbol("FormerNodeBrand");
 const FusedFormerBrand: unique symbol = Symbol("FusedFormerBrand");

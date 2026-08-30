@@ -325,7 +325,8 @@ function assertWhereOperation(
       const data = shape(value, path, ["op", "computation", "in", "out"]);
       nonemptyString(data.computation, `${path}.computation`);
       assertPattern(data.in, `${path}.in`);
-      nonemptyString(data.out, `${path}.out`);
+      if (typeof data.out === "string") nonemptyString(data.out, `${path}.out`);
+      else assertPattern(data.out, `${path}.out`);
       return;
     }
     case "custom": {
@@ -483,6 +484,11 @@ function assertFormerNode(value: unknown, path: string): asserts value is Former
     case "leaf": {
       const data = shape(value, path, ["node", "var"]);
       nonemptyString(data.var, `${path}.var`);
+      return;
+    }
+    case "literal": {
+      const data = shape(value, path, ["node", "value"]);
+      assertJsonValue(data.value, `${path}.value`, new WeakSet());
       return;
     }
     case "record": {

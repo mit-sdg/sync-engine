@@ -119,7 +119,12 @@ selected instance. Bindings do not transfer ownership, establish TypeScript
 assignability, configure adapters or storage, or provide runtime validation.
 External-to-external targets and binding chains are invalid. Direct dependencies on
 qualified owned types are resolved independently, so cycles among those instance
-dependencies are valid. Unused concrete declarations are invalid.
+dependencies are valid. Unused concrete declarations are invalid. When the concept
+implementation is a generic TypeScript class, specialize it separately at
+`registerConcept` with a TypeScript instantiation expression; the
+[authoring guide](guide/authoring.md#2-write-each-concept-specification)
+shows the source counterpart. The checker currently validates the design binding
+and TypeScript shape independently rather than proving that they agree.
 
 Use several instances when a finite set of application domains needs separate
 semantic identities for one unchanged concept contract. Instance declarations are

@@ -248,8 +248,12 @@ async function applyOp(
       case "compute": {
         const ref = typeof op.computation === "function" ? op.computation : computationOf(op, env);
         const value = await ref.fn(bindInputMapping(frame, op.in));
-        if (op.out in frame && frame[op.out] !== value) break;
-        pushFrame(result, { ...frame, [op.out]: value }, assertRows);
+        if (typeof op.out === "string" || typeof op.out === "symbol") {
+          if (op.out in frame && !structurallyEqual(frame[op.out], value)) break;
+          pushFrame(result, { ...frame, [op.out]: value }, assertRows);
+          break;
+        }
+        appendFrames(result, expandDistinctRows(frame, [value], op.out, assertRows), assertRows);
         break;
       }
       case "custom": {

@@ -140,7 +140,7 @@ export type WhereOpIR =
   | { op: "earlier"; when: ActionTriggerIR }
   | { op: "now"; out: string }
   | { op: "holds"; computation: string; in: PatternIR }
-  | { op: "compute"; computation: string; in: PatternIR; out: string }
+  | { op: "compute"; computation: string; in: PatternIR; out: string | PatternIR }
   | { op: "custom"; fnRef: string; opaque: true; in: string[]; out: string[] };
 
 /**
@@ -206,8 +206,17 @@ export interface SpliceIR {
   whether?: true;
 }
 
+export type JsonLiteral =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonLiteral[]
+  | { [key: string]: JsonLiteral };
+
 export type FormerNodeIR =
   | { node: "leaf"; var: string }
+  | { node: "literal"; value: JsonLiteral }
   | {
       node: "record";
       where?: FormerWhereOpIR[];

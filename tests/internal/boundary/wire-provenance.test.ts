@@ -671,7 +671,12 @@ describe("endpoint wire provenance", () => {
               op: "compute",
               computation: "setupSecretMatches",
               in: { secret: variable("setupSecret") },
-              out: "valid",
+              out: {
+                valid: variable("valid"),
+                reason: variable("reason"),
+                details: [{ id: variable("detailId") }],
+                metadata: { $lit: { $field: variable("escapedField") } },
+              },
             },
           ],
           then: [
@@ -679,7 +684,13 @@ describe("endpoint wire provenance", () => {
               kind: "request",
               concept: "RequestBoundary",
               action: "respond",
-              input: { requestId: variable("requestId"), valid: variable("valid") },
+              input: {
+                requestId: variable("requestId"),
+                valid: variable("valid"),
+                reason: variable("reason"),
+                detailId: variable("detailId"),
+                escapedField: variable("escapedField"),
+              },
             },
           ],
         },
@@ -705,7 +716,111 @@ describe("endpoint wire provenance", () => {
         {
           source: "computation-output",
           computation: "setupSecretMatches",
-          path: [],
+          path: ["valid"],
+        },
+      ],
+    });
+    expect(field(endpoint.output, "reason")).toMatchObject({
+      kind: "reference",
+      allOf: [
+        {
+          source: "computation-output",
+          computation: "setupSecretMatches",
+          path: ["reason"],
+        },
+      ],
+    });
+    expect(field(endpoint.output, "detailId")).toMatchObject({
+      kind: "reference",
+      allOf: [
+        {
+          source: "computation-output",
+          computation: "setupSecretMatches",
+          path: ["details", "0", "id"],
+        },
+      ],
+    });
+    expect(field(endpoint.output, "escapedField")).toMatchObject({
+      kind: "reference",
+      allOf: [
+        {
+          source: "computation-output",
+          computation: "setupSecretMatches",
+          path: ["metadata", "$field"],
+        },
+      ],
+    });
+  });
+
+  test("preserves portable literals produced by a former", () => {
+    const literalApp: AppIR = {
+      unlowered: [],
+      views: [],
+      formers: [
+        {
+          name: "defaults",
+          ins: [],
+          bindings: [],
+          promise: "one",
+          body: {
+            node: "record",
+            entries: {
+              status: { node: "literal", value: "unknown" },
+              policy: { node: "literal", value: { limit: 3, mode: "safe" } },
+            },
+          },
+        },
+      ],
+      reactions: [
+        {
+          name: "Defaults",
+          when: [
+            {
+              kind: "action",
+              concept: "RequestBoundary",
+              action: "request",
+              input: { path: "/defaults", requestId: variable("requestId") },
+              output: {},
+            },
+          ],
+          where: [],
+          then: [
+            {
+              kind: "request",
+              concept: "RequestBoundary",
+              action: "respond",
+              input: {
+                requestId: variable("requestId"),
+                body: { $former: { name: "defaults", in: {} } },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const endpoint = wireContracts(literalApp).endpoints[0];
+    expect(endpoint.output).toMatchObject({
+      kind: "object",
+      fields: [
+        {
+          key: "body",
+          type: {
+            kind: "object",
+            fields: [
+              {
+                key: "policy",
+                type: {
+                  kind: "object",
+                  fields: [
+                    { key: "limit", type: { kind: "literal", value: 3 } },
+                    { key: "mode", type: { kind: "literal", value: "safe" } },
+                  ],
+                },
+              },
+              { key: "status", type: { kind: "literal", value: "unknown" } },
+            ],
+          },
         },
       ],
     });

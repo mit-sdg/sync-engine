@@ -266,6 +266,44 @@ describe("where ops: evaluation", () => {
     expect(out.map(($) => $[twice])).toEqual([4, 10]);
   });
 
+  test("compute projects an object result into several bindings", async () => {
+    const describe = vocabulary({
+      concepts: {},
+      computations: {
+        describe: ({ n }: { n: number }) => ({
+          doubled: n * 2,
+          details: { parity: n % 2 },
+        }),
+      },
+    }).computations.describe;
+    const { n, doubled, parity } = $vars;
+    const out = await applyWhereOps(new Frames({ [n]: 3 }), [
+      compute(describe, { n }, { doubled, details: { parity } }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0][doubled]).toBe(6);
+    expect(out[0][parity]).toBe(1);
+  });
+
+  test("serialized compute projections bind beneath escaped dollar keys", async () => {
+    const env = {
+      computation: () => ({ fn: () => ({ data: { $field: 3 } }) }),
+    } as never;
+    const out = await applyWhereOps(
+      new Frames({}),
+      [
+        {
+          op: "compute",
+          computation: "describe",
+          in: {},
+          out: { data: { $lit: { $field: { $var: "bound" } } } },
+        },
+      ],
+      env,
+    );
+    expect(out).toEqual([{ bound: 3 }]);
+  });
+
   test("custom declares its footprint positionally and stays quarantined", async () => {
     const { a, b, sum } = $vars;
     const out = await applyWhereOps(new Frames({ [a]: 2, [b]: 3 }), [
@@ -295,7 +333,7 @@ describe("where ops: construction guards", () => {
       computations: { double: ({ n }) => (n as number) * 2 },
     }).computations.double;
     expect(() => compute((() => 1) as never, {}, Symbol("x"))).toThrow("vocabulary");
-    expect(() => compute(double, {}, "notavar" as never)).toThrow("single variable");
+    expect(() => compute(double, {}, "notavar" as never)).toThrow("one variable or a record");
   });
 });
 
