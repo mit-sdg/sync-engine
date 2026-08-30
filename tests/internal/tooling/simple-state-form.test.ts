@@ -6,11 +6,19 @@ import {
 } from "@engine/tooling/simple-state-form";
 import { describe, expect, test } from "vite-plus/test";
 
+const FIXTURE_TYPES = ["Person", "Profile", "Operation", "Group"] as const;
+
 function validate(body: string) {
   const scanned = scanDesignMarkdown(`\`\`\`state\n${body}\n\`\`\`\n`, "concept.md");
   const fence = scanned.fences[0];
   if (fence === undefined) throw new Error("test fixture has no state fence");
-  return validateSimpleStateForm(fence);
+  return validateSimpleStateForm(fence, {
+    externalTypes: FIXTURE_TYPES.map((name) => ({
+      name,
+      explanation: "",
+      location: { line: 1, column: 1 },
+    })),
+  });
 }
 
 function issue(body: string, code: SimpleStateFormIssueCode, suggestion: string): void {
@@ -21,8 +29,8 @@ describe("limited Simple State Form validation", () => {
   test("reports deterministic repairs for recognized SSF mistakes", () => {
     issue(
       "a set of Sessions with\n  a revokedAt optional DateTime",
-      "SSF_MISPLACED_OPTIONAL",
-      "  an optional revokedAt DateTime",
+      "SSF_MISPLACED_MODIFIER",
+      "  a optional revokedAt DateTime",
     );
     for (const collection of ["set of Person", "seq Person"]) {
       issue(
@@ -33,7 +41,7 @@ describe("limited Simple State Form validation", () => {
     }
     issue(
       "a set of Sessions with\n  revokedAt optional DateTime",
-      "SSF_MISPLACED_OPTIONAL",
+      "SSF_MISPLACED_MODIFIER",
       "  optional revokedAt DateTime",
     );
     issue(
@@ -41,11 +49,7 @@ describe("limited Simple State Form validation", () => {
       "SSF_OPTIONAL_COLLECTION",
       "Remove `optional` from this field.",
     );
-    issue(
-      "a set of Sessions with\n  a optional revokedAt DateTime",
-      "SSF_ARTICLE",
-      "  an optional revokedAt DateTime",
-    );
+    issue("a set of Items with\n  a Profile", "SSF_MALFORMED_FIELD", "  a profile Profile");
     issue(
       "a sequence of Observations with\n  an operation Operation",
       "SSF_NEAR_MISS_KEYWORD",
@@ -76,7 +80,7 @@ describe("limited Simple State Form validation", () => {
   test("reports source positions from the Markdown fence", () => {
     expect(validate("a set of Sessions with\n  a revokedAt optional DateTime")).toMatchObject([
       {
-        code: "SSF_MISPLACED_OPTIONAL",
+        code: "SSF_MISPLACED_MODIFIER",
         location: { source: "concept.md", line: 3, column: 15 },
         span: { start: { offset: 37, line: 2, column: 15 } },
       },
@@ -140,7 +144,7 @@ a set of Sessions with
       },
       {
         severity: "error",
-        code: "SSF_MISPLACED_OPTIONAL",
+        code: "SSF_MISPLACED_MODIFIER",
         location: { source: "design/example.md", line: 13, column: 15 },
         span: { start: { offset: 37, line: 2, column: 15 } },
       },
@@ -192,7 +196,8 @@ a set of Sessions with
       },
       {
         code: "SSF_MALFORMED_FIELD",
-        suggestion: "Use a complete field, or prefix prose with the exact `Rule:` marker.",
+        suggestion:
+          "Use a complete field, a `unique fieldName (and fieldName)*` constraint, or prefix prose with the exact `Rule:` marker.",
       },
     ]);
   });
@@ -209,7 +214,7 @@ a set of Sessions with
     issue(
       "a set of Items with",
       "SSF_MALFORMED_DECLARATION",
-      "Remove `with` or add at least one indented field.",
+      "Remove `with` or add an indented field or uniqueness constraint.",
     );
   });
 
@@ -242,7 +247,7 @@ a set of Sessions with
     ).toEqual([
       "SSF_NEAR_MISS_KEYWORD",
       "SSF_MISSING_WITH",
-      "SSF_MISPLACED_OPTIONAL",
+      "SSF_MISPLACED_MODIFIER",
       "SSF_OPTIONAL_COLLECTION",
     ]);
   });

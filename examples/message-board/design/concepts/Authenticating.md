@@ -15,22 +15,23 @@ authenticates Ari, returning the account reference, which is the username `ari`.
 ## Types
 
 ```types
-
+opaque Secret
+  A password verifier; its representation is the implementer's choice.
 ```
 
 ## State
 
 ```state
 a set of Accounts with
-  a username Username
-  a salt Salt
+  a unique username String
+  a salt String
   a passwordVerifier Secret
 ```
 
 ## Actions
 
 ```actions
-register (username: Username, password: Password) : return (account: Account)
+register (username: String, password: String) : return (account: Account)
   where username is not 3 to 32 letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
@@ -46,7 +47,7 @@ register (username: Username, password: Password) : return (account: Account)
     bind account to that account
     return account
 
-authenticate (username: Username, password: Password) : return (account: Account)
+authenticate (username: String, password: String) : return (account: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
@@ -59,6 +60,6 @@ authenticate (username: Username, password: Password) : return (account: Account
 ## Queries
 
 ```queries
-_registered (username: Username) : one (registered: Flag)
-  answers false for an unknown Username
+_registered (username: String) : one (registered: Flag)
+  answers false for an unknown username
 ```

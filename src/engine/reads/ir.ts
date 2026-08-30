@@ -423,6 +423,14 @@ export interface SpecificationExternalTypeIR {
   location: SpecificationLocationIR;
 }
 
+/** One concept-local type declared in the Types fence beside its external parameters. */
+export type SpecificationLocalTypeIR = {
+  name: string;
+  /** Optional reader-facing explanation, normalized from its indented lines. */
+  explanation: string;
+  location: SpecificationLocationIR;
+} & ({ kind: "enumeration"; values: readonly string[] } | { kind: "opaque" });
+
 /** Simple State Form source retained from the State fence. */
 export interface SpecificationStateIR {
   /** Normalized fence contents, privately validated against the version-1 SSF grammar. */
@@ -440,6 +448,7 @@ export interface ConceptSpecificationIR {
   purpose: string;
   principle: string;
   externalTypes: readonly SpecificationExternalTypeIR[];
+  localTypes: readonly SpecificationLocalTypeIR[];
   state: SpecificationStateIR;
   actions: readonly SpecificationActionIR[];
   queries: readonly SpecificationQueryIR[];

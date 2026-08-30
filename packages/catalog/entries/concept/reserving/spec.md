@@ -18,6 +18,9 @@ external Resource
   The reservable unit receiving an exclusive claim.
 external Claimant
   The identity holding a reservation.
+
+ReservationStatus is ACTIVE or FULFILLED or RELEASED
+  Whether the claim still holds the resource.
 ```
 
 ## State
@@ -30,7 +33,8 @@ a set of Reservations with
   a reservedAt DateTime
   an optional endedAt DateTime
 
-Rule: at most one active or fulfilled Reservation has each Resource
+a Claimed set of Reservations where status is ACTIVE or FULFILLED with
+  unique resource
 ```
 
 ## Actions

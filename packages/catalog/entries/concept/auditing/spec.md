@@ -34,22 +34,22 @@ external Target
 ```state
 a set of Entries with
   a trail Trail
-  a position Position
+  a position Number
   an event Event
   an actor Actor
   an action String
   a detail String
   a target Target
   a recordedAt DateTime
+  unique trail and event
 
-Rule: within one Trail at most one Entry has each event
 Rule: within one Trail the positions are 1 through the number of Entries
 ```
 
 ## Actions
 
 ```actions
-record (trail: Trail, event: Event, actor: Actor, action: String, detail: String, target: Target, at: DateTime) : return (entry: Entry, position: Position)
+record (trail: Trail, event: Event, actor: Actor, action: String, detail: String, target: Target, at: DateTime) : return (entry: Entry, position: Number)
   where action is blank or longer than 100 characters
   then
     refuse INVALID_ENTRY_ACTION "An entry action must not be blank and must be at most 100 characters."
@@ -72,22 +72,22 @@ record (trail: Trail, event: Event, actor: Actor, action: String, detail: String
 ## Queries
 
 ```queries
-_get (entry: Entry) : optional (trail: Trail, position: Position, event: Event, actor: Actor, action: String, detail: String, target: Target, recordedAt: DateTime)
+_get (entry: Entry) : optional (trail: Trail, position: Number, event: Event, actor: Actor, action: String, detail: String, target: Target, recordedAt: DateTime)
   answers the Entry's Trail, position, event, actor, action, detail, target, and recorded time
   answers no row for an unknown Entry
-_since (trail: Trail, after: Position) : many (entry: Entry, position: Position, event: Event, actor: Actor, action: String, detail: String, target: Target, recordedAt: DateTime)
+_since (trail: Trail, after: Number) : many (entry: Entry, position: Number, event: Event, actor: Actor, action: String, detail: String, target: Target, recordedAt: DateTime)
   answers the Entries of the Trail above position after, so 0 answers every Entry
   answers no rows when the Trail has no Entry above after
   orders rows by position
-_byActor (trail: Trail, actor: Actor) : many (entry: Entry, position: Position, event: Event, action: String, detail: String, target: Target, recordedAt: DateTime)
+_byActor (trail: Trail, actor: Actor) : many (entry: Entry, position: Number, event: Event, action: String, detail: String, target: Target, recordedAt: DateTime)
   answers the Actor's Entries in the Trail with their positions, events, actions, details, targets, and recorded times
   answers no rows when the Actor has no Entries in the Trail
   orders rows by position
-_forTarget (trail: Trail, target: Target) : many (entry: Entry, position: Position, event: Event, actor: Actor, action: String, detail: String, recordedAt: DateTime)
+_forTarget (trail: Trail, target: Target) : many (entry: Entry, position: Number, event: Event, actor: Actor, action: String, detail: String, recordedAt: DateTime)
   answers the Target's Entries in the Trail with their positions, events, actors, actions, details, and recorded times
   answers no rows when the Target has no Entries in the Trail
   orders rows by position
-_extent (trail: Trail) : one (entries: Count, last: Position)
+_extent (trail: Trail) : one (entries: Number, last: Number)
   answers the Trail's Entry count and last position
   answers entries 0 and last 0 for a Trail with no Entries
 ```

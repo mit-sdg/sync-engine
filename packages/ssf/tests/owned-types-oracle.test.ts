@@ -12,6 +12,7 @@ type Multiplicity = "element" | "sequence" | "set";
 
 interface OracleOptions {
   readonly externalTypes?: readonly string[];
+  readonly localTypes?: readonly { readonly name: string; readonly values?: readonly string[] }[];
   readonly evidenceTypeNames?: readonly string[];
 }
 
@@ -41,8 +42,12 @@ function stateFieldType(line: string): string | undefined {
   if (!/^[ \t]/.test(line)) return undefined;
   const original = line.trim().split(/\s+/);
   const first = original[0] === "a" || original[0] === "an" ? 1 : 0;
-  const optional = original.indexOf("optional", first);
-  const words = original.filter((_, index) => index >= first && index !== optional);
+  const modifiers = new Set(
+    original.flatMap((word, index) =>
+      index >= first && (word === "optional" || word === "unique") ? [index] : [],
+    ),
+  );
+  const words = original.filter((_, index) => index >= first && !modifiers.has(index));
   let value = 0;
   if (words[0] !== "set" && words[0] !== "seq" && FIELD_NAME.test(words[0] ?? "")) value = 1;
   if (words[value] === "set" || words[value] === "seq") {
@@ -58,12 +63,13 @@ function stateFieldType(line: string): string | undefined {
 /** Independent, test-only line scanner for valid SSF inventories. */
 function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): readonly string[] {
   const external = new Set(options.externalTypes ?? []);
+  const local = new Set((options.localTypes ?? []).map(({ name }) => name));
   const lines = source.split(/\r?\n/);
   const declarations = new Map(
     lines
       .map(structuralDeclaration)
       .filter((item): item is readonly [string, Multiplicity] => item !== undefined)
-      .filter(([name]) => !external.has(name) && !PRIMITIVES.has(name)),
+      .filter(([name]) => !external.has(name) && !local.has(name) && !PRIMITIVES.has(name)),
   );
   const explicitAliases = lines.flatMap((line): Array<readonly [string, string]> => {
     const words = line.trim().split(/\s+/);
@@ -83,6 +89,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
       declarations.has(target) &&
       !declarations.has(name) &&
       !external.has(name) &&
+      !local.has(name) &&
       !PRIMITIVES.has(name)
     ) {
       owned.add(name);
@@ -100,6 +107,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
         !declarations.has(candidate) &&
         !explicitNames.has(candidate) &&
         !external.has(candidate) &&
+        !local.has(candidate) &&
         !PRIMITIVES.has(candidate) &&
         TYPE_NAME.test(candidate),
     )
@@ -140,6 +148,18 @@ function externalTypes(markdown: string): string[] {
   );
 }
 
+function localTypes(markdown: string): { name: string; values?: readonly string[] }[] {
+  const match = /```types\r?\n([\s\S]*?)\r?\n```/.exec(markdown);
+  const body = match?.[1] ?? "";
+  return [
+    ...[...body.matchAll(/^opaque ([A-Z][A-Za-z0-9_]*)$/gm)].map(([, name]) => ({ name: name! })),
+    ...[...body.matchAll(/^([A-Z][A-Za-z0-9_]*) is (\S.*)$/gm)].map(([, name, rest]) => {
+      const values = rest!.split(/\s+or\s+/);
+      return values.length > 1 ? { name: name!, values } : { name: name! };
+    }),
+  ];
+}
+
 function memberTypeEvidence(markdown: string): string[] {
   return [...markdown.matchAll(/```(?:actions|queries)\r?\n([\s\S]*?)\r?\n```/g)].flatMap(
     ([, body]) =>
@@ -152,8 +172,12 @@ function memberTypeEvidence(markdown: string): string[] {
 
 function expectAgreement(label: string, source: string, options: OracleOptions = {}): void {
   const parsed = parseSimpleStateForm(source, options);
+  // The oracle compares ownership. An undeclared name is by definition not owned, so its
+  // diagnostic is orthogonal here and fixtures may leave alias candidates undeclared.
   expect(
-    parsed.diagnostics.filter(({ severity }) => severity === "error"),
+    parsed.diagnostics.filter(
+      ({ severity, code }) => severity === "error" && code !== "SSF_UNDECLARED_TYPE",
+    ),
     label,
   ).toEqual([]);
   expect(ownedTypeNameSpellings(parsed.document.inventory), label).toEqual(
@@ -202,6 +226,7 @@ a set of Thesis`;
       const markdown = await readFile(path, "utf8");
       expectAgreement(path, stateFence(markdown), {
         externalTypes: externalTypes(markdown),
+        localTypes: localTypes(markdown),
         evidenceTypeNames: memberTypeEvidence(markdown),
       });
     }

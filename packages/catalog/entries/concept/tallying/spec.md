@@ -22,10 +22,9 @@ external Subject
 
 ```state
 a set of Totals with
-  a subject Subject
+  a unique subject Subject
   a count Number
 
-Rule: at most one Total has each subject
 Rule: count is a positive whole number
 ```
 

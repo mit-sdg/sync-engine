@@ -1,6 +1,13 @@
 import { automaticAliasCandidates } from "./automatic-aliases.ts";
 import { PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
-import { error, type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic } from "./model.ts";
+import {
+  error,
+  type ParsedAlias,
+  type ParsedDeclaration,
+  type ParsedField,
+  type SsfDiagnostic,
+  type SsfLocalType,
+} from "./model.ts";
 
 export interface ResolutionFacts {
   readonly validStructuralNames: ReadonlySet<string>;
@@ -38,17 +45,161 @@ function cycleMembers(parentBySubset: ReadonlyMap<string, string>): ReadonlySet<
   return cyclic;
 }
 
+/** Fields a declaration may name: its own, then every ancestor's up the subset chain. */
+function constrainableFields(
+  declaration: ParsedDeclaration,
+  byName: ReadonlyMap<string, ParsedDeclaration>,
+  parentBySubset: ReadonlyMap<string, string>,
+): ReadonlyMap<string, ParsedField> {
+  const fields = new Map<string, ParsedField>();
+  const visited = new Set<string>();
+  let cursor: ParsedDeclaration | undefined = declaration;
+  while (cursor !== undefined && !visited.has(cursor.name.text)) {
+    visited.add(cursor.name.text);
+    for (const field of cursor.fields) if (!fields.has(field.name)) fields.set(field.name, field);
+    const parent = parentBySubset.get(cursor.name.text);
+    cursor = parent === undefined ? undefined : byName.get(parent);
+  }
+  return fields;
+}
+
+/** Report uniqueness constraints that name an unavailable field or repeat a combination. */
+function validateUniqueConstraints(
+  declarations: readonly ParsedDeclaration[],
+  uniqueDeclarations: ReadonlyMap<string, ParsedDeclaration>,
+  parentBySubset: ReadonlyMap<string, string>,
+  diagnostics: SsfDiagnostic[],
+): void {
+  for (const declaration of declarations) {
+    const available = constrainableFields(declaration, uniqueDeclarations, parentBySubset);
+    // The modifier is the one-field line, so it occupies that combination already.
+    const combinations = new Set(
+      declaration.fields.filter(({ unique }) => unique).map(({ name }) => name),
+    );
+    for (const constraint of declaration.constraints) {
+      const named = new Set<string>();
+      for (const field of constraint.fields) {
+        if (!available.has(field.text))
+          diagnostics.push(
+            error({
+              code: "SSF_UNKNOWN_UNIQUE_FIELD",
+              message: `Uniqueness constraint names ${JSON.stringify(field.text)}, which is not a field of declaration ${JSON.stringify(declaration.name.text)}.`,
+              suggestion:
+                "Name only fields of this declaration or of a declaration it is a subset of.",
+              span: field.span,
+            }),
+          );
+        else if (named.has(field.text))
+          diagnostics.push(
+            error({
+              code: "SSF_DUPLICATE_UNIQUE",
+              message: `Uniqueness constraint names field ${JSON.stringify(field.text)} more than once.`,
+              suggestion: "Name each field once; a combination constrains distinct fields.",
+              span: field.span,
+            }),
+          );
+        named.add(field.text);
+      }
+      const combination = constraint.fields
+        .map(({ text }) => text)
+        .sort()
+        .join(" and ");
+      if (combinations.has(combination))
+        diagnostics.push(
+          error({
+            code: "SSF_DUPLICATE_UNIQUE",
+            message: `Declaration ${JSON.stringify(declaration.name.text)} constrains the combination ${JSON.stringify(combination)} more than once.`,
+            suggestion: "State each unique combination once; field order does not distinguish it.",
+            span: constraint.span,
+          }),
+        );
+      combinations.add(combination);
+    }
+  }
+}
+
+/** Report subset conditions whose field is unavailable or whose value the field cannot hold. */
+function validateSubsetConditions(
+  declarations: readonly ParsedDeclaration[],
+  uniqueDeclarations: ReadonlyMap<string, ParsedDeclaration>,
+  parentBySubset: ReadonlyMap<string, string>,
+  localTypes: readonly SsfLocalType[],
+  diagnostics: SsfDiagnostic[],
+): void {
+  const valuesByType = new Map(
+    localTypes.flatMap(({ name, values }) =>
+      values === undefined ? [] : [[name, values] as const],
+    ),
+  );
+  for (const declaration of declarations) {
+    const { condition } = declaration;
+    if (condition === undefined) continue;
+    const field = constrainableFields(declaration, uniqueDeclarations, parentBySubset).get(
+      condition.field.text,
+    );
+    if (field === undefined) {
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_CONDITION",
+          message: `Subset condition names ${JSON.stringify(condition.field.text)}, which is not a field of ${JSON.stringify(declaration.name.text)} or of a declaration it is a subset of.`,
+          suggestion: "Condition a subset on a field its members carry.",
+          span: condition.field.span,
+        }),
+      );
+      continue;
+    }
+    const typeName = field.value.kind === "named" ? field.value.reference.text : undefined;
+    const values = typeName === undefined ? undefined : valuesByType.get(typeName);
+    if (values === undefined) {
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_CONDITION",
+          message: `Subset condition tests field ${JSON.stringify(condition.field.text)}, whose type ${JSON.stringify(typeName ?? "collection")} is not a declared enumeration.`,
+          suggestion:
+            "Condition a subset on a field whose type the Types fence declares as `Name is A or B`.",
+          span: condition.field.span,
+        }),
+      );
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const tested of condition.values) {
+      if (!values.includes(tested.text))
+        diagnostics.push(
+          error({
+            code: "SSF_INVALID_SUBSET_CONDITION",
+            message: `Subset condition tests for ${JSON.stringify(tested.text)}, which is not a value of ${JSON.stringify(typeName)}.`,
+            suggestion: `Use one of: ${values.join(", ")}.`,
+            span: tested.span,
+          }),
+        );
+      else if (seen.has(tested.text))
+        diagnostics.push(
+          error({
+            code: "SSF_INVALID_SUBSET_CONDITION",
+            message: `Subset condition tests for ${JSON.stringify(tested.text)} more than once.`,
+            suggestion: "List each value once.",
+            span: tested.span,
+          }),
+        );
+      seen.add(tested.text);
+    }
+  }
+}
+
 /** Resolve order-independent alias and subset graphs and report every invalid edge. */
 export function validateTypeGraph(
   declarations: readonly ParsedDeclaration[],
   aliases: readonly ParsedAlias[],
   external: ReadonlySet<string>,
   evidenceTypeNames: readonly string[],
+  localTypes: readonly SsfLocalType[],
   diagnostics: SsfDiagnostic[],
 ): ResolutionFacts {
   const declarationGroups = groupsOf(declarations, ({ name }) => name.text);
   const aliasGroups = groupsOf(aliases, ({ name }) => name.text);
-  const occupied = new Set([...declarationGroups.keys(), ...external, ...PRIMITIVES]);
+  const local = new Set(localTypes.map(({ name }) => name));
+  const occupied = new Set([...declarationGroups.keys(), ...external, ...local, ...PRIMITIVES]);
 
   for (const [name, group] of declarationGroups) {
     for (const declaration of group.slice(1))
@@ -61,13 +212,20 @@ export function validateTypeGraph(
         }),
       );
     for (const declaration of group) {
-      if (external.has(name) || PRIMITIVE_NAMES.has(name))
+      const collision = external.has(name)
+        ? "an external type"
+        : local.has(name)
+          ? "a concept-local type"
+          : PRIMITIVE_NAMES.has(name)
+            ? "an SSF primitive"
+            : undefined;
+      if (collision !== undefined)
         diagnostics.push(
           error({
             code: "SSF_NAME_COLLISION",
-            message: `Structural declaration ${JSON.stringify(name)} collides with ${external.has(name) ? "an external type" : "an SSF primitive"}.`,
+            message: `Structural declaration ${JSON.stringify(name)} collides with ${collision}.`,
             suggestion:
-              "Rename the structural declaration; owned, external, and primitive names are one exact namespace.",
+              "Rename the structural declaration; owned, external, concept-local, and primitive names are one exact namespace.",
             span: declaration.name.span,
           }),
         );
@@ -78,31 +236,11 @@ export function validateTypeGraph(
             error({
               code: "SSF_DUPLICATE_FIELD",
               message: `Field ${JSON.stringify(field.name)} occurs more than once in declaration ${JSON.stringify(name)}.`,
-              suggestion:
-                "Use a unique effective field name within this declaration, including inferred names.",
+              suggestion: "Use a unique field name within this declaration.",
               span: field.nameSpan,
             }),
           );
         seenFields.add(field.name);
-        const enumeration =
-          field.value.kind === "enumeration"
-            ? field.value
-            : field.value.kind === "collection" && field.value.element.kind === "enumeration"
-              ? field.value.element
-              : undefined;
-        const seenValues = new Set<string>();
-        for (const value of enumeration?.valueReferences ?? []) {
-          if (seenValues.has(value.text))
-            diagnostics.push(
-              error({
-                code: "SSF_DUPLICATE_ENUM_VALUE",
-                message: `Enumeration value ${JSON.stringify(value.text)} occurs more than once in this field.`,
-                suggestion: "List each enumeration value exactly once in this field.",
-                span: value.span,
-              }),
-            );
-          seenValues.add(value.text);
-        }
       }
     }
   }
@@ -125,7 +263,9 @@ export function validateTypeGraph(
     ),
   );
   const eligible = new Map(
-    [...uniqueDeclarations].filter(([name]) => !external.has(name) && !PRIMITIVE_NAMES.has(name)),
+    [...uniqueDeclarations].filter(
+      ([name]) => !external.has(name) && !local.has(name) && !PRIMITIVE_NAMES.has(name),
+    ),
   );
 
   // Explicit aliases take precedence over automatic evidence. Both maps initially
@@ -146,6 +286,7 @@ export function validateTypeGraph(
     evidenceTypeNames,
     new Set(aliasGroups.keys()),
     external,
+    local,
   );
   for (const { candidates, owners } of automatic.ambiguities) {
     diagnostics.push({
@@ -187,18 +328,20 @@ export function validateTypeGraph(
     }
     if (parent === undefined) {
       const category = external.has(authoredParent)
-        ? "external type"
-        : PRIMITIVE_NAMES.has(authoredParent)
-          ? "SSF primitive"
-          : aliasGroups.has(authoredParent)
-            ? "invalid alias"
-            : declarationGroups.has(authoredParent)
-              ? "ambiguous duplicate declaration"
-              : "unresolved name";
+        ? "an external type"
+        : local.has(authoredParent)
+          ? "a concept-local type"
+          : PRIMITIVE_NAMES.has(authoredParent)
+            ? "an SSF primitive"
+            : aliasGroups.has(authoredParent)
+              ? "an invalid alias"
+              : declarationGroups.has(authoredParent)
+                ? "an ambiguous duplicate declaration"
+                : "an unresolved name";
       diagnostics.push(
         error({
           code: "SSF_INVALID_SUBSET_PARENT",
-          message: `Subset parent ${JSON.stringify(authoredParent)} is an ${category}; a parent must be an exact owned structural declaration or explicit alias.`,
+          message: `Subset parent ${JSON.stringify(authoredParent)} is ${category}; a parent must be an exact owned structural declaration or explicit alias.`,
           suggestion:
             "Declare the parent as a unique identity or subset, or use an exact explicit alias for one.",
           span: declaration.parent.span,
@@ -213,6 +356,15 @@ export function validateTypeGraph(
       parentBySubset.set(declaration.name.text, parent);
     }
   }
+
+  validateUniqueConstraints(declarations, uniqueDeclarations, parentBySubset, diagnostics);
+  validateSubsetConditions(
+    declarations,
+    uniqueDeclarations,
+    parentBySubset,
+    localTypes,
+    diagnostics,
+  );
 
   const cyclicNames = cycleMembers(parentBySubset);
   for (const declaration of declarations) {
@@ -286,11 +438,13 @@ export function validateTypeGraph(
         ? "another alias (alias chains are not allowed)"
         : external.has(target)
           ? "an external type"
-          : PRIMITIVE_NAMES.has(target)
-            ? "a primitive"
-            : declarationGroups.has(target)
-              ? "an invalid or ambiguous structural declaration"
-              : "an unresolved name";
+          : local.has(target)
+            ? "a concept-local type"
+            : PRIMITIVE_NAMES.has(target)
+              ? "a primitive"
+              : declarationGroups.has(target)
+                ? "an invalid or ambiguous structural declaration"
+                : "an unresolved name";
       diagnostics.push(
         error({
           code: "SSF_INVALID_ALIAS_TARGET",

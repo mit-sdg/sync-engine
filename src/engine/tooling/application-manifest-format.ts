@@ -18,9 +18,10 @@ import { isAuthoredDeclarationPath, isDesignIdentifier } from "@engine/utils/des
 import { setOwn } from "@engine/utils/own-property";
 import { ordinal } from "@engine/utils/ordinal";
 import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
-import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
+import { ownedTypeNameSpellings, parseSimpleStateForm, SSF_PRIMITIVES } from "@ssf";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
+import { validateSpecificationSignatureTypes } from "./specification-signature-types.ts";
 import { specificationTypeNameEvidence } from "./specification-type-evidence.ts";
 
 type DataRecord = Record<string, unknown>;
@@ -45,12 +46,18 @@ export function specificationOwnedTypeNames(
 ): readonly string[] {
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
+    localTypes: specification.localTypes.map((type) => ({
+      name: type.name,
+      ...(type.kind === "enumeration" ? { values: type.values } : {}),
+    })),
     evidenceTypeNames: specificationTypeNameEvidence(specification),
   });
   const errors = parsed.diagnostics.filter(({ severity }) => severity === "error");
   if (errors.length > 0) {
+    // Advice explains why a name failed to resolve, so it travels with the failure here
+    // exactly as it does through `check-design`, and every repair keeps its suggestion.
     throw new Error(
-      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${errors
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid structural SSF State:\n${parsed.diagnostics
         .map((diagnostic) => {
           const location =
             diagnostic.span === undefined
@@ -60,8 +67,19 @@ export function specificationOwnedTypeNames(
                   line: specification.state.location.line + diagnostic.span.start.line - 1,
                   column: specification.state.location.column + diagnostic.span.start.column - 1,
                 };
-          return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}`;
+          return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}\n  suggestion: ${diagnostic.suggestion}`;
         })
+        .join("\n")}`,
+    );
+  }
+  const signatureIssues = validateSpecificationSignatureTypes(specification, parsed.document);
+  if (signatureIssues.length > 0) {
+    throw new Error(
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid action/query signature types:\n${signatureIssues
+        .map(
+          ({ code, message, suggestion, location }) =>
+            `- line ${location.line}, column ${location.column}: [${code}] ${message}\n  suggestion: ${suggestion}`,
+        )
         .join("\n")}`,
     );
   }
@@ -165,6 +183,14 @@ function nonemptyString(value: unknown, path: string): asserts value is string {
 
 function boolean(value: unknown, path: string): asserts value is boolean {
   if (typeof value !== "boolean") fail(path, "expected a boolean");
+}
+
+const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*$/;
+const ENUMERATION_VALUE = /^[A-Z][A-Z0-9_]*$/;
+
+function typeName(value: unknown, path: string): asserts value is string {
+  nonemptyString(value, path);
+  if (!TYPE_NAME.test(value as string)) fail(path, "expected an SSF type name");
 }
 
 function designIdentifier(value: unknown, path: string): asserts value is string {
@@ -658,6 +684,7 @@ function assertSpecification(
     "purpose",
     "principle",
     "externalTypes",
+    "localTypes",
     "state",
     "actions",
     "queries",
@@ -676,10 +703,57 @@ function assertSpecification(
     string(item.explanation, `${externalPath}.explanation`);
     assertLocation(item.location, `${externalPath}.location`);
   }
+  const externalNames = new Set(
+    array(data.externalTypes, `${path}.externalTypes`).map(
+      (external) => (external as DataRecord)["name"] as string,
+    ),
+  );
   uniqueFieldIndexes(data.externalTypes, `${path}.externalTypes`, "name");
+  // A manifest is checked independently of the parser that produced it, so it re-proves
+  // the Types-fence grammar and the single type namespace rather than trusting them.
+  for (const [index, local] of array(data.localTypes, `${path}.localTypes`).entries()) {
+    const localPath = `${path}.localTypes[${index}]`;
+    const kind = (local as DataRecord | undefined)?.["kind"];
+    const item = shape(local, localPath, [
+      "kind",
+      "name",
+      "explanation",
+      "location",
+      ...(kind === "enumeration" ? ["values"] : []),
+    ]);
+    if (kind !== "enumeration" && kind !== "opaque")
+      fail(`${localPath}.kind`, 'expected "enumeration" or "opaque"');
+    typeName(item.name, `${localPath}.name`);
+    if (SSF_PRIMITIVES.includes(item.name as (typeof SSF_PRIMITIVES)[number]))
+      fail(`${localPath}.name`, "collides with the SSF primitive of the same name");
+    if (externalNames.has(item.name))
+      fail(`${localPath}.name`, "collides with the external type of the same name");
+    string(item.explanation, `${localPath}.explanation`);
+    assertLocation(item.location, `${localPath}.location`);
+    if (kind === "enumeration") {
+      uniqueNonemptyStrings(item.values, `${localPath}.values`);
+      const values = item.values as readonly string[];
+      if (values.length < 2) fail(`${localPath}.values`, "expected two or more values");
+      for (const [valueIndex, value] of values.entries())
+        if (!ENUMERATION_VALUE.test(value))
+          fail(
+            `${localPath}.values[${valueIndex}]`,
+            "expected uppercase ASCII letters, digits, or `_`",
+          );
+    }
+  }
+  uniqueFieldIndexes(data.localTypes, `${path}.localTypes`, "name");
   const state = shape(data.state, `${path}.state`, ["body", "location"]);
   string(state.body, `${path}.state.body`);
   assertLocation(state.location, `${path}.state.location`);
+  // A manifest is read independently of the parser that wrote it, so every specification
+  // re-proves its State against its own Types fence. The checked-design branch separately
+  // compares the derived inventory; this proves the State is one a parser could produce.
+  try {
+    specificationOwnedTypeNames(data as unknown as ConceptSpecificationIR);
+  } catch (error) {
+    fail(`${path}.state`, error instanceof Error ? error.message : "declares invalid SSF State");
+  }
   const parsedActions = array(data.actions, `${path}.actions`);
   if (parsedActions.length === 0) fail(`${path}.actions`, "expected at least one action");
   for (const [index, action] of parsedActions.entries()) {

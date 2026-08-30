@@ -1382,6 +1382,47 @@ _get(value: String) : optional (result: String)
     };
     const example = (manifest: ApplicationManifestV1) => manifest.concepts.at(-1)!;
 
+    // A manifest is validated independently of the parser that produced it, so it re-proves
+    // the Types-fence grammar and the single type namespace instead of trusting them.
+    const withLocalType = (local: Record<string, unknown>) => (manifest: ApplicationManifestV1) => {
+      const target = example(manifest).specification! as unknown as Record<string, unknown>;
+      target["localTypes"] = [
+        ...(target["localTypes"] as unknown[]),
+        { explanation: "", location: { line: 1, column: 1 }, ...local },
+      ];
+    };
+    const localPath = "$.concepts[1].specification.localTypes[0]";
+    // Every specification re-proves its State, not only a checked design copy.
+    rejects((manifest) => {
+      const target = example(manifest).specification! as unknown as Record<string, unknown>;
+      const state = target["state"] as Record<string, unknown>;
+      target["localTypes"] = [
+        { kind: "opaque", name: "Notes", explanation: "", location: { line: 1, column: 1 } },
+      ];
+      state["body"] = "a set of Notes";
+    }, "$.concepts[1].specification.state");
+    rejects((manifest) => {
+      const target = example(manifest).specification! as unknown as Record<string, unknown>;
+      target["externalTypes"] = [
+        { name: "String", explanation: "", location: { line: 1, column: 1 } },
+      ];
+    }, "$.concepts[1].specification.state");
+
+    rejects(withLocalType({ kind: "opaque", name: "String" }), `${localPath}.name`);
+    rejects(withLocalType({ kind: "opaque", name: "mood" }), `${localPath}.name`);
+    rejects(
+      withLocalType({ kind: "enumeration", name: "Mood", values: ["ONLY"] }),
+      `${localPath}.values`,
+    );
+    rejects(
+      withLocalType({ kind: "enumeration", name: "Mood", values: [] }),
+      `${localPath}.values`,
+    );
+    rejects(
+      withLocalType({ kind: "enumeration", name: "Mood", values: ["Ok", "FINE"] }),
+      `${localPath}.values[0]`,
+    );
+
     rejects((manifest) => {
       const state = example(manifest).specification!.state as unknown as Record<string, unknown>;
       state.prose = "legacy following prose";

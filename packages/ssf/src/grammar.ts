@@ -1,13 +1,14 @@
-import { ENUM_VALUE, FIELD_NAME, inferredFieldName, TYPE_NAME } from "./names.ts";
+import { ENUM_VALUE, FIELD_NAME, TYPE_NAME } from "./names.ts";
 import {
   error,
   type ParsedAlias,
   type ParsedDeclaration,
-  type ParsedEnumeration,
   type ParsedField,
   type ParsedFieldType,
   type ParsedNamed,
   type ParsedReference,
+  type ParsedSubsetCondition,
+  type ParsedUniqueConstraint,
   type SourceLine,
   type SsfDiagnostic,
   type SsfMultiplicity,
@@ -89,9 +90,33 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     return undefined;
 
   const consumed = parentIndex ?? nameIndex;
-  const trailing = authored.slice(consumed + 1);
-  const hasWith = trailing[0] === "with";
-  if (trailing.length > 1 || (trailing.length > 0 && !hasWith)) return undefined;
+  let trailing = consumed + 1;
+  let condition: ParsedSubsetCondition | undefined;
+  if (declarationKind === "subset" && authored[trailing] === "where") {
+    const where = line.tokens[trailing]!;
+    const field = line.tokens[trailing + 1];
+    if (field === undefined || !FIELD_NAME.test(field.text) || authored[trailing + 2] !== "is")
+      return undefined;
+    const values: ParsedReference[] = [];
+    let cursor = trailing + 3;
+    for (; cursor < line.tokens.length; cursor += 1) {
+      const token = line.tokens[cursor]!;
+      if ((cursor - trailing - 3) % 2 === 0) {
+        if (!ENUM_VALUE.test(token.text)) break;
+        values.push({ text: token.text, span: token.span });
+      } else if (token.text !== "or") break;
+    }
+    const last = values.at(-1);
+    if (last === undefined || cursor - trailing - 3 !== values.length * 2 - 1) return undefined;
+    condition = {
+      field: { text: field.text, span: field.span },
+      values,
+      span: span(where.span.start, last.span.end),
+    };
+    trailing = cursor;
+  }
+  const hasWith = authored[trailing] === "with";
+  if (authored.length > trailing + (hasWith ? 1 : 0)) return undefined;
 
   return {
     name: { text: nameToken.text, span: nameToken.span },
@@ -100,7 +125,9 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     ...(parentToken === undefined
       ? {}
       : { parent: { text: parentToken.text, span: parentToken.span } }),
+    ...(condition === undefined ? {} : { condition }),
     fields: [],
+    constraints: [],
     rules: [],
     span: lineSpan(line),
     signatureSpan: lineSpan(line),
@@ -129,98 +156,92 @@ function parseAlias(line: SourceLine): ParsedAlias | undefined {
   };
 }
 
-function enumerationValues(
-  tokens: readonly SsfToken[],
-  start: number,
-): ParsedEnumeration | undefined {
-  const first = tokens[start];
-  if (first === undefined) return undefined;
-  const values: ParsedReference[] = [];
-  for (let index = start; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (token === undefined) return undefined;
-    if ((index - start) % 2 === 0) {
-      if (!ENUM_VALUE.test(token.text)) return undefined;
-      values.push({ text: token.text, span: token.span });
-    } else if (token.text !== "or") return undefined;
-  }
-  if (values.length < 2 || tokens.length - start !== values.length * 2 - 1) return undefined;
-  return {
-    kind: "enumeration",
-    values: values.map(({ text }) => text),
-    valueReferences: values,
-    span: span(first.span.start, tokens.at(-1)?.span.end ?? first.span.end),
-  };
-}
-
-function scalarEnumeration(
-  tokens: readonly SsfToken[],
-  start: number,
-): ParsedEnumeration | undefined {
-  const marker = tokens[start];
-  if (marker?.text !== "of") return undefined;
-  const parsed = enumerationValues(tokens, start + 1);
-  return parsed === undefined
-    ? undefined
-    : { ...parsed, span: span(marker.span.start, parsed.span.end) };
-}
-
 function namedType(token: SsfToken | undefined): ParsedNamed | undefined {
   return token !== undefined && TYPE_NAME.test(token.text)
     ? { kind: "named", reference: { text: token.text, span: token.span } }
     : undefined;
 }
 
-function parseField(line: SourceLine): ParsedField | undefined {
-  const authored = line.tokens;
-  const first = authored[0]?.text === "a" || authored[0]?.text === "an" ? 1 : 0;
-  const optionalIndex = authored.findIndex(
-    (token, index) => index >= first && token.text === "optional",
+const FIELD_MODIFIERS = ["optional", "unique"] as const;
+
+type FieldModifier = (typeof FIELD_MODIFIERS)[number];
+
+function fieldModifier(text: string | undefined): FieldModifier | undefined {
+  return FIELD_MODIFIERS.find((modifier) => modifier === text);
+}
+
+/** Index of each authored modifier token, ignoring a leading article. */
+function modifierIndexes(authored: readonly SsfToken[], article: number): readonly number[] {
+  return authored.flatMap((token, index) =>
+    index >= article && fieldModifier(token.text) !== undefined ? [index] : [],
   );
-  const tokens = authored.filter((_, index) => index >= first && index !== optionalIndex);
-  const explicitName =
-    tokens[0]?.text !== "set" &&
-    tokens[0]?.text !== "seq" &&
-    FIELD_NAME.test(tokens[0]?.text ?? "");
-  const valueStart = explicitName ? 1 : 0;
+}
+
+function articleLength(authored: readonly SsfToken[]): number {
+  return authored[0]?.text === "a" || authored[0]?.text === "an" ? 1 : 0;
+}
+
+/** Parse a field's tokens: an optional article, its modifiers, and a named value. */
+function parseFieldTokens(authored: readonly SsfToken[]): Omit<ParsedField, "span"> | undefined {
+  const article = articleLength(authored);
+  const indexes = modifierIndexes(authored, article);
+  const modifiers = new Set(indexes.map((index) => fieldModifier(authored[index]!.text)!));
+  if (modifiers.size !== indexes.length) return undefined;
+  const tokens = authored.filter((_, index) => index >= article && !indexes.includes(index));
+  const nameToken = tokens[0];
+  if (
+    nameToken === undefined ||
+    nameToken.text === "set" ||
+    nameToken.text === "seq" ||
+    !FIELD_NAME.test(nameToken.text)
+  )
+    return undefined;
 
   let value: ParsedFieldType | undefined;
-  const structural = tokens[valueStart]?.text;
+  const structural = tokens[1]?.text;
   if (structural === "set" || structural === "seq") {
-    let elementStart = valueStart + 1;
+    let elementStart = 2;
     if (tokens[elementStart]?.text === "of") elementStart += 1;
-    const element = enumerationValues(tokens, elementStart) ?? namedType(tokens[elementStart]);
-    if (
-      element !== undefined &&
-      (element.kind === "enumeration" || elementStart + 1 === tokens.length)
-    )
+    const element = namedType(tokens[elementStart]);
+    if (element !== undefined && elementStart + 1 === tokens.length)
       value = {
         kind: "collection",
         multiplicity: structural === "set" ? "set" : "sequence",
         element,
-        span: span(tokens[valueStart]!.span.start, tokens.at(-1)!.span.end),
+        span: span(tokens[1]!.span.start, tokens.at(-1)!.span.end),
       };
   } else {
-    value = scalarEnumeration(tokens, valueStart) ?? namedType(tokens[valueStart]);
-    if (value?.kind === "named" && valueStart + 1 !== tokens.length) value = undefined;
+    value = tokens.length === 2 ? namedType(tokens[1]) : undefined;
   }
-  const inferred =
-    value?.kind === "named"
-      ? value.reference
-      : value?.kind === "collection" && value.element.kind === "named"
-        ? value.element.reference
-        : undefined;
-  const name = explicitName ? tokens[0]?.text : inferredFieldName(inferred?.text ?? "");
-  const nameSpan = explicitName ? tokens[0]?.span : inferred?.span;
-  if (name === "" || nameSpan === undefined || value === undefined) return undefined;
+  if (value === undefined) return undefined;
   return {
-    name,
-    nameSpan,
-    inferredName: !explicitName,
-    optional: optionalIndex >= 0,
+    name: nameToken.text,
+    nameSpan: nameToken.span,
+    optional: modifiers.has("optional"),
+    unique: modifiers.has("unique"),
     value,
-    span: lineSpan(line),
   };
+}
+
+function parseField(line: SourceLine): ParsedField | undefined {
+  const parsed = parseFieldTokens(line.tokens);
+  return parsed === undefined ? undefined : { ...parsed, span: lineSpan(line) };
+}
+
+/** Parse `unique fieldName (and fieldName)*`; the field modifier is shorthand for one name. */
+function parseUniqueConstraint(line: SourceLine): ParsedUniqueConstraint | undefined {
+  const tokens = line.tokens;
+  if (tokens[0]?.text !== "unique") return undefined;
+  const fields: ParsedReference[] = [];
+  for (let index = 1; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    if (index % 2 === 1) {
+      if (!FIELD_NAME.test(token.text)) return undefined;
+      fields.push({ text: token.text, span: token.span });
+    } else if (token.text !== "and") return undefined;
+  }
+  if (fields.length === 0 || tokens.length !== fields.length * 2) return undefined;
+  return { fields, span: lineSpan(line) };
 }
 
 function ruleMarker(line: SourceLine): string | undefined {
@@ -242,15 +263,19 @@ function nearMissRuleDiagnostic(line: SourceLine, marker: string): SsfDiagnostic
   });
 }
 
-function orphanedLineDiagnostic(line: SourceLine, marker?: string): SsfDiagnostic {
+function orphanedLineDiagnostic(
+  line: SourceLine,
+  marker?: string,
+  body: "field" | "uniqueness constraint" = "field",
+): SsfDiagnostic {
   const nearMiss = marker !== undefined && marker !== RULE_MARKER;
-  const subject = marker === undefined ? "valid SSF field" : `indented \`${marker}\` line`;
+  const subject = marker === undefined ? `valid SSF ${body}` : `indented \`${marker}\` line`;
   return error({
     code: "SSF_ORPHANED_LINE",
     message: `This ${subject} has no enclosing SSF declaration${nearMiss ? ` and does not use the exact \`${RULE_MARKER}\` marker` : ""}.`,
     suggestion:
       marker === undefined
-        ? "Add an enclosing declaration ending in `with` before this field."
+        ? `Add an enclosing declaration ending in \`with\` before this ${body}.`
         : nearMiss
           ? `Add an enclosing declaration and use \`${RULE_MARKER}\`; or unindent the corrected line to make it a top-level rule.`
           : "Add an enclosing declaration before this line, or remove its indentation to make it a top-level rule.",
@@ -272,8 +297,10 @@ function malformedLineDiagnostic(
   const field = kind === "field";
   return error({
     code: field ? "SSF_MALFORMED_FIELD" : "SSF_MALFORMED_DECLARATION",
-    message: `This ${field ? "indented" : "top-level"} line is not ${field ? "an SSF field or" : "an SSF declaration, alias, or"} \`${RULE_MARKER}\` line.`,
-    suggestion: `Use a complete ${field ? "field" : "declaration or alias"}, or prefix prose with the exact \`${RULE_MARKER}\` marker.`,
+    message: `This ${field ? "indented" : "top-level"} line is not ${field ? "an SSF field, uniqueness constraint, or" : "an SSF declaration, alias, or"} \`${RULE_MARKER}\` line.`,
+    suggestion: field
+      ? `Use a complete field, a \`unique fieldName (and fieldName)*\` constraint, or prefix prose with the exact \`${RULE_MARKER}\` marker.`
+      : `Use a complete declaration or alias, or prefix prose with the exact \`${RULE_MARKER}\` marker.`,
     span: lineSpan(line),
   });
 }
@@ -296,6 +323,7 @@ function canonicalStructural(structural: SsfMultiplicity): "element" | "seq" | "
 function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[] {
   const diagnostics: SsfDiagnostic[] = [];
   const hasFields = declaration.fields.length > 0;
+  const hasBody = hasFields || declaration.constraints.length > 0;
   const tokens = declaration.signature.tokens;
   const authored = words(declaration.signature);
   const canonical = canonicalStructural(declaration.multiplicity);
@@ -307,7 +335,7 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   const subsetMissingArticle =
     declaration.declarationKind === "subset" && declaration.structuralIndex === 1;
   if (collectionHasArticle) replacements.set(0, articleFor(declaration.multiplicity));
-  const canonicalLine = `${correctedTokens(tokens, replacements)}${hasFields && !declaration.hasWith ? " with" : ""}`;
+  const canonicalLine = `${correctedTokens(tokens, replacements)}${hasBody && !declaration.hasWith ? " with" : ""}`;
   const subsetArticleSuggestion = `Use \`a ${canonicalLine}\` or \`an ${canonicalLine}\`.`;
   const structuralToken = tokens[declaration.structuralIndex];
 
@@ -352,22 +380,23 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
       );
     }
   }
-  if (declaration.hasWith && declaration.fields.length === 0 && !declaration.hasMalformedField) {
+  if (declaration.hasWith && !hasBody && !declaration.hasMalformedField) {
     diagnostics.push(
       error({
         code: "SSF_MALFORMED_DECLARATION",
-        message: "A declaration ending in `with` must have at least one indented field.",
-        suggestion: "Remove `with` or add at least one indented field.",
+        message:
+          "A declaration ending in `with` must have at least one indented field or constraint.",
+        suggestion: "Remove `with` or add an indented field or uniqueness constraint.",
         span: tokens.at(-1)?.span ?? declaration.signatureSpan,
       }),
     );
   }
-  if (hasFields && !declaration.hasWith) {
+  if (hasBody && !declaration.hasWith) {
     const end = declaration.signatureSpan.end;
     diagnostics.push(
       error({
         code: "SSF_MISSING_WITH",
-        message: "A declaration with indented fields must include `with`.",
+        message: "A declaration with an indented body must include `with`.",
         suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
         span: span(end, end),
       }),
@@ -376,43 +405,91 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   return diagnostics;
 }
 
-function fieldDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
+/** Render a repaired field line under its authored indentation. */
+function repairedLine(line: SourceLine, tokens: readonly SsfToken[]): string {
+  const indentation = line.text.slice(
+    0,
+    (line.tokens[0]?.span.start.offset ?? line.start) - line.start,
+  );
+  return `${indentation}${tokens.map(({ text }) => text).join(" ")}`;
+}
+
+/** Order a field's tokens canonically: the article, then its modifiers, then the rest. */
+function canonicalFieldTokens(
+  tokens: readonly SsfToken[],
+  field: Omit<ParsedField, "span">,
+): readonly SsfToken[] {
+  const article = articleLength(tokens);
+  const indexes = modifierIndexes(tokens, article);
+  return [
+    ...tokens.slice(0, article),
+    ...FIELD_MODIFIERS.filter((modifier) => field[modifier]).map((modifier) => ({
+      ...tokens[indexes[0]!]!,
+      text: modifier,
+    })),
+    ...tokens.filter((_, index) => index >= article && !indexes.includes(index)),
+  ];
+}
+
+/**
+ * Diagnose an indented line parseField rejected, suggesting the field name it omits. The
+ * suggestion is a complete repair or none: a line that still needs correcting is worse
+ * guidance than the general message, so it is only offered once it parses and passes.
+ */
+function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
   const tokens = line.tokens;
-  const indentation = line.text.slice(0, (tokens[0]?.span.start.offset ?? line.start) - line.start);
-  const hasArticle = tokens[0]?.text === "a" || tokens[0]?.text === "an";
-  const optionalIndex = tokens.findIndex(({ text }) => text === "optional");
-  if (optionalIndex < 0) return undefined;
-  const optionalToken = tokens[optionalIndex]!;
-  if (tokens.some(({ text }) => text === "set" || text === "seq"))
+  const article = articleLength(tokens);
+  let start = article;
+  while (fieldModifier(tokens[start]?.text) !== undefined) start += 1;
+  const structural = tokens[start]?.text === "set" || tokens[start]?.text === "seq";
+  const source = structural ? tokens.at(-1) : tokens[start];
+  if (source !== undefined && TYPE_NAME.test(source.text)) {
+    const name = { ...source, text: `${source.text[0]!.toLowerCase()}${source.text.slice(1)}` };
+    const named = parseFieldTokens([...tokens.slice(0, start), name, ...tokens.slice(start)]);
+    const repaired =
+      named === undefined
+        ? undefined
+        : canonicalFieldTokens([...tokens.slice(0, start), name, ...tokens.slice(start)], named);
+    if (repaired !== undefined && fieldViolation(parseFieldTokens(repaired)) === undefined)
+      return error({
+        code: "SSF_MALFORMED_FIELD",
+        message: "An SSF field needs a lowercase name before its value.",
+        suggestion: repairedLine(line, repaired),
+        span: source.span,
+      });
+  }
+  return malformedLineDiagnostic(line, "field");
+}
+
+/** The notation's own rule on a field the grammar accepts: a collection is never optional. */
+function fieldViolation(
+  field: Omit<ParsedField, "span"> | undefined,
+): "optional-collection" | undefined {
+  return field?.optional === true && field.value.kind === "collection"
+    ? "optional-collection"
+    : undefined;
+}
+
+/** Diagnose a parsed field whose modifiers the grammar accepts but the notation does not. */
+function fieldDiagnostic(line: SourceLine, field: ParsedField): SsfDiagnostic | undefined {
+  const tokens = line.tokens;
+  const article = articleLength(tokens);
+  const indexes = modifierIndexes(tokens, article);
+  if (fieldViolation(field) === "optional-collection")
     return error({
       code: "SSF_OPTIONAL_COLLECTION",
       message: "SSF collections are never optional; an empty collection represents absence.",
       suggestion: "Remove `optional` from this field.",
-      span: optionalToken.span,
+      span: tokens[indexes.find((index) => tokens[index]!.text === "optional")!]!.span,
     });
-  const expectedOptionalIndex = hasArticle ? 1 : 0;
-  if (optionalIndex !== expectedOptionalIndex) {
-    const withoutOptional = tokens
-      .filter((_, index) => index !== optionalIndex)
-      .map(({ text }) => text);
-    if (hasArticle) withoutOptional[0] = "an";
-    withoutOptional.splice(expectedOptionalIndex, 0, "optional");
-    return error({
-      code: "SSF_MISPLACED_OPTIONAL",
-      message:
-        "The `optional` modifier must precede the field name and follow the article when present.",
-      suggestion: `${indentation}${withoutOptional.join(" ")}`,
-      span: optionalToken.span,
-    });
-  }
-  if (tokens[0]?.text === "a")
-    return error({
-      code: "SSF_ARTICLE",
-      message: "Use `an` before `optional`.",
-      suggestion: `${indentation}${correctedTokens(tokens, new Map([[0, "an"]]))}`,
-      span: tokens[0].span,
-    });
-  return undefined;
+  const misplaced = indexes.find((index, position) => index !== article + position);
+  if (misplaced === undefined) return undefined;
+  return error({
+    code: "SSF_MISPLACED_MODIFIER",
+    message: `The \`${tokens[misplaced]!.text}\` modifier must come before the field name.`,
+    suggestion: repairedLine(line, canonicalFieldTokens(tokens, field)),
+    span: tokens[misplaced]!.span,
+  });
 }
 
 export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
@@ -443,14 +520,21 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
     }
     if (indented) {
       const field = parseField(line);
-      if (field === undefined) {
-        diagnostics.push(malformedLineDiagnostic(line, "field"));
+      const constraint = field === undefined ? parseUniqueConstraint(line) : undefined;
+      if (field !== undefined) {
+        if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
+        else {
+          current.fields.push(field);
+          const diagnostic = fieldDiagnostic(line, field);
+          if (diagnostic !== undefined) diagnostics.push(diagnostic);
+        }
+      } else if (constraint !== undefined) {
+        if (current === undefined)
+          diagnostics.push(orphanedLineDiagnostic(line, undefined, "uniqueness constraint"));
+        else current.constraints.push(constraint);
+      } else {
+        diagnostics.push(fieldFailureDiagnostic(line));
         if (current !== undefined) current.hasMalformedField = true;
-      } else if (current === undefined) diagnostics.push(orphanedLineDiagnostic(line));
-      else {
-        current.fields.push(field);
-        const diagnostic = fieldDiagnostic(line);
-        if (diagnostic !== undefined) diagnostics.push(diagnostic);
       }
       if (current !== undefined) current.span = span(current.span.start, lineSpan(line).end);
       continue;

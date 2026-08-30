@@ -2,25 +2,29 @@
 
 Simple State Form (SSF) is the State language for a concept specification: a small
 English-like notation for declaring the facts a concept owns. Write one declaration,
-alias, or rule per top-level line, and put a declaration's fields on the following
-indented lines. All of it lives inside the concept's `state` fence.
+alias, or rule per top-level line, and put a declaration's fields and uniqueness
+constraints on the following indented lines. All of it lives inside the concept's
+`state` fence.
 
 ```state
 a set of Items with
-  a title String
+  a unique title String
   an optional owner Person
   a watchers set of Person
-  a status of OPEN or DONE
+  a status Status
 
-a Completed set of Items with
+a set of Votes with
+  an item Item
+  a voter Voter
+  unique item and voter
+
+a Completed set of Items where status is DONE with
   a completedAt DateTime
 
 an element Settings with
   a retentionDays Number
 
 alias WorkItem for Items
-
-Rule: at most one Item has each title
 ```
 
 ## Grammar
@@ -28,18 +32,15 @@ Rule: at most one Item has each title
 ```text
 document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
-subsetDecl := (a|an) Subtype (element|set) [of] (Type|Subtype|Alias) [with] declarationBody?
-declarationBody := (INDENT (field | ruleLine))+
+subsetDecl := (a|an) Subtype (element|set) [of] Parent [condition] [with] declarationBody?
+condition := where fieldName is VALUE (or VALUE)*
+declarationBody := (INDENT (field | uniqueLine | ruleLine))+
 aliasDecl := alias Alias for (Type|Subtype)
-field := [a|an] (requiredField | optional optionalField)
-requiredField := inferredField | fieldName (scalar|collection)
-optionalField := named | fieldName scalar
-inferredField := named | (set|seq) [of] named
-scalar := named | enum
-named := Type | Parameter | primitive
-enum := of values
-collection := (set|seq) [of] (named|values)
-values := VALUE (or VALUE)+
+field := [a|an] modifier* fieldName (named|collection)
+modifier := optional | unique
+uniqueLine := unique fieldName (and fieldName)*
+named := Type | Parameter | Local | primitive
+collection := (set|seq) [of] named
 primitive := Number | String | Flag | Date | DateTime
 ruleLine := Rule: TEXT
 ```
@@ -51,8 +52,8 @@ gets a diagnostic that names its source location.
 
 A top-level declaration uses `a set of Items`, `a seq of Items`, or `an element
 Settings`. The `of` after a structural keyword is optional. A declaration with fields
-ends its first line with `with` and needs at least one field; an attached `Rule:` line
-does not count as one.
+ends its first line with `with` and needs at least one field or uniqueness constraint.
+A `Rule:` line attaches to a declaration without `with` and satisfies neither.
 
 A subset such as `a Completed set of Items` classifies members of an existing parent. It
 may use `set` or `element`, but not `seq`. The parent is a declaration, another subset,
@@ -62,7 +63,7 @@ parent cycles.
 
 ## Fields
 
-A field may carry an explicit lowercase name before its value:
+A field writes a lowercase name before its value:
 
 ```state
 a set of Items with
@@ -70,29 +71,104 @@ a set of Items with
   an optional owner Person
   a members set of Person
   a history seq of Event
-  a status of OPEN or DONE
-  a flags set of VISIBLE or HIDDEN
+  a status Status
+  a flags set of Visibility
 ```
 
-An indented field may omit its article. `optional` comes before the field name, and
-directly after the article when there is one: `an optional owner Person`. Collections
-are never optional; an empty collection represents absence.
+An indented field may omit its article, and `a` and `an` both read. The modifiers
+`optional` and `unique` go between the article and the field name, each at most once and
+in either order. Because a field's own name is read after them, `optional` and `unique`
+cannot themselves name a field, and neither can `set` or `seq`; every other lowercase
+name is free. Collections are never optional; an empty collection represents absence.
+Field names are unique within their declaration. A collection uses `set` or `seq` with an
+optional `of`, and holds scalars rather than further collections. Named-type unions are
+not part of SSF: `or` separates enumeration values, which are unique within their
+enumeration.
 
-Omit the field name when a scalar or collection supplies a single named type. SSF
-lowercases the first character of that spelling:
+## Uniqueness
+
+Prefix a field with `unique` when its values must be unique among members of that
+declaration:
 
 ```state
-an element Example with
-  a Profile
-  a set of Options
+a set of Items with
+  a unique title String
 ```
 
-These fields are named `profile` and `options`. An enumeration always needs a written
-name. Field names, written or inferred, are unique within their declaration.
+When it is a _combination_ of fields that must be unique, put `unique` on its own line
+and join the field names with `and`:
 
-A collection uses `set` or `seq` with an optional `of`, and holds scalars rather than
-further collections. Named-type unions are not part of SSF: `or` separates enumeration
-values, which are unique within their enumeration.
+```state
+a set of Votes with
+  an item Item
+  a voter Voter
+  a direction Direction
+  unique item and voter
+```
+
+No two Votes share both an item and a voter, though many Votes share either one. The
+modifier is shorthand for a line naming that one field, so write the modifier where the
+field is declared and the line where it is inherited. Field order does not distinguish a
+combination, and a declaration may carry several.
+
+The constraint applies to the declaration carrying it. A `unique` field or line on a
+subset constrains only members of that subset, and may name the parent's fields as well
+as the subset's own. An `optional unique` field may be absent from multiple members;
+values that are present remain unique. A `unique` collection field compares the whole
+collection, so no two members hold the same set or the same sequence:
+
+```state
+a set of Conversations with
+  a unique participants set of Person
+```
+
+## Declared types
+
+Every name a field value uses resolves to one of four things: an identity this State
+owns, an external parameter, an SSF primitive, or a concept-local type — and a name that
+resolves to none of them draws `SSF_UNDECLARED_TYPE`. Concept-local types are declared
+beside the external parameters in the concept's `types` fence:
+
+```types
+external Person
+  The person who authors a note.
+
+Status is OPEN or DONE
+  Whether the item is still open.
+
+opaque Secret
+  A password verifier; its representation is the implementer's choice.
+```
+
+`Name is A or B` is an enumeration, and its values are the ones a subset condition may
+test. `opaque Name` says the representation is deliberately the implementer's business.
+Write an SSF primitive directly instead of declaring another name for it; constraints
+that narrow a primitive belong where they are enforced. Refining an identity is what a
+subset already does.
+
+Declaration, alias, external, concept-local, and primitive names are one namespace: a
+Types declaration may not shadow a primitive, and a State declaration may not shadow a
+Types name. The concept parser owns the `types` fence and reports its form, duplicate,
+and primitive-collision diagnostics; SSF reports collisions it can see against State.
+
+## Subset conditions
+
+A subset may state which members it classifies by testing a field against declared
+enumeration values:
+
+```state
+a set of Invitations with
+  a target Target
+  an invitee Person
+  a status InvitationStatus
+
+a Pending set of Invitations where status is PENDING with
+  unique target and invitee
+```
+
+The field resolves against the subset and its ancestors, and every tested value has to
+be one the field's enumeration declares. A condition on a field whose type is not a
+declared enumeration fails, as does an unknown value.
 
 ## Aliases
 
@@ -133,19 +209,22 @@ or `_`. Enumeration values begin with an uppercase letter and otherwise use uppe
 letters, digits, and `_`.
 
 Declaration and alias names are unique across a concept's State and share that namespace
-with the concept's external parameters and the SSF primitives. Field names are local to
+with the concept's external parameters, its concept-local types, and the SSF primitives. Field names are local to
 their declaration, and enumeration values to their enumeration.
 
 ## What a field value may name
 
-A field value may name an identity the concept owns, an external parameter, a primitive,
-or a conventional or refined type that nothing declares. SSF records which of those it
-is and leaves an unrecognized name as written: State is a design notation, not a closed
-type universe. Action and query types are open in the same way.
+A field value may name an identity the concept owns, an external parameter, a
+concept-local enumeration or opaque type, or an SSF primitive. An unrecognized State name is retained as
+unresolved and fails with `SSF_UNDECLARED_TYPE`. Action and query signature types resolve
+against that same closed universe and fail the same way, including when the name is
+nested inside a type argument or union.
 
 Ownership matters where something is proved against it. Subset parents and alias targets
 resolve within the same State, and an application's qualified binding target names an
-owned spelling of the instance it targets.
+owned spelling of the instance it targets. Signature validation runs only after plural
+joins consume signature evidence, so a singular spelling established by that join is
+owned before it is checked.
 
 ## What the declarations mean
 
@@ -164,7 +243,7 @@ Prose the notation cannot express goes on a `Rule:` line, either at the top leve
 indented under a declaration:
 
 ```state
-Rule: at most one Item has each title
+Rule: an Item's owner must be active
 ```
 
 SSF keeps the line as written and makes no claim about it, even when the text resembles
@@ -180,6 +259,7 @@ line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
 `sequence`, and `sequences` are reported as near misses for `seq`, and `singleton` for
 `element`.
 
-SSF proves the structural declarations, their graph, and the owned type names they
-establish. It does not prove rule text or refinement meaning, and says nothing about
-behavior, storage layout, or implementation.
+SSF proves the structural declarations, their graph, the uniqueness constraints and the
+fields they name, and the owned type names they establish. Tooling then checks action and
+query signature names against that resolved inventory. Neither check proves rule text or
+type meaning, and neither says anything about behavior, storage layout, or implementation.

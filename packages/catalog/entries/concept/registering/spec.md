@@ -26,9 +26,7 @@ external Occurrence
 ```state
 a set of Registrations with
   a subject Subject
-  an occurrence Occurrence
-
-Rule: at most one Registration has each occurrence
+  a unique occurrence Occurrence
 ```
 
 ## Actions

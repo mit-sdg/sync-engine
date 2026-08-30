@@ -114,35 +114,43 @@ _get(note: Note) : optional (author: Person, text: String)
 ## `Types`
 
 `Types` contains exactly one `types` fence. The fence may be empty. Version 1
-accepts only external declarations:
+accepts external parameters, concept-local enumerations, and opaque local types:
 
 ```types
 external User
   The person who authors a comment.
 
-external Target
-  The object receiving the comment.
+Status is DRAFT or PUBLISHED
+  The lifecycle states a publication may occupy.
+
+opaque Secret
+  A verifier whose representation belongs to the implementation.
 ```
 
 The declaration grammar is:
 
 ```text
 external Name
+Name is VALUE or VALUE [or VALUE ...]
+opaque Name
   optional explanation, which may continue on later indented lines
 ```
 
 An external type is an opaque parameter supplied by each application that uses
-the concept. The explanation is retained as documentation. The `external`
-keyword is required; concrete types and bindings are application design,
-not concept-local declarations. Give an external type the uppercase type-name form
-SSF uses for every other type, and do not reuse the name of an SSF primitive.
+the concept. An enumeration declares two or more uppercase values. An opaque local type
+makes an intentionally unspecified representation explicit. Explanations are retained as
+documentation. Concrete types and bindings are application design, not concept-local
+declarations. Give every declared type the uppercase type-name form SSF uses, and do not
+reuse the name of an SSF primitive. Write the primitive itself rather than declaring a
+new name for it, and state narrowing constraints where they are enforced.
 
-Other names in State, action signatures, and query signatures are descriptive
-vocabulary, not declarations that must be repeated in Types. A name may identify
-concept-owned state, a conventional value such as `String` or `Flag`, or a
-refinement whose accepted values are established by action conditions and
-refusals. Version 1 parses type-expression shape but neither defines a primitive
-type universe nor requires every named type to have a declaration.
+Every State field and every named type in an action or query signature resolves to a
+concept-owned identity, an external parameter, a concept-local enumeration or opaque
+type, or an SSF primitive. An unresolved name fails with `SSF_UNDECLARED_TYPE`,
+whether it appears in a State field or a signature, and the check descends into nested
+type arguments and unions. Owned, external, concept-local, and primitive names share one
+namespace, so a Types declaration may not shadow a primitive or a State declaration. Version 1 parses type-expression shape without
+claiming semantic equivalence with an implementation language.
 
 ## `State`
 
@@ -155,8 +163,8 @@ concept-specification IR.
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
 The parser recognizes set, sequence, element, subset, alias, and field declarations
-together with their multiplicities, identifiers, articles, and subset graph. Declared
-names are taken as written.
+together with their multiplicities, identifiers, articles, uniqueness constraints, and
+subset graph. Declared names are taken as written.
 
 Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
 the declaration, are joined when they form a singular and plural pair. Irregular pairs
@@ -170,18 +178,26 @@ Parents that name an external parameter or primitive, unresolved or duplicate na
 self-parenting, and cycles fail with source-located diagnostics.
 
 Declaration and alias names are unique across the fence and share that namespace with
-external parameters and SSF primitives. Field names are unique within their declaration,
-and enumeration values within their enumeration.
+external parameters, concept-local types, and SSF primitives. Field names are unique within their declaration,
+and enumeration values within their enumeration. Prefix a field with `unique` to require
+distinct values among members of that declaration; a unique collection field compares the
+whole collection. Require a _combination_ to be distinct with a `unique` line joining
+field names with `and`, such as `unique item and voter`. The modifier is shorthand for a
+line naming one field, so the line form is what a subset uses to constrain a field it
+inherits rather than declares; a subset's constraints bind only its own members. Every field writes a lowercase name before
+its value, and `optional` and `unique` sit between any article and that name in either
+order.
 
-Invariant prose goes on a `Rule:` line, at the top level or indented under a
-declaration. The parser retains the line and makes no claim about it, while every other
-nonblank line must parse as a declaration, alias, or field. Field value names stay open,
-because they may denote conventional or concept-local refinement types: an unrecognized
-name is retained and classified as unresolved rather than rejected, and becomes owned
-only through a joined pair or an alias. Operation signature types need not appear in
-State. The parser does not prove rules, refinement meaning, action conditions or
-effects, query meaning, storage layout, State/storage agreement, or implementation
-behavior.
+Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or
+indented under a declaration. The parser retains the line and makes no claim about it,
+while every other nonblank line must parse as a declaration, alias, or field. An
+unrecognized field value is retained as unresolved in the IR and fails the check.
+Operation signature types need not appear in State, but each must resolve against the
+same declared, owned, local, or primitive universe. Signature names first supply plural-join evidence; tooling
+then validates them against the resolved inventory, so a singular spelling established
+only by that join is accepted. The parser does not prove rules, type meaning, action
+conditions or effects, query meaning, storage layout, State/storage agreement, or
+implementation behavior.
 
 Config-based checking uses the owned-name inventory for one proof: a
 qualified external-binding target must name a declaration or alias owned by the selected
@@ -260,9 +276,11 @@ Action names begin with an ASCII letter. Query names begin with `_`. Field
 names begin with an ASCII letter or `_`; subsequent characters may also be
 digits. Names must be unique in their applicable scope.
 
-Type expressions remain implementation-language-independent references. They
-do not establish runtime schemas or semantic equivalence with TypeScript types.
-In particular, a concept identity commonly erases to `string` in an
+Type expressions remain implementation-language-independent references. Every named
+node, including a nested type argument or union member, must resolve to an owned,
+external, concept-local, or primitive type. `null` and `undefined` introduce no names.
+Resolved expressions do not establish runtime schemas or semantic equivalence with
+TypeScript types. In particular, a concept identity commonly erases to `string` in an
 implementation.
 
 ## Agreement with TypeScript

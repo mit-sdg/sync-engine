@@ -28,13 +28,12 @@ external Item
 a set of Labels with
   a scope Scope
   a name String
+  unique scope and name
 
 a set of Applications with
   a label Label
   an item Item
-
-Rule: within one Scope each Label name is unique
-Rule: at most one Application has each label and item pair
+  unique label and item
 ```
 
 ## Actions

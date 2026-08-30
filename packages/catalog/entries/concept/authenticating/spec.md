@@ -16,22 +16,23 @@ registered.
 ## Types
 
 ```types
-
+opaque Secret
+  A password verifier; its representation is the implementer's choice.
 ```
 
 ## State
 
 ```state
 a set of Accounts with
-  a username Username
-  a salt Salt
+  a unique username String
+  a salt String
   a passwordVerifier Secret
 ```
 
 ## Actions
 
 ```actions
-register (username: Username, password: Password) : return (account: Account)
+register (username: String, password: String) : return (account: Account)
   where username is not 3 to 32 ASCII letters, digits, underscores, or hyphens
   then
     refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
@@ -47,7 +48,7 @@ register (username: Username, password: Password) : return (account: Account)
     bind account to that Account
     return account
 
-authenticate (username: Username, password: Password) : return (account: Account)
+authenticate (username: String, password: String) : return (account: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
@@ -56,7 +57,7 @@ authenticate (username: Username, password: Password) : return (account: Account
     bind account to the verified Account
     return account
 
-changePassword (username: Username, currentPassword: Password, newPassword: Password) : return (account: Account)
+changePassword (username: String, currentPassword: String, newPassword: String) : return (account: Account)
   where newPassword is shorter than 8 characters or longer than 128 characters
   then
     refuse WEAK_PASSWORD "A password must contain 8 to 128 characters."
@@ -69,7 +70,7 @@ changePassword (username: Username, currentPassword: Password, newPassword: Pass
     bind account to that Account
     return account
 
-unregister (username: Username, password: Password) : return (account: Account)
+unregister (username: String, password: String) : return (account: Account)
   where username is unknown or password does not verify
   then
     refuse INVALID_CREDENTIALS "The username or password is incorrect."
@@ -83,7 +84,7 @@ unregister (username: Username, password: Password) : return (account: Account)
 ## Queries
 
 ```queries
-_registered (username: Username) : one (registered: Flag)
-  answers true when an Account has the Username
-  answers false for an unknown Username
+_registered (username: String) : one (registered: Flag)
+  answers true when an Account has the username
+  answers false for an unknown username
 ```

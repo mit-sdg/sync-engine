@@ -118,8 +118,12 @@ describe("generic design guidance", () => {
     }
     expect(review).toContain("Do not reject a cycle merely because instance A");
     expect(review).toContain("core-owned\n`RequestBoundary`");
-    expect(reference.replace(/\s+/g, " ")).toContain(
-      "Invariant prose goes on a `Rule:` line, at the top level or indented under a declaration",
+    const normalizedReference = reference.replace(/\s+/g, " ");
+    expect(normalizedReference).toContain(
+      "Prefix a field with `unique` to require distinct values among members of that declaration; a unique collection field compares the whole collection.",
+    );
+    expect(normalizedReference).toContain(
+      "Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or indented under a declaration",
     );
     expect(reference).toContain("qualified external-binding target");
   });

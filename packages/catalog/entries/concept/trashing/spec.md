@@ -16,18 +16,19 @@ later trash are refused because purge is permanent.
 ```types
 external Item
   The object whose removal disposition is tracked.
+
+DispositionStatus is KEPT or TRASHED or PURGED
+  Where the item currently sits.
 ```
 
 ## State
 
 ```state
 a set of Dispositions with
-  an item Item
+  a unique item Item
   a status DispositionStatus
   an optional trashedAt DateTime
   an optional purgedAt DateTime
-
-Rule: at most one Disposition has each Item
 ```
 
 ## Actions
