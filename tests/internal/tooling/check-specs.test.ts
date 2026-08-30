@@ -804,7 +804,7 @@ describe("concept discovery", () => {
       await writeFile(
         join(project, "design", "concepts", "Sessioning.md"),
         "# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n" +
-          "## Types\n\n```types\n```\n\n## State\n\n```state\n```\n\n" +
+          "## Types\n\n```types\n```\n\n## State\n\n```state\na set of Sessions\n```\n\n" +
           "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\nstart (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\n```\n\n" +
           "## Queries\n\n```queries\n```\n",
       );

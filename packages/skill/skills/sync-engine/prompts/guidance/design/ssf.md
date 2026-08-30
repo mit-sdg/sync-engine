@@ -24,9 +24,11 @@ with uppercase ASCII letters, digits, or `_` only. Always write fieldName.
 
 Declare every type in the Types fence: `external Name` for an application-supplied
 parameter, `Name is A or B` for an enumeration, `opaque Name` when the representation is
-deliberately the implementer's. A name that is none of these, nor owned, nor primitive,
-draws `SSF_UNDECLARED_TYPE`. Never name a type for a primitive—write the primitive on the
-field and state what narrows it where it is enforced.
+deliberately the implementer's. A State field name that is none of these, nor owned, nor
+primitive, draws `SSF_UNDECLARED_TYPE` advice; the same unresolved name anywhere in an
+action or query signature is an error, including inside a type argument or union. Never
+name a type for a primitive—write the primitive on the field and state what narrows it
+where it is enforced.
 
 Make every nonblank line parse or start with `Rule:`. Put a `Rule:` line at top level or
 indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A top-level
@@ -45,9 +47,10 @@ subset, or either alias; forward chains work. Unresolved, external, primitive, a
 invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
 rejected.
 
-Structures, aliases, externals, and primitives share one State namespace. Keep
-fieldNames unique per declaration, VALUEs per enum. An unresolved field value is a
-legal conventional/refinement reference, not an owned binding target.
+Structures, aliases, externals, local types, and primitives share one type universe.
+Keep fieldNames unique per declaration and VALUEs per enum. Resolve State first so
+signature evidence can establish a plural join, then reject every signature name absent
+from the resolved owned inventory, externals, local types, and primitives.
 
 Mark a field `unique` when its values must be unique among members of that declaration; a
 unique collection field compares the whole collection. A `unique` line names the fields of

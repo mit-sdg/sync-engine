@@ -346,6 +346,23 @@ Comments.User is Person
     }
   });
 
+  test("rejects undeclared signature types at their exact authored locations", async () => {
+    const markdown = concept.replace("text: String", "text: Blancmange");
+    const line = markdown.split("\n").findIndex((text) => text.includes("text: Blancmange")) + 1;
+    const column = markdown.split("\n")[line - 1]!.indexOf("Blancmange") + 1;
+    const root = await fixture({ "signature.md": markdown });
+    try {
+      await expect(checkDesignFiles(["signature.md"], root)).rejects.toThrow(
+        new RegExp(
+          `signature\\.md:${String(line)}:${String(column)}: \\[SSF_UNDECLARED_TYPE\\].*Declare it in the Types fence`,
+          "s",
+        ),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test.each([
     ["person", "SSF_INVALID_EXTERNAL_NAME"],
     ["String", "SSF_NAME_COLLISION"],
@@ -387,10 +404,12 @@ Comments.User is Person
   });
 
   test("reports automatic-alias advice without failing the design check", async () => {
-    const ambiguous = concept.replace(
-      "a set of Notes with\n  an author Person\n  a text String",
-      "a set of Axes with\n  a short Ax\n  an anatomical Axis",
-    );
+    const ambiguous = concept
+      .replace(
+        "a set of Notes with\n  an author Person\n  a text String",
+        "a set of Axes with\n  a short Ax\n  an anatomical Axis",
+      )
+      .replaceAll(": Note", ": Axes");
     expect(specificationOwnedTypeNames(parseSpec(ambiguous).specification!)).toEqual(["Axes"]);
     const root = await fixture({ "advice.md": ambiguous });
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});

@@ -21,6 +21,7 @@ import { isSemVer, PACKAGE_NAME } from "@engine/utils/package-version";
 import { ownedTypeNameSpellings, parseSimpleStateForm } from "@ssf";
 import type { ApplicationDiagnostic } from "./diagnostics.ts";
 import type { ApplicationManifestV1, ManifestEndpointV1 } from "./manifest.ts";
+import { validateSpecificationSignatureTypes } from "./specification-signature-types.ts";
 import { specificationTypeNameEvidence } from "./specification-type-evidence.ts";
 
 type DataRecord = Record<string, unknown>;
@@ -66,6 +67,17 @@ export function specificationOwnedTypeNames(
                 };
           return `- line ${location.line}, column ${location.column}: [${diagnostic.code}] ${diagnostic.message}`;
         })
+        .join("\n")}`,
+    );
+  }
+  const signatureIssues = validateSpecificationSignatureTypes(specification, parsed.document);
+  if (signatureIssues.length > 0) {
+    throw new Error(
+      `authored design: concept definition ${JSON.stringify(specification.definitionName)} has invalid action/query signature types:\n${signatureIssues
+        .map(
+          ({ code, message, suggestion, location }) =>
+            `- line ${location.line}, column ${location.column}: [${code}] ${message}\n  suggestion: ${suggestion}`,
+        )
         .join("\n")}`,
     );
   }

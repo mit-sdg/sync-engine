@@ -5478,8 +5478,27 @@ export declare function parseSimpleStateForm(fence: MarkdownFence, options?: Sim
 export declare function validateSimpleStateForm(fence: MarkdownFence, options?: SimpleStateFormOptions): readonly SimpleStateFormIssue[];
 export {};
 
+=== dist/engine/tooling/specification-signature-types.d.ts ===
+import type { ConceptSpecificationIR, SpecificationLocationIR } from "../reads/ir.ts";
+import { type SsfDocument } from "./ssf-package/index.js";
+export interface SpecificationSignatureTypeIssue {
+    readonly severity: "error";
+    readonly code: "SSF_UNDECLARED_TYPE";
+    readonly message: string;
+    readonly suggestion: string;
+    readonly location: SpecificationLocationIR;
+}
+/** Check signatures only after their spelling evidence has resolved State ownership. */
+export declare function validateSpecificationSignatureTypes(specification: ConceptSpecificationIR, document: SsfDocument): readonly SpecificationSignatureTypeIssue[];
+
 === dist/engine/tooling/specification-type-evidence.d.ts ===
-import type { ConceptSpecificationIR } from "../reads/ir.ts";
+import type { ConceptSpecificationIR, SpecificationLocationIR } from "../reads/ir.ts";
+export interface SpecificationTypeNameOccurrence {
+    readonly name: string;
+    readonly location: SpecificationLocationIR;
+}
+/** Every located named type in action and query parameters and results. */
+export declare function specificationTypeNameOccurrences(specification: ConceptSpecificationIR): readonly SpecificationTypeNameOccurrence[];
 /** Exact authored action/query parameter and result type spellings for SSF resolution. */
 export declare function specificationTypeNameEvidence(specification: ConceptSpecificationIR): readonly string[];
 

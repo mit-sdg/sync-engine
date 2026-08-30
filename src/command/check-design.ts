@@ -7,10 +7,11 @@ import {
   type AuthoredApplicationDesignDocument,
 } from "@engine/tooling/authored-application-design";
 import { scanDesignMarkdown } from "@engine/tooling/markdown-design-source";
+import { parseSimpleStateForm, type SimpleStateFormIssue } from "@engine/tooling/simple-state-form";
 import {
-  validateSimpleStateForm,
-  type SimpleStateFormIssue,
-} from "@engine/tooling/simple-state-form";
+  validateSpecificationSignatureTypes,
+  type SpecificationSignatureTypeIssue,
+} from "@engine/tooling/specification-signature-types";
 import { parseSpec, type ConceptSpecDiagnostic } from "@engine/reactions/concepts/concept-spec";
 import { specificationTypeNameEvidence } from "@engine/tooling/specification-type-evidence";
 import { parseCommandOptions, type OutputFormat } from "./command-options.ts";
@@ -92,6 +93,23 @@ function simpleStateFormDiagnostics(issues: readonly SimpleStateFormIssue[]): Di
   );
 }
 
+function signatureTypeDiagnostics(
+  source: string,
+  issues: readonly SpecificationSignatureTypeIssue[],
+): DiagnosticRecord[] {
+  return issues.map(
+    ({ code, message, suggestion, severity, location }): DiagnosticRecord => ({
+      code,
+      path: source,
+      line: location.line,
+      column: location.column,
+      severity,
+      message,
+      suggestion,
+    }),
+  );
+}
+
 function applicationFormDiagnostic(issue: ApplicationDesignFormIssue): DiagnosticRecord {
   return {
     code: issue.code,
@@ -146,20 +164,35 @@ async function inspectDesignFiles(
         const stateFence = scanDesignMarkdown(markdown, label).fences.find(
           ({ info }) => info === "state",
         );
-        const stateIssues =
-          stateFence === undefined
-            ? []
-            : validateSimpleStateForm(stateFence, {
-                externalTypes: parsed.specification.externalTypes,
-                localTypes: parsed.specification.localTypes,
-                evidenceTypeNames: specificationTypeNameEvidence(parsed.specification),
-              });
+        if (stateFence === undefined) throw new Error("parsed concept has no State fence");
+        const parsedState = parseSimpleStateForm(stateFence, {
+          externalTypes: parsed.specification.externalTypes,
+          localTypes: parsed.specification.localTypes,
+          evidenceTypeNames: specificationTypeNameEvidence(parsed.specification),
+        });
+        const stateIssues = parsedState.issues;
         const stateErrors = stateIssues.filter(({ severity }) => severity === "error");
         if (stateErrors.length > 0) {
           failures.push(
             `Design document ${label} is invalid: ${describeSimpleStateFormIssues(stateErrors)}`,
           );
           diagnostics.push(...simpleStateFormDiagnostics(stateErrors));
+          continue;
+        }
+        const signatureIssues = validateSpecificationSignatureTypes(
+          parsed.specification,
+          parsedState.document,
+        );
+        if (signatureIssues.length > 0) {
+          failures.push(
+            `Design document ${label} is invalid: ${signatureIssues
+              .map(
+                ({ code, message, suggestion, location }) =>
+                  `${label}:${location.line}:${location.column}: [${code}] ${message}\n  suggestion: ${suggestion}`,
+              )
+              .join("\n")}`,
+          );
+          diagnostics.push(...signatureTypeDiagnostics(label, signatureIssues));
           continue;
         }
         const stateAdvice = stateIssues.filter(({ severity }) => severity === "advice");

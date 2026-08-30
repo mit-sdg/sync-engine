@@ -131,9 +131,6 @@ beside the external parameters in the concept's `types` fence:
 external Person
   The person who authors a note.
 
-Username is String
-  A login name, unique among accounts.
-
 Status is OPEN or DONE
   Whether the item is still open.
 
@@ -141,11 +138,11 @@ opaque Secret
   A password verifier; its representation is the implementer's choice.
 ```
 
-`Name is <primitive>` refines a primitive; the rules that narrow it live in the action
-branches, not here. `Name is A or B` is an enumeration, and its values are the ones a
-subset condition may test. `opaque Name` says the representation is deliberately the
-implementer's business — the explicit way to opt out rather than the accidental one.
-Refining an _identity_ is what a subset already does, so a refinement base is a primitive.
+`Name is A or B` is an enumeration, and its values are the ones a subset condition may
+test. `opaque Name` says the representation is deliberately the implementer's business.
+Write an SSF primitive directly instead of declaring another name for it; constraints
+that narrow a primitive belong where they are enforced. Refining an identity is what a
+subset already does.
 
 SSF itself takes these names as given; the concept parser owns the `types` fence and
 reports its own form, duplicate, and collision diagnostics.
@@ -213,14 +210,17 @@ their declaration, and enumeration values to their enumeration.
 
 ## What a field value may name
 
-A field value may name an identity the concept owns, an external parameter, a primitive,
-or a conventional or refined type that nothing declares. SSF records which of those it
-is and leaves an unrecognized name as written: State is a design notation, not a closed
-type universe. Action and query types are open in the same way.
+A field value may name an identity the concept owns, an external parameter, a
+concept-local enumeration or opaque type, or an SSF primitive. An unrecognized State
+name is retained as unresolved and draws `SSF_UNDECLARED_TYPE` advice. Action and query
+signature types resolve against that same closed universe; an unrecognized signature
+name is an error, including when it is nested inside a type argument or union.
 
 Ownership matters where something is proved against it. Subset parents and alias targets
 resolve within the same State, and an application's qualified binding target names an
-owned spelling of the instance it targets.
+owned spelling of the instance it targets. Signature validation runs only after plural
+joins consume signature evidence, so a singular spelling established by that join is
+owned before it is checked.
 
 ## What the declarations mean
 
@@ -256,5 +256,6 @@ line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
 `element`.
 
 SSF proves the structural declarations, their graph, the uniqueness constraints and the
-fields they name, and the owned type names they establish. It does not prove rule text or refinement meaning,
-and says nothing about behavior, storage layout, or implementation.
+fields they name, and the owned type names they establish. Tooling then checks action and
+query signature names against that resolved inventory. Neither check proves rule text or
+type meaning, and neither says anything about behavior, storage layout, or implementation.
