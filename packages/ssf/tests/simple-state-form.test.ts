@@ -1177,6 +1177,24 @@ alias Human for People`).document.inventory;
     ]);
   });
 
+  test("keeps a concept-local name out of the automatic alias inventory", () => {
+    const source = "a set of Items";
+    const evidenceTypeNames = ["Item"];
+    expect(
+      ownedTypeNameSpellings(
+        parseSimpleStateForm(source, { evidenceTypeNames }).document.inventory,
+      ),
+    ).toEqual(["Item", "Items"]);
+    // Declaring `Item` locally takes the spelling, so the plural join must not also claim
+    // it; otherwise one name would be both owned and concept-local.
+    expect(
+      ownedTypeNameSpellings(
+        parseSimpleStateForm(source, { evidenceTypeNames, localTypes: [{ name: "Item" }] }).document
+          .inventory,
+      ),
+    ).toEqual(["Items"]);
+  });
+
   test("keeps an alias out of the concept-local namespace", () => {
     expect(
       parseSimpleStateForm("a set of Items with\n  a name String\n\nalias Status for Items", {

@@ -167,10 +167,10 @@ export interface SsfDocument {
   readonly inventory: SsfTypeInventory;
 }
 
-/** One concept-local type declared in the Types fence: a refinement, enumeration, or opaque. */
+/** One concept-local type declared in the Types fence: an enumeration or an opaque type. */
 export interface SsfLocalType {
   readonly name: string;
-  /** Declared values, for an enumeration; absent for a refinement or an opaque type. */
+  /** Declared values, for an enumeration; absent for an opaque type. */
   readonly values?: readonly string[];
 }
 

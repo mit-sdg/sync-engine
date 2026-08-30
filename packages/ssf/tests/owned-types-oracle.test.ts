@@ -59,6 +59,7 @@ function stateFieldType(line: string): string | undefined {
 /** Independent, test-only line scanner for valid SSF inventories. */
 function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): readonly string[] {
   const external = new Set(options.externalTypes ?? []);
+  const local = new Set((options.localTypes ?? []).map(({ name }) => name));
   const lines = source.split(/\r?\n/);
   const declarations = new Map(
     lines
@@ -101,6 +102,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
         !declarations.has(candidate) &&
         !explicitNames.has(candidate) &&
         !external.has(candidate) &&
+        !local.has(candidate) &&
         !PRIMITIVES.has(candidate) &&
         TYPE_NAME.test(candidate),
     )

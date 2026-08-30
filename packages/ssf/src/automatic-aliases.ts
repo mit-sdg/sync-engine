@@ -23,7 +23,9 @@ function exactPluralPair(left: string, right: string): boolean {
 
 /**
  * Relate only exact authored evidence to one non-element structure or subset owner.
- * The pluralizer's output is compared, never inserted into the inventory.
+ * The pluralizer's output is compared, never inserted into the inventory. A name the
+ * Types fence already claims is not a candidate: joining it would make one spelling both
+ * owned and declared, which the single type namespace forbids.
  */
 export function automaticAliasCandidates(
   declarations: readonly ParsedDeclaration[],
@@ -31,6 +33,7 @@ export function automaticAliasCandidates(
   evidenceTypeNames: readonly string[],
   explicitAliasNames: ReadonlySet<string>,
   external: ReadonlySet<string>,
+  local: ReadonlySet<string>,
 ): {
   readonly aliases: ReadonlyMap<string, string>;
   readonly ambiguities: readonly {
@@ -55,6 +58,7 @@ export function automaticAliasCandidates(
       eligibleStructuralNames.has(candidate) ||
       explicitAliasNames.has(candidate) ||
       external.has(candidate) ||
+      local.has(candidate) ||
       PRIMITIVE_NAMES.has(candidate)
     ) {
       continue;

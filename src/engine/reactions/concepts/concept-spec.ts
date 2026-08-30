@@ -885,6 +885,7 @@ const TYPES_EXTERNAL = /^external\s+([A-Za-z_][A-Za-z0-9_]*)$/;
 const TYPES_OPAQUE = /^opaque\s+([A-Za-z_][A-Za-z0-9_]*)$/;
 const TYPES_LOCAL = /^([A-Za-z_][A-Za-z0-9_]*)\s+is\s+(\S.*)$/;
 const TYPES_ENUM_VALUE = /^[A-Z][A-Z0-9_]*$/;
+const TYPES_NAME = /^[A-Z][A-Za-z0-9_]*$/;
 const TYPES_FORMS =
   "a Types declaration must be `external Name`, `opaque Name`, or `Name is` two or more values";
 
@@ -910,9 +911,17 @@ function typeDeclarationOf(
     return undefined;
   }
   const location = located(name);
-  // SSF reports an external colliding with a primitive against its own namespace; a
-  // concept-local name never reaches SSF as a declaration, so it is checked here.
+  // SSF validates external names against its own namespace; a concept-local name never
+  // reaches SSF as a declaration, so its form and collisions are checked here.
   if (external !== null) return { form: "external", name, explanation, location };
+  if (!TYPES_NAME.test(name)) {
+    report(
+      "CONCEPT_SPEC_DECLARATION",
+      `the type "${name}" must start with an uppercase ASCII letter and continue with letters, digits, or "_"`,
+      location,
+    );
+    return undefined;
+  }
   if (isPrimitive(name)) {
     report(
       "CONCEPT_SPEC_DECLARATION",

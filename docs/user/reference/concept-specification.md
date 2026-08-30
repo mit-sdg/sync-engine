@@ -190,9 +190,9 @@ order.
 Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or
 indented under a declaration. The parser retains the line and makes no claim about it,
 while every other nonblank line must parse as a declaration, alias, or field. An
-unrecognized field value is retained as unresolved and draws advice. Operation signature
-types need not appear in State, but each must resolve against the same declared, owned,
-local, or primitive universe. Signature names first supply plural-join evidence; tooling
+unrecognized field value is retained as unresolved in the IR and fails the check.
+Operation signature types need not appear in State, but each must resolve against the
+same declared, owned, local, or primitive universe. Signature names first supply plural-join evidence; tooling
 then validates them against the resolved inventory, so a singular spelling established
 only by that join is accepted. The parser does not prove rules, type meaning, action
 conditions or effects, query meaning, storage layout, State/storage agreement, or

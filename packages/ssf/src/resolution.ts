@@ -44,7 +44,7 @@ function typeReference(
       };
 }
 
-/** A name no kind claims. Structural uses already diagnose; field values draw advice below. */
+/** A name no kind claims. Structural uses already diagnose; field values fail below. */
 function unresolved(reference: ParsedReference): SsfTypeReference {
   return {
     text: reference.text,

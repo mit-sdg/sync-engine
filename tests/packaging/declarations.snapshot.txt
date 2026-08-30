@@ -5508,9 +5508,11 @@ import type { ParsedDeclaration } from "./model.ts";
 export declare function stateFieldTypeEvidence(declarations: readonly ParsedDeclaration[]): readonly string[];
 /**
  * Relate only exact authored evidence to one non-element structure or subset owner.
- * The pluralizer's output is compared, never inserted into the inventory.
+ * The pluralizer's output is compared, never inserted into the inventory. A name the
+ * Types fence already claims is not a candidate: joining it would make one spelling both
+ * owned and declared, which the single type namespace forbids.
  */
-export declare function automaticAliasCandidates(declarations: readonly ParsedDeclaration[], eligibleStructuralNames: ReadonlySet<string>, evidenceTypeNames: readonly string[], explicitAliasNames: ReadonlySet<string>, external: ReadonlySet<string>): {
+export declare function automaticAliasCandidates(declarations: readonly ParsedDeclaration[], eligibleStructuralNames: ReadonlySet<string>, evidenceTypeNames: readonly string[], explicitAliasNames: ReadonlySet<string>, external: ReadonlySet<string>, local: ReadonlySet<string>): {
     readonly aliases: ReadonlyMap<string, string>;
     readonly ambiguities: readonly {
         readonly candidates: readonly string[];
@@ -5664,10 +5666,10 @@ export interface SsfDocument {
     readonly rules: readonly SsfRuleLine[];
     readonly inventory: SsfTypeInventory;
 }
-/** One concept-local type declared in the Types fence: a refinement, enumeration, or opaque. */
+/** One concept-local type declared in the Types fence: an enumeration or an opaque type. */
 export interface SsfLocalType {
     readonly name: string;
-    /** Declared values, for an enumeration; absent for a refinement or an opaque type. */
+    /** Declared values, for an enumeration; absent for an opaque type. */
     readonly values?: readonly string[];
 }
 export interface SsfParseOptions {

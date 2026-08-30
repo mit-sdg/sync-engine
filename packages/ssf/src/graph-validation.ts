@@ -281,6 +281,7 @@ export function validateTypeGraph(
     evidenceTypeNames,
     new Set(aliasGroups.keys()),
     external,
+    local,
   );
   for (const { candidates, owners } of automatic.ambiguities) {
     diagnostics.push({

@@ -14,16 +14,16 @@ Defined in [Authenticating](../design/concepts/Authenticating.md), line 1.
 
 #### Actions
 
-- `register(username: Username, password: Password) : return (account: Account)`
+- `register(username: String, password: String) : return (account: Account)`
   - Refuses `INVALID_USERNAME`: A username must contain 3 to 32 letters, numbers, underscores, or hyphens.
   - Refuses `WEAK_PASSWORD`: A password must contain 8 to 128 characters.
   - Refuses `USERNAME_TAKEN`: That username is already registered.
-- `authenticate(username: Username, password: Password) : return (account: Account)`
+- `authenticate(username: String, password: String) : return (account: Account)`
   - Refuses `INVALID_CREDENTIALS`: The username or password is incorrect.
 
 #### Queries
 
-- `_registered(username: Username) : one (registered: Flag)`
+- `_registered(username: String) : one (registered: Flag)`
 
 #### Instances
 
@@ -76,7 +76,7 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Actions
 
-- `start(subject: Subject) : return (session: Session, expiresAt: Time)`
+- `start(subject: Subject) : return (session: Session, expiresAt: DateTime)`
 - `current(session: Session) : return (subject: Subject)`
   - Refuses `UNKNOWN_SESSION`: This session is not active.
 - `end(session: Session) : return (ended: Flag)`
@@ -84,7 +84,7 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Queries
 
-- `_active(session: Session) : optional (subject: Subject, expiresAt: Time)`
+- `_active(session: Session) : optional (subject: Subject, expiresAt: DateTime)`
 
 #### Instances
 
