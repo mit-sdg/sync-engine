@@ -205,8 +205,11 @@ function satisfiesMajorRange(version: string, range: string): boolean {
 }
 
 function verifyRuntime(release: SkillRelease, runtime: RuntimeVersions): void {
-  if (runtime.bun !== undefined && runtime.bun !== release.toolchain.bun) {
-    throw new Error(`Running Bun ${runtime.bun} does not match ${release.toolchain.bun}`);
+  if (runtime.bun !== undefined) {
+    if (runtime.bun !== release.toolchain.bun) {
+      throw new Error(`Running Bun ${runtime.bun} does not match ${release.toolchain.bun}`);
+    }
+    return;
   }
   if (!satisfiesMajorRange(runtime.node, release.toolchain.node)) {
     throw new Error(`Running Node ${runtime.node} does not satisfy ${release.toolchain.node}`);

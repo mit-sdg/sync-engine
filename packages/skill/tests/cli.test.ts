@@ -27,6 +27,8 @@ const fixtureRoot = fileURLToPath(new URL("./fixtures/cli", import.meta.url));
 const expectedRoot = fileURLToPath(new URL("./fixtures/expected", import.meta.url));
 const temporary: string[] = [];
 const instant = new Date("2026-08-19T09:06:43.000Z");
+const paseoAgentId = "11111111-1111-4111-8111-111111111111";
+const secondPaseoAgentId = "22222222-2222-4222-8222-222222222222";
 
 async function application(label: string): Promise<string> {
   const path = await realpath(await mkdtemp(resolve(tmpdir(), `sync-engine-skill-cli-${label}-`)));
@@ -189,7 +191,7 @@ async function finalizeInitial(root: string, launch: InitialLaunch, response?: s
     "## Status\r\n\r\nComplete.\r\n\r\n## Changed\r\n\r\nNone.\r\n\r\n## Questions\r\n\r\nNone.\r\n";
   await writeFile(launch.responsePath, content, "utf8");
   const result = await invoke(
-    ["launch", "complete", launch.recordPath, "--agent-id", "designer-agent-1", "--status", "Idle"],
+    ["launch", "complete", launch.recordPath, "--agent-id", paseoAgentId, "--status", "Idle"],
     root,
   );
   return { result, content };
@@ -213,6 +215,28 @@ describe("skill CLI help and arguments", () => {
     const root = await application("help");
     const expected = await readFile(resolve(expectedRoot, "help.txt"), "utf8");
     expect(await invoke([], root)).toEqual({ code: 0, stdout: expected, stderr: "" });
+  });
+
+  test("creates role-aware grants and recommends the native harness", async () => {
+    const root = await application("grant-and-harness");
+    const grant = await invoke(
+      ["grant", "init", "--role", "designer", "--phase", "decomposition"],
+      root,
+    );
+    expect(JSON.parse(grant.stdout)).toEqual({
+      readableAreas: [],
+      writableAreas: [{ area: "current-decomposition", path: "decomposition.md" }],
+      toolKinds: ["repository-read", "repository-write"],
+      projectShell: "none",
+      network: false,
+      generatedOutput: false,
+      longRunningProcesses: false,
+    });
+    const recommendation = await invoke(["harness", "recommend"], root, {
+      environment: { PI_CODING_AGENT: "true", PASEO_AGENT_ID: "outer" },
+    });
+    expect(recommendation.stdout).toContain("Recommended execution harness: pi");
+    expect(recommendation.stdout).toContain("Outer supervisor: paseo");
   });
 
   test.each([
@@ -555,7 +579,9 @@ describe("prompt preparation and completion", () => {
       "brief.md",
     ]);
 
-    const configured = await prepareInitial(root, { timeoutSeconds: 42 });
+    const configuredRoot = await application("configured-timeout");
+    await started(configuredRoot);
+    const configured = await prepareInitial(configuredRoot, { timeoutSeconds: 42 });
     expect(await readLaunchRecord(configured.recordPath)).toMatchObject({ timeoutSeconds: 42 });
     expect(parseLabeledOutput(configured.output).Timeout).toEqual([
       "42 seconds; coordinator-managed observation limit; CLI does not observe harness",
@@ -610,7 +636,7 @@ describe("prompt preparation and completion", () => {
     expect(parseLabeledOutput(result.stdout)).toEqual({
       "Launch finalized": [launch.recordPath],
       Response: [launch.responsePath],
-      Harness: ["paseo; agent designer-agent-1"],
+      Harness: [`paseo; agent ${paseoAgentId}`],
       Status: ["completed"],
       Warning: ["paseo capabilities were prompt-guided rather than harness-enforced."],
     });
@@ -618,7 +644,7 @@ describe("prompt preparation and completion", () => {
     expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
       state: "finalized",
       harness: "paseo",
-      agentId: "designer-agent-1",
+      agentId: paseoAgentId,
       status: "completed",
       enforcement: "prompt-guided",
     });
@@ -634,7 +660,7 @@ describe("prompt preparation and completion", () => {
     expect(parseLabeledOutput(result.stdout)).toEqual({
       "Launch finalized": [launch.recordPath],
       Response: [launch.responsePath],
-      Harness: ["paseo; agent designer-agent-1"],
+      Harness: [`paseo; agent ${paseoAgentId}`],
       Status: ["completed"],
       Warning: ["paseo capabilities were prompt-guided rather than harness-enforced."],
     });
@@ -704,6 +730,59 @@ describe("prompt preparation and completion", () => {
     expect(shown.stdout).toContain("## Active decisions");
   });
 
+  test("runs authored structure validation before semantic contract criticism", async () => {
+    const root = await application("critic-preflight");
+    const unit = await started(root);
+    const task = await copyFixture(root, "initial-task.md");
+    const design = resolve(root, "design/concepts");
+    await mkdir(design, { recursive: true });
+    const changed = resolve(design, "Posting.md");
+    await writeFile(changed, "# malformed\n");
+    const grant = resolve(root, "coordination/critic-grant.json");
+    await writeFile(
+      grant,
+      `${JSON.stringify({
+        readableAreas: [{ area: "design", path: "concepts/Posting.md" }],
+        writableAreas: [],
+        toolKinds: ["repository-read"],
+        projectShell: "none",
+        network: false,
+        generatedOutput: false,
+        longRunningProcesses: false,
+      })}\n`,
+    );
+    const result = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "critic",
+        "--phase",
+        "contracts",
+        "--task",
+        task,
+        "--grant",
+        grant,
+        "--harness",
+        "paseo",
+        "--input",
+        `brief=${resolve(unit, "brief.md")}`,
+        "--input",
+        `changed-contracts=${changed}`,
+      ],
+      root,
+      { designCheck: async () => ({ exitCode: 1, output: "duplicate H1\n" }) },
+    );
+    expect(result).toEqual(
+      cliFailure(
+        "Contract syntax validation failed before semantic criticism:\nduplicate H1",
+        "Continue the contract designer with these diagnostics, then rerun the critic preparation.",
+      ),
+    );
+  });
+
   test("rejects stale design for a nonwriter using the bound canonical root", async () => {
     const root = await application("stale-design");
     await started(root);
@@ -726,7 +805,15 @@ describe("prompt preparation and completion", () => {
     );
     await writeFile(resolve(design, "types.md"), "# Changed types\n", "utf8");
     const result = await invoke(
-      ["launch", "complete", launch.recordPath, "--agent-id", "agent", "--status", "completed"],
+      [
+        "launch",
+        "complete",
+        launch.recordPath,
+        "--agent-id",
+        paseoAgentId,
+        "--status",
+        "completed",
+      ],
       root,
     );
     expect(result).toEqual(cliFailure("Design changed after preparation"));
@@ -738,14 +825,22 @@ describe("prompt preparation and completion", () => {
     await started(root);
     const launch = await prepareInitial(root);
     const completed = await invoke(
-      ["launch", "complete", launch.recordPath, "--agent-id", "agent", "--status", "completed"],
+      [
+        "launch",
+        "complete",
+        launch.recordPath,
+        "--agent-id",
+        paseoAgentId,
+        "--status",
+        "completed",
+      ],
       root,
     );
     expect(completed).toEqual(cliFailure(`Native response is empty: ${launch.responsePath}`));
     expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
 
     const failed = await invoke(
-      ["launch", "complete", launch.recordPath, "--agent-id", "agent", "--status", "failed"],
+      ["launch", "complete", launch.recordPath, "--agent-id", paseoAgentId, "--status", "failed"],
       root,
     );
     expect(failed.code).toBe(0);
@@ -779,7 +874,9 @@ describe("prompt preparation and completion", () => {
       "designer/decomposition",
     ]);
 
-    const invalidLaunch = await prepareInitial(root);
+    const invalidRoot = await application("invalid-response");
+    await started(invalidRoot);
+    const invalidLaunch = await prepareInitial(invalidRoot);
     await writeFile(invalidLaunch.responsePath, Uint8Array.from([0xc3, 0x28]));
     const invalid = await invoke(
       [
@@ -787,16 +884,57 @@ describe("prompt preparation and completion", () => {
         "complete",
         invalidLaunch.recordPath,
         "--agent-id",
-        "agent-2",
+        secondPaseoAgentId,
         "--status",
         "failed",
       ],
-      root,
+      invalidRoot,
     );
     expect(invalid).toEqual(
       cliFailure(`Native response is not valid UTF-8: ${invalidLaunch.responsePath}`),
     );
     expect((await readLaunchRecord(invalidLaunch.recordPath)).state).toBe("prepared");
+  });
+
+  test("makes unfinished work loud and allows an explicit pre-launch adapter correction", async () => {
+    const root = await application("unfinished-adapter");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown.stdout).toContain("ACTION REQUIRED: 1 unfinished run");
+    expect(await invoke(["work", "finish", "message-board-search"], root)).toEqual(
+      cliFailure(
+        "Work item message-board-search has 1 unfinished prepared run",
+        "Finalize each run, then rerun work finish before handback.",
+      ),
+    );
+
+    const changed = await invoke(["launch", "adapter", launch.recordPath, "--harness", "pi"], root);
+    expect(changed).toMatchObject({ code: 0, stderr: "" });
+    expect(changed.stdout).toContain("Prepared launch adapter changed: paseo -> pi");
+    expect((await readLaunchRecord(launch.recordPath)).harness).toBe("pi");
+    const wrongIdentity = await invoke(
+      ["launch", "complete", launch.recordPath, "--agent-id", paseoAgentId, "--status", "failed"],
+      root,
+    );
+    expect(wrongIdentity.stderr).toContain("is not a valid Pi session ID for pi");
+    const completed = await invoke(
+      [
+        "launch",
+        "complete",
+        launch.recordPath,
+        "--agent-id",
+        "01a05c1f-e5d2-7c92-9a6d-e6883393f526",
+        "--status",
+        "failed",
+      ],
+      root,
+    );
+    expect(completed.code).toBe(0);
+    expect(await invoke(["work", "finish", "message-board-search"], root)).toMatchObject({
+      code: 0,
+      stderr: "",
+    });
   });
 
   test("does not allow completion to switch the prepared harness", async () => {
@@ -814,7 +952,7 @@ describe("prompt preparation and completion", () => {
         "complete",
         launch.recordPath,
         "--agent-id",
-        "agent",
+        paseoAgentId,
         "--status",
         "completed",
         "--harness",
@@ -831,6 +969,44 @@ describe("prompt preparation and completion", () => {
 });
 
 describe("continuation and replacement", () => {
+  test("makes same-designer phase continuation the default", async () => {
+    const root = await application("designer-phase-default");
+    const unit = await started(root);
+    const initial = await prepareInitial(root);
+    expect((await finalizeInitial(root, initial)).result.code).toBe(0);
+    const decomposition = resolve(unit, "decomposition.md");
+    await writeFile(decomposition, "# Accepted decomposition\n");
+    const task = await copyFixture(root, "follow-up-task.md");
+    const grant = await copyFixture(root, "designer-contracts-grant.json");
+    const result = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "designer",
+        "--phase",
+        "contracts",
+        "--task",
+        task,
+        "--grant",
+        grant,
+        "--harness",
+        "paseo",
+        "--input",
+        `brief=${resolve(unit, "brief.md")}`,
+        "--input",
+        `accepted-decomposition=${decomposition}`,
+      ],
+      root,
+    );
+    expect(result.stderr).toContain(
+      "A finalized decomposition designer already owns this work item",
+    );
+    expect(result.stderr).toContain(`Continue ${initial.recordPath} into contracts`);
+  });
+
   test("keeps identity and harness with retained bindings, while replacement expands context", async () => {
     const root = await application("continuity");
     await started(root);
@@ -867,7 +1043,7 @@ describe("continuation and replacement", () => {
     }).toEqual({
       prepared: ["designer/decomposition"],
       harness: ["paseo"],
-      targetAgent: ["designer-agent-1"],
+      targetAgent: [paseoAgentId],
       timeout: ["75 seconds; coordinator-managed observation limit; CLI does not observe harness"],
     });
     const continuationPath = reported(continuation.stdout, "Record");
@@ -898,6 +1074,26 @@ describe("continuation and replacement", () => {
         Buffer.byteLength(await readFile(initial.briefPath)),
       ),
     });
+    await writeFile(
+      continuedRecord.response.path,
+      "## Status\nComplete\n## Changed\nNone\n## Questions\nNone\n",
+    );
+    expect(
+      (
+        await invoke(
+          [
+            "launch",
+            "complete",
+            continuationPath,
+            "--agent-id",
+            paseoAgentId,
+            "--status",
+            "completed",
+          ],
+          root,
+        )
+      ).code,
+    ).toBe(0);
 
     const replacement = await invoke(
       [
@@ -993,7 +1189,7 @@ describe("continuation and replacement", () => {
       targetAgent: transitionOutput["Target agent"],
     }).toEqual({
       prepared: ["designer/contracts"],
-      targetAgent: ["designer-agent-1"],
+      targetAgent: [paseoAgentId],
     });
     const recordPath = reported(transition.stdout, "Record");
     const prepared = await readLaunchRecord(recordPath);
@@ -1046,7 +1242,7 @@ describe("continuation and replacement", () => {
       "utf8",
     );
     const completion = await invoke(
-      ["launch", "complete", recordPath, "--agent-id", "designer-agent-1", "--status", "completed"],
+      ["launch", "complete", recordPath, "--agent-id", paseoAgentId, "--status", "completed"],
       root,
     );
     expect(completion.code).toBe(0);
@@ -1054,7 +1250,7 @@ describe("continuation and replacement", () => {
     expect(finalized).toMatchObject({
       state: "finalized",
       harness: "paseo",
-      agentId: "designer-agent-1",
+      agentId: paseoAgentId,
       phase: "contracts",
       design: { root: design, before: expect.any(String), after: expect.any(String) },
     });
@@ -1102,8 +1298,6 @@ describe("continuation and replacement", () => {
         "--harness",
         "paseo",
         ...context,
-        "--design-root",
-        design,
       ],
       root,
     );
@@ -1118,15 +1312,7 @@ describe("continuation and replacement", () => {
     expect(
       (
         await invoke(
-          [
-            "launch",
-            "complete",
-            initialPath,
-            "--agent-id",
-            "concept-agent-1",
-            "--status",
-            "completed",
-          ],
+          ["launch", "complete", initialPath, "--agent-id", paseoAgentId, "--status", "completed"],
           root,
         )
       ).code,
@@ -1202,18 +1388,18 @@ describe("continuation and replacement", () => {
     await writeFile(specification, "# Posting\n\nChanged again after preparation.\n", "utf8");
     await writeFile(continuedRecord.response.path, response, "utf8");
     const staleCompletion = await invoke(
-      [
-        "launch",
-        "complete",
-        continuedPath,
-        "--agent-id",
-        "concept-agent-1",
-        "--status",
-        "completed",
-      ],
+      ["launch", "complete", continuedPath, "--agent-id", paseoAgentId, "--status", "completed"],
       root,
     );
     expect(staleCompletion).toEqual(cliFailure("Design changed after preparation"));
+    expect(
+      (
+        await invoke(
+          ["launch", "complete", continuedPath, "--agent-id", paseoAgentId, "--status", "failed"],
+          root,
+        )
+      ).code,
+    ).toBe(0);
 
     const refreshed = await invoke(continueArgs, root, {
       now: () => new Date("2026-08-19T09:14:00.000Z"),
@@ -1225,15 +1411,7 @@ describe("continuation and replacement", () => {
     expect(refreshedRecord.design?.before).toBe(currentDigest);
     await writeFile(refreshedRecord.response.path, response, "utf8");
     const completed = await invoke(
-      [
-        "launch",
-        "complete",
-        refreshedPath,
-        "--agent-id",
-        "concept-agent-1",
-        "--status",
-        "completed",
-      ],
+      ["launch", "complete", refreshedPath, "--agent-id", paseoAgentId, "--status", "completed"],
       root,
     );
     expect(completed.code).toBe(0);
@@ -1241,7 +1419,7 @@ describe("continuation and replacement", () => {
       state: "finalized",
       design: { root: design, before: currentDigest },
       harness: "paseo",
-      agentId: "concept-agent-1",
+      agentId: paseoAgentId,
     });
   });
 

@@ -77,6 +77,8 @@ Do not add those files again. Add only relevant conditional material:
 
 Use the generic repeatable `context` input for a special request that does not fit a named slot. Prefer exact excerpts and public declarations over whole manuals.
 
+Create grants with `sync-engine-skill grant init --role <role> --phase <phase>` and its repeatable `--read <area>:<path>` and `--write <area>:<path>` options. Paths are relative to their semantic area: `assigned-design:concepts/Tasking.md` means `design/concepts/Tasking.md`, while `current-decomposition:decomposition.md` means the work-unit file. The CLI supplies role defaults and rejects design ownership in the wrong phase.
+
 Grant explicit files or bounded directories:
 
 - designers and critics: affected design plus directly relevant shared contracts;
@@ -106,7 +108,7 @@ sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
   --input <slot>=<path> ...
 ```
 
-Use `--design-root design` when the run must be bound to permanent design. Prompt size is reported; remove irrelevant context when it is excessive. A supplied real harness context limit may still reject an oversized prompt.
+Permanent design is bound automatically when a prompt reads or writes it. Contract design may change only granted canonical design files; design is immutable for every other bound role. `--design-root design` remains available to introduce the same binding explicitly. Prompt size is reported; remove irrelevant context when it is excessive. A supplied real harness context limit may still reject an oversized prompt.
 
 Delegation sends only the printed short instruction to read the prompt file. Simulation uses that same prompt as the coordinator's complete role assignment. Copy either result verbatim to the response path and run the printed completion command.
 
@@ -114,11 +116,11 @@ A simulated result records no agent identity and is not independent. If independ
 
 ## 6. Design and review only when needed
 
-Create `decomposition.md` only when product boundaries, need placement, or cross-owner obligations change. One designer may continue through decomposition, contracts, and repairs. A distinct critic performs one full review, then narrowly verifies stable findings after repair.
+Create only the work-unit `decomposition.md` when product boundaries, need placement, or cross-owner obligations change; never copy decomposition into permanent design. Continue its finalized designer record into contracts with `sync-engine-skill continue <record> --phase contracts ...`. A fresh designer requires an intentional replacement. A distinct critic performs one full review, then narrowly verifies stable findings after repair.
 
 Do not require concept-by-concept review loops. Repeat full review only when a repair changes boundaries or materially expands affected interactions.
 
-Validate authored design with the application command:
+Validate authored design with the application command before returning contract design:
 
 ```sh
 bunx --no-install sync-engine check-design <files...>
@@ -143,6 +145,7 @@ Run:
 
 ```sh
 sync-engine-skill work show <slug>
+sync-engine-skill work finish <slug>
 ```
 
-Update the activity section with validation and status. Hand back the goal, changed areas, delegated and simulated roles, identities where present, independent-review limitations, checks, unresolved findings, assumptions, and omitted evidence. Stop after the requested outcome and relevant checks pass.
+`work finish` blocks handback while any run is still prepared. Update the activity section with validation and status. Hand back the goal, changed areas, delegated and simulated roles, identities where present, independent-review limitations, checks, unresolved findings, assumptions, and omitted evidence. Stop after the requested outcome and relevant checks pass.

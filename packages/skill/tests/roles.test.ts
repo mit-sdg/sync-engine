@@ -3,6 +3,7 @@ import {
   capabilityCategories,
   capabilityRecommendationIssues,
   getRoleSpecification,
+  initialCapabilityGrant,
   recommendedCapabilitiesByRolePhase,
   neverGrantableCapabilities,
   roleSpecificationIds,
@@ -258,9 +259,10 @@ describe("typed role specifications", () => {
     });
     expect(recommendedCapabilitiesByRolePhase["evidence-worker/evidence"]).toMatchObject({
       writableAreas: ["owned-scenario", "owned-test"],
-      network: true,
+      projectShell: "project-validation",
+      network: false,
       generatedOutput: false,
-      longRunningProcesses: true,
+      longRunningProcesses: false,
     });
 
     for (const maximum of Object.values(recommendedCapabilitiesByRolePhase)) {
@@ -270,6 +272,37 @@ describe("typed role specifications", () => {
 });
 
 describe("effective capability grants", () => {
+  test("constructs role-aware starting grants", () => {
+    expect(
+      initialCapabilityGrant(getRoleSpecification("designer", "decomposition"), [], []),
+    ).toEqual({
+      readableAreas: [],
+      writableAreas: [{ area: "current-decomposition", path: "decomposition.md" }],
+      toolKinds: ["repository-read", "repository-write"],
+      projectShell: "none",
+      network: false,
+      generatedOutput: false,
+      longRunningProcesses: false,
+    });
+  });
+
+  test("reserves decomposition and canonical authored design for their owning phases", () => {
+    expect(() =>
+      validateCapabilityGrant(getRoleSpecification("critic", "decomposition"), {
+        ...noCapabilities,
+        writableAreas: [{ area: "current-decomposition", path: "decomposition.md" }],
+      }),
+    ).toThrow("current-decomposition:decomposition.md is owned only by designer/decomposition");
+    expect(() =>
+      validateCapabilityGrant(getRoleSpecification("designer", "contracts"), {
+        ...noCapabilities,
+        writableAreas: [{ area: "assigned-design", path: "contracts.md" }],
+      }),
+    ).toThrow(
+      "assigned-design:contracts.md must be types.md, concepts/<Name>.md, or compositions/<Name>.md",
+    );
+  });
+
   test("accepts bounded paths and returns canonical ordering", () => {
     const specification = getRoleSpecification("designer", "decomposition");
     const grant = validateCapabilityGrant(specification, {
@@ -294,23 +327,23 @@ describe("effective capability grants", () => {
     expect(grant.toolKinds).toEqual(["repository-read", "repository-write"]);
   });
 
-  test("treats role capabilities as recommendations rather than gates", () => {
+  test("treats non-design role capabilities as recommendations rather than gates", () => {
     const grant = validateCapabilityGrant(getRoleSpecification("critic", "decomposition"), {
       ...noCapabilities,
-      writableAreas: [{ area: "assigned-design", path: "types.md" }],
+      writableAreas: [{ area: "owned-test", path: "tests/review.test.ts" }],
       toolKinds: ["repository-write"],
       projectShell: "project-local",
       network: true,
     });
     expect(grant).toMatchObject({
-      writableAreas: [{ area: "assigned-design", path: "types.md" }],
+      writableAreas: [{ area: "owned-test", path: "tests/review.test.ts" }],
       projectShell: "project-local",
       network: true,
     });
     expect(
       capabilityRecommendationIssues(getRoleSpecification("critic", "decomposition"), grant),
     ).toEqual([
-      "write area assigned-design",
+      "write area owned-test",
       "tool kind repository-write",
       "projectShell project-local",
       "network",

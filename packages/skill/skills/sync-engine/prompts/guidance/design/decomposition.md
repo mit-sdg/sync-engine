@@ -25,10 +25,10 @@ For each new or changed concept, answer in one compact row:
 - Which decision is it the sole authority for?
 - What foreign subject remains opaque?
 - Could an unrelated application reuse the whole mechanism unchanged?
-- What is the strongest plausible split, and why is it worse?
+- What is the strongest plausible split for each independently nameable state family or decision, and why is each split worse for semantic reasons rather than convenience or atomicity?
 - If it was merged with a neighbor, which independent authority or lifecycle would be lost?
 
-Split distinct purposes, lifecycles, authorities, failures, or independently reusable state. Combine only when the parts have no useful independent life. Shared identity, workflow order, desired atomicity, UI placement, or a product feature name does not justify a merge. A reaction that merely reassembles one authority's transition is evidence that the boundary may be wrong.
+Split distinct purposes, lifecycles, authorities, failures, or independently reusable state. Treat a concept owning several independently nameable state families or decisions as presumptively overloaded: test each family as a reusable mechanism and explain why it has no useful life apart from every other family. Combine only when the parts have no useful independent life. Shared identity, workflow order, desired atomicity, fewer obligations, UI placement, or a product feature name does not justify a merge; composition and recoverable false intervals exist precisely to coordinate independent owners. A reaction that merely reassembles one authority's transition is evidence that the boundary may be wrong.
 
 Classify relevant concepts as `new`, `changed`, `reused-unchanged`, or `unaffected-context`. Record catalog disposition only for selected concepts. Reference reused contracts instead of restating them.
 

@@ -4,11 +4,17 @@ Usage:
   sync-engine-skill work start <slug>
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
   sync-engine-skill work show <slug>
+  sync-engine-skill work finish <slug>
+  sync-engine-skill grant init --role <role> --phase <phase>
+    [--read <area>:<path>]... [--write <area>:<path>]...
+    [--shell <level>] [--network] [--generated-output] [--long-running]
+  sync-engine-skill harness recommend
   sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
     --task <path> --grant <json-path>
     (--harness <harness> | --simulate <reason>)
     [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
     [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  sync-engine-skill launch adapter <prepared-record> --harness <harness>
   sync-engine-skill launch complete <prepared-record> --agent-id <id>
     --status <native-status> [--model <id>]
   sync-engine-skill simulation complete <prepared-record> --status <status>
@@ -33,9 +39,10 @@ Harnesses:
   paseo, pi, codex, claude-code, antigravity, cursor
 
 Options:
-  --design-root must be the canonical <application>/design directory. Prompt build creates
-  a binding; continue recomputes an existing binding automatically and accepts this option
-  only to introduce one when the prior record has none. Completion uses the recorded root.
+  --harness names the mechanism that creates the role agent, not an outer supervisor.
+  Design binding is automatic when a run reads or writes permanent design. --design-root
+  may explicitly introduce the same canonical <application>/design binding; continue
+  recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
   --context-limit is a positive byte limit supplied by the selected harness or model.
   --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
   CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
@@ -58,7 +65,7 @@ Inputs:
   frontend-worker/implementation: brief (one, retained), public-interface (one or more, retained), frontend-paths (one, inline), public-references (repeatable optional, retained), examples (repeatable optional, retained), context (repeatable optional, retained)
   evidence-worker/evidence: brief (one, retained), contracts (one or more, retained), public-interface (one or more, retained), frontend-surface (repeatable optional, retained), relevant-tests (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), context (repeatable optional, retained)
 
-Capability grant JSON (every field is required; role recommendations are defaults, not gates):
+Capability grant JSON (every field is required; use grant init for validated defaults):
   {
     "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
     "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
@@ -68,6 +75,10 @@ Capability grant JSON (every field is required; role recommendations are default
     "generatedOutput": false,
     "longRunningProcesses": false
   }
+
+  Paths are relative to their semantic area. For example, assigned-design:concepts/Tasking.md
+  resolves to design/concepts/Tasking.md; current-decomposition:decomposition.md resolves
+  to the work-unit decomposition. Those two write areas are exclusive to their design phases.
 
 Completion:
   Delegated and simulated runs use the same prompt and response artifacts. Copy the role
@@ -90,5 +101,6 @@ Continuation and replacement:
   retained inputs in full, and may select --harness; it remains a replacement.
 
 Warnings:
-  Continuing with a release mismatch is explicit. Adapters report prompt-guided
-  capabilities when the harness does not enforce them.
+  Finalize the current run before preparing another. work finish refuses handback while a
+  run remains prepared. Continuing with a release mismatch is explicit. Adapters report
+  prompt-guided capabilities when the harness does not enforce them.

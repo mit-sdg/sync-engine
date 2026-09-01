@@ -101,7 +101,8 @@ async function design(root: string): Promise<string> {
   const path = resolve(root, "design");
   await mkdir(resolve(path, "concepts"), { recursive: true });
   await writeFile(resolve(path, "concepts/Posting.md"), "# Posting\n", "utf8");
-  await writeFile(resolve(path, "composition.md"), "# Composition\n", "utf8");
+  await mkdir(resolve(path, "compositions"), { recursive: true });
+  await writeFile(resolve(path, "compositions/Board.md"), "# Composition\n", "utf8");
   return path;
 }
 
@@ -302,6 +303,10 @@ describe("design lifecycle", () => {
     const launch = await prepared(unit, {
       role: "designer",
       phase: "contracts",
+      grant: {
+        ...grant,
+        writableAreas: [{ area: "assigned-design", path: "concepts/Posting.md" }],
+      },
       design: { root, digest: empty.digest },
     });
     await mkdir(resolve(root, "concepts"), { recursive: true });
@@ -310,7 +315,9 @@ describe("design lifecycle", () => {
     const final = await complete(launch.path, "Changed: design/concepts/Posting.md\n");
 
     expect(authored.files).toBe(1);
-    expect(final.design).toEqual({ root, before: empty.digest, after: authored.digest });
+    expect(final.design).toMatchObject({ root, before: empty.digest, after: authored.digest });
+    expect(final.design?.beforeFiles).toEqual([]);
+    expect(final.design?.afterFiles?.map(({ path }) => path)).toEqual(["concepts/Posting.md"]);
   });
 
   test("contract designer records before and after authored-design digests", async () => {
@@ -324,15 +331,21 @@ describe("design lifecycle", () => {
     const launch = await prepared(unit, {
       role: "designer",
       phase: "contracts",
+      grant: {
+        ...grant,
+        writableAreas: [{ area: "assigned-design", path: "compositions/Board.md" }],
+      },
       design: { root, digest: before.digest },
     });
-    await writeFile(resolve(root, "composition.md"), "# Changed composition\n");
+    await writeFile(resolve(root, "compositions/Board.md"), "# Changed composition\n");
     const after = await digestDesign(root);
     const final = await complete(launch.path, "Changed: design/composition.md\n");
 
-    expect(final.design).toEqual({ root, before: before.digest, after: after.digest });
+    expect(final.design).toMatchObject({ root, before: before.digest, after: after.digest });
+    expect(final.design?.beforeFiles).toHaveLength(2);
+    expect(final.design?.afterFiles).toHaveLength(2);
     const linked = resolve(root, "linked.md");
-    await symlink(resolve(root, "composition.md"), linked);
+    await symlink(resolve(root, "compositions/Board.md"), linked);
     expect(await rejectedValue(digestDesign(root))).toEqual({
       name: "RecordError",
       message: `Design contains a symbolic link: ${linked}`,
@@ -348,7 +361,7 @@ describe("design lifecycle", () => {
       phase: "implementation",
       design: { root, digest: before.digest },
     });
-    await writeFile(resolve(root, "composition.md"), "# Changed\n");
+    await writeFile(resolve(root, "compositions/Board.md"), "# Changed\n");
 
     expect(await rejectedValue(complete(launch.path, "Status: complete\n"))).toEqual({
       name: "RecordError",

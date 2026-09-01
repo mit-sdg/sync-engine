@@ -4,13 +4,17 @@ Use this reference only when delegating. Coordinator simulation does not invoke 
 
 ## Common launch contract
 
+The selected harness is the mechanism that creates the role agent, not an outer supervisor. Run `sync-engine-skill harness recommend` when the coordinator is itself hosted by another system; use the printed launch action from prompt preparation.
+
 For each delegated run:
 
 1. Build the role prompt. The CLI writes task, access, prompt, empty response, and prepared record artifacts.
 2. Invoke the selected harness from the application workspace. A fresh run creates a fresh identity; a continuation targets the exact recorded identity.
 3. Send only the printed short instruction: `Read and follow the complete assignment in <prompt-path>`. The prompt file is the complete role message. Do not paste, summarize, or prefix its contents.
 4. Observe until terminal status or the recorded timeout. Preserve the returned identity and complete final or partial response.
-5. Copy the response verbatim to the printed response path and run the printed `launch complete` command.
+5. Copy the response verbatim to the printed response path and run the printed `launch complete` command before preparing another role. Completion validates adapter-specific identity form.
+
+If a fresh launch has not started and must use another adapter, run `sync-engine-skill launch adapter <prepared-record> --harness <harness>` before launching. A same-agent continuation cannot change adapter.
 
 The explicitly named prompt file is the only workflow artifact the role may read. The compiled prompt contains its task, context, access, and result guidance.
 

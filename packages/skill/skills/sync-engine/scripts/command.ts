@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,8 @@ import {
   configurationWithUserOverrides,
   harnessIds,
   prepareHarnessInvocation,
+  recommendHarness,
+  validateHarnessIdentity,
   type HarnessId,
   type LaunchTarget,
   type PreparedHarnessInvocation,
@@ -26,6 +29,7 @@ import {
   normalizeLaunchStatus,
   prepareLaunch,
   readLaunchRecord,
+  replacePreparedHarness,
   type ExecutionHarness,
   type LaunchRecord,
   type PrepareLaunchResult,
@@ -33,11 +37,14 @@ import {
 import {
   capabilityRecommendationIssues,
   getRoleSpecification,
+  initialCapabilityGrant,
   projectShellAccessLevels,
   roleSpecificationIds,
   roleSpecifications,
   validateCapabilityGrant,
   type EffectiveCapabilityGrant,
+  type ReadableAreaGrant,
+  type WritableAreaGrant,
 } from "./roles.ts";
 import {
   canonicalPath,
@@ -70,6 +77,27 @@ function launchTitle(slug: string, role: string): string {
 
 type WriteOutput = (text: string) => void;
 type Bootstrap = typeof bootstrapApplication;
+type DesignCheck = (
+  paths: readonly string[],
+  cwd: string,
+) => Promise<{ readonly exitCode: number; readonly output: string }>;
+
+const runDesignCheck: DesignCheck = (paths, cwd) =>
+  new Promise((fulfill, reject) => {
+    const child = spawn("bunx", ["--no-install", "sync-engine", "check-design", ...paths], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.once("error", reject);
+    child.once("close", (exitCode) => fulfill({ exitCode: exitCode ?? 1, output }));
+  });
 
 export interface CommandDependencies {
   readonly cwd?: string;
@@ -78,6 +106,8 @@ export interface CommandDependencies {
   readonly stderr?: WriteOutput;
   readonly bootstrap?: Bootstrap;
   readonly bootstrapDependencies?: BootstrapDependencies;
+  readonly designCheck?: DesignCheck;
+  readonly environment?: NodeJS.ProcessEnv;
   readonly now?: () => Date;
 }
 
@@ -119,11 +149,17 @@ Usage:
   ${commandName} work start <slug>
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
   ${commandName} work show <slug>
+  ${commandName} work finish <slug>
+  ${commandName} grant init --role <role> --phase <phase>
+    [--read <area>:<path>]... [--write <area>:<path>]...
+    [--shell <level>] [--network] [--generated-output] [--long-running]
+  ${commandName} harness recommend
   ${commandName} prompt build --work <slug> --role <role> --phase <phase>
     --task <path> --grant <json-path>
     (--harness <harness> | --simulate <reason>)
     [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
     [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+  ${commandName} launch adapter <prepared-record> --harness <harness>
   ${commandName} launch complete <prepared-record> --agent-id <id>
     --status <native-status> [--model <id>]
   ${commandName} simulation complete <prepared-record> --status <status>
@@ -140,9 +176,10 @@ Harnesses:
   ${harnessIds.join(", ")}
 
 Options:
-  --design-root must be the canonical <application>/design directory. Prompt build creates
-  a binding; continue recomputes an existing binding automatically and accepts this option
-  only to introduce one when the prior record has none. Completion uses the recorded root.
+  --harness names the mechanism that creates the role agent, not an outer supervisor.
+  Design binding is automatic when a run reads or writes permanent design. --design-root
+  may explicitly introduce the same canonical <application>/design binding; continue
+  recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
   --context-limit is a positive byte limit supplied by the selected harness or model.
   --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
   CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
@@ -157,7 +194,7 @@ Inputs:
   Accepted slots are:
 ${inputs}
 
-Capability grant JSON (every field is required; role recommendations are defaults, not gates):
+Capability grant JSON (every field is required; use grant init for validated defaults):
   {
     "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
     "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
@@ -167,6 +204,10 @@ Capability grant JSON (every field is required; role recommendations are default
     "generatedOutput": false,
     "longRunningProcesses": false
   }
+
+  Paths are relative to their semantic area. For example, assigned-design:concepts/Tasking.md
+  resolves to design/concepts/Tasking.md; current-decomposition:decomposition.md resolves
+  to the work-unit decomposition. Those two write areas are exclusive to their design phases.
 
 Completion:
   Delegated and simulated runs use the same prompt and response artifacts. Copy the role
@@ -189,8 +230,9 @@ Continuation and replacement:
   retained inputs in full, and may select --harness; it remains a replacement.
 
 Warnings:
-  Continuing with a release mismatch is explicit. Adapters report prompt-guided
-  capabilities when the harness does not enforce them.
+  Finalize the current run before preparing another. work finish refuses handback while a
+  run remains prepared. Continuing with a release mismatch is explicit. Adapters report
+  prompt-guided capabilities when the harness does not enforce them.
 `;
 }
 
@@ -267,6 +309,16 @@ function harness(value: string): HarnessId {
     throw new CliError(`Unknown harness ${value}; expected ${harnessIds.join(", ")}`);
   }
   return value as HarnessId;
+}
+
+function areaGrant(value: string, kind: "read" | "write"): ReadableAreaGrant | WritableAreaGrant {
+  const separator = value.indexOf(":");
+  if (separator <= 0 || separator === value.length - 1) {
+    throw new CliError(`--${kind} must have the form <area>:<relative-path>: ${value}`);
+  }
+  return { area: value.slice(0, separator), path: value.slice(separator + 1) } as
+    | ReadableAreaGrant
+    | WritableAreaGrant;
 }
 
 function commandRoot(dependencies: CommandDependencies): string {
@@ -381,6 +433,26 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function workRecords(unit: WorkUnit): Promise<Array<{ path: string; record: LaunchRecord }>> {
+  const names = (await readdir(unit.path)).filter((name) => name.endsWith(".record.json")).sort();
+  return Promise.all(
+    names.map(async (name) => {
+      const path = resolve(unit.path, name);
+      return { path, record: await readLaunchRecord(path) };
+    }),
+  );
+}
+
+async function requireNoPreparedRun(unit: WorkUnit): Promise<void> {
+  const prepared = (await workRecords(unit)).find(({ record }) => record.state === "prepared");
+  if (prepared !== undefined) {
+    throw new CliError(
+      `Work item ${unit.slug} already has an unfinished prepared run: ${prepared.path}`,
+      `Finalize it, change its adapter, or record a terminal failure before preparing another run.`,
+    );
+  }
+}
+
 function pathCovered(path: string, prior: string): boolean {
   return prior === "." || path === prior || path.startsWith(`${prior}/`);
 }
@@ -448,6 +520,24 @@ async function prepareCommand(
   dependencies: CommandDependencies,
 ): Promise<void> {
   const unit = await requireWorkUnit(options.cwd, options.slug);
+  await requireNoPreparedRun(unit);
+  if (options.kind === "fresh" && options.role === "designer" && options.phase === "contracts") {
+    const priorDesigner = (await workRecords(unit))
+      .filter(
+        ({ record }) =>
+          record.state === "finalized" &&
+          record.execution === "delegated" &&
+          record.role === "designer" &&
+          record.phase === "decomposition",
+      )
+      .at(-1);
+    if (priorDesigner !== undefined) {
+      throw new CliError(
+        `A finalized decomposition designer already owns this work item`,
+        `Continue ${priorDesigner.path} into contracts; use --replace only when a fresh designer is intentional.`,
+      );
+    }
+  }
   const skillRoot = canonicalPath(options.skillRoot);
   const taskPath = canonicalSource(options.taskPath, [options.cwd], "Task");
   const grantPath = canonicalSource(options.grantPath, [options.cwd], "Capability grant");
@@ -485,6 +575,31 @@ async function prepareCommand(
     options.priorGrant === undefined
       ? undefined
       : capabilityExpansionIssue(built.effectiveCapabilities, options.priorGrant);
+  if (built.specification.id === "critic/contracts") {
+    const changed = suppliedInputs
+      .filter(({ id }) => id === "changed-contracts")
+      .map(({ path }) => path);
+    const checked = await (dependencies.designCheck ?? runDesignCheck)(changed, options.cwd);
+    if (checked.exitCode !== 0) {
+      throw new CliError(
+        `Contract syntax validation failed before semantic criticism${checked.output.trim() === "" ? "" : `:\n${checked.output.trimEnd()}`}`,
+        `Continue the contract designer with these diagnostics, then rerun the critic preparation.`,
+      );
+    }
+  }
+  const inferredDesign =
+    built.specification.id === "designer/contracts" ||
+    built.effectiveCapabilities.readableAreas.some(({ area }) => area === "design") ||
+    built.effectiveCapabilities.writableAreas.some(({ area }) => area === "assigned-design") ||
+    suppliedInputs.some(({ path }) => isPathInside(resolve(options.cwd, "design"), path));
+  const design =
+    options.design ??
+    (inferredDesign
+      ? {
+          root: resolve(options.cwd, "design"),
+          digest: (await digestDesign(resolve(options.cwd, "design"))).digest,
+        }
+      : undefined);
   const launch = await prepareLaunch({
     applicationRoot: options.cwd,
     slug: options.slug,
@@ -501,7 +616,7 @@ async function prepareCommand(
     promptSha256: built.sha256,
     grant: built.effectiveCapabilities,
     retainedSources: built.retainedSources,
-    ...(options.design === undefined ? {} : { design: options.design }),
+    ...(design === undefined ? {} : { design }),
     ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
     ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
   });
@@ -550,6 +665,28 @@ Instruction: Use the prompt file as the complete simulated role assignment. Writ
 `);
 }
 
+function launchAction(invocation: PreparedHarnessInvocation<EffectiveCapabilityGrant>): string {
+  const instruction = invocation.prompt.agentInstruction ?? invocation.native.instruction;
+  if (invocation.harness === "pi") {
+    const sessionDirectory = resolve(dirname(invocation.prompt.path), "pi-sessions");
+    const target =
+      invocation.target.kind === "fresh"
+        ? ""
+        : ` --session ${JSON.stringify(invocation.target.agentId)}`;
+    const title =
+      invocation.target.kind === "fresh" ? ` --name ${JSON.stringify(invocation.title.value)}` : "";
+    return `cd ${JSON.stringify(invocation.cwd.path)} && pi --mode json -p --session-dir ${JSON.stringify(sessionDirectory)}${target}${title} ${JSON.stringify(instruction)}`;
+  }
+  if (invocation.harness === "paseo") {
+    const target =
+      invocation.target.kind === "fresh"
+        ? `run --cwd ${JSON.stringify(invocation.cwd.path)} --title ${JSON.stringify(invocation.title.value)} --provider <provider/model>`
+        : `send ${JSON.stringify(invocation.target.agentId)}`;
+    return `paseo ${target} ${JSON.stringify(instruction)}`;
+  }
+  return `${invocation.native.mechanism}: ${invocation.native.operation}. ${invocation.native.instruction}`;
+}
+
 function printPrepared(
   kind: PrepareCommandOptions["kind"],
   built: BuiltPrompt,
@@ -580,6 +717,7 @@ ${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
       ? "Target: fresh agent"
       : `Target agent: ${invocation.target.agentId}`;
   out(`Harness: ${invocation.harness}
+Launch: ${launchAction(invocation)}
 Agent title: ${invocation.title.value}${invocation.title.nativeField === undefined ? "" : `; ${invocation.title.nativeField}`}
 Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
 Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
@@ -595,6 +733,7 @@ Instruction: ${invocation.native.instruction}\n`);
       `Warning: ${invocation.harness} capabilities are prompt-guided rather than harness-enforced.\n`,
     );
   }
+  out(`Next: Finalize this record before preparing another role.\n`);
 }
 
 async function workStart(
@@ -656,6 +795,62 @@ async function workStart(
   out(`Bootstrap: ${result.outcome}; application ${result.plan.applicationRoot}
 Work unit: ${unit.path}
 Brief: ${unit.briefPath}\n`);
+}
+
+async function grantInit(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "grant init", [], {
+    "--role": "value",
+    "--phase": "value",
+    "--read": "repeatable",
+    "--write": "repeatable",
+    "--shell": "value",
+    "--network": "flag",
+    "--generated-output": "flag",
+    "--long-running": "flag",
+  });
+  const role = required(parsed.options, "--role", "grant init");
+  const phase = required(parsed.options, "--phase", "grant init");
+  const spec = getRoleSpecification(role, phase);
+  const shell = optional(parsed.options, "--shell");
+  if (
+    shell !== undefined &&
+    !projectShellAccessLevels.includes(shell as (typeof projectShellAccessLevels)[number])
+  ) {
+    throw new CliError(
+      `Unknown shell level ${shell}; expected ${projectShellAccessLevels.join(", ")}`,
+    );
+  }
+  const readable = (parsed.options.get("--read") ?? []).map((value) =>
+    areaGrant(value, "read"),
+  ) as ReadableAreaGrant[];
+  const writable = (parsed.options.get("--write") ?? []).map((value) =>
+    areaGrant(value, "write"),
+  ) as WritableAreaGrant[];
+  const grant = initialCapabilityGrant(spec, readable, writable, {
+    ...(shell === undefined
+      ? {}
+      : { projectShell: shell as EffectiveCapabilityGrant["projectShell"] }),
+    network: parsed.options.has("--network"),
+    generatedOutput: parsed.options.has("--generated-output"),
+    longRunningProcesses: parsed.options.has("--long-running"),
+  });
+  output(dependencies).out(`${JSON.stringify(grant, undefined, 2)}\n`);
+}
+
+function harnessRecommend(dependencies: CommandDependencies): void {
+  const recommendation = recommendHarness(dependencies.environment ?? process.env);
+  const harnessLine =
+    recommendation.harness === undefined
+      ? "Recommended execution harness: none detected; select the native role-launch mechanism explicitly."
+      : `Recommended execution harness: ${recommendation.harness}`;
+  const supervisorLine =
+    recommendation.outerSupervisor === undefined
+      ? "Outer supervisor: none detected"
+      : `Outer supervisor: ${recommendation.outerSupervisor} (not the execution harness unless it creates the role agent)`;
+  output(dependencies).out(`${harnessLine}\n${supervisorLine}\nReason: ${recommendation.reason}\n`);
 }
 
 const promptDefinitions = {
@@ -738,6 +933,37 @@ function completionTarget(record: LaunchRecord): LaunchTarget {
     : { kind: "fresh" };
 }
 
+async function launchAdapter(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "launch adapter", ["prepared-record"], {
+    "--harness": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const recordPath = resolve(cwd, parsed.positionals[0]!);
+  const previous = await readLaunchRecord(recordPath);
+  requireRecordApplication(previous, cwd);
+  const next = harness(required(parsed.options, "--harness", "launch adapter"));
+  const record = await replacePreparedHarness(recordPath, next);
+  const grant = validateCapabilityGrant(
+    getRoleSpecification(record.role, record.phase),
+    record.grant,
+  );
+  const invocation = prepareHarnessInvocation({
+    harness: next,
+    target: completionTarget(record),
+    promptPath: record.prompt.path,
+    cwd,
+    title: launchTitle(record.work.slug, record.role),
+    effectiveCapabilities: grant,
+    timeoutSeconds: record.timeoutSeconds,
+  });
+  output(dependencies).out(
+    `Prepared launch adapter changed: ${previous.harness} -> ${next}\nRecord: ${recordPath}\nLaunch: ${launchAction(invocation)}\n`,
+  );
+}
+
 async function launchComplete(
   args: readonly string[],
   dependencies: CommandDependencies,
@@ -757,6 +983,11 @@ async function launchComplete(
   if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
   if (record.execution !== "delegated" || record.harness === "coordinator") {
     throw new CliError(`launch complete requires a delegated run`);
+  }
+  try {
+    validateHarnessIdentity(record.harness, agentId);
+  } catch (error) {
+    throw new CliError(error instanceof Error ? error.message : String(error));
   }
   await utf8(record.response.path, "Native response", status === "completed");
   const validatedGrant = validateCapabilityGrant(
@@ -916,22 +1147,24 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
   const parsed = parseTail(args, "work show", ["slug"], {});
   const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
   const brief = await utf8(unit.briefPath, "Work brief");
-  const names = (await readdir(unit.path)).filter((name) => name.endsWith(".record.json")).sort();
-  const lines: string[] = [];
-  for (const name of names) {
-    const record = await readLaunchRecord(resolve(unit.path, name));
-    const state = record.state === "prepared" ? "prepared" : record.status;
+  const records = await workRecords(unit);
+  const prepared = records.filter(({ record }) => record.state === "prepared");
+  const lines = records.map(({ path, record }) => {
+    const name = basename(path);
+    const state = record.state === "prepared" ? "prepared — action required" : record.status;
     const executor =
       record.execution === "simulated"
         ? `coordinator simulation (${record.simulationReason})`
         : record.state === "finalized"
           ? `${record.harness}:${record.agentId}`
           : record.harness;
-    lines.push(
-      `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}; ${executor}`,
-    );
-  }
-  output(dependencies).out(`Work unit: ${unit.slug}
+    return `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}; ${executor}`;
+  });
+  const readiness =
+    prepared.length === 0
+      ? "Handback readiness: no unfinished runs."
+      : `ACTION REQUIRED: ${prepared.length} unfinished run${prepared.length === 1 ? "" : "s"}.\nHandback readiness: blocked until each prepared record is finalized.`;
+  output(dependencies).out(`${readiness}\n\nWork unit: ${unit.slug}
 Path: ${unit.path}
 
 ${brief.text.trimEnd()}
@@ -941,6 +1174,22 @@ ${lines.length === 0 ? "None." : lines.join("\n")}
 `);
 }
 
+async function workFinish(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "work finish", ["slug"], {});
+  const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
+  const prepared = (await workRecords(unit)).filter(({ record }) => record.state === "prepared");
+  if (prepared.length > 0) {
+    throw new CliError(
+      `Work item ${unit.slug} has ${prepared.length} unfinished prepared run${prepared.length === 1 ? "" : "s"}`,
+      `Finalize each run, then rerun work finish before handback.`,
+    );
+  }
+  output(dependencies).out(`Work item ${unit.slug} is ready for handback: no unfinished runs.\n`);
+}
+
 async function execute(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
   if (args.length === 0 || (args.length === 1 && (args[0] === "--help" || args[0] === "-h"))) {
     output(dependencies).out(helpText());
@@ -948,7 +1197,15 @@ async function execute(args: readonly string[], dependencies: CommandDependencie
   }
   if (args[0] === "work" && args[1] === "start") return workStart(args.slice(2), dependencies);
   if (args[0] === "work" && args[1] === "show") return workShow(args.slice(2), dependencies);
+  if (args[0] === "work" && args[1] === "finish") return workFinish(args.slice(2), dependencies);
+  if (args[0] === "grant" && args[1] === "init") return grantInit(args.slice(2), dependencies);
+  if (args[0] === "harness" && args[1] === "recommend") {
+    harnessRecommend(dependencies);
+    return;
+  }
   if (args[0] === "prompt" && args[1] === "build") return promptBuild(args.slice(2), dependencies);
+  if (args[0] === "launch" && args[1] === "adapter")
+    return launchAdapter(args.slice(2), dependencies);
   if (args[0] === "launch" && args[1] === "complete")
     return launchComplete(args.slice(2), dependencies);
   if (args[0] === "simulation" && args[1] === "complete")

@@ -27,7 +27,7 @@ Existing accepted design may proceed directly to implementation. The user may om
 
 ## Keep work visible
 
-One work item lives at `.sync-engine/work/<slug>/`. Its `brief.md` records goal, active decisions, status, and concise activity. Timestamped artifacts preserve each task, access grant, compiled prompt, result, execution mode, identity, and status. Use `sync-engine-skill work show <slug>` for a readable overview.
+One work item lives at `.sync-engine/work/<slug>/`. Its `brief.md` records goal, active decisions, status, and concise activity. Timestamped artifacts preserve each task, access grant, compiled prompt, result, execution mode, identity, and status. Use `sync-engine-skill work show <slug>` for a readable overview. Finalize each run before preparing another; when execution budget is low, hand back before starting optional evidence. `work finish <slug>` refuses handback while a run remains prepared.
 
 ## Delegate or simulate
 
@@ -37,7 +37,7 @@ Simulate when the user requests it or delegation is unavailable. If the user exp
 
 ## Bound role context
 
-Inline the task and authoritative context. Grant only the files or directories needed for normal work, with separate read and write areas. The CLI warns when access exceeds a role recommendation or a same-phase continuation expands its prior grant; record only consequential choices under `Active decisions`. Exclude `node_modules`, framework internals, skills, harness configuration, traces, and unrelated work artifacts; supply exact public documentation or declarations inline.
+Inline the task and authoritative context. Grant only the files or directories needed for normal work, with separate read and write areas. Prefer `sync-engine-skill grant init` over hand-authoring capability JSON. The CLI warns when access exceeds a role recommendation or a same-phase continuation expands its prior grant; record only consequential choices under `Active decisions`. Exclude `node_modules`, framework internals, skills, harness configuration, traces, and unrelated work artifacts; supply exact public documentation or declarations inline.
 
 If context is missing, expand it through a new prompt rather than asking the role to discover unlisted files. Project checks may read the wider project transitively, but the role does not inspect unlisted files itself.
 

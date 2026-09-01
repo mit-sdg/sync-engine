@@ -25,7 +25,7 @@ Build a durable team task board with projects, assignments, and a small web UI.
 Ask me before implementation.
 ```
 
-The coordinator creates or resumes `.sync-engine/work/<slug>/`, records consequential decisions, selects only useful roles, validates the result, and reports the evidence.
+The coordinator creates or resumes `.sync-engine/work/<slug>/`, records consequential decisions, selects only useful roles, validates the result, and reports the evidence. `grant init` creates role-aware capability grants, `harness recommend` distinguishes a native execution harness from an outer supervisor, and `work finish` catches unfinished records before handback.
 
 ## Adaptable coordination
 

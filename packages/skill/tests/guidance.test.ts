@@ -97,7 +97,9 @@ describe("prompt guidance", () => {
     ]) {
       expect(contracts).toContain(phrase);
     }
-    expect(decompositionCritic).toContain("strongest plausible split");
+    expect(decompositionCritic).toContain("strongest plausible splits");
+    expect(decomposition).toContain("presumptively overloaded");
+    expect(decompositionCritic).toContain("desired atomicity, fewer obligations");
     expect(contractCritic).toContain("one compact assessment row per affected obligation");
     expect(concepts).toContain("`ConceptClass.length === 0`");
     expect(concepts).toContain("never the tuple union `[] | [Row]`");

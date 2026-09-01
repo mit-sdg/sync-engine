@@ -6,8 +6,10 @@ import {
   inheritedHarnessConfiguration,
   prepareHarnessInvocation,
   promptGuidedCapabilitySupport,
+  recommendHarness,
   summarizeCapabilitySupport,
   validateHarnessAdapters,
+  validateHarnessIdentity,
   type CapabilitySupport,
   type CapabilitySupportMap,
   type HarnessAdapterDefinition,
@@ -171,6 +173,23 @@ describe("harness adapter conformance", () => {
       expect(continuation.cwd.behavior).toBe("preserve-agent-workspace");
       expect(adapter.identity.stableContinuation).toBe(true);
     }
+  });
+
+  test("distinguishes native harness identity forms and outer supervision", () => {
+    expect(validateHarnessIdentity("pi", "01a05c1f-e5d2-7c92-9a6d-e6883393f526")).toBe(
+      "01a05c1f-e5d2-7c92-9a6d-e6883393f526",
+    );
+    expect(validateHarnessIdentity("paseo", "1253d8c0-78d9-4739-9300-8f808a9f9d19")).toBe(
+      "1253d8c0-78d9-4739-9300-8f808a9f9d19",
+    );
+    expect(() => validateHarnessIdentity("paseo", "01a05c1f-e5d2-7c92-9a6d-e6883393f526")).toThrow(
+      "is not a valid Paseo agent ID for paseo",
+    );
+    expect(recommendHarness({ PI_CODING_AGENT: "true", PASEO_AGENT_ID: "outer" })).toEqual({
+      harness: "pi",
+      outerSupervisor: "paseo",
+      reason: "detected native Pi coordinator",
+    });
   });
 
   test("rejects non-positive, fractional, and non-finite timeouts", () => {

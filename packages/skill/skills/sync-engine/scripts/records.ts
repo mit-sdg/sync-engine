@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { HarnessId } from "./harness.ts";
-import type { EffectiveCapabilityGrant, RoleId, RolePhase } from "./roles.ts";
+import {
+  isCanonicalAuthoredDesignPath,
+  type EffectiveCapabilityGrant,
+  type RoleId,
+  type RolePhase,
+} from "./roles.ts";
 import {
   type RunArtifacts,
   type WorkUnit,
@@ -43,10 +48,17 @@ export interface RetainedSource {
   readonly sha256: string;
 }
 
+export interface DesignFileDigest {
+  readonly path: string;
+  readonly sha256: string;
+}
+
 export interface DesignBinding {
   readonly root: string;
   readonly before: string;
+  readonly beforeFiles?: readonly DesignFileDigest[];
   readonly after?: string;
+  readonly afterFiles?: readonly DesignFileDigest[];
 }
 
 export interface LaunchRelationship {
@@ -171,6 +183,25 @@ function retainedSources(value: unknown): readonly RetainedSource[] {
   });
 }
 
+function designFileDigests(value: unknown, label: string): readonly DesignFileDigest[] {
+  if (!Array.isArray(value)) throw new RecordError(`Design ${label} files must be an array`);
+  const seen = new Set<string>();
+  return value.map((candidate) => {
+    const file = object(candidate, `Design ${label} file`);
+    const path = text(file["path"], `Design ${label} file path`);
+    if (
+      isAbsolute(path) ||
+      path.includes("\\") ||
+      path.split("/").some((part) => !part || part === "." || part === "..")
+    ) {
+      throw new RecordError(`Design ${label} file path must be canonical and relative`);
+    }
+    if (seen.has(path)) throw new RecordError(`Design ${label} files contain duplicate ${path}`);
+    seen.add(path);
+    return { path, sha256: hash(file["sha256"], `Design ${label} file hash`) };
+  });
+}
+
 function decodeRecord(value: unknown): LaunchRecord {
   const record = object(value, "Launch record");
   if (record["state"] !== "prepared" && record["state"] !== "finalized") {
@@ -217,10 +248,15 @@ function decodeRecord(value: unknown): LaunchRecord {
     const design = object(record["design"], "Design binding");
     absolutePath(design["root"], "Design root");
     hash(design["before"], "Design before digest");
+    if (design["beforeFiles"] !== undefined) designFileDigests(design["beforeFiles"], "before");
     if (design["after"] !== undefined) hash(design["after"], "Design after digest");
+    if (design["afterFiles"] !== undefined) designFileDigests(design["afterFiles"], "after");
     const writer = role === "designer" && phase === "contracts";
-    if (record["state"] === "prepared" && design["after"] !== undefined) {
-      throw new RecordError(`Prepared design binding cannot have an after digest`);
+    if (
+      record["state"] === "prepared" &&
+      (design["after"] !== undefined || design["afterFiles"] !== undefined)
+    ) {
+      throw new RecordError(`Prepared design binding cannot have an after snapshot`);
     }
     if (record["state"] === "finalized" && writer !== (design["after"] !== undefined)) {
       throw new RecordError(`Finalized design after digest does not match the role`);
@@ -333,6 +369,30 @@ export async function readLaunchRecord(path: string): Promise<LaunchRecord> {
   return (await loadRecord(path)).record;
 }
 
+export async function replacePreparedHarness(
+  path: string,
+  nextHarness: HarnessId,
+): Promise<PreparedLaunchRecord> {
+  const loaded = await loadRecord(path);
+  if (loaded.record.state !== "prepared") {
+    throw new RecordError(`Harness replacement requires a prepared record`);
+  }
+  const prepared = loaded.record;
+  if (prepared.execution !== "delegated" || prepared.harness === "coordinator") {
+    throw new RecordError(`Harness replacement requires delegated execution`);
+  }
+  if (prepared.relationship?.kind === "continuation") {
+    throw new RecordError(`A same-agent continuation cannot change harness`);
+  }
+  const response = await regularFile(prepared.response.path, prepared.work.path, "Response");
+  if (response.byteLength !== 0) {
+    throw new RecordError(`Harness replacement requires an empty response artifact`);
+  }
+  const updated: PreparedLaunchRecord = { ...prepared, harness: nextHarness };
+  await writeFile(loaded.path, `${JSON.stringify(updated, undefined, 2)}\n`, "utf8");
+  return updated;
+}
+
 function markdown(value: string | Uint8Array, name: string): Uint8Array {
   const content = bytes(value);
   try {
@@ -389,10 +449,11 @@ async function prepareDesign(
     throw new RecordError(`Design root must be the canonical application design directory`);
   }
   const before = hash(input.digest, "Design digest");
-  if ((await digestDesign(root)).digest !== before) {
+  const snapshot = await snapshotDesign(root);
+  if (snapshot.digest !== before) {
     throw new RecordError(`Design changed before launch preparation`);
   }
-  return { root, before };
+  return { root, before, beforeFiles: snapshot.fileDigests };
 }
 
 export interface PrepareLaunchOptions {
@@ -533,6 +594,59 @@ async function requireFreshIdentity(
   }
 }
 
+function changedDesignPaths(
+  before: readonly DesignFileDigest[],
+  after: readonly DesignFileDigest[],
+): string[] {
+  const previous = new Map(before.map((file) => [file.path, file.sha256]));
+  const current = new Map(after.map((file) => [file.path, file.sha256]));
+  return [...new Set([...previous.keys(), ...current.keys()])]
+    .filter((path) => previous.get(path) !== current.get(path))
+    .sort();
+}
+
+async function completedDesign(
+  prepared: PreparedLaunchRecord,
+  status: LaunchStatus,
+): Promise<DesignBinding | undefined> {
+  if (prepared.design === undefined) return undefined;
+  const snapshot = await snapshotDesign(prepared.design.root);
+  const writer = prepared.role === "designer" && prepared.phase === "contracts";
+  if (status !== "completed") {
+    return writer
+      ? { ...prepared.design, after: snapshot.digest, afterFiles: snapshot.fileDigests }
+      : prepared.design;
+  }
+  if (!writer) {
+    if (snapshot.digest !== prepared.design.before) {
+      throw new RecordError(`Design changed after preparation`);
+    }
+    return prepared.design;
+  }
+
+  const changed = changedDesignPaths(prepared.design.beforeFiles ?? [], snapshot.fileDigests);
+  if (prepared.design.beforeFiles !== undefined) {
+    const assigned = prepared.grant.writableAreas
+      .filter(({ area }) => area === "assigned-design")
+      .map(({ path }) => path);
+    const outside = changed.filter((path) => !assigned.includes(path));
+    if (outside.length > 0) {
+      throw new RecordError(
+        `Contract design changed outside its assignment: ${outside.join(", ")}`,
+      );
+    }
+  }
+  const noncanonical = changed.filter((path) => !isCanonicalAuthoredDesignPath(path));
+  if (noncanonical.length > 0) {
+    throw new RecordError(`Contract design used noncanonical paths: ${noncanonical.join(", ")}`);
+  }
+  return {
+    ...prepared.design,
+    after: snapshot.digest,
+    afterFiles: snapshot.fileDigests,
+  };
+}
+
 export interface FinalizeLaunchOptions {
   readonly recordPath: string;
   readonly agentId: string;
@@ -568,15 +682,7 @@ export async function finalizeLaunch(
     throw new RecordError(`Effective grant changed after preparation`);
   }
 
-  let design = prepared.design;
-  if (design !== undefined) {
-    const current = (await digestDesign(design.root)).digest;
-    if (prepared.role === "designer" && prepared.phase === "contracts") {
-      design = { ...design, after: current };
-    } else if (current !== design.before) {
-      throw new RecordError(`Design changed after preparation`);
-    }
-  }
+  const design = await completedDesign(prepared, options.status);
   if (prepared.relationship?.kind === "continuation") {
     if (
       prepared.harness !== prepared.relationship.targetHarness ||
@@ -641,15 +747,7 @@ export async function finalizeSimulation(
     throw new RecordError(`Effective grant changed after preparation`);
   }
 
-  let design = prepared.design;
-  if (design !== undefined) {
-    const current = (await digestDesign(design.root)).digest;
-    if (prepared.role === "designer" && prepared.phase === "contracts") {
-      design = { ...design, after: current };
-    } else if (current !== design.before) {
-      throw new RecordError(`Design changed after preparation`);
-    }
-  }
+  const design = await completedDesign(prepared, options.status);
   const response = await regularFile(prepared.response.path, prepared.work.path, "Response");
   const finalized: FinalizedLaunchRecord = {
     ...prepared,
@@ -672,6 +770,10 @@ export interface DesignDigest {
   readonly files: number;
 }
 
+export interface DesignSnapshot extends DesignDigest {
+  readonly fileDigests: readonly DesignFileDigest[];
+}
+
 interface DesignFile {
   readonly path: string;
   readonly relativePath: string;
@@ -690,7 +792,7 @@ async function designFiles(root: string, directory: string): Promise<DesignFile[
   return files;
 }
 
-export async function digestDesign(directory: string): Promise<DesignDigest> {
+export async function snapshotDesign(directory: string): Promise<DesignSnapshot> {
   const root = resolve(directory);
   const entry = await lstat(root).catch((error: unknown) => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
@@ -711,6 +813,7 @@ export async function digestDesign(directory: string): Promise<DesignDigest> {
         );
 
   const digest = createHash("sha256");
+  const fileDigests: DesignFileDigest[] = [];
   for (const file of files) {
     const content = await readFile(file.path);
     digest
@@ -719,6 +822,12 @@ export async function digestDesign(directory: string): Promise<DesignDigest> {
       .update(String(content.byteLength))
       .update("\0")
       .update(content);
+    fileDigests.push({ path: file.relativePath, sha256: sha256(content) });
   }
-  return { digest: digest.digest("hex"), files: files.length };
+  return { digest: digest.digest("hex"), files: files.length, fileDigests };
+}
+
+export async function digestDesign(directory: string): Promise<DesignDigest> {
+  const { digest, files } = await snapshotDesign(directory);
+  return { digest, files };
 }

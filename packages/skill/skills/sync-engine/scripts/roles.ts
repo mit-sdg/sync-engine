@@ -151,7 +151,7 @@ export const recommendedCapabilitiesByRolePhase = {
   "concept-worker/implementation": max(applicationRead, conceptWrite, "project-local", "generated"),
   "application-worker/implementation": applicationMax,
   "frontend-worker/implementation": frontendMax,
-  "evidence-worker/evidence": max(applicationRead, evidenceWrite, "project-local", "network-host"),
+  "evidence-worker/evidence": max(applicationRead, evidenceWrite, "project-validation"),
 } as const satisfies Readonly<Record<RoleSpecificationId, RecommendedCapabilities>>;
 
 const inline = (
@@ -514,6 +514,9 @@ export function capabilityRecommendationIssues(
     ...grant.readableAreas
       .filter(({ area }) => !recommended.readableAreas.includes(area))
       .map(({ area }) => `read area ${area}`),
+    ...grant.readableAreas
+      .filter(({ area, path }) => area === "application" && path === ".")
+      .map(() => `read path application:. is unbounded`),
     ...grant.writableAreas
       .filter(({ area }) => !recommended.writableAreas.includes(area))
       .map(({ area }) => `write area ${area}`),
@@ -543,6 +546,62 @@ export function capabilityRecommendationIssues(
   return issues;
 }
 
+function validateRoleOwnership(
+  spec: RoleSpecification,
+  writableAreas: readonly WritableAreaGrant[],
+): void {
+  for (const { area, path } of writableAreas) {
+    if (area === "current-decomposition" && spec.id !== "designer/decomposition") {
+      fail(spec, `${area}:${path} is owned only by designer/decomposition`);
+    }
+    if (area === "assigned-design") {
+      if (spec.id !== "designer/contracts") {
+        fail(spec, `${area}:${path} is owned only by designer/contracts`);
+      }
+      if (!isCanonicalAuthoredDesignPath(path)) {
+        fail(
+          spec,
+          `${area}:${path} must be types.md, concepts/<Name>.md, or compositions/<Name>.md`,
+        );
+      }
+    }
+  }
+}
+
+export function isCanonicalAuthoredDesignPath(path: string): boolean {
+  return path === "types.md" || /^(?:concepts|compositions)\/[A-Z][A-Za-z0-9]*\.md$/.test(path);
+}
+
+export function initialCapabilityGrant(
+  spec: RoleSpecification,
+  readableAreas: readonly ReadableAreaGrant[],
+  writableAreas: readonly WritableAreaGrant[],
+  overrides: Partial<
+    Pick<
+      EffectiveCapabilityGrant,
+      "projectShell" | "network" | "generatedOutput" | "longRunningProcesses"
+    >
+  > = {},
+): EffectiveCapabilityGrant {
+  const writes =
+    spec.id === "designer/decomposition" && writableAreas.length === 0
+      ? [{ area: "current-decomposition" as const, path: "decomposition.md" }]
+      : [...writableAreas];
+  const grant = {
+    readableAreas,
+    writableAreas: writes,
+    toolKinds: [
+      ...(readableAreas.length > 0 || writes.length > 0 ? (["repository-read"] as const) : []),
+      ...(writes.length > 0 ? (["repository-write"] as const) : []),
+    ],
+    projectShell: overrides.projectShell ?? spec.recommendedCapabilities.projectShell,
+    network: overrides.network ?? false,
+    generatedOutput: overrides.generatedOutput ?? false,
+    longRunningProcesses: overrides.longRunningProcesses ?? false,
+  };
+  return validateCapabilityGrant(spec, grant);
+}
+
 export function validateCapabilityGrant(
   spec: RoleSpecification,
   value: unknown,
@@ -550,6 +609,7 @@ export function validateCapabilityGrant(
   const grant = shape(spec, value, "grant", capabilityCategories);
   const readableAreas = areaGrants(spec, grant.readableAreas, "readableAreas", readAreas);
   const writableAreas = areaGrants(spec, grant.writableAreas, "writableAreas", writeAreas, true);
+  validateRoleOwnership(spec, writableAreas);
   const toolKinds = toolGrant(spec, grant.toolKinds);
   if (
     typeof grant.projectShell !== "string" ||

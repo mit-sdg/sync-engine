@@ -1,5 +1,7 @@
 # Authored formats
 
+Write each concept to `design/concepts/<Gerund>.md`, each application composition to `design/compositions/<Name>.md`, and application-owned concrete types to `design/types.md`. These are the only authored-design locations; decomposition remains the work-unit `decomposition.md`.
+
 Each concept has one gerund identifier H1 naming its mechanism (`# Tasking`, never
 `# Tasks` or `# Task Management`) and these H2s, in order;
 no other headings or fences:

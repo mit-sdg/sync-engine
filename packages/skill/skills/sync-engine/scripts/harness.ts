@@ -148,6 +148,45 @@ export function getHarnessAdapter(id: HarnessId): HarnessAdapterDefinition {
   return harnessAdapters.find((adapter) => adapter.id === id)!;
 }
 
+const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuidV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function validateHarnessIdentity(id: HarnessId, identity: string): string {
+  requireText(identity, "agent identity");
+  const expected =
+    id === "pi" ? uuidV7 : id === "paseo" || id === "antigravity" ? uuidV4 : undefined;
+  if (expected !== undefined && !expected.test(identity)) {
+    throw new Error(`${identity} is not a valid ${getHarnessAdapter(id).identity.label} for ${id}`);
+  }
+  return identity;
+}
+
+export function recommendHarness(environment: NodeJS.ProcessEnv): {
+  readonly harness?: HarnessId;
+  readonly outerSupervisor?: HarnessId;
+  readonly reason: string;
+} {
+  const outerSupervisor = environment["PASEO_AGENT_ID"] === undefined ? undefined : "paseo";
+  if (environment["PI_CODING_AGENT"] === "true" || environment["PI_SESSION_ID"] !== undefined) {
+    return {
+      harness: "pi",
+      ...(outerSupervisor === undefined ? {} : { outerSupervisor }),
+      reason: "detected native Pi coordinator",
+    };
+  }
+  if (environment["CURSOR_SESSION_ID"] !== undefined) {
+    return {
+      harness: "cursor",
+      ...(outerSupervisor === undefined ? {} : { outerSupervisor }),
+      reason: "detected native Cursor coordinator",
+    };
+  }
+  return {
+    ...(outerSupervisor === undefined ? {} : { outerSupervisor }),
+    reason: "no native coordinator harness was detected",
+  };
+}
+
 /** Prepare declarative data only; the coordinator performs the native invocation. */
 export function prepareHarnessInvocation<Capabilities>(
   request: PrepareHarnessRequest<Capabilities>,
