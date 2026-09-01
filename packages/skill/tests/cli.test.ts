@@ -235,8 +235,8 @@ describe("skill CLI help and arguments", () => {
     const recommendation = await invoke(["harness", "recommend"], root, {
       environment: { PI_CODING_AGENT: "true", PASEO_AGENT_ID: "outer" },
     });
-    expect(recommendation.stdout).toContain("Recommended execution harness: pi");
-    expect(recommendation.stdout).toContain("Outer supervisor: paseo");
+    expect(recommendation.stdout).toContain("Recommended execution harness: paseo");
+    expect(recommendation.stdout).toContain("Current supervisor: paseo");
   });
 
   test.each([

@@ -176,7 +176,8 @@ Harnesses:
   ${harnessIds.join(", ")}
 
 Options:
-  --harness names the mechanism that creates the role agent, not an outer supervisor.
+  --harness names the mechanism that creates and retains the role agent. A detected
+  supervising harness takes precedence over its embedded provider runtime.
   Design binding is automatic when a run reads or writes permanent design. --design-root
   may explicitly introduce the same canonical <application>/design binding; continue
   recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
@@ -680,7 +681,7 @@ function launchAction(invocation: PreparedHarnessInvocation<EffectiveCapabilityG
   if (invocation.harness === "paseo") {
     const target =
       invocation.target.kind === "fresh"
-        ? `run --cwd ${JSON.stringify(invocation.cwd.path)} --title ${JSON.stringify(invocation.title.value)} --provider <provider/model>`
+        ? `run --cwd ${JSON.stringify(invocation.cwd.path)} --title ${JSON.stringify(invocation.title.value)} --provider <current-provider> --model <current-model> [--thinking <current-thinking>]`
         : `send ${JSON.stringify(invocation.target.agentId)}`;
     return `paseo ${target} ${JSON.stringify(instruction)}`;
   }
@@ -849,7 +850,9 @@ function harnessRecommend(dependencies: CommandDependencies): void {
   const supervisorLine =
     recommendation.outerSupervisor === undefined
       ? "Outer supervisor: none detected"
-      : `Outer supervisor: ${recommendation.outerSupervisor} (not the execution harness unless it creates the role agent)`;
+      : recommendation.harness === recommendation.outerSupervisor
+        ? `Current supervisor: ${recommendation.outerSupervisor} (use it to create and retain role agents)`
+        : `Outer supervisor: ${recommendation.outerSupervisor}`;
   output(dependencies).out(`${harnessLine}\n${supervisorLine}\nReason: ${recommendation.reason}\n`);
 }
 

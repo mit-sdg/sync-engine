@@ -167,11 +167,17 @@ export function recommendHarness(environment: NodeJS.ProcessEnv): {
   readonly reason: string;
 } {
   const outerSupervisor = environment["PASEO_AGENT_ID"] === undefined ? undefined : "paseo";
+  if (outerSupervisor !== undefined) {
+    return {
+      harness: "paseo",
+      outerSupervisor,
+      reason: "detected Paseo-managed coordinator; Paseo retains role ownership and completion",
+    };
+  }
   if (environment["PI_CODING_AGENT"] === "true" || environment["PI_SESSION_ID"] !== undefined) {
     return {
       harness: "pi",
-      ...(outerSupervisor === undefined ? {} : { outerSupervisor }),
-      reason: "detected native Pi coordinator",
+      reason: "detected native Pi coordinator outside Paseo",
     };
   }
   if (environment["CURSOR_SESSION_ID"] !== undefined) {

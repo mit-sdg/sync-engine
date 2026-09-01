@@ -4,12 +4,12 @@ Use this reference only when delegating. Coordinator simulation does not invoke 
 
 ## Common launch contract
 
-The selected harness is the mechanism that creates the role agent, not an outer supervisor. Run `sync-engine-skill harness recommend` when the coordinator is itself hosted by another system; use the printed launch action from prompt preparation.
+The selected harness is the mechanism that creates and retains the role agent through completion. Run `sync-engine-skill harness recommend` before delegation; a detected supervising harness takes precedence over its embedded provider runtime. For Paseo-managed coordinators, inspect the current agent and pass its provider, model, and thinking settings to the foreground `paseo run`. Use the printed launch action from prompt preparation.
 
 For each delegated run:
 
 1. Build the role prompt. The CLI writes task, access, prompt, empty response, and prepared record artifacts.
-2. Invoke the selected harness from the application workspace. A fresh run creates a fresh identity; a continuation targets the exact recorded identity.
+2. Invoke the selected harness from the application workspace. A fresh run creates a fresh identity; a continuation targets the exact recorded identity. Keep Paseo launches in the foreground so the coordinator receives the final response before continuing.
 3. Send only the printed short instruction: `Read and follow the complete assignment in <prompt-path>`. The prompt file is the complete role message. Do not paste, summarize, or prefix its contents.
 4. Observe until terminal status or the recorded timeout. Preserve the returned identity and complete final or partial response.
 5. Copy the response verbatim to the printed response path and run the printed `launch complete` command before preparing another role. Completion validates adapter-specific identity form.

@@ -27,11 +27,11 @@ Existing accepted design may proceed directly to implementation. The user may om
 
 ## Keep work visible
 
-One work item lives at `.sync-engine/work/<slug>/`. Its `brief.md` records goal, active decisions, status, and concise activity. Timestamped artifacts preserve each task, access grant, compiled prompt, result, execution mode, identity, and status. Use `sync-engine-skill work show <slug>` for a readable overview. Finalize each run before preparing another; when execution budget is low, hand back before starting optional evidence. `work finish <slug>` refuses handback while a run remains prepared.
+One work item lives at `.sync-engine/work/<slug>/`. Its `brief.md` records goal, active decisions, status, and concise activity. Timestamped artifacts preserve each task, access grant, compiled prompt, result, execution mode, identity, and status. Use `sync-engine-skill work show <slug>` for a readable overview. Finalize each run before preparing another and never return, idle, or wait with a simulation record prepared. When execution budget is low, hand back before starting optional evidence. `work finish <slug>` refuses handback while a run remains prepared.
 
 ## Delegate or simulate
 
-A delegated role uses a fresh agent unless continuing that exact recorded identity. A coordinator simulation uses the same compiled prompt and artifacts, records its reason, has no agent ID, and is never described as independent.
+A delegated role uses a fresh agent unless continuing that exact recorded identity. Prefer a detected supervising harness that can retain role ownership and completion over its embedded provider adapter. For example, when `PASEO_AGENT_ID` is present, use the Paseo harness and keep its delegated launch in the foreground. Outside such supervision, use the supported native adapter. A coordinator simulation uses the same compiled prompt and artifacts, records its reason, has no agent ID, and is never described as independent.
 
 Simulate when the user requests it or delegation is unavailable. If the user explicitly required independence, ask before simulating. A later delegated review replaces or supplements a simulation; it does not continue one.
 

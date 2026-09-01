@@ -186,9 +186,13 @@ describe("harness adapter conformance", () => {
       "is not a valid Paseo agent ID for paseo",
     );
     expect(recommendHarness({ PI_CODING_AGENT: "true", PASEO_AGENT_ID: "outer" })).toEqual({
-      harness: "pi",
+      harness: "paseo",
       outerSupervisor: "paseo",
-      reason: "detected native Pi coordinator",
+      reason: "detected Paseo-managed coordinator; Paseo retains role ownership and completion",
+    });
+    expect(recommendHarness({ PI_CODING_AGENT: "true" })).toEqual({
+      harness: "pi",
+      reason: "detected native Pi coordinator outside Paseo",
     });
   });
 

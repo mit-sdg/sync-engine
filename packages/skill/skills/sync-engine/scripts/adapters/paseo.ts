@@ -13,7 +13,8 @@ export const paseoAdapter = {
   fresh: {
     mechanism: "Paseo CLI",
     operation: "paseo run",
-    instruction: "Run paseo run with the short generated file-reading instruction.",
+    instruction:
+      "Inspect the current Paseo agent, then run paseo run in the foreground with its provider, model, and thinking settings plus the short generated file-reading instruction; retain the returned child agent ID and final response.",
   },
   continuation: {
     mechanism: "Paseo CLI",

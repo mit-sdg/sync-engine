@@ -39,7 +39,8 @@ Harnesses:
   paseo, pi, codex, claude-code, antigravity, cursor
 
 Options:
-  --harness names the mechanism that creates the role agent, not an outer supervisor.
+  --harness names the mechanism that creates and retains the role agent. A detected
+  supervising harness takes precedence over its embedded provider runtime.
   Design binding is automatic when a run reads or writes permanent design. --design-root
   may explicitly introduce the same canonical <application>/design binding; continue
   recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
