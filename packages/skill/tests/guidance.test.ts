@@ -97,9 +97,11 @@ describe("prompt guidance", () => {
     ]) {
       expect(contracts).toContain(phrase);
     }
-    expect(decompositionCritic).toContain("strongest plausible splits");
-    expect(decomposition).toContain("presumptively overloaded");
+    expect(decompositionCritic).toContain("boundary verdict");
+    expect(decomposition).toContain("deletion test");
+    expect(decomposition).toContain("minimum-mechanism test");
     expect(decompositionCritic).toContain("desired atomicity, fewer obligations");
+    expect(decompositionCritic).toContain("retry-only ledger");
     expect(contractCritic).toContain("one compact assessment row per affected obligation");
     expect(concepts).toContain("`ConceptClass.length === 0`");
     expect(concepts).toContain("never the tuple union `[] | [Row]`");

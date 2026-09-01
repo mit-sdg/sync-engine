@@ -25,10 +25,13 @@ For each new or changed concept, answer in one compact row:
 - Which decision is it the sole authority for?
 - What foreign subject remains opaque?
 - Could an unrelated application reuse the whole mechanism unchanged?
-- What is the strongest plausible split for each independently nameable state family or decision, and why is each split worse for semantic reasons rather than convenience or atomicity?
-- If it was merged with a neighbor, which independent authority or lifecycle would be lost?
+- What does the deletion test show for each independently nameable state family or decision?
+- What is the strongest plausible split, and why is it worse for semantic reasons rather than convenience or atomicity?
+- If this concept merged with its nearest neighbor, which independent authority or lifecycle would be lost? If none, why is it not needless fragmentation?
 
-Split distinct purposes, lifecycles, authorities, failures, or independently reusable state. Treat a concept owning several independently nameable state families or decisions as presumptively overloaded: test each family as a reusable mechanism and explain why it has no useful life apart from every other family. Combine only when the parts have no useful independent life. Shared identity, workflow order, desired atomicity, fewer obligations, UI placement, or a product feature name does not justify a merge; composition and recoverable false intervals exist precisely to coordinate independent owners. A reaction that merely reassembles one authority's transition is evidence that the boundary may be wrong.
+Split distinct purposes, lifecycles, authorities, failures, or independently reusable state. Apply a deletion test to every independently nameable state family: if removing it leaves the rest coherent and the removed family remains meaningful over an opaque subject, split it even when only composition triggers its changes. Treat a concept owning several such families as presumptively overloaded. Combine only when the parts have no useful independent life. Shared identity, workflow order, desired atomicity, fewer obligations, UI placement, or a product feature name does not justify a merge; composition and recoverable false intervals exist precisely to coordinate independent owners.
+
+Also require every concept to pass a minimum-mechanism test: it owns a semantic lifecycle or decision meaningful apart from its neighbor. A namespace or index for another concept's primary records, a retry ledger introduced only to close an obligation, or coordination with no independent product lifecycle belongs with the owner or in composition. Prefer adapting an effect owner to accept a stable operation identity over inventing a helper concept solely for retry. A reaction that merely reassembles one authority's transition is evidence that the boundary may be wrong.
 
 Classify relevant concepts as `new`, `changed`, `reused-unchanged`, or `unaffected-context`. Record catalog disposition only for selected concepts. Reference reused contracts instead of restating them.
 

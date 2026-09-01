@@ -166,7 +166,7 @@ describe("typed role specifications", () => {
         heading: "Assessments",
         required: true,
         guidance:
-          "Adverse assessments keyed to rows; confirm clean coverage once without restating rows.",
+          "One overloaded, minimal, or fragmented verdict per concept; adverse assessments keyed to rows.",
       },
       {
         heading: "Findings",
