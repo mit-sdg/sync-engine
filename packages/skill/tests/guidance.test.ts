@@ -80,6 +80,9 @@ describe("prompt guidance", () => {
     const application = read(
       "../skills/sync-engine/prompts/guidance/implementation/application.md",
     );
+    const frameworkSafety = read(
+      "../skills/sync-engine/prompts/guidance/implementation/framework-safety.md",
+    );
 
     for (const phrase of [
       "sole authority",
@@ -110,6 +113,8 @@ describe("prompt guidance", () => {
     expect(application).toContain('import { assemble } from "@mit-sdg/sync-engine/assembly"');
     expect(application).toContain('import { composition } from "./composition.ts"');
     expect(application).toContain("applicationConceptSet.implementations()");
+    expect(frameworkSafety).toContain("Never open `node_modules`, package `dist` files");
+    expect(frameworkSafety).toContain("must be supplied inline");
   });
 
   test("keeps application realization patterns byte-exact with tested examples", () => {

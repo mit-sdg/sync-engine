@@ -31,7 +31,7 @@ One work item lives at `.sync-engine/work/<slug>/`. Its `brief.md` records goal,
 
 ## Delegate or simulate
 
-A delegated role uses a fresh agent unless continuing that exact recorded identity. Prefer a detected supervising harness that can retain role ownership and completion over its embedded provider adapter. For example, when `PASEO_AGENT_ID` is present, use the Paseo harness and keep its delegated launch in the foreground. Outside such supervision, use the supported native adapter. A coordinator simulation uses the same compiled prompt and artifacts, records its reason, has no agent ID, and is never described as independent.
+A delegated role uses a fresh agent unless continuing that exact recorded identity. Prefer a detected supervising harness that can retain role ownership and completion over its embedded provider adapter. For example, when `PASEO_AGENT_ID` is present, use the Paseo harness and keep its delegated launch in the foreground. Outside such supervision, use the supported native adapter. A coordinator simulation uses the same compiled prompt and artifacts, records its reason, has no agent ID, and is never described as independent. It is direct execution, not role-play: do not claim to send an assignment, invoke an agent, or wait for a role. Once the prompt is built, perform the work silently and finalize it before resuming coordination.
 
 Simulate when the user requests it or delegation is unavailable. If the user explicitly required independence, ask before simulating. A later delegated review replaces or supplements a simulation; it does not continue one.
 
@@ -39,7 +39,7 @@ Simulate when the user requests it or delegation is unavailable. If the user exp
 
 Inline the task and authoritative context. Grant only the files or directories needed for normal work, with separate read and write areas. Prefer `sync-engine-skill grant init` over hand-authoring capability JSON. The CLI warns when access exceeds a role recommendation or a same-phase continuation expands its prior grant; record only consequential choices under `Active decisions`. Exclude `node_modules`, framework internals, skills, harness configuration, traces, and unrelated work artifacts; supply exact public documentation or declarations inline.
 
-If context is missing, expand it through a new prompt rather than asking the role to discover unlisted files. Project checks may read the wider project transitively, but the role does not inspect unlisted files itself.
+If context is missing, expand it through a new prompt rather than asking the role to discover unlisted files. During simulation, the coordinator itself is bound by that prompt's grant until completion; broader coordinator access and prior discoveries are not role context. Project checks may read the wider project transitively, but the role does not inspect unlisted files itself.
 
 ## Keep prompts lean
 

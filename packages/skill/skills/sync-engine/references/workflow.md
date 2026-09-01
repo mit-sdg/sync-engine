@@ -110,6 +110,8 @@ sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
   --input <slot>=<path> ...
 ```
 
+Simulation means doing the compiled assignment directly. Do not announce sending, invoking, or waiting for a role agent. From prompt preparation through completion, use only its supplied context and access grant; if more context is needed, finalize or abandon the attempt and prepare a new prompt rather than inspecting it as coordinator.
+
 Permanent design is bound automatically when a prompt reads or writes it. Contract design may change only granted canonical design files; design is immutable for every other bound role. `--design-root design` remains available to introduce the same binding explicitly. Prompt size is reported; remove irrelevant context when it is excessive. A supplied real harness context limit may still reject an oversized prompt.
 
 Delegation sends only the printed short instruction to read the prompt file. Keep the launch in the foreground when the adapter supports it, copy its returned result verbatim to the response path, and complete the record before yielding. Simulation uses that same prompt as the coordinator's complete role assignment; never idle or return while its record is prepared. Copy the result verbatim to the response path and run the printed completion command.

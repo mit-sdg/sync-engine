@@ -288,7 +288,7 @@ Root: ${JSON.stringify(applicationRoot)}. The short native message explicitly au
 - Tools: ${grant.toolKinds.length === 0 ? "none" : grant.toolKinds.map((tool) => `\`${tool}\``).join(", ")}.
 - Shell: \`${grant.projectShell}\`; network: ${grant.network ? "yes" : "no"}; generated output: ${grant.generatedOutput ? "yes" : "no"}; long-running processes: ${grant.longRunningProcesses ? "yes" : "no"}.
 
-Inspect only listed files or directories. Project checks may transitively read other project files, but do not inspect them yourself. Exclude \`.git\`, \`.sync-engine\` except this prompt, harness/skill configuration, \`node_modules\`, framework internals, agent traces, parent directories, and unrelated generated output. Ask for context instead of searching outside the grant. Generated files come only from granted commands. Never grantable: ${never}.`;
+Inspect only listed files or directories. In coordinator simulation, this grant binds the coordinator itself; broader coordinator access and prior discovery are unavailable to the assignment. Project checks may transitively read other project files, but do not inspect them yourself. Never open \`node_modules\`, package \`dist\` files, or framework internals, including declarations; required public excerpts must be supplied inline. Exclude \`.git\`, \`.sync-engine\` except this prompt, harness/skill configuration, agent traces, parent directories, and unrelated generated output. Ask for context instead of searching outside the grant. Generated files come only from granted commands. Never grantable: ${never}.`;
 }
 
 function deltaCapabilities(grant: EffectiveCapabilityGrant): string {

@@ -662,7 +662,7 @@ Response: ${launch.artifacts.responsePath}
 Record: ${launch.path}
 Reason: ${launch.record.simulationReason}
 Prompt bytes: ${built.bytes}; sha256 ${built.sha256}
-Instruction: Use the prompt file as the complete simulated role assignment. Write the result verbatim to Response, then run ${commandName} simulation complete ${launch.path} --status completed.
+Instruction: Execute the prompt directly now, within its exact access grant. Do not role-play, send an assignment, invoke an agent, narrate waiting, inspect broader coordinator context, node_modules, or package dist files. Write the result verbatim to Response, then run ${commandName} simulation complete ${launch.path} --status completed before resuming coordination.
 `);
 }
 
