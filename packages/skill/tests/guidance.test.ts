@@ -71,6 +71,43 @@ describe("prompt guidance", () => {
     }
   });
 
+  test("keeps normal role kits complete enough to design, review, and implement", () => {
+    const decomposition = read("../skills/sync-engine/prompts/guidance/design/decomposition.md");
+    const contracts = read("../skills/sync-engine/prompts/guidance/design/contracts.md");
+    const decompositionCritic = read("../skills/sync-engine/prompts/roles/critic-decomposition.md");
+    const contractCritic = read("../skills/sync-engine/prompts/roles/critic-contracts.md");
+    const concepts = read("../skills/sync-engine/prompts/guidance/implementation/concepts.md");
+    const application = read(
+      "../skills/sync-engine/prompts/guidance/implementation/application.md",
+    );
+
+    for (const phrase of [
+      "sole authority",
+      "unrelated application",
+      "strongest plausible split",
+      "stable retry identity accepted by the effect owner",
+    ]) {
+      expect(decomposition).toContain(phrase);
+    }
+    for (const phrase of [
+      "unchanged post-refusal state",
+      "ordering of required effects relative to acknowledgement",
+      "bypassable authorization",
+      "exactly one matching `Declaration.Identity at /path` entry",
+    ]) {
+      expect(contracts).toContain(phrase);
+    }
+    expect(decompositionCritic).toContain("strongest plausible split");
+    expect(contractCritic).toContain("one compact assessment row per affected obligation");
+    expect(concepts).toContain("`ConceptClass.length === 0`");
+    expect(concepts).toContain("never the tuple union `[] | [Row]`");
+    expect(application).toContain("import { conceptSet, registerConcept }");
+    expect(application).toContain("import { InvalidContent, PostingConcept }");
+    expect(application).toContain('import { assemble } from "@mit-sdg/sync-engine/assembly"');
+    expect(application).toContain('import { composition } from "./composition.ts"');
+    expect(application).toContain("applicationConceptSet.implementations()");
+  });
+
   test("keeps application realization patterns byte-exact with tested examples", () => {
     const guide = read("../skills/sync-engine/prompts/guidance/api/application-example.md");
     const sections = sectionRecord(

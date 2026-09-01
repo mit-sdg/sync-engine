@@ -19,6 +19,8 @@ export type LaunchStatus = (typeof launchStatuses)[number];
 export type EnforcementLevel = (typeof enforcementLevels)[number];
 
 const harnessValues = ["paseo", "pi", "codex", "claude-code", "antigravity", "cursor"] as const;
+export type ExecutionMode = "delegated" | "simulated";
+export type ExecutionHarness = HarnessId | "coordinator";
 const rolePhaseValues = [
   "designer/decomposition",
   "designer/contracts",
@@ -59,7 +61,10 @@ interface LaunchRecordBase {
   readonly work: { readonly slug: string; readonly path: string };
   readonly role: RoleId;
   readonly phase: RolePhase;
-  readonly harness: HarnessId;
+  readonly execution: ExecutionMode;
+  readonly independent: boolean;
+  readonly harness: ExecutionHarness;
+  readonly simulationReason?: string;
   readonly timeoutSeconds: number;
   readonly prompt: { readonly path: string; readonly sha256: string };
   readonly capabilities: { readonly path: string; readonly sha256: string };
@@ -77,7 +82,7 @@ export interface PreparedLaunchRecord extends LaunchRecordBase {
 export interface FinalizedLaunchRecord extends LaunchRecordBase {
   readonly state: "finalized";
   readonly response: { readonly path: string; readonly sha256: string; readonly bytes: number };
-  readonly agentId: string;
+  readonly agentId?: string;
   readonly status: LaunchStatus;
   readonly enforcement: EnforcementLevel;
   readonly model?: string;
@@ -133,7 +138,8 @@ function hash(value: unknown, name: string): string {
   return value;
 }
 
-function harness(value: unknown, name = "Harness"): HarnessId {
+function harness(value: unknown, name = "Harness"): ExecutionHarness {
+  if (value === "coordinator") return value;
   if (!harnessValues.includes(value as HarnessId)) throw new RecordError(`${name} is invalid`);
   return value as HarnessId;
 }
@@ -174,7 +180,24 @@ function decodeRecord(value: unknown): LaunchRecord {
   text(work["slug"], "Work slug");
   absolutePath(work["path"], "Work path");
   const [role, phase] = rolePhase(record["role"], record["phase"]);
-  harness(record["harness"]);
+  if (record["execution"] !== "delegated" && record["execution"] !== "simulated") {
+    throw new RecordError(`Execution must be delegated or simulated`);
+  }
+  const execution = record["execution"];
+  if (record["independent"] !== (execution === "delegated")) {
+    throw new RecordError(
+      `Independent must be true for delegated execution and false for simulation`,
+    );
+  }
+  const selectedHarness = harness(record["harness"]);
+  if (execution === "simulated") {
+    if (selectedHarness !== "coordinator") {
+      throw new RecordError(`Simulated execution must use the coordinator`);
+    }
+    text(record["simulationReason"], "Simulation reason");
+  } else if (selectedHarness === "coordinator" || record["simulationReason"] !== undefined) {
+    throw new RecordError(`Delegated execution must use a harness and no simulation reason`);
+  }
   positiveSeconds(record["timeoutSeconds"]);
 
   for (const [name, value] of [
@@ -204,6 +227,9 @@ function decodeRecord(value: unknown): LaunchRecord {
     }
   }
   if (record["relationship"] !== undefined) {
+    if (execution === "simulated") {
+      throw new RecordError(`Simulated execution cannot claim same-agent continuity`);
+    }
     const relationship = object(record["relationship"], "Launch relationship");
     if (relationship["kind"] !== "continuation" && relationship["kind"] !== "replacement") {
       throw new RecordError(`Launch relationship kind is invalid`);
@@ -213,7 +239,10 @@ function decodeRecord(value: unknown): LaunchRecord {
     text(relationship["targetAgentId"], "Related agent identity");
   }
   if (record["state"] === "finalized") {
-    text(record["agentId"], "Agent identity");
+    if (execution === "delegated") text(record["agentId"], "Agent identity");
+    else if (record["agentId"] !== undefined) {
+      throw new RecordError(`Simulated execution cannot claim an agent identity`);
+    }
     if (!launchStatuses.includes(record["status"] as LaunchStatus)) {
       throw new RecordError(`Finalized record has an unknown status`);
     }
@@ -320,11 +349,21 @@ async function prepareRelationship(
   input: Pick<LaunchRelationship, "kind" | "recordPath"> | undefined,
   unit: WorkUnit,
   role: RoleId,
-  selectedHarness: HarnessId,
+  selectedHarness: ExecutionHarness,
 ): Promise<LaunchRelationship | undefined> {
   if (input === undefined) return undefined;
+  if (selectedHarness === "coordinator") {
+    throw new RecordError(`Simulated execution cannot continue or replace an agent`);
+  }
   const target = await loadRecord(input.recordPath);
   if (target.record.state !== "finalized") throw new RecordError(`Related launch is not finalized`);
+  if (
+    target.record.execution !== "delegated" ||
+    target.record.harness === "coordinator" ||
+    target.record.agentId === undefined
+  ) {
+    throw new RecordError(`Related launch is not a delegated agent run`);
+  }
   if (target.record.work.path !== unit.path || target.record.role !== role) {
     throw new RecordError(`Related launch belongs to another work unit or role`);
   }
@@ -361,7 +400,9 @@ export interface PrepareLaunchOptions {
   readonly slug: string;
   readonly role: RoleId;
   readonly phase: RolePhase;
-  readonly harness: HarnessId;
+  readonly execution?: ExecutionMode;
+  readonly harness: ExecutionHarness;
+  readonly simulationReason?: string;
   readonly timeoutSeconds: number;
   readonly task: string | Uint8Array;
   readonly prompt: string | Uint8Array;
@@ -385,7 +426,16 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
     requireSafeRunLabel(options.role, "role"),
     requireSafeRunLabel(options.phase, "phase"),
   );
+  const execution = options.execution ?? "delegated";
   const selectedHarness = harness(options.harness);
+  if (execution === "simulated") {
+    if (selectedHarness !== "coordinator") {
+      throw new RecordError(`Simulated execution must use the coordinator`);
+    }
+    text(options.simulationReason, "Simulation reason");
+  } else if (selectedHarness === "coordinator" || options.simulationReason !== undefined) {
+    throw new RecordError(`Delegated execution must use a harness and no simulation reason`);
+  }
   const timeoutSeconds = positiveSeconds(options.timeoutSeconds);
   const task = markdown(options.task, "Task");
   const prompt = markdown(options.prompt, "Prompt");
@@ -420,7 +470,12 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
       work: { slug: unit.slug, path: unit.path },
       role,
       phase,
+      execution,
+      independent: execution === "delegated",
       harness: selectedHarness,
+      ...(options.simulationReason === undefined
+        ? {}
+        : { simulationReason: options.simulationReason }),
       timeoutSeconds,
       prompt: { path: artifacts.promptPath, sha256: promptHash },
       capabilities: { path: artifacts.capabilitiesPath, sha256: sha256(grantContent) },
@@ -467,6 +522,7 @@ async function requireFreshIdentity(
     const candidate = (await loadRecord(path)).record;
     if (
       candidate.state === "finalized" &&
+      candidate.execution === "delegated" &&
       candidate.relationship?.kind !== "continuation" &&
       candidate.harness === prepared.harness &&
       candidate.agentId === agentId
@@ -501,6 +557,9 @@ export async function finalizeLaunch(
   if (loaded.record.state !== "prepared")
     throw new RecordError(`Launch record is already finalized`);
   const prepared = loaded.record;
+  if (prepared.execution !== "delegated" || prepared.harness === "coordinator") {
+    throw new RecordError(`launch complete requires delegated execution`);
+  }
   await Promise.all([
     verifyArtifact(prepared.prompt, prepared.work.path, "Prompt"),
     verifyArtifact(prepared.capabilities, prepared.work.path, "Capability artifact"),
@@ -549,6 +608,59 @@ export async function finalizeLaunch(
     status: options.status,
     enforcement: options.enforcement,
     ...(options.model === undefined ? {} : { model: options.model }),
+    ...(design === undefined ? {} : { design }),
+  };
+  await writeFile(loaded.path, `${JSON.stringify(finalized, undefined, 2)}\n`, "utf8");
+  return finalized;
+}
+
+export interface FinalizeSimulationOptions {
+  readonly recordPath: string;
+  readonly status: LaunchStatus;
+}
+
+export async function finalizeSimulation(
+  options: FinalizeSimulationOptions,
+): Promise<FinalizedLaunchRecord> {
+  if (!launchStatuses.includes(options.status)) {
+    throw new RecordError(`Unknown normalized launch status`);
+  }
+  const loaded = await loadRecord(options.recordPath);
+  if (loaded.record.state !== "prepared") {
+    throw new RecordError(`Launch record is already finalized`);
+  }
+  const prepared = loaded.record;
+  if (prepared.execution !== "simulated" || prepared.harness !== "coordinator") {
+    throw new RecordError(`simulation complete requires simulated execution`);
+  }
+  await Promise.all([
+    verifyArtifact(prepared.prompt, prepared.work.path, "Prompt"),
+    verifyArtifact(prepared.capabilities, prepared.work.path, "Capability artifact"),
+  ]);
+  if (sha256(serializeGrant(prepared.grant)) !== prepared.capabilities.sha256) {
+    throw new RecordError(`Effective grant changed after preparation`);
+  }
+
+  let design = prepared.design;
+  if (design !== undefined) {
+    const current = (await digestDesign(design.root)).digest;
+    if (prepared.role === "designer" && prepared.phase === "contracts") {
+      design = { ...design, after: current };
+    } else if (current !== design.before) {
+      throw new RecordError(`Design changed after preparation`);
+    }
+  }
+  const response = await regularFile(prepared.response.path, prepared.work.path, "Response");
+  const finalized: FinalizedLaunchRecord = {
+    ...prepared,
+    state: "finalized",
+    response: {
+      path: prepared.response.path,
+      sha256: sha256(response),
+      bytes: response.byteLength,
+    },
+    status: options.status,
+    enforcement: "prompt-guided",
     ...(design === undefined ? {} : { design }),
   };
   await writeFile(loaded.path, `${JSON.stringify(finalized, undefined, 2)}\n`, "utf8");

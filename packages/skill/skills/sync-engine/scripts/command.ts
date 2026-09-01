@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrapApplication, conflictChoices, type BootstrapDependencies } from "./bootstrap.ts";
@@ -22,14 +22,16 @@ import {
 import {
   digestDesign,
   finalizeLaunch,
+  finalizeSimulation,
   normalizeLaunchStatus,
   prepareLaunch,
   readLaunchRecord,
-  type FinalizedLaunchRecord,
+  type ExecutionHarness,
   type LaunchRecord,
   type PrepareLaunchResult,
 } from "./records.ts";
 import {
+  capabilityRecommendationIssues,
   getRoleSpecification,
   projectShellAccessLevels,
   roleSpecificationIds,
@@ -116,12 +118,15 @@ export function helpText(): string {
 Usage:
   ${commandName} work start <slug>
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+  ${commandName} work show <slug>
   ${commandName} prompt build --work <slug> --role <role> --phase <phase>
-    --task <path> --grant <json-path> --harness <harness>
+    --task <path> --grant <json-path>
+    (--harness <harness> | --simulate <reason>)
     [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
     [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   ${commandName} launch complete <prepared-record> --agent-id <id>
     --status <native-status> [--model <id>]
+  ${commandName} simulation complete <prepared-record> --status <status>
   ${commandName} continue <finalized-record> --phase <phase> --task <path>
     --grant <json-path> [--input <slot>=<path>]... [--replace]
     [--harness <harness>] [--design-root <path>] [--context-limit <bytes>]
@@ -152,7 +157,7 @@ Inputs:
   Accepted slots are:
 ${inputs}
 
-Capability grant JSON (every field is required and must be within the role maximum):
+Capability grant JSON (every field is required; role recommendations are defaults, not gates):
   {
     "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
     "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
@@ -164,9 +169,10 @@ Capability grant JSON (every field is required and must be within the role maxim
   }
 
 Completion:
-  Before launch complete, copy the native response verbatim into the printed Response
-  path. The prepared record fixes harness, timeout, and design root. Completed status
-  requires nonempty UTF-8; another terminal status permits an empty captured response.
+  Delegated and simulated runs use the same prompt and response artifacts. Copy the role
+  result verbatim to Response, then run the printed completion command. A simulated run
+  records its reason, coordinator executor, and non-independent status without inventing
+  an agent identity. Completed status requires nonempty UTF-8.
 
 Status normalization:
   completed: complete, completed, idle, settled, success, succeeded
@@ -177,15 +183,14 @@ Status normalization:
 Continuation and replacement:
   continue normally keeps the prior role, harness, and exact agent identity. It binds only
   unchanged retained sources known by that agent; unseen or changed sources are inline.
-  Within one phase capabilities must be reused or narrowed; an explicit phase transition
-  uses a grant validated against the new phase maximum.
+  Each continuation records its current access grant. Same-phase expansion is allowed
+  with a warning; record consequential expansion in the work brief.
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
 Warnings:
   Continuing with a release mismatch is explicit. Adapters report prompt-guided
-  capabilities when the harness does not enforce them. Missing required response
-  headings warn after finalization but do not discard useful native output.
+  capabilities when the harness does not enforce them.
 `;
 }
 
@@ -380,8 +385,7 @@ function pathCovered(path: string, prior: string): boolean {
   return prior === "." || path === prior || path.startsWith(`${prior}/`);
 }
 
-/** Return the first capability expansion, or undefined when next reuses or narrows prior. */
-export function capabilitySubsetIssue(
+function capabilityExpansionIssue(
   next: EffectiveCapabilityGrant,
   prior: EffectiveCapabilityGrant,
 ): string | undefined {
@@ -421,7 +425,9 @@ interface PrepareCommandOptions {
   readonly taskPath: string;
   readonly grantPath: string;
   readonly inputValues: readonly string[];
-  readonly harness: HarnessId;
+  readonly harness: ExecutionHarness;
+  readonly simulationReason?: string;
+  readonly priorGrant?: EffectiveCapabilityGrant;
   readonly target: LaunchTarget;
   readonly delivery: PromptContextDelivery;
   readonly relationship?: {
@@ -434,7 +440,6 @@ interface PrepareCommandOptions {
   readonly timeoutSeconds: number;
   readonly model?: string;
   readonly reasoning?: string;
-  readonly priorGrant?: EffectiveCapabilityGrant;
   readonly kind: "fresh" | "continuation" | "replacement";
 }
 
@@ -472,16 +477,24 @@ async function prepareCommand(
       ? {}
       : { contextLimitBytes: options.contextLimitBytes }),
   });
-  if (options.priorGrant !== undefined) {
-    const issue = capabilitySubsetIssue(built.effectiveCapabilities, options.priorGrant);
-    if (issue !== undefined) throw new CliError(`Continuation capability grant ${issue}`);
-  }
+  const recommendationIssues = capabilityRecommendationIssues(
+    built.specification,
+    built.effectiveCapabilities,
+  );
+  const expansionIssue =
+    options.priorGrant === undefined
+      ? undefined
+      : capabilityExpansionIssue(built.effectiveCapabilities, options.priorGrant);
   const launch = await prepareLaunch({
     applicationRoot: options.cwd,
     slug: options.slug,
     role: built.specification.role,
     phase: built.specification.phase,
+    execution: options.harness === "coordinator" ? "simulated" : "delegated",
     harness: options.harness,
+    ...(options.simulationReason === undefined
+      ? {}
+      : { simulationReason: options.simulationReason }),
     timeoutSeconds: options.timeoutSeconds,
     task: task.bytes,
     prompt: built.content,
@@ -492,6 +505,21 @@ async function prepareCommand(
     ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
     ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
   });
+  const { out } = output(dependencies);
+  if (recommendationIssues.length > 0) {
+    out(
+      `Warning: ${built.specification.id} access exceeds role recommendations: ${recommendationIssues.join(", ")}. Record the choice in the work brief when consequential.\n`,
+    );
+  }
+  if (expansionIssue !== undefined) {
+    out(
+      `Warning: same-phase continuation access expands (${expansionIssue}). Record the choice in the work brief when consequential.\n`,
+    );
+  }
+  if (options.harness === "coordinator") {
+    printSimulated(built, launch, dependencies);
+    return;
+  }
   const invocation = prepareHarnessInvocation({
     harness: options.harness,
     target: options.target,
@@ -503,6 +531,23 @@ async function prepareCommand(
     configuration,
   });
   printPrepared(options.kind, built, launch, invocation, dependencies);
+}
+
+function printSimulated(
+  built: BuiltPrompt,
+  launch: PrepareLaunchResult,
+  dependencies: CommandDependencies,
+): void {
+  output(dependencies).out(`Coordinator simulation prepared: ${built.specification.id}
+Task: ${launch.artifacts.taskPath}
+Capabilities: ${launch.artifacts.capabilitiesPath}
+Prompt: ${launch.artifacts.promptPath}
+Response: ${launch.artifacts.responsePath}
+Record: ${launch.path}
+Reason: ${launch.record.simulationReason}
+Prompt bytes: ${built.bytes}; sha256 ${built.sha256}
+Instruction: Use the prompt file as the complete simulated role assignment. Write the result verbatim to Response, then run ${commandName} simulation complete ${launch.path} --status completed.
+`);
 }
 
 function printPrepared(
@@ -620,6 +665,7 @@ const promptDefinitions = {
   "--task": "value",
   "--grant": "value",
   "--harness": "value",
+  "--simulate": "value",
   "--input": "repeatable",
   "--design-root": "value",
   "--context-limit": "value",
@@ -639,7 +685,13 @@ async function promptBuild(
   const phase = required(parsed.options, "--phase", "prompt build");
   const taskPath = resolve(cwd, required(parsed.options, "--task", "prompt build"));
   const grantPath = resolve(cwd, required(parsed.options, "--grant", "prompt build"));
-  const harnessId = harness(required(parsed.options, "--harness", "prompt build"));
+  const selectedHarness = optional(parsed.options, "--harness");
+  const simulationReason = optional(parsed.options, "--simulate");
+  if ((selectedHarness === undefined) === (simulationReason === undefined)) {
+    throw new CliError(`prompt build requires exactly one of --harness or --simulate`);
+  }
+  const harnessId: ExecutionHarness =
+    simulationReason === undefined ? harness(selectedHarness!) : "coordinator";
   getRoleSpecification(role, phase);
   const designOption = optional(parsed.options, "--design-root");
   const designRoot = designOption === undefined ? undefined : exactDesignRoot(designOption, cwd);
@@ -666,6 +718,7 @@ async function promptBuild(
       grantPath,
       inputValues: parsed.options.get("--input") ?? [],
       harness: harnessId,
+      ...(simulationReason === undefined ? {} : { simulationReason }),
       target: { kind: "fresh" },
       delivery: "fresh",
       kind: "fresh",
@@ -685,18 +738,6 @@ function completionTarget(record: LaunchRecord): LaunchTarget {
     : { kind: "fresh" };
 }
 
-function missingResponseHeadings(record: FinalizedLaunchRecord, response: string): string[] {
-  const specification = getRoleSpecification(record.role, record.phase);
-  const headings = new Set<string>();
-  for (const match of response.matchAll(/^##[ \t]+(.+?)[ \t]*#*[ \t]*$/gm)) {
-    headings.add(match[1]!.trim().toLowerCase());
-  }
-  return specification.returnShape
-    .filter(({ required }) => required)
-    .map(({ heading }) => heading)
-    .filter((heading) => !headings.has(heading.toLowerCase()));
-}
-
 async function launchComplete(
   args: readonly string[],
   dependencies: CommandDependencies,
@@ -714,7 +755,10 @@ async function launchComplete(
   const record = await readLaunchRecord(recordPath);
   requireRecordApplication(record, cwd);
   if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
-  const response = await utf8(record.response.path, "Native response", status === "completed");
+  if (record.execution !== "delegated" || record.harness === "coordinator") {
+    throw new CliError(`launch complete requires a delegated run`);
+  }
+  await utf8(record.response.path, "Native response", status === "completed");
   const validatedGrant = validateCapabilityGrant(
     getRoleSpecification(record.role, record.phase),
     record.grant,
@@ -745,12 +789,32 @@ Status: ${finalized.status}\n`);
       `Warning: ${finalized.harness} capabilities were prompt-guided rather than harness-enforced.\n`,
     );
   }
-  const missing = missingResponseHeadings(finalized, response.text);
-  if (missing.length > 0) {
-    out(
-      `Warning: native response is missing required headings: ${missing.join(", ")}; the captured response was finalized unchanged.\n`,
-    );
+}
+
+async function simulationComplete(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "simulation complete", ["prepared-record"], {
+    "--status": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const status = normalizeLaunchStatus(required(parsed.options, "--status", "simulation complete"));
+  const recordPath = resolve(cwd, parsed.positionals[0]!);
+  const record = await readLaunchRecord(recordPath);
+  requireRecordApplication(record, cwd);
+  if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
+  if (record.execution !== "simulated") {
+    throw new CliError(`simulation complete requires a simulated run`);
   }
+  await utf8(record.response.path, "Simulated response", status === "completed");
+  const finalized = await finalizeSimulation({ recordPath, status });
+  output(dependencies).out(`Simulation finalized: ${recordPath}
+Response: ${finalized.response.path}
+Executor: coordinator; independent: no
+Reason: ${finalized.simulationReason}
+Status: ${finalized.status}
+`);
 }
 
 async function continueLaunch(
@@ -793,12 +857,21 @@ async function continueLaunch(
   const prior = await readLaunchRecord(priorPath);
   requireRecordApplication(prior, cwd);
   if (prior.state !== "finalized") throw new CliError(`continue requires a finalized record`);
+  if (
+    prior.execution !== "delegated" ||
+    prior.harness === "coordinator" ||
+    prior.agentId === undefined
+  ) {
+    throw new CliError(
+      `A simulated run has no agent identity; prepare another simulation or a fresh delegated run`,
+    );
+  }
   getRoleSpecification(prior.role, phase);
-  const harnessId = harness(selectedHarness ?? prior.harness);
   const priorGrant = validateCapabilityGrant(
     getRoleSpecification(prior.role, prior.phase),
     prior.grant,
   );
+  const harnessId = harness(selectedHarness ?? prior.harness);
   if (prior.design !== undefined && designOption !== undefined) {
     throw new CliError(`Continue already has a bound design root; omit --design-root`);
   }
@@ -812,7 +885,6 @@ async function continueLaunch(
           root: exactDesignRoot(designRoot, cwd),
           digest: (await digestDesign(designRoot)).digest,
         };
-  const enforceSubset = !replacing && phase === prior.phase;
   await prepareCommand(
     {
       cwd,
@@ -831,13 +903,42 @@ async function continueLaunch(
       ...(design === undefined ? {} : { design }),
       ...(!replacing ? { knownRetained: prior.retainedSources } : {}),
       ...(contextLimit === undefined ? {} : { contextLimitBytes: contextLimit }),
+      ...(!replacing && phase === prior.phase ? { priorGrant } : {}),
       timeoutSeconds,
       ...(model === undefined ? {} : { model }),
       ...(reasoning === undefined ? {} : { reasoning }),
-      ...(enforceSubset ? { priorGrant } : {}),
     },
     dependencies,
   );
+}
+
+async function workShow(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
+  const parsed = parseTail(args, "work show", ["slug"], {});
+  const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
+  const brief = await utf8(unit.briefPath, "Work brief");
+  const names = (await readdir(unit.path)).filter((name) => name.endsWith(".record.json")).sort();
+  const lines: string[] = [];
+  for (const name of names) {
+    const record = await readLaunchRecord(resolve(unit.path, name));
+    const state = record.state === "prepared" ? "prepared" : record.status;
+    const executor =
+      record.execution === "simulated"
+        ? `coordinator simulation (${record.simulationReason})`
+        : record.state === "finalized"
+          ? `${record.harness}:${record.agentId}`
+          : record.harness;
+    lines.push(
+      `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}; ${executor}`,
+    );
+  }
+  output(dependencies).out(`Work unit: ${unit.slug}
+Path: ${unit.path}
+
+${brief.text.trimEnd()}
+
+## Runs
+${lines.length === 0 ? "None." : lines.join("\n")}
+`);
 }
 
 async function execute(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
@@ -846,9 +947,12 @@ async function execute(args: readonly string[], dependencies: CommandDependencie
     return;
   }
   if (args[0] === "work" && args[1] === "start") return workStart(args.slice(2), dependencies);
+  if (args[0] === "work" && args[1] === "show") return workShow(args.slice(2), dependencies);
   if (args[0] === "prompt" && args[1] === "build") return promptBuild(args.slice(2), dependencies);
   if (args[0] === "launch" && args[1] === "complete")
     return launchComplete(args.slice(2), dependencies);
+  if (args[0] === "simulation" && args[1] === "complete")
+    return simulationComplete(args.slice(2), dependencies);
   if (args[0] === "continue") return continueLaunch(args.slice(1), dependencies);
   throw new CliError(
     `Unknown or incomplete command: ${args.join(" ")}`,

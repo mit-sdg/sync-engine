@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   capabilityCategories,
+  capabilityRecommendationIssues,
   getRoleSpecification,
-  maximumCapabilitiesByRolePhase,
+  recommendedCapabilitiesByRolePhase,
   neverGrantableCapabilities,
   roleSpecificationIds,
   roleSpecifications,
@@ -93,6 +94,7 @@ describe("typed role specifications", () => {
       "revised-candidate",
       "affected-design",
       "review-guidance",
+      "context",
     ]);
     expect(verification.returnShape.map(({ heading }) => heading)).toEqual(["Verdict", "Findings"]);
     expect(verification.returnShape[1]?.guidance).toBe(
@@ -108,13 +110,15 @@ describe("typed role specifications", () => {
         cardinality: "exactly-one",
         delivery: "inline",
       });
-      expect(specification.maximumCapabilities).toBe(maximumCapabilitiesByRolePhase[id]);
+      expect(specification.recommendedCapabilities).toBe(recommendedCapabilitiesByRolePhase[id]);
+      expect(specification.inputs.at(-1)?.id).toBe("context");
     }
   });
 
   test("keeps conditional API context in inputs and requires application types", () => {
     const application = roleSpecifications["application-worker/implementation"];
-    expect(application.guidancePaths).toContain("guidance/api/application-example.md");
+    expect(application.guidancePaths).toContain("guidance/api/composition.md");
+    expect(application.guidancePaths).not.toContain("guidance/api/application-example.md");
     expect(application.guidancePaths).not.toContain("guidance/api/http-host.md");
     for (const id of ["types", "concept-specifications", "concept-public-surfaces"]) {
       expect(application.inputs.find((input) => input.id === id)).toMatchObject({
@@ -142,7 +146,11 @@ describe("typed role specifications", () => {
 
   test("requests concise semantic return fields", () => {
     expect(roleSpecifications["designer/decomposition"].returnShape).toEqual([
-      { heading: "Status", required: true, guidance: "Complete or blocked." },
+      {
+        heading: "Status",
+        required: true,
+        guidance: "Complete or blocked unless the task requests another format.",
+      },
       { heading: "Changed", required: true, guidance: "Paths changed, or none." },
       { heading: "Questions", required: true, guidance: "Material questions, or none." },
       {
@@ -219,7 +227,7 @@ describe("typed role specifications", () => {
       "delegation-or-handoff",
     ]);
 
-    expect(maximumCapabilitiesByRolePhase["designer/decomposition"]).toEqual({
+    expect(recommendedCapabilitiesByRolePhase["designer/decomposition"]).toEqual({
       readableAreas: ["work-unit", "design"],
       writableAreas: ["current-decomposition"],
       toolKinds: ["repository-read", "repository-write"],
@@ -228,7 +236,7 @@ describe("typed role specifications", () => {
       generatedOutput: false,
       longRunningProcesses: false,
     });
-    expect(maximumCapabilitiesByRolePhase["concept-worker/implementation"]).toMatchObject({
+    expect(recommendedCapabilitiesByRolePhase["concept-worker/implementation"]).toMatchObject({
       readableAreas: ["application"],
       writableAreas: ["owned-concept", "owned-test"],
       projectShell: "project-local",
@@ -236,33 +244,33 @@ describe("typed role specifications", () => {
       generatedOutput: true,
       longRunningProcesses: false,
     });
-    expect(maximumCapabilitiesByRolePhase["application-worker/implementation"]).toMatchObject({
+    expect(recommendedCapabilitiesByRolePhase["application-worker/implementation"]).toMatchObject({
       writableAreas: ["owned-integration", "owned-configuration", "owned-test"],
       network: false,
       generatedOutput: true,
       longRunningProcesses: true,
     });
-    expect(maximumCapabilitiesByRolePhase["frontend-worker/implementation"]).toMatchObject({
+    expect(recommendedCapabilitiesByRolePhase["frontend-worker/implementation"]).toMatchObject({
       writableAreas: ["owned-frontend", "owned-test"],
       network: true,
       generatedOutput: false,
       longRunningProcesses: true,
     });
-    expect(maximumCapabilitiesByRolePhase["evidence-worker/evidence"]).toMatchObject({
+    expect(recommendedCapabilitiesByRolePhase["evidence-worker/evidence"]).toMatchObject({
       writableAreas: ["owned-scenario", "owned-test"],
       network: true,
       generatedOutput: false,
       longRunningProcesses: true,
     });
 
-    for (const maximum of Object.values(maximumCapabilitiesByRolePhase)) {
+    for (const maximum of Object.values(recommendedCapabilitiesByRolePhase)) {
       expect(Object.keys(maximum)).toEqual(capabilityCategories);
     }
   });
 });
 
 describe("effective capability grants", () => {
-  test("accepts only a subset and returns canonical ordering", () => {
+  test("accepts bounded paths and returns canonical ordering", () => {
     const specification = getRoleSpecification("designer", "decomposition");
     const grant = validateCapabilityGrant(specification, {
       readableAreas: [
@@ -286,31 +294,42 @@ describe("effective capability grants", () => {
     expect(grant.toolKinds).toEqual(["repository-read", "repository-write"]);
   });
 
+  test("treats role capabilities as recommendations rather than gates", () => {
+    const grant = validateCapabilityGrant(getRoleSpecification("critic", "decomposition"), {
+      ...noCapabilities,
+      writableAreas: [{ area: "assigned-design", path: "types.md" }],
+      toolKinds: ["repository-write"],
+      projectShell: "project-local",
+      network: true,
+    });
+    expect(grant).toMatchObject({
+      writableAreas: [{ area: "assigned-design", path: "types.md" }],
+      projectShell: "project-local",
+      network: true,
+    });
+    expect(
+      capabilityRecommendationIssues(getRoleSpecification("critic", "decomposition"), grant),
+    ).toEqual([
+      "write area assigned-design",
+      "tool kind repository-write",
+      "projectShell project-local",
+      "network",
+    ]);
+  });
+
+  test("flags an application ownership path that covers concept work", () => {
+    const specification = getRoleSpecification("application-worker", "implementation");
+    const grant = validateCapabilityGrant(specification, {
+      ...noCapabilities,
+      writableAreas: [{ area: "owned-integration", path: "src" }],
+      toolKinds: ["repository-write"],
+    });
+    expect(capabilityRecommendationIssues(specification, grant)).toEqual([
+      "write path owned-integration:src overlaps concept ownership",
+    ]);
+  });
+
   test.each([
-    [
-      "a write area owned by another role",
-      "critic/decomposition",
-      { ...noCapabilities, writableAreas: [{ area: "assigned-design", path: "types.md" }] },
-      "write area assigned-design exceeds the role maximum",
-    ],
-    [
-      "general shell for a validation-only designer",
-      "designer/contracts",
-      { ...noCapabilities, projectShell: "project-local" },
-      "projectShell project-local exceeds the role maximum",
-    ],
-    [
-      "network for a concept worker",
-      "concept-worker/implementation",
-      { ...noCapabilities, network: true },
-      "network exceeds the role maximum",
-    ],
-    [
-      "generated output for a frontend worker",
-      "frontend-worker/implementation",
-      { ...noCapabilities, generatedOutput: true },
-      "generatedOutput exceeds the role maximum",
-    ],
     [
       "an escaping path",
       "concept-worker/implementation",
@@ -357,24 +376,6 @@ describe("effective capability grants", () => {
       "readableAreas[0] path is already relative to design and cannot repeat its root: design/concepts",
     ],
     [
-      "an application source grant containing concepts",
-      "application-worker/implementation",
-      {
-        ...noCapabilities,
-        writableAreas: [{ area: "owned-integration", path: "src" }],
-      },
-      "writableAreas[0] must not cover concept-owned source or tests: src",
-    ],
-    [
-      "an application test grant containing concept tests",
-      "application-worker/implementation",
-      {
-        ...noCapabilities,
-        writableAreas: [{ area: "owned-test", path: "test/concepts" }],
-      },
-      "writableAreas[0] must not cover concept-owned source or tests: test/concepts",
-    ],
-    [
       "an unmodeled capability",
       "designer/decomposition",
       { ...noCapabilities, gitMutation: true },
@@ -394,7 +395,7 @@ describe("effective capability grants", () => {
     const covered = new Set<string>();
     for (const id of roleSpecificationIds) {
       const specification = roleSpecifications[id];
-      for (const area of specification.maximumCapabilities.writableAreas) {
+      for (const area of specification.recommendedCapabilities.writableAreas) {
         covered.add(area);
         expect(
           thrownValue(() =>

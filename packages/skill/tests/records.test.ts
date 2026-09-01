@@ -358,6 +358,20 @@ describe("design lifecycle", () => {
 });
 
 describe("decoder and cleanup", () => {
+  test("requires current execution metadata", async () => {
+    const unit = await work("current-record");
+    const launch = await prepared(unit);
+    const incomplete = { ...launch.record } as Record<string, unknown>;
+    delete incomplete["execution"];
+    delete incomplete["independent"];
+    await writeFile(launch.path, `${JSON.stringify(incomplete, undefined, 2)}\n`);
+
+    expect(await rejectedValue(readLaunchRecord(launch.path))).toEqual({
+      name: "RecordError",
+      message: "Execution must be delegated or simulated",
+    });
+  });
+
   test("validates supported role/phase and harness values", async () => {
     const unit = await work("malformed");
     const launch = await prepared(unit);

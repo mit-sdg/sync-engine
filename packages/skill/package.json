@@ -1,7 +1,7 @@
 {
   "name": "@mit-sdg/sync-engine-skill",
   "version": "1.0.0-beta.16",
-  "description": "Agent Skill for independently designed and reviewed sync-engine applications",
+  "description": "Agent Skill for scoped sync-engine application design, implementation, and evidence",
   "keywords": [
     "agent-skills",
     "sync-engine"

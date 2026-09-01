@@ -848,7 +848,8 @@ process.on("exit", () => { const forbidden = loaded.filter((url) => url.includes
   if (
     !entry.startsWith("---\nname: sync-engine\ndescription:") ||
     !entry.includes("[workflow](references/workflow.md)") ||
-    !entry.includes("Delegate every selected design, criticism")
+    !entry.includes("## Follow direction over defaults") ||
+    !entry.includes("## Delegate or simulate")
   ) {
     throw new Error("skill package does not contain the required sync-engine Agent Skill");
   }

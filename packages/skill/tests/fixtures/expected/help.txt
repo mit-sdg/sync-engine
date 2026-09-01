@@ -3,12 +3,15 @@ sync-engine skill CLI — prompt builder and validator
 Usage:
   sync-engine-skill work start <slug>
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+  sync-engine-skill work show <slug>
   sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
-    --task <path> --grant <json-path> --harness <harness>
+    --task <path> --grant <json-path>
+    (--harness <harness> | --simulate <reason>)
     [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
     [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   sync-engine-skill launch complete <prepared-record> --agent-id <id>
     --status <native-status> [--model <id>]
+  sync-engine-skill simulation complete <prepared-record> --status <status>
   sync-engine-skill continue <finalized-record> --phase <phase> --task <path>
     --grant <json-path> [--input <slot>=<path>]... [--replace]
     [--harness <harness>] [--design-root <path>] [--context-limit <bytes>]
@@ -45,17 +48,17 @@ Inputs:
   <slot>=<path> argument per file. Brief and decomposition slots require their exact
   work-unit files; every other input must resolve inside the application or skill root.
   Accepted slots are:
-  designer/decomposition: brief (one, retained), current-decomposition (optional, inline), affected-design (repeatable optional, retained)
-  designer/contracts: brief (one, retained), accepted-decomposition (optional, retained), resolved-findings (optional, retained), affected-contracts (repeatable optional, retained), catalog-contracts (repeatable optional, retained), candidate-contracts (repeatable optional, inline)
-  critic/decomposition: brief (one, retained), candidate-decomposition (one, inline), affected-design (repeatable optional, retained)
-  critic/contracts: brief (one, retained), accepted-decomposition (optional, retained), changed-contracts (one or more, inline), affected-contracts (repeatable optional, retained)
-  critic/verification: brief (one, retained), original-findings (one, inline), revised-candidate (one or more, inline), affected-design (repeatable optional, retained), review-guidance (one or more, retained)
-  concept-worker/implementation: brief (one, retained), specifications (one or more, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), starting-paths (one, inline)
-  application-worker/implementation: brief (one, retained), types (one or more, retained), compositions (one or more, retained), obligations (repeatable optional, retained), concept-specifications (one or more, retained), concept-public-surfaces (one or more, retained), existing-wiring (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), starting-paths (one, inline)
-  frontend-worker/implementation: brief (one, retained), public-interface (one or more, retained), frontend-paths (one, inline), public-references (repeatable optional, retained), examples (repeatable optional, retained)
-  evidence-worker/evidence: brief (one, retained), contracts (one or more, retained), public-interface (one or more, retained), frontend-surface (repeatable optional, retained), relevant-tests (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained)
+  designer/decomposition: brief (one, retained), current-decomposition (optional, inline), affected-design (repeatable optional, retained), context (repeatable optional, retained)
+  designer/contracts: brief (one, retained), accepted-decomposition (optional, retained), resolved-findings (optional, retained), affected-contracts (repeatable optional, retained), catalog-contracts (repeatable optional, retained), candidate-contracts (repeatable optional, inline), public-references (repeatable optional, retained), context (repeatable optional, retained)
+  critic/decomposition: brief (one, retained), candidate-decomposition (one, inline), affected-design (repeatable optional, retained), context (repeatable optional, retained)
+  critic/contracts: brief (one, retained), accepted-decomposition (optional, retained), changed-contracts (one or more, inline), affected-contracts (repeatable optional, retained), public-references (repeatable optional, retained), context (repeatable optional, retained)
+  critic/verification: brief (one, retained), original-findings (one, inline), revised-candidate (one or more, inline), affected-design (repeatable optional, retained), review-guidance (one or more, retained), context (repeatable optional, retained)
+  concept-worker/implementation: brief (one, retained), specifications (one or more, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), starting-paths (one, inline), context (repeatable optional, retained)
+  application-worker/implementation: brief (one, retained), types (one or more, retained), compositions (one or more, retained), obligations (repeatable optional, retained), concept-specifications (one or more, retained), concept-public-surfaces (one or more, retained), existing-wiring (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), starting-paths (one, inline), context (repeatable optional, retained)
+  frontend-worker/implementation: brief (one, retained), public-interface (one or more, retained), frontend-paths (one, inline), public-references (repeatable optional, retained), examples (repeatable optional, retained), context (repeatable optional, retained)
+  evidence-worker/evidence: brief (one, retained), contracts (one or more, retained), public-interface (one or more, retained), frontend-surface (repeatable optional, retained), relevant-tests (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), context (repeatable optional, retained)
 
-Capability grant JSON (every field is required and must be within the role maximum):
+Capability grant JSON (every field is required; role recommendations are defaults, not gates):
   {
     "readableAreas": [{"area": "work-unit|design|application", "path": "relative/POSIX"}],
     "writableAreas": [{"area": "current-decomposition|assigned-design|owned-concept|owned-integration|owned-configuration|owned-frontend|owned-test|owned-scenario", "path": "relative/POSIX"}],
@@ -67,9 +70,10 @@ Capability grant JSON (every field is required and must be within the role maxim
   }
 
 Completion:
-  Before launch complete, copy the native response verbatim into the printed Response
-  path. The prepared record fixes harness, timeout, and design root. Completed status
-  requires nonempty UTF-8; another terminal status permits an empty captured response.
+  Delegated and simulated runs use the same prompt and response artifacts. Copy the role
+  result verbatim to Response, then run the printed completion command. A simulated run
+  records its reason, coordinator executor, and non-independent status without inventing
+  an agent identity. Completed status requires nonempty UTF-8.
 
 Status normalization:
   completed: complete, completed, idle, settled, success, succeeded
@@ -80,12 +84,11 @@ Status normalization:
 Continuation and replacement:
   continue normally keeps the prior role, harness, and exact agent identity. It binds only
   unchanged retained sources known by that agent; unseen or changed sources are inline.
-  Within one phase capabilities must be reused or narrowed; an explicit phase transition
-  uses a grant validated against the new phase maximum.
+  Each continuation records its current access grant. Same-phase expansion is allowed
+  with a warning; record consequential expansion in the work brief.
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
 Warnings:
   Continuing with a release mismatch is explicit. Adapters report prompt-guided
-  capabilities when the harness does not enforce them. Missing required response
-  headings warn after finalization but do not discard useful native output.
+  capabilities when the harness does not enforce them.

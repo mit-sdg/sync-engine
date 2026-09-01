@@ -59,14 +59,7 @@ describe("harness adapter conformance", () => {
         promptDelivery.fresh.mode,
         promptDelivery.continuation.mode,
       ]),
-    ).toEqual([
-      ["shell-file-expansion", "native-prompt-file"],
-      ["shell-file-expansion", "shell-file-expansion"],
-      ["agent-file-instruction", "agent-file-instruction"],
-      ["agent-file-instruction", "agent-file-instruction"],
-      ["agent-file-instruction", "agent-file-instruction"],
-      ["shell-file-expansion", "shell-file-expansion"],
-    ]);
+    ).toEqual(harnessAdapters.map(() => ["agent-file-instruction", "agent-file-instruction"]));
     expect(harnessAdapters.map(({ cwd }) => cwd.mode)).toEqual([
       "explicit-application-cwd",
       "explicit-application-cwd",

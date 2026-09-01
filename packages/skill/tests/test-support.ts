@@ -97,10 +97,10 @@ export function sectionRecord(
 export function promptSections(markdown: string): readonly MarkdownSection[] {
   return markdownSections(markdown, 1, [
     "Role and objective",
-    "Capabilities",
+    "Access",
     "Guidance",
     "Context",
-    "Return shape",
+    "Result",
   ]);
 }
 

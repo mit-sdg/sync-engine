@@ -15,13 +15,11 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import type { BootstrapOptions, BootstrapResult } from "../skills/sync-engine/scripts/bootstrap.ts";
 import {
-  capabilitySubsetIssue,
   defaultSkillRootForCommand,
   run,
   type CommandDependencies,
 } from "../skills/sync-engine/scripts/command.ts";
 import { digestDesign, readLaunchRecord } from "../skills/sync-engine/scripts/records.ts";
-import type { EffectiveCapabilityGrant } from "../skills/sync-engine/scripts/roles.ts";
 import { parseLabeledOutput, promptContext, retainedContext } from "./test-support.ts";
 
 const skillRoot = fileURLToPath(new URL("../skills/sync-engine", import.meta.url));
@@ -534,15 +532,17 @@ describe("prompt preparation and completion", () => {
       record: [launch.recordPath],
       harness: ["paseo"],
       title: ["message-board-search — Designer; --title"],
-      delivery: ["shell-file-expansion; the paseo run positional prompt"],
+      delivery: ["agent-file-instruction; the paseo run positional prompt"],
       cwd: [`${root}; explicit-application-cwd`],
       timeout: [
         "1800 seconds; coordinator-managed observation limit; CLI does not observe harness",
       ],
       sources: undefined,
       target: ["fresh agent"],
-      native: ["Paseo CLI; paseo run with file-backed positional prompt"],
-      agentInstruction: undefined,
+      native: ["Paseo CLI; paseo run"],
+      agentInstruction: [
+        `Read and follow the complete assignment in this prompt file:\n${launch.promptPath}`,
+      ],
       warning: ["paseo capabilities are prompt-guided rather than harness-enforced."],
     });
     const stem = "2026-08-19T09-06-43Z-designer-decomposition";
@@ -560,6 +560,45 @@ describe("prompt preparation and completion", () => {
     expect(parseLabeledOutput(configured.output).Timeout).toEqual([
       "42 seconds; coordinator-managed observation limit; CLI does not observe harness",
     ]);
+  });
+
+  test("warns without blocking when access exceeds a role recommendation", async () => {
+    const root = await application("recommendation-warning");
+    const unit = await started(root);
+    const task = await copyFixture(root, "initial-task.md");
+    const sourceGrant = JSON.parse(
+      await readFile(resolve(fixtureRoot, "designer-grant.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const grant = resolve(root, "coordination/designer-network-grant.json");
+    await writeFile(grant, `${JSON.stringify({ ...sourceGrant, network: true }, undefined, 2)}\n`);
+    const base = [
+      "prompt",
+      "build",
+      "--work",
+      "message-board-search",
+      "--role",
+      "designer",
+      "--phase",
+      "decomposition",
+      "--task",
+      task,
+      "--grant",
+      grant,
+      "--harness",
+      "paseo",
+      "--input",
+      `brief=${resolve(unit, "brief.md")}`,
+    ] as const;
+
+    const prepared = await invoke(base, root);
+    expect(prepared).toMatchObject({ code: 0, stderr: "" });
+    expect(parseLabeledOutput(prepared.stdout).Warning).toEqual([
+      "designer/decomposition access exceeds role recommendations: network. Record the choice in the work brief when consequential.",
+      "paseo capabilities are prompt-guided rather than harness-enforced.",
+    ]);
+    const record = await readLaunchRecord(reported(prepared.stdout, "Record"));
+    expect(record.grant.network).toBe(true);
+    expect(await readFile(record.prompt.path, "utf8")).toContain("network: yes");
   });
 
   test("reads a verbatim native response, normalizes status, and finalizes", async () => {
@@ -585,7 +624,7 @@ describe("prompt preparation and completion", () => {
     });
   });
 
-  test("warns on malformed return headings but preserves and finalizes useful output", async () => {
+  test("accepts a task-specific result format and preserves useful output", async () => {
     const root = await application("shape-warning");
     await started(root);
     const launch = await prepareInitial(root);
@@ -597,13 +636,72 @@ describe("prompt preparation and completion", () => {
       Response: [launch.responsePath],
       Harness: ["paseo; agent designer-agent-1"],
       Status: ["completed"],
-      Warning: [
-        "paseo capabilities were prompt-guided rather than harness-enforced.",
-        "native response is missing required headings: Status, Changed, Questions; the captured response was finalized unchanged.",
-      ],
+      Warning: ["paseo capabilities were prompt-guided rather than harness-enforced."],
     });
     expect(await readFile(launch.responsePath, "utf8")).toBe(useful);
     expect((await readLaunchRecord(launch.recordPath)).state).toBe("finalized");
+  });
+
+  test("records coordinator simulation without inventing an agent identity", async () => {
+    const root = await application("simulation");
+    const unit = await started(root);
+    const task = await copyFixture(root, "initial-task.md");
+    const grant = await copyFixture(root, "designer-grant.json");
+    const prepared = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "designer",
+        "--phase",
+        "decomposition",
+        "--task",
+        task,
+        "--grant",
+        grant,
+        "--simulate",
+        "delegation-unavailable",
+        "--input",
+        `brief=${resolve(unit, "brief.md")}`,
+      ],
+      root,
+    );
+    expect(prepared).toMatchObject({ code: 0, stderr: "" });
+    const output = parseLabeledOutput(prepared.stdout);
+    expect(output["Coordinator simulation prepared"]).toEqual(["designer/decomposition"]);
+    expect(output.Reason).toEqual(["delegation-unavailable"]);
+    const recordPath = reported(prepared.stdout, "Record");
+    const responsePath = reported(prepared.stdout, "Response");
+    expect(await readLaunchRecord(recordPath)).toMatchObject({
+      state: "prepared",
+      execution: "simulated",
+      independent: false,
+      harness: "coordinator",
+      simulationReason: "delegation-unavailable",
+    });
+
+    await writeFile(responsePath, "A task-specific simulated result.\n", "utf8");
+    const completed = await invoke(
+      ["simulation", "complete", recordPath, "--status", "completed"],
+      root,
+    );
+    expect(completed).toMatchObject({ code: 0, stderr: "" });
+    const finalized = await readLaunchRecord(recordPath);
+    expect(finalized).toMatchObject({
+      state: "finalized",
+      execution: "simulated",
+      independent: false,
+      harness: "coordinator",
+      status: "completed",
+    });
+    expect("agentId" in finalized).toBe(false);
+
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown).toMatchObject({ code: 0, stderr: "" });
+    expect(shown.stdout).toContain("coordinator simulation (delegation-unavailable)");
+    expect(shown.stdout).toContain("## Active decisions");
   });
 
   test("rejects stale design for a nonwriter using the bound canonical root", async () => {
@@ -1147,7 +1245,7 @@ describe("continuation and replacement", () => {
     });
   });
 
-  test("rejects a capability expansion and a harness change for same-agent continuation", async () => {
+  test("warns on access expansion but not an unrequested harness change", async () => {
     const root = await application("continuation-integrity");
     await started(root);
     const initial = await prepareInitial(root, { grant: "designer-narrow-grant.json" });
@@ -1155,24 +1253,27 @@ describe("continuation and replacement", () => {
     const followUpTask = await copyFixture(root, "follow-up-task.md");
     const fullGrant = await copyFixture(root, "designer-grant.json");
 
-    const expanded = await invoke(
-      [
-        "continue",
-        initial.recordPath,
-        "--phase",
-        "decomposition",
-        "--task",
-        followUpTask,
-        "--grant",
-        fullGrant,
-        "--input",
-        `brief=${initial.briefPath}`,
-      ],
-      root,
-    );
-    expect(expanded).toEqual(
-      cliFailure("Continuation capability grant readableAreas expands at design:."),
-    );
+    const expansion = [
+      "continue",
+      initial.recordPath,
+      "--phase",
+      "decomposition",
+      "--task",
+      followUpTask,
+      "--grant",
+      fullGrant,
+      "--input",
+      `brief=${initial.briefPath}`,
+    ] as const;
+    const expanded = await invoke(expansion, root);
+    expect(expanded).toMatchObject({ code: 0, stderr: "" });
+    expect(parseLabeledOutput(expanded.stdout).Warning).toEqual([
+      "same-phase continuation access expands (readableAreas expands at design:.). Record the choice in the work brief when consequential.",
+      "paseo capabilities are prompt-guided rather than harness-enforced.",
+    ]);
+    expect(await readLaunchRecord(reported(expanded.stdout, "Record"))).toMatchObject({
+      grant: { readableAreas: expect.arrayContaining([{ area: "design", path: "." }]) },
+    });
 
     const changedHarness = await invoke(
       [
@@ -1192,23 +1293,5 @@ describe("continuation and replacement", () => {
       root,
     );
     expect(changedHarness).toEqual(cliFailure("--harness is valid only with --replace"));
-  });
-
-  test("recognizes a child path as a narrowed capability", () => {
-    const base: EffectiveCapabilityGrant = {
-      readableAreas: [{ area: "application", path: "src" }],
-      writableAreas: [],
-      toolKinds: ["repository-read"],
-      projectShell: "none",
-      network: false,
-      generatedOutput: false,
-      longRunningProcesses: false,
-    };
-    expect(
-      capabilitySubsetIssue(
-        { ...base, readableAreas: [{ area: "application", path: "src/features" }] },
-        base,
-      ),
-    ).toBeUndefined();
   });
 });

@@ -1,34 +1,34 @@
 # <Change title>
 
-Keep this brief change-scoped. These headings are prompts, not a schema; reorder, add,
-or omit them as the change requires. Use `User:` and `Assumption:` labels when they make
-a consequential choice clearer, without adding identifiers.
-
 ## Goal
 
-<Describe the useful outcome of this bounded change.>
+<Useful outcome of this bounded change.>
 
 ## Scope
 
-- In: <behavior or area included>
-- Out: <behavior or area intentionally excluded>
+- In: <included behavior or area>
+- Out: <intentional exclusion>
 
 ## Requirements
 
-- <Externally observable success, expected refusal, or constraint.>
+- <Observable success, refusal, or constraint.>
 
-## Decisions and Assumptions
+## Active decisions
 
-When stored facts are in scope, record whether they survive restart as a `User:` choice
-or `Assumption:`; do not add a separate required field.
+Record only choices that later work must know. Explicit user direction overrides skill defaults unless it conflicts with safety or repository instructions.
 
-- User: <decision supplied by the user, if any>
-- Assumption: <conservative assumption made to complete the work, if any>
+- None.
 
-## Done When
+## Done when
 
-- <Observable outcome and the evidence that will establish it.>
+- <Outcome and evidence that establishes it.>
 
-## Open Questions
+## Open questions
 
 None.
+
+## Activity
+
+Keep a concise chronological record of phase selection, delegated or simulated roles, material findings, validation, and handback. Detailed prompts and results live in the run artifacts.
+
+- Work item started.

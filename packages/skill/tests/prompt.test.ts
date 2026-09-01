@@ -141,10 +141,10 @@ describe("deterministic prompt rendering", () => {
     expect(Buffer.from(first.content)).toEqual(Buffer.from(expectedForPlatform(expected)));
     expect(promptSections(first.content).map(({ heading }) => heading)).toEqual([
       "Role and objective",
-      "Capabilities",
+      "Access",
       "Guidance",
       "Context",
-      "Return shape",
+      "Result",
     ]);
 
     expect(second.content).toBe(first.content);
@@ -242,7 +242,7 @@ describe("deterministic prompt rendering", () => {
       "Additional public framework references": inlineSource("authored-format.md", fencedHeadings),
       "Exact starting paths": inlineSource("paths.md", "src/concepts/tasking"),
     });
-    expect(sectionRecord(promptSections(result.content)).Capabilities).toBe(
+    expect(sectionRecord(promptSections(result.content)).Access).toBe(
       expectedForPlatform(
         await readFile(resolve(expectedRoot, "read-application.capabilities.md"), "utf8"),
       ).trimEnd(),
@@ -378,9 +378,9 @@ describe("deterministic prompt rendering", () => {
     expect(delta.bytes).toBeLessThan(fresh.bytes / 2);
     expect(sectionRecord(promptSections(delta.content))).toMatchObject({
       "Role and objective": expect.stringContaining("prior same-phase role contract"),
-      Capabilities: expect.stringContaining("Current effective grant:"),
+      Access: expect.stringContaining("This grant replaces prior access; other rules remain."),
       Guidance: expect.stringContaining("Unchanged from the prior same-agent context"),
-      "Return shape": expect.stringContaining("`## Status`, `## Changed`, `## Questions`"),
+      Result: expect.stringContaining("`## Status`, `## Changed`, `## Questions`"),
     });
     expect(
       delta.sources
@@ -606,21 +606,11 @@ describe("prompt build errors", () => {
     });
   });
 
-  test("wraps an effective grant that exceeds the role maximum", async () => {
-    expect(
-      await rejectedValue(
-        buildPrompt(
-          designerOptions({
-            grant: { ...designerGrant, network: true },
-          }),
-        ),
-      ),
-    ).toEqual({
-      name: "PromptBuildError",
-      code: "invalid-grant",
-      message:
-        "Error: Invalid capability grant for designer/decomposition: network exceeds the role maximum",
-    });
+  test("accepts a role deviation expressed in the grant", async () => {
+    const result = await buildPrompt(
+      designerOptions({ grant: { ...designerGrant, network: true } }),
+    );
+    expect(result.effectiveCapabilities.network).toBe(true);
   });
 
   test("does not require predecessor records or review acceptance", async () => {

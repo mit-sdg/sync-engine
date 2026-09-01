@@ -87,7 +87,7 @@ interface CapabilitySet<Readable, Writable> {
   readonly generatedOutput: boolean;
   readonly longRunningProcesses: boolean;
 }
-export type MaximumCapabilities = CapabilitySet<ReadableRepositoryArea, WritableOwnershipArea>;
+export type RecommendedCapabilities = CapabilitySet<ReadableRepositoryArea, WritableOwnershipArea>;
 export type ReadableAreaGrant = Readonly<{ area: ReadableRepositoryArea; path: string }>;
 export type WritableAreaGrant = Readonly<{ area: WritableOwnershipArea; path: string }>;
 export type EffectiveCapabilityGrant = CapabilitySet<ReadableAreaGrant, WritableAreaGrant>;
@@ -99,7 +99,7 @@ export interface RoleSpecification {
   readonly templatePath: string;
   readonly guidancePaths: readonly string[];
   readonly inputs: readonly AcceptedInput[];
-  readonly maximumCapabilities: MaximumCapabilities;
+  readonly recommendedCapabilities: RecommendedCapabilities;
   readonly returnShape: readonly ReturnField[];
 }
 
@@ -122,7 +122,7 @@ function max(
   writableAreas: readonly WritableOwnershipArea[],
   projectShell: ProjectShellAccess = "none",
   extras: Extras = "none",
-): MaximumCapabilities {
+): RecommendedCapabilities {
   return {
     readableAreas,
     writableAreas,
@@ -142,7 +142,7 @@ const frontendWrite = ["owned-frontend", "owned-test"] as const;
 const evidenceWrite = ["owned-scenario", "owned-test"] as const;
 const applicationMax = max(applicationRead, applicationWrite, "project-local", "generated-host");
 const frontendMax = max(applicationRead, frontendWrite, "project-local", "network-host");
-export const maximumCapabilitiesByRolePhase = {
+export const recommendedCapabilitiesByRolePhase = {
   "designer/decomposition": max(designRead, ["current-decomposition"]),
   "designer/contracts": max(designRead, ["assigned-design"], "project-validation"),
   "critic/decomposition": max(designRead, []),
@@ -152,7 +152,7 @@ export const maximumCapabilitiesByRolePhase = {
   "application-worker/implementation": applicationMax,
   "frontend-worker/implementation": frontendMax,
   "evidence-worker/evidence": max(applicationRead, evidenceWrite, "project-local", "network-host"),
-} as const satisfies Readonly<Record<RoleSpecificationId, MaximumCapabilities>>;
+} as const satisfies Readonly<Record<RoleSpecificationId, RecommendedCapabilities>>;
 
 const inline = (
   id: string,
@@ -167,6 +167,8 @@ const retained = (
 const task = (heading = "Task") => inline("task", heading);
 const brief = (heading = "Brief") => retained("brief", heading);
 
+const extraContext = retained("context", "Additional directed context", "zero-or-more");
+
 const output = (heading: string, required = true, guidance = ""): ReturnField => ({
   heading,
   required,
@@ -174,7 +176,7 @@ const output = (heading: string, required = true, guidance = ""): ReturnField =>
 });
 
 const designerReturn = [
-  output("Status", true, "Complete or blocked."),
+  output("Status", true, "Complete or blocked unless the task requests another format."),
   output("Changed", true, "Paths changed, or none."),
   output("Questions", true, "Material questions, or none."),
   output("Checks", false, "Command and outcome when applicable."),
@@ -217,7 +219,7 @@ function specification(
     templatePath: template(role, phase),
     guidancePaths: guidance.map((path) => `guidance/${path}.md`),
     inputs,
-    maximumCapabilities: maximumCapabilitiesByRolePhase[id],
+    recommendedCapabilities: recommendedCapabilitiesByRolePhase[id],
     returnShape,
   };
 }
@@ -231,6 +233,7 @@ export const roleSpecifications = {
       brief(),
       inline("current-decomposition", "Current decomposition", "zero-or-one"),
       retained("affected-design", "Affected existing design", "zero-or-more"),
+      extraContext,
     ],
     designerReturn,
   ),
@@ -245,6 +248,8 @@ export const roleSpecifications = {
       retained("affected-contracts", "Affected existing contracts", "zero-or-more"),
       retained("catalog-contracts", "Relevant unchanged catalog contracts", "zero-or-more"),
       inline("candidate-contracts", "Current candidate contracts", "zero-or-more"),
+      retained("public-references", "Selected format and API references", "zero-or-more"),
+      extraContext,
     ],
     designerReturn,
   ),
@@ -256,6 +261,7 @@ export const roleSpecifications = {
       brief(),
       inline("candidate-decomposition", "Candidate decomposition"),
       retained("affected-design", "Affected existing design", "zero-or-more"),
+      extraContext,
     ],
     [
       criticReturn[0]!,
@@ -276,6 +282,8 @@ export const roleSpecifications = {
       retained("accepted-decomposition", "Accepted decomposition", "zero-or-one"),
       inline("changed-contracts", "Changed candidate contracts", "one-or-more"),
       retained("affected-contracts", "Affected existing contracts", "zero-or-more"),
+      retained("public-references", "Selected review references", "zero-or-more"),
+      extraContext,
     ],
     criticReturn,
   ),
@@ -289,6 +297,7 @@ export const roleSpecifications = {
       inline("revised-candidate", "Revised candidate context", "one-or-more"),
       retained("affected-design", "Retained affected design", "zero-or-more"),
       retained("review-guidance", "Retained review guidance", "one-or-more"),
+      extraContext,
     ],
     [criticReturn[0]!, output("Findings", true, verificationFindings)],
   ),
@@ -302,17 +311,13 @@ export const roleSpecifications = {
       retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
       inline("starting-paths", "Exact starting paths"),
+      extraContext,
     ],
     workerReturn,
   ),
   "application-worker/implementation": specification(
     "application-worker/implementation",
-    [
-      "implementation/framework-safety",
-      "implementation/application",
-      "api/composition",
-      "api/application-example",
-    ],
+    ["implementation/framework-safety", "implementation/application", "api/composition"],
     [
       task(),
       brief(),
@@ -325,6 +330,7 @@ export const roleSpecifications = {
       retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
       inline("starting-paths", "Exact starting paths"),
+      extraContext,
     ],
     workerReturn,
   ),
@@ -338,6 +344,7 @@ export const roleSpecifications = {
       inline("frontend-paths", "Frontend starting paths"),
       retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
+      extraContext,
     ],
     workerReturn,
   ),
@@ -353,6 +360,7 @@ export const roleSpecifications = {
       retained("relevant-tests", "Existing relevant tests", "zero-or-more"),
       retained("public-references", "Additional public framework references", "zero-or-more"),
       retained("examples", "Relevant examples", "zero-or-more"),
+      extraContext,
     ],
     [
       ...workerReturn,
@@ -420,7 +428,6 @@ function areaGrants<A extends string>(
   value: unknown,
   field: "readableAreas" | "writableAreas",
   known: readonly A[],
-  maximum: readonly A[],
   write = false,
 ): Array<{ area: A; path: string }> {
   if (!Array.isArray(value)) fail(spec, `${field} must be an array`);
@@ -433,8 +440,6 @@ function areaGrants<A extends string>(
       fail(spec, `${at} has unknown area ${String(entry.area)}`);
     }
     const area = entry.area as A;
-    if (!maximum.includes(area))
-      fail(spec, `${write ? "write" : "read"} area ${area} exceeds the role maximum`);
     const path = safePath(spec, entry.path, at);
     if (write && path === ".") {
       fail(spec, `write area ${area} must name a concrete path family`);
@@ -444,14 +449,6 @@ function areaGrants<A extends string>(
       ((area === "design" || area === "assigned-design") && path.split("/")[0] === "design");
     if (repeatedRoot) {
       fail(spec, `${at} path is already relative to ${area} and cannot repeat its root: ${path}`);
-    }
-    const applicationOwnershipOverlap =
-      spec.id === "application-worker/implementation" &&
-      ((area === "owned-integration" && (path === "src" || path.split("/").includes("concepts"))) ||
-        (area === "owned-test" &&
-          (path === "test" || path === "tests" || path.split("/").includes("concepts"))));
-    if (applicationOwnershipOverlap) {
-      fail(spec, `${at} must not cover concept-owned source or tests: ${path}`);
     }
     if (area === "current-decomposition" && path !== "decomposition.md") {
       fail(spec, "current-decomposition can grant only decomposition.md");
@@ -493,9 +490,6 @@ function toolGrant(spec: RoleSpecification, value: unknown): ToolKind[] {
     }
     const tool = candidate as ToolKind;
     if (result.includes(tool)) fail(spec, `duplicate tool kind ${tool}`);
-    if (!spec.maximumCapabilities.toolKinds.includes(tool)) {
-      fail(spec, `tool kind ${tool} exceeds the role maximum`);
-    }
     result.push(tool);
   }
   return result.sort((a, b) => tools.indexOf(a) - tools.indexOf(b));
@@ -508,8 +502,45 @@ function flag(
 ): boolean {
   const value = grant[key];
   if (typeof value !== "boolean") fail(spec, `${key} must be boolean`);
-  if (value && !spec.maximumCapabilities[key]) fail(spec, `${key} exceeds the role maximum`);
   return value;
+}
+
+export function capabilityRecommendationIssues(
+  spec: RoleSpecification,
+  grant: EffectiveCapabilityGrant,
+): readonly string[] {
+  const recommended = spec.recommendedCapabilities;
+  const issues = [
+    ...grant.readableAreas
+      .filter(({ area }) => !recommended.readableAreas.includes(area))
+      .map(({ area }) => `read area ${area}`),
+    ...grant.writableAreas
+      .filter(({ area }) => !recommended.writableAreas.includes(area))
+      .map(({ area }) => `write area ${area}`),
+    ...grant.toolKinds
+      .filter((tool) => !recommended.toolKinds.includes(tool))
+      .map((tool) => `tool kind ${tool}`),
+  ];
+  if (spec.id === "application-worker/implementation") {
+    for (const { area, path } of grant.writableAreas) {
+      const parts = path.split("/");
+      const overlapsConcepts =
+        (area === "owned-integration" && (path === "src" || parts.includes("concepts"))) ||
+        (area === "owned-test" &&
+          (path === "test" || path === "tests" || parts.includes("concepts")));
+      if (overlapsConcepts) issues.push(`write path ${area}:${path} overlaps concept ownership`);
+    }
+  }
+  if (
+    projectShellAccessLevels.indexOf(grant.projectShell) >
+    projectShellAccessLevels.indexOf(recommended.projectShell)
+  ) {
+    issues.push(`projectShell ${grant.projectShell}`);
+  }
+  for (const key of ["network", "generatedOutput", "longRunningProcesses"] as const) {
+    if (grant[key] && !recommended[key]) issues.push(key);
+  }
+  return issues;
 }
 
 export function validateCapabilityGrant(
@@ -517,21 +548,8 @@ export function validateCapabilityGrant(
   value: unknown,
 ): EffectiveCapabilityGrant {
   const grant = shape(spec, value, "grant", capabilityCategories);
-  const readableAreas = areaGrants(
-    spec,
-    grant.readableAreas,
-    "readableAreas",
-    readAreas,
-    spec.maximumCapabilities.readableAreas,
-  );
-  const writableAreas = areaGrants(
-    spec,
-    grant.writableAreas,
-    "writableAreas",
-    writeAreas,
-    spec.maximumCapabilities.writableAreas,
-    true,
-  );
+  const readableAreas = areaGrants(spec, grant.readableAreas, "readableAreas", readAreas);
+  const writableAreas = areaGrants(spec, grant.writableAreas, "writableAreas", writeAreas, true);
   const toolKinds = toolGrant(spec, grant.toolKinds);
   if (
     typeof grant.projectShell !== "string" ||
@@ -540,12 +558,6 @@ export function validateCapabilityGrant(
     fail(spec, `unknown projectShell level ${String(grant.projectShell)}`);
   }
   const projectShell = grant.projectShell as ProjectShellAccess;
-  if (
-    projectShellAccessLevels.indexOf(projectShell) >
-    projectShellAccessLevels.indexOf(spec.maximumCapabilities.projectShell)
-  ) {
-    fail(spec, `projectShell ${projectShell} exceeds the role maximum`);
-  }
   return {
     readableAreas,
     writableAreas,

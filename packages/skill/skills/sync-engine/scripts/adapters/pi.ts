@@ -4,8 +4,8 @@ export const piAdapter = {
   id: "pi",
   identity: { kind: "conversation-id", label: "Pi session ID", stableContinuation: true },
   promptDelivery: {
-    fresh: { mode: "shell-file-expansion", field: "the initial message argument" },
-    continuation: { mode: "shell-file-expansion", field: "the continuation message argument" },
+    fresh: { mode: "agent-file-instruction", field: "the initial message argument" },
+    continuation: { mode: "agent-file-instruction", field: "the continuation message argument" },
   },
   cwd: { mode: "explicit-application-cwd", field: "process cwd" },
   configurationInheritance: "coordinator-supplied",
