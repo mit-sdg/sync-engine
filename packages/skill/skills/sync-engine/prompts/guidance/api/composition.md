@@ -61,8 +61,17 @@ former(name, (input, free) => where(...).form({ ...shape }));
 - A view's `.holds()`, `.one()`, `.optional()`, or `.many()` follows the closing
   `view(...)`; it is never called on `where(...)`.
 - Builders receive binding bags. Reading a property, including by destructuring, declares a
-  stable logic variable in that partition. Completed views and formers take one
-  object-shaped input mapping.
+  stable logic variable in that partition. Bind query outputs with `.is({ ... })`; do not
+  destructure the query call itself:
+
+  ```ts
+  const targetFor = view("target for (code)", ({ code }, { target }, _free) =>
+    where(Shortening._resolve({ code }).is({ target })),
+  ).one();
+  ```
+
+  Completed views and formers take one object-shaped input mapping.
+
 - A view with no output binding is a predicate and ends in `.holds()`. A view that binds
   output rows returns `.many()` by default and may state `.one()` or `.optional()` instead.
   Stacked `where` blocks are alternatives, and local bindings do not escape the view.

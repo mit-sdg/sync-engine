@@ -5,6 +5,8 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   briefFileName,
   canonicalPath,
+  policyFileName,
+  readWorkPolicy,
   requirePathInWorkUnit,
   requireWorkUnit,
   reserveRunArtifacts,
@@ -110,7 +112,20 @@ describe("work start", () => {
 
     expect(unit.path).toBe(workUnitPath(root, "record-mechanics"));
     expect(unit.briefPath).toBe(resolve(unit.path, briefFileName));
+    expect(unit.policyPath).toBe(resolve(unit.path, policyFileName));
     expect(await readFile(unit.briefPath, "utf8")).toBe(template);
+    expect(await readWorkPolicy(unit)).toEqual({ review: "required", execution: "mixed" });
+  });
+
+  test("records one immutable review and execution policy", async () => {
+    const root = await application();
+    const unit = await startWorkUnit({
+      applicationRoot: root,
+      slug: "fixed-policy",
+      briefTemplate: "# Brief\n",
+      policy: { review: "omitted", execution: "simulated" },
+    });
+    expect(await readWorkPolicy(unit)).toEqual({ review: "omitted", execution: "simulated" });
   });
 
   test("copies from a template path and never overwrites an existing unit", async () => {
@@ -196,6 +211,7 @@ describe("run artifacts", () => {
     for (const [suffix, path] of [
       ["task.md", first.taskPath],
       ["capabilities.json", first.capabilitiesPath],
+      ["baseline.json", first.baselinePath],
       ["prompt.md", first.promptPath],
       ["response.md", first.responsePath],
       ["record.json", first.recordPath],

@@ -1,11 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   digestDesign,
   finalizeLaunch,
+  finalizeSimulation,
+  inferRoleResult,
   prepareLaunch,
   readLaunchRecord,
   sha256,
@@ -170,6 +172,163 @@ describe("prepared and finalized records", () => {
     });
   });
 
+  test("rejects changes outside the write grant for every terminal status", async () => {
+    const unit = await work("write-scope");
+    const launch = await prepared(unit);
+    await mkdir(resolve(unit.root, "src"), { recursive: true });
+    await writeFile(resolve(unit.root, "src/outside.ts"), "export {};\n", "utf8");
+
+    expect(await rejectedValue(complete(launch.path, "partial", { status: "failed" }))).toEqual({
+      name: "RecordError",
+      message: "Run changed paths outside its write grant: src/outside.ts",
+    });
+  });
+
+  test("excludes current coordinator brief and Pi session state from workspace enforcement", async () => {
+    const unit = await work("coordinator-state");
+    const launch = await prepared(unit);
+    await writeFile(resolve(unit.path, "brief.md"), "# Coordinator-revised brief\n", "utf8");
+    await mkdir(resolve(unit.path, "pi-sessions/nested"), { recursive: true });
+    await writeFile(resolve(unit.path, "pi-sessions/nested/session.jsonl"), "{}\n", "utf8");
+
+    expect(await complete(launch.path, "## Status\n\nComplete\n")).toMatchObject({
+      state: "finalized",
+      result: "complete",
+    });
+  });
+
+  test("still checks other run artifacts and other work units", async () => {
+    const unit = await work("cross-run-state");
+    const first = await prepared(unit);
+    await complete(first.path, "## Status\n\nComplete\n", { agentId: "agent-first" });
+    const launch = await prepared(unit, { at: new Date("2026-08-19T09:06:44.000Z") });
+    await writeFile(first.path, `${await readFile(first.path, "utf8")}\n`, "utf8");
+    expect(
+      await rejectedValue(
+        complete(launch.path, "partial", { status: "failed", agentId: "agent-second" }),
+      ),
+    ).toEqual({
+      name: "RecordError",
+      message: `Run changed paths outside its write grant: ${relative(unit.root, first.path)}`,
+    });
+
+    const original = (await readFile(first.path, "utf8")).trimEnd() + "\n";
+    await writeFile(first.path, original, "utf8");
+    await complete(launch.path, "partial", { status: "failed", agentId: "agent-second" });
+    const other = await startWorkUnit({
+      applicationRoot: unit.root,
+      slug: "other-unit",
+      briefTemplate: "# Other\n",
+    });
+    const second = await prepared(unit, { at: new Date("2026-08-19T09:06:45.000Z") });
+    await writeFile(other.briefPath, "# Changed other brief\n", "utf8");
+    expect(
+      await rejectedValue(
+        complete(second.path, "partial", { status: "failed", agentId: "agent-third" }),
+      ),
+    ).toEqual({
+      name: "RecordError",
+      message: "Run changed paths outside its write grant: .sync-engine/work/other-unit/brief.md",
+    });
+  });
+
+  test("records a blocked role result without accepting a completed status", async () => {
+    const unit = await work("blocked-result");
+    const launch = await prepared(unit);
+    const response = "## Status\n\nBlocked: missing public context.\n";
+
+    expect(await rejectedValue(complete(launch.path, response))).toEqual({
+      name: "RecordError",
+      message: "Response reports a blocked result; finalize with --status blocked",
+    });
+    const finalized = await complete(launch.path, response, { status: "blocked" });
+    expect(finalized).toMatchObject({ status: "blocked", result: "blocked" });
+  });
+
+  test("parses flexible Status and Verdict heading forms without treating Summary as status", () => {
+    const encoded = (value: string) => Buffer.from(value, "utf8");
+    expect(inferRoleResult(encoded("## Verdict: approve\n"))).toBe("approve");
+    expect(inferRoleResult(encoded("### Verdict\n\napprove\n"))).toBe("approve");
+    expect(inferRoleResult(encoded("## Verdict\n\n- approve\n"))).toBe("approve");
+    expect(inferRoleResult(encoded("## Status\n\n✅ Complete\n"))).toBe("complete");
+    expect(inferRoleResult(encoded("# Verdict — **revise**\n"))).toBe("revise");
+    expect(inferRoleResult(encoded("## Summary\n\nComplete\n"))).toBe("unknown");
+    expect(inferRoleResult(encoded("##### Verdict\n\napprove\n"))).toBe("unknown");
+    expect(inferRoleResult(encoded("## Verdict\n\nMaybe\napprove\n"))).toBe("unknown");
+  });
+
+  test("rejects an unparsable required critic verdict for delegated and simulated completion", async () => {
+    const delegatedUnit = await work("critic-verdict");
+    const review = { subject: "design" as const, digest: "c".repeat(64) };
+    const delegated = await prepared(delegatedUnit, {
+      role: "critic",
+      phase: "contracts",
+      review,
+    });
+    const message =
+      "Critic response has no parsable `## Verdict`; this record cannot satisfy the review policy. Fix the response file to state approve, revise, or blocked, then rerun completion.";
+    expect(await rejectedValue(complete(delegated.path, "## Summary\n\nLooks good.\n"))).toEqual({
+      name: "RecordError",
+      message,
+    });
+
+    const simulatedUnit = await work("simulated-critic-verdict");
+    const simulated = await prepared(simulatedUnit, {
+      role: "critic",
+      phase: "contracts",
+      execution: "simulated",
+      harness: "coordinator",
+      simulationReason: "test",
+      review,
+    });
+    await writeFile(simulated.record.response.path, "## Verdict\n\nUnclear\n", "utf8");
+    expect(
+      await rejectedValue(finalizeSimulation({ recordPath: simulated.path, status: "completed" })),
+    ).toEqual({ name: "RecordError", message });
+  });
+
+  test("binds an approving review to its exact candidate digest", async () => {
+    const unit = await work("review-target");
+    const digest = "b".repeat(64);
+    const launch = await prepared(unit, {
+      role: "critic",
+      phase: "decomposition",
+      review: { subject: "decomposition", digest },
+    });
+    const finalized = await complete(
+      launch.path,
+      "## Verdict\n\n**Approve.**\n## Assessments\n\nSound.\n## Findings\n\nNone.\n",
+    );
+    expect(finalized).toMatchObject({
+      result: "approve",
+      review: { subject: "decomposition", digest },
+    });
+  });
+
+  test("rejects manually rewritten prepared design controls", async () => {
+    const unit = await work("control-tamper");
+    const designRoot = await design(unit.root);
+    const snapshot = await digestDesign(designRoot);
+    const launch = await prepared(unit, {
+      design: { root: designRoot, digest: snapshot.digest },
+    });
+    await writeFile(
+      launch.path,
+      `${JSON.stringify(
+        {
+          ...launch.record,
+          design: { ...launch.record.design, beforeFiles: [] },
+        },
+        undefined,
+        2,
+      )}\n`,
+    );
+    expect(await rejectedValue(complete(launch.path, "partial", { status: "failed" }))).toEqual({
+      name: "RecordError",
+      message: "Protected launch controls changed after preparation",
+    });
+  });
+
   test("rejects a manually changed embedded grant", async () => {
     const unit = await work("grant-tamper");
     const launch = await prepared(unit);
@@ -270,6 +429,7 @@ describe("relationship identity snapshots", () => {
       name: "RecordError",
       message: "Continuation must use the snapshotted harness and agent",
     });
+    await writeFile(target.path, `${JSON.stringify(target.record, undefined, 2)}\n`);
     const final = await complete(next.path, undefined, { agentId: "agent-original" });
     expect(final.agentId).toBe("agent-original");
   });
@@ -396,11 +556,11 @@ describe("decoder and cleanup", () => {
 
     await writeFile(
       launch.path,
-      `${JSON.stringify({ ...launch.record, role: "critic", phase: "implementation" })}\n`,
+      `${JSON.stringify({ ...launch.record, role: "designer", phase: "implementation" })}\n`,
     );
     expect(await rejectedValue(readLaunchRecord(launch.path))).toEqual({
       name: "RecordError",
-      message: "Role and phase combination is invalid: critic/implementation",
+      message: "Role and phase combination is invalid: designer/implementation",
     });
   });
 
@@ -420,7 +580,11 @@ describe("decoder and cleanup", () => {
       name: "RecordError",
       message: `Cannot prepare launch: Error: EEXIST: file already exists, open '${injected}'`,
     });
-    expect((await readdir(unit.path)).sort()).toEqual([`${stem}.capabilities.json`, "brief.md"]);
+    expect((await readdir(unit.path)).sort()).toEqual([
+      `${stem}.capabilities.json`,
+      "brief.md",
+      "policy.json",
+    ]);
     expect(await readFile(injected, "utf8")).toBe("external\n");
   });
 });

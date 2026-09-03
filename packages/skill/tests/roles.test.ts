@@ -29,6 +29,7 @@ describe("typed role specifications", () => {
       "designer/contracts",
       "critic/decomposition",
       "critic/contracts",
+      "critic/implementation",
       "critic/verification",
       "concept-worker/implementation",
       "application-worker/implementation",
@@ -46,6 +47,7 @@ describe("typed role specifications", () => {
       ["designer", "contracts", "roles/designer-contracts.md"],
       ["critic", "decomposition", "roles/critic-decomposition.md"],
       ["critic", "contracts", "roles/critic-contracts.md"],
+      ["critic", "implementation", "roles/critic-implementation.md"],
       ["critic", "verification", "roles/critic-verification.md"],
       ["concept-worker", "implementation", "roles/concept-worker.md"],
       ["application-worker", "implementation", "roles/application-worker.md"],
@@ -85,6 +87,34 @@ describe("typed role specifications", () => {
       "Changed",
       "Questions",
       "Checks",
+    ]);
+
+    const implementationReview = roleSpecifications["critic/implementation"];
+    expect(implementationReview.guidancePaths).toEqual([
+      "guidance/implementation/framework-safety.md",
+      "guidance/design/ssf-reading.md",
+      "guidance/design/boundary.md",
+      "guidance/api/composition.md",
+    ]);
+    expect(
+      implementationReview.inputs.map(({ id, cardinality, delivery }) => ({
+        id,
+        cardinality,
+        delivery,
+      })),
+    ).toEqual([
+      { id: "task", cardinality: "exactly-one", delivery: "inline" },
+      { id: "brief", cardinality: "exactly-one", delivery: "retained" },
+      { id: "contracts", cardinality: "one-or-more", delivery: "retained" },
+      { id: "accepted-decomposition", cardinality: "zero-or-one", delivery: "retained" },
+      { id: "changed-source-and-tests", cardinality: "one-or-more", delivery: "inline" },
+      { id: "public-references", cardinality: "zero-or-more", delivery: "retained" },
+      { id: "context", cardinality: "zero-or-more", delivery: "retained" },
+    ]);
+    expect(implementationReview.returnShape.map(({ heading }) => heading)).toEqual([
+      "Verdict",
+      "Assessments",
+      "Findings",
     ]);
 
     const verification = roleSpecifications["critic/verification"];
@@ -187,6 +217,20 @@ describe("typed role specifications", () => {
         guidance: "Stable-ID blocker or material findings, or none.",
       },
     ]);
+    expect(roleSpecifications["critic/implementation"].returnShape).toEqual([
+      { heading: "Verdict", required: true, guidance: "Approve, revise, or blocked." },
+      {
+        heading: "Assessments",
+        required: true,
+        guidance:
+          "Compact contract-by-contract or obligation-by-obligation conformance assessment.",
+      },
+      {
+        heading: "Findings",
+        required: true,
+        guidance: "Stable-ID blocker or material findings, or none.",
+      },
+    ]);
     expect(roleSpecifications["concept-worker/implementation"].returnShape).toEqual([
       { heading: "Status", required: true, guidance: "Complete or blocked." },
       { heading: "Changed", required: true, guidance: "Paths changed, or none." },
@@ -233,6 +277,15 @@ describe("typed role specifications", () => {
       writableAreas: ["current-decomposition"],
       toolKinds: ["repository-read", "repository-write"],
       projectShell: "none",
+      network: false,
+      generatedOutput: false,
+      longRunningProcesses: false,
+    });
+    expect(recommendedCapabilitiesByRolePhase["critic/implementation"]).toEqual({
+      readableAreas: ["application"],
+      writableAreas: [],
+      toolKinds: ["repository-read"],
+      projectShell: "project-validation",
       network: false,
       generatedOutput: false,
       longRunningProcesses: false,
@@ -477,7 +530,7 @@ describe("effective capability grants", () => {
     expect(thrownValue(() => getRoleSpecification("designer", "accepted"))).toEqual({
       name: "Error",
       message:
-        "Unknown role specification designer/accepted; expected designer/decomposition, designer/contracts, critic/decomposition, critic/contracts, critic/verification, concept-worker/implementation, application-worker/implementation, frontend-worker/implementation, evidence-worker/evidence",
+        "Unknown role specification designer/accepted; expected designer/decomposition, designer/contracts, critic/decomposition, critic/contracts, critic/implementation, critic/verification, concept-worker/implementation, application-worker/implementation, frontend-worker/implementation, evidence-worker/evidence",
     });
   });
 });

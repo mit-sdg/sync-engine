@@ -5,6 +5,15 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 export const workflowDirectory = ".sync-engine";
 export const workDirectory = "work";
 export const briefFileName = "brief.md";
+export const policyFileName = "policy.json";
+export const reviewPolicies = ["required", "omitted"] as const;
+export const executionPolicies = ["delegated", "simulated", "mixed"] as const;
+export type ReviewPolicy = (typeof reviewPolicies)[number];
+export type ExecutionPolicy = (typeof executionPolicies)[number];
+export interface WorkPolicy {
+  readonly review: ReviewPolicy;
+  readonly execution: ExecutionPolicy;
+}
 
 const safeName = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const maximumNameLength = 80;
@@ -84,6 +93,7 @@ export interface WorkUnit {
   readonly slug: string;
   readonly path: string;
   readonly briefPath: string;
+  readonly policyPath: string;
 }
 
 function describeWorkUnit(applicationRoot: string, slug: string): WorkUnit {
@@ -96,6 +106,7 @@ function describeWorkUnit(applicationRoot: string, slug: string): WorkUnit {
     slug,
     path,
     briefPath: resolve(path, briefFileName),
+    policyPath: resolve(path, policyFileName),
   };
 }
 
@@ -116,6 +127,37 @@ export async function requireWorkUnit(applicationRoot: string, slug: string): Pr
     throw new WorkError(`Work unit changed while it was being resolved: ${lexicalPath}`);
   }
   return unit;
+}
+
+export async function readWorkPolicy(unit: WorkUnit): Promise<WorkPolicy> {
+  const entry = await lstat(unit.policyPath).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  });
+  if (entry === undefined) return { review: "required", execution: "mixed" };
+  if (entry.isSymbolicLink() || !entry.isFile()) {
+    throw new WorkError(`Work policy must be a regular file: ${unit.policyPath}`);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(await readFile(unit.policyPath, "utf8")) as unknown;
+  } catch (error) {
+    throw new WorkError(`Work policy is not readable JSON: ${String(error)}`);
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new WorkError(`Work policy must be an object`);
+  }
+  const policy = value as Record<string, unknown>;
+  if (
+    !reviewPolicies.includes(policy["review"] as ReviewPolicy) ||
+    !executionPolicies.includes(policy["execution"] as ExecutionPolicy)
+  ) {
+    throw new WorkError(`Work policy is invalid`);
+  }
+  return {
+    review: policy["review"] as ReviewPolicy,
+    execution: policy["execution"] as ExecutionPolicy,
+  };
 }
 
 export function requirePathInWorkUnit(path: string, workUnit: string): string {
@@ -145,6 +187,7 @@ export interface StartWorkUnitOptions {
   readonly slug: string;
   /** Template bytes are copied verbatim to brief.md. */
   readonly briefTemplate: string | Uint8Array;
+  readonly policy?: WorkPolicy;
 }
 
 /** Create one work unit and its brief. An existing slug is never reused or overwritten. */
@@ -180,8 +223,14 @@ export async function startWorkUnit(options: StartWorkUnitOptions): Promise<Work
       throw new WorkError(`Created work unit is not a directory: ${lexicalUnit}`);
     }
     const briefPath = requirePathInWorkUnit(resolve(lexicalUnit, briefFileName), lexicalUnit);
+    const policyPath = requirePathInWorkUnit(resolve(lexicalUnit, policyFileName), lexicalUnit);
+    const policy = options.policy ?? { review: "required", execution: "mixed" };
+    if (!reviewPolicies.includes(policy.review) || !executionPolicies.includes(policy.execution)) {
+      throw new WorkError(`Work policy is invalid`);
+    }
     await writeFile(briefPath, bytes, { flag: "wx" });
-    return { ...unit, path: canonicalPath(lexicalUnit), briefPath };
+    await writeFile(policyPath, `${JSON.stringify(policy, undefined, 2)}\n`, { flag: "wx" });
+    return { ...unit, path: canonicalPath(lexicalUnit), briefPath, policyPath };
   } catch (error) {
     await rm(lexicalUnit, { recursive: true, force: true });
     if (error instanceof WorkError) throw error;
@@ -193,6 +242,7 @@ export interface StartWorkUnitFromTemplateOptions {
   readonly applicationRoot: string;
   readonly slug: string;
   readonly briefTemplatePath: string;
+  readonly policy?: WorkPolicy;
 }
 
 export async function startWorkUnitFromTemplate(
@@ -210,6 +260,7 @@ export async function startWorkUnitFromTemplate(
     applicationRoot: options.applicationRoot,
     slug: options.slug,
     briefTemplate: template,
+    ...(options.policy === undefined ? {} : { policy: options.policy }),
   });
 }
 
@@ -223,6 +274,7 @@ export interface RunArtifacts {
   readonly stem: string;
   readonly taskPath: string;
   readonly capabilitiesPath: string;
+  readonly baselinePath: string;
   readonly promptPath: string;
   readonly responsePath: string;
   readonly recordPath: string;
@@ -233,6 +285,7 @@ function artifactPaths(unit: string, stem: string): RunArtifacts {
     stem,
     taskPath: resolve(unit, `${stem}.task.md`),
     capabilitiesPath: resolve(unit, `${stem}.capabilities.json`),
+    baselinePath: resolve(unit, `${stem}.baseline.json`),
     promptPath: resolve(unit, `${stem}.prompt.md`),
     responsePath: resolve(unit, `${stem}.response.md`),
     recordPath: resolve(unit, `${stem}.record.json`),
@@ -274,6 +327,7 @@ export async function reserveRunArtifacts(options: ReserveRunOptions): Promise<R
     const paths = [
       artifacts.taskPath,
       artifacts.capabilitiesPath,
+      artifacts.baselinePath,
       artifacts.promptPath,
       artifacts.responsePath,
       artifacts.recordPath,

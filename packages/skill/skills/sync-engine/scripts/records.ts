@@ -12,15 +12,19 @@ import {
   type RunArtifacts,
   type WorkUnit,
   canonicalPath,
+  readWorkPolicy,
   requirePathInWorkUnit,
   requireSafeRunLabel,
   requireWorkUnit,
   reserveRunArtifacts,
+  type WorkPolicy,
 } from "./work.ts";
 
-export const launchStatuses = ["completed", "failed", "cancelled", "timed-out"] as const;
+export const launchStatuses = ["completed", "blocked", "failed", "cancelled", "timed-out"] as const;
+export const roleResults = ["complete", "blocked", "approve", "revise", "unknown"] as const;
 export const enforcementLevels = ["harness-enforced", "prompt-guided"] as const;
 export type LaunchStatus = (typeof launchStatuses)[number];
+export type RoleResult = (typeof roleResults)[number];
 export type EnforcementLevel = (typeof enforcementLevels)[number];
 
 const harnessValues = ["paseo", "pi", "codex", "claude-code", "antigravity", "cursor"] as const;
@@ -31,6 +35,7 @@ const rolePhaseValues = [
   "designer/contracts",
   "critic/decomposition",
   "critic/contracts",
+  "critic/implementation",
   "critic/verification",
   "concept-worker/implementation",
   "application-worker/implementation",
@@ -61,11 +66,26 @@ export interface DesignBinding {
   readonly afterFiles?: readonly DesignFileDigest[];
 }
 
-export interface LaunchRelationship {
-  readonly kind: "continuation" | "replacement";
-  readonly recordPath: string;
-  readonly targetHarness: HarnessId;
-  readonly targetAgentId: string;
+export type LaunchRelationship =
+  | {
+      readonly kind: "continuation" | "replacement";
+      readonly recordPath: string;
+      readonly targetHarness: HarnessId;
+      readonly targetAgentId: string;
+    }
+  | {
+      readonly kind: "simulation-continuation";
+      readonly recordPath: string;
+    };
+
+export interface WorkspaceBinding {
+  readonly root: string;
+  readonly baseline: { readonly path: string; readonly sha256: string };
+}
+
+export interface ReviewTarget {
+  readonly subject: "decomposition" | "design";
+  readonly digest: string;
 }
 
 interface LaunchRecordBase {
@@ -83,7 +103,11 @@ interface LaunchRecordBase {
   readonly grant: EffectiveCapabilityGrant;
   readonly response: { readonly path: string };
   readonly retainedSources: readonly RetainedSource[];
+  readonly policy?: WorkPolicy;
+  readonly workspace?: WorkspaceBinding;
   readonly design?: DesignBinding;
+  readonly review?: ReviewTarget;
+  readonly reviewOverride?: string;
   readonly relationship?: LaunchRelationship;
 }
 
@@ -96,6 +120,7 @@ export interface FinalizedLaunchRecord extends LaunchRecordBase {
   readonly response: { readonly path: string; readonly sha256: string; readonly bytes: number };
   readonly agentId?: string;
   readonly status: LaunchStatus;
+  readonly result: RoleResult;
   readonly enforcement: EnforcementLevel;
   readonly model?: string;
 }
@@ -105,6 +130,7 @@ export type LaunchRecord = PreparedLaunchRecord | FinalizedLaunchRecord;
 export function normalizeLaunchStatus(status: string): LaunchStatus {
   const value = status.trim().toLowerCase().replaceAll("_", "-");
   if (/^(?:complete|completed|idle|settled|success|succeeded)$/.test(value)) return "completed";
+  if (/^(?:block|blocked)$/.test(value)) return "blocked";
   if (/^(?:error|failed|failure)$/.test(value)) return "failed";
   if (/^(?:canceled|cancelled|stopped)$/.test(value)) return "cancelled";
   if (/^(?:timeout|timed-out|timed out)$/.test(value)) return "timed-out";
@@ -243,6 +269,31 @@ function decodeRecord(value: unknown): LaunchRecord {
   const response = object(record["response"], "Response binding");
   absolutePath(response["path"], "Response path");
   retainedSources(record["retainedSources"]);
+  if (record["policy"] !== undefined) {
+    const policy = object(record["policy"], "Work policy");
+    if (
+      (policy["review"] !== "required" && policy["review"] !== "omitted") ||
+      !["delegated", "simulated", "mixed"].includes(String(policy["execution"]))
+    ) {
+      throw new RecordError(`Recorded work policy is invalid`);
+    }
+  }
+
+  if (record["workspace"] !== undefined) {
+    const workspace = object(record["workspace"], "Workspace binding");
+    absolutePath(workspace["root"], "Workspace root");
+    const baseline = object(workspace["baseline"], "Workspace baseline");
+    absolutePath(baseline["path"], "Workspace baseline path");
+    hash(baseline["sha256"], "Workspace baseline hash");
+  }
+  if (record["review"] !== undefined) {
+    const review = object(record["review"], "Review target");
+    if (review["subject"] !== "decomposition" && review["subject"] !== "design") {
+      throw new RecordError(`Review subject must be decomposition or design`);
+    }
+    hash(review["digest"], "Review target digest");
+  }
+  if (record["reviewOverride"] !== undefined) text(record["reviewOverride"], "Review override");
 
   if (record["design"] !== undefined) {
     const design = object(record["design"], "Design binding");
@@ -263,16 +314,28 @@ function decodeRecord(value: unknown): LaunchRecord {
     }
   }
   if (record["relationship"] !== undefined) {
-    if (execution === "simulated") {
-      throw new RecordError(`Simulated execution cannot claim same-agent continuity`);
-    }
     const relationship = object(record["relationship"], "Launch relationship");
-    if (relationship["kind"] !== "continuation" && relationship["kind"] !== "replacement") {
-      throw new RecordError(`Launch relationship kind is invalid`);
-    }
     absolutePath(relationship["recordPath"], "Related record path");
-    harness(relationship["targetHarness"], "Related harness");
-    text(relationship["targetAgentId"], "Related agent identity");
+    if (relationship["kind"] === "simulation-continuation") {
+      if (execution !== "simulated") {
+        throw new RecordError(`Simulation continuation requires simulated execution`);
+      }
+      if (
+        relationship["targetHarness"] !== undefined ||
+        relationship["targetAgentId"] !== undefined
+      ) {
+        throw new RecordError(`Simulation continuation cannot claim a harness identity`);
+      }
+    } else {
+      if (execution === "simulated") {
+        throw new RecordError(`Simulated execution cannot claim agent continuity`);
+      }
+      if (relationship["kind"] !== "continuation" && relationship["kind"] !== "replacement") {
+        throw new RecordError(`Launch relationship kind is invalid`);
+      }
+      harness(relationship["targetHarness"], "Related harness");
+      text(relationship["targetAgentId"], "Related agent identity");
+    }
   }
   if (record["state"] === "finalized") {
     if (execution === "delegated") text(record["agentId"], "Agent identity");
@@ -281,6 +344,10 @@ function decodeRecord(value: unknown): LaunchRecord {
     }
     if (!launchStatuses.includes(record["status"] as LaunchStatus)) {
       throw new RecordError(`Finalized record has an unknown status`);
+    }
+    if (record["result"] === undefined) record["result"] = "unknown";
+    if (!roleResults.includes(record["result"] as RoleResult)) {
+      throw new RecordError(`Finalized record has an unknown role result`);
     }
     if (!enforcementLevels.includes(record["enforcement"] as EnforcementLevel)) {
       throw new RecordError(`Finalized record has an unknown enforcement level`);
@@ -352,6 +419,16 @@ async function loadRecord(path: string): Promise<LoadedRecord> {
   directWorkPath(record.prompt.path, workPath, "Prompt");
   directWorkPath(record.capabilities.path, workPath, "Capability artifact");
   directWorkPath(record.response.path, workPath, "Response");
+  if (record.workspace !== undefined) {
+    const expectedRoot = resolve(workPath, "../../..");
+    if (
+      record.workspace.root !== expectedRoot ||
+      canonicalPath(record.workspace.root) !== expectedRoot
+    ) {
+      throw new RecordError(`Workspace root is not the canonical application directory`);
+    }
+    directWorkPath(record.workspace.baseline.path, workPath, "Workspace baseline");
+  }
   if (record.relationship !== undefined) {
     directWorkPath(record.relationship.recordPath, workPath, "Related record");
   }
@@ -388,7 +465,39 @@ export async function replacePreparedHarness(
   if (response.byteLength !== 0) {
     throw new RecordError(`Harness replacement requires an empty response artifact`);
   }
-  const updated: PreparedLaunchRecord = { ...prepared, harness: nextHarness };
+  let updated: PreparedLaunchRecord = { ...prepared, harness: nextHarness };
+  if (updated.workspace !== undefined) {
+    const content = await regularFile(
+      updated.workspace.baseline.path,
+      updated.work.path,
+      "Workspace baseline",
+    );
+    const baseline = object(JSON.parse(new TextDecoder().decode(content)), "Workspace baseline");
+    baseline["controlsSha256"] = protectedControls({
+      role: updated.role,
+      phase: updated.phase,
+      execution: updated.execution,
+      harness: updated.harness,
+      timeoutSeconds: updated.timeoutSeconds,
+      promptSha256: updated.prompt.sha256,
+      grant: updated.grant,
+      retainedSources: updated.retainedSources,
+      ...(updated.policy === undefined ? {} : { policy: updated.policy }),
+      ...(updated.design === undefined ? {} : { design: updated.design }),
+      ...(updated.review === undefined ? {} : { review: updated.review }),
+      ...(updated.reviewOverride === undefined ? {} : { reviewOverride: updated.reviewOverride }),
+      ...(updated.relationship === undefined ? {} : { relationship: updated.relationship }),
+    });
+    const revised = `${JSON.stringify(baseline, undefined, 2)}\n`;
+    await writeFile(updated.workspace.baseline.path, revised, "utf8");
+    updated = {
+      ...updated,
+      workspace: {
+        ...updated.workspace,
+        baseline: { ...updated.workspace.baseline, sha256: sha256(revised) },
+      },
+    };
+  }
   await writeFile(loaded.path, `${JSON.stringify(updated, undefined, 2)}\n`, "utf8");
   return updated;
 }
@@ -412,11 +521,21 @@ async function prepareRelationship(
   selectedHarness: ExecutionHarness,
 ): Promise<LaunchRelationship | undefined> {
   if (input === undefined) return undefined;
+  const target = await loadRecord(input.recordPath);
+  if (target.record.state !== "finalized") throw new RecordError(`Related launch is not finalized`);
+  if (target.record.work.path !== unit.path || target.record.role !== role) {
+    throw new RecordError(`Related launch belongs to another work unit or role`);
+  }
+  const recordPath = directWorkPath(target.path, unit.path, "Related record");
+  if (input.kind === "simulation-continuation") {
+    if (selectedHarness !== "coordinator" || target.record.execution !== "simulated") {
+      throw new RecordError(`Simulation continuation requires a finalized simulation`);
+    }
+    return { kind: "simulation-continuation", recordPath };
+  }
   if (selectedHarness === "coordinator") {
     throw new RecordError(`Simulated execution cannot continue or replace an agent`);
   }
-  const target = await loadRecord(input.recordPath);
-  if (target.record.state !== "finalized") throw new RecordError(`Related launch is not finalized`);
   if (
     target.record.execution !== "delegated" ||
     target.record.harness === "coordinator" ||
@@ -424,18 +543,76 @@ async function prepareRelationship(
   ) {
     throw new RecordError(`Related launch is not a delegated agent run`);
   }
-  if (target.record.work.path !== unit.path || target.record.role !== role) {
-    throw new RecordError(`Related launch belongs to another work unit or role`);
-  }
   if (input.kind === "continuation" && selectedHarness !== target.record.harness) {
     throw new RecordError(`Continuation must select the related launch harness`);
   }
   return {
     kind: input.kind,
-    recordPath: directWorkPath(target.path, unit.path, "Related record"),
+    recordPath,
     targetHarness: target.record.harness,
     targetAgentId: target.record.agentId,
   };
+}
+
+const workspaceExclusions = new Set([".git", "node_modules", ".cache", ".vite", "coverage"]);
+const coordinatorSessionDirectories = new Set(["pi-sessions"]);
+
+function coordinatorOwnedWorkspacePath(path: string, workPath: string): boolean {
+  const relativeToWork = relative(workPath, path).split(sep).join("/");
+  if (relativeToWork === "brief.md" || relativeToWork === "policy.json") return true;
+  const first = relativeToWork.split("/")[0];
+  return first !== undefined && coordinatorSessionDirectories.has(first);
+}
+
+async function workspaceFileDigests(
+  root: string,
+  directory: string,
+  workPath: string,
+): Promise<DesignFileDigest[]> {
+  const files: DesignFileDigest[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (directory === root && workspaceExclusions.has(entry.name)) continue;
+    const path = resolve(directory, entry.name);
+    if (coordinatorOwnedWorkspacePath(path, workPath)) continue;
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) files.push(...(await workspaceFileDigests(root, path, workPath)));
+    else if (entry.isFile()) {
+      files.push({
+        path: relative(root, path).split(sep).join("/"),
+        sha256: sha256(await readFile(path)),
+      });
+    }
+  }
+  return files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+async function snapshotWorkspace(
+  root: string,
+  workPath: string,
+): Promise<readonly DesignFileDigest[]> {
+  return workspaceFileDigests(root, root, workPath);
+}
+
+function protectedControls(record: {
+  readonly role: RoleId;
+  readonly phase: RolePhase;
+  readonly execution: ExecutionMode;
+  readonly harness: ExecutionHarness;
+  readonly timeoutSeconds: number;
+  readonly promptSha256: string;
+  readonly grant: EffectiveCapabilityGrant;
+  readonly retainedSources: readonly RetainedSource[];
+  readonly policy?: WorkPolicy;
+  readonly design?: DesignBinding;
+  readonly review?: ReviewTarget;
+  readonly reviewOverride?: string;
+  readonly relationship?: LaunchRelationship;
+}): string {
+  return sha256(JSON.stringify(record));
+}
+
+function workspaceBaseline(files: readonly DesignFileDigest[], controlsSha256: string): string {
+  return `${JSON.stringify({ files, controlsSha256 }, undefined, 2)}\n`;
 }
 
 async function prepareDesign(
@@ -471,6 +648,7 @@ export interface PrepareLaunchOptions {
   readonly grant: EffectiveCapabilityGrant;
   readonly retainedSources: readonly RetainedSource[];
   readonly design?: { readonly root: string; readonly digest: string };
+  readonly review?: ReviewTarget;
   readonly relationship?: Pick<LaunchRelationship, "kind" | "recordPath">;
   readonly at?: Date;
 }
@@ -505,8 +683,14 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
     throw new RecordError(`Prompt hash changed before preparation`);
   }
   const retained = retainedSources(options.retainedSources);
+  const policy = await readWorkPolicy(unit);
   const design = await prepareDesign(options.design, unit);
+  const review =
+    options.review === undefined
+      ? undefined
+      : { subject: options.review.subject, digest: hash(options.review.digest, "Review digest") };
   const relationship = await prepareRelationship(options.relationship, unit, role, selectedHarness);
+  const workspaceFiles = await snapshotWorkspace(unit.applicationRoot, unit.path);
   const artifacts = await reserveRunArtifacts({
     applicationRoot: unit.applicationRoot,
     slug: unit.slug,
@@ -519,10 +703,27 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
   try {
     const grantContent = serializeGrant(options.grant);
     const grant = JSON.parse(grantContent) as EffectiveCapabilityGrant;
+    const controlsSha256 = protectedControls({
+      role,
+      phase,
+      execution,
+      harness: selectedHarness,
+      timeoutSeconds,
+      promptSha256: promptHash,
+      grant,
+      retainedSources: retained,
+      policy,
+      ...(design === undefined ? {} : { design }),
+      ...(review === undefined ? {} : { review }),
+      ...(relationship === undefined ? {} : { relationship }),
+    });
+    const baseline = workspaceBaseline(workspaceFiles, controlsSha256);
     await writeFile(artifacts.taskPath, task, { flag: "wx" });
     created.push(artifacts.taskPath);
     await writeFile(artifacts.capabilitiesPath, grantContent, { flag: "wx" });
     created.push(artifacts.capabilitiesPath);
+    await writeFile(artifacts.baselinePath, baseline, { flag: "wx" });
+    created.push(artifacts.baselinePath);
     await writeFile(artifacts.promptPath, prompt, { flag: "wx" });
     created.push(artifacts.promptPath);
 
@@ -543,7 +744,13 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
       grant,
       response: { path: artifacts.responsePath },
       retainedSources: retained,
+      policy,
+      workspace: {
+        root: unit.applicationRoot,
+        baseline: { path: artifacts.baselinePath, sha256: sha256(baseline) },
+      },
       ...(design === undefined ? {} : { design }),
+      ...(review === undefined ? {} : { review }),
       ...(relationship === undefined ? {} : { relationship }),
     };
     await writeFile(artifacts.recordPath, `${JSON.stringify(record, undefined, 2)}\n`, {
@@ -605,18 +812,96 @@ function changedDesignPaths(
     .sort();
 }
 
+function pathCoveredBy(path: string, granted: string): boolean {
+  return path === granted || path.startsWith(`${granted}/`);
+}
+
+function generatedPath(path: string): boolean {
+  const parts = path.split("/");
+  return (
+    parts.includes("generated") ||
+    parts[0] === "dist" ||
+    parts.some((part) => part.includes(".generated."))
+  );
+}
+
+async function completedWorkspace(prepared: PreparedLaunchRecord): Promise<void> {
+  if (prepared.workspace === undefined) return;
+  const content = await regularFile(
+    prepared.workspace.baseline.path,
+    prepared.work.path,
+    "Workspace baseline",
+  );
+  if (sha256(content) !== prepared.workspace.baseline.sha256) {
+    throw new RecordError(`Workspace baseline changed after preparation`);
+  }
+  let baseline: unknown;
+  try {
+    baseline = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(content));
+  } catch (error) {
+    throw new RecordError(`Workspace baseline is not readable JSON: ${String(error)}`);
+  }
+  const binding = object(baseline, "Workspace baseline");
+  const files = designFileDigests(binding["files"], "workspace");
+  const controlsSha256 = hash(binding["controlsSha256"], "Protected launch controls");
+  const actualControls = protectedControls({
+    role: prepared.role,
+    phase: prepared.phase,
+    execution: prepared.execution,
+    harness: prepared.harness,
+    timeoutSeconds: prepared.timeoutSeconds,
+    promptSha256: prepared.prompt.sha256,
+    grant: prepared.grant,
+    retainedSources: prepared.retainedSources,
+    ...(prepared.policy === undefined ? {} : { policy: prepared.policy }),
+    ...(prepared.design === undefined ? {} : { design: prepared.design }),
+    ...(prepared.review === undefined ? {} : { review: prepared.review }),
+    ...(prepared.reviewOverride === undefined ? {} : { reviewOverride: prepared.reviewOverride }),
+    ...(prepared.relationship === undefined ? {} : { relationship: prepared.relationship }),
+  });
+  if (actualControls !== controlsSha256) {
+    throw new RecordError(`Protected launch controls changed after preparation`);
+  }
+  const changed = changedDesignPaths(
+    files,
+    await snapshotWorkspace(prepared.workspace.root, prepared.work.path),
+  );
+  const writable = prepared.grant.writableAreas.map(({ area, path }) =>
+    area === "assigned-design"
+      ? `design/${path}`
+      : area === "current-decomposition"
+        ? `.sync-engine/work/${prepared.work.slug}/decomposition.md`
+        : path,
+  );
+  const currentStem = prepared.prompt.path.replace(/\.prompt\.md$/, "");
+  const currentArtifacts = [
+    ".task.md",
+    ".capabilities.json",
+    ".baseline.json",
+    ".prompt.md",
+    ".response.md",
+    ".record.json",
+  ].map((suffix) =>
+    relative(prepared.workspace!.root, `${currentStem}${suffix}`).split(sep).join("/"),
+  );
+  const outside = changed.filter(
+    (path) =>
+      !writable.some((granted) => pathCoveredBy(path, granted)) &&
+      !currentArtifacts.includes(path) &&
+      !(prepared.grant.generatedOutput && generatedPath(path)),
+  );
+  if (outside.length > 0) {
+    throw new RecordError(`Run changed paths outside its write grant: ${outside.join(", ")}`);
+  }
+}
+
 async function completedDesign(
   prepared: PreparedLaunchRecord,
-  status: LaunchStatus,
+  _status: LaunchStatus,
 ): Promise<DesignBinding | undefined> {
   if (prepared.design === undefined) return undefined;
   const snapshot = await snapshotDesign(prepared.design.root);
   const writer = prepared.role === "designer" && prepared.phase === "contracts";
-  if (status !== "completed") {
-    return writer
-      ? { ...prepared.design, after: snapshot.digest, afterFiles: snapshot.fileDigests }
-      : prepared.design;
-  }
   if (!writer) {
     if (snapshot.digest !== prepared.design.before) {
       throw new RecordError(`Design changed after preparation`);
@@ -645,6 +930,61 @@ async function completedDesign(
     after: snapshot.digest,
     afterFiles: snapshot.fileDigests,
   };
+}
+
+export function inferRoleResult(response: Uint8Array): RoleResult {
+  let content: string;
+  try {
+    content = new TextDecoder("utf-8", { fatal: true }).decode(response);
+  } catch {
+    return "unknown";
+  }
+  const heading = (name: "Status" | "Verdict"): string | undefined => {
+    const expression = new RegExp(
+      `^#{1,4}\\s+${name}(?:(?:\\s*:\\s*|\\s+(?:-|—)\\s+)([^\\n]*))?\\s*$`,
+      "im",
+    );
+    const match = expression.exec(content);
+    if (match === null) return undefined;
+    const inline = match[1]?.trim();
+    const rest = content.slice(match.index + match[0].length);
+    const firstLine = inline || rest.split("\n").find((line) => line.trim() !== "");
+    return firstLine
+      ?.replaceAll(/[*_`~]/g, "")
+      .replace(/^[^\p{L}\p{N}]+/u, "")
+      .trim()
+      .toLowerCase();
+  };
+  const status = heading("Status");
+  if (status?.startsWith("block")) return "blocked";
+  if (status?.startsWith("complete")) return "complete";
+  const verdict = heading("Verdict");
+  if (verdict?.startsWith("block")) return "blocked";
+  if (verdict?.startsWith("approve")) return "approve";
+  if (verdict?.startsWith("revise")) return "revise";
+  return "unknown";
+}
+
+function validateRoleResult(
+  prepared: PreparedLaunchRecord,
+  status: LaunchStatus,
+  result: RoleResult,
+): void {
+  if (
+    prepared.review !== undefined &&
+    (prepared.policy === undefined || prepared.policy.review === "required") &&
+    result === "unknown"
+  ) {
+    throw new RecordError(
+      "Critic response has no parsable `## Verdict`; this record cannot satisfy the review policy. Fix the response file to state approve, revise, or blocked, then rerun completion.",
+    );
+  }
+  if (status === "completed" && result === "blocked") {
+    throw new RecordError(`Response reports a blocked result; finalize with --status blocked`);
+  }
+  if (status === "blocked" && result !== "blocked") {
+    throw new RecordError(`Blocked status requires a response whose Status or Verdict is blocked`);
+  }
 }
 
 export interface FinalizeLaunchOptions {
@@ -682,7 +1022,6 @@ export async function finalizeLaunch(
     throw new RecordError(`Effective grant changed after preparation`);
   }
 
-  const design = await completedDesign(prepared, options.status);
   if (prepared.relationship?.kind === "continuation") {
     if (
       prepared.harness !== prepared.relationship.targetHarness ||
@@ -701,7 +1040,11 @@ export async function finalizeLaunch(
     await requireFreshIdentity(prepared, loaded.path, options.agentId);
   }
 
+  const design = await completedDesign(prepared, options.status);
+  await completedWorkspace(prepared);
   const response = await regularFile(prepared.response.path, prepared.work.path, "Response");
+  const result = inferRoleResult(response);
+  validateRoleResult(prepared, options.status, result);
   const finalized: FinalizedLaunchRecord = {
     ...prepared,
     state: "finalized",
@@ -712,6 +1055,7 @@ export async function finalizeLaunch(
     },
     agentId: options.agentId,
     status: options.status,
+    result,
     enforcement: options.enforcement,
     ...(options.model === undefined ? {} : { model: options.model }),
     ...(design === undefined ? {} : { design }),
@@ -748,7 +1092,10 @@ export async function finalizeSimulation(
   }
 
   const design = await completedDesign(prepared, options.status);
+  await completedWorkspace(prepared);
   const response = await regularFile(prepared.response.path, prepared.work.path, "Response");
+  const result = inferRoleResult(response);
+  validateRoleResult(prepared, options.status, result);
   const finalized: FinalizedLaunchRecord = {
     ...prepared,
     state: "finalized",
@@ -758,6 +1105,7 @@ export async function finalizeSimulation(
       bytes: response.byteLength,
     },
     status: options.status,
+    result,
     enforcement: "prompt-guided",
     ...(design === undefined ? {} : { design }),
   };

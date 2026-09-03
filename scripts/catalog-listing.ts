@@ -14,6 +14,10 @@ briefs need a mechanism none of them covers, so "no entry fits, because ..." is 
 expected answer rather than a fault. Mark an entry \`catalog-unchanged\` only when the
 product needs every listed action and query; otherwise mark it \`catalog-adapted\` and keep
 only the needed surface during contract authoring.
+
+Obtain full contracts with \`bunx --no-install sync-engine-catalog list\` and
+\`bunx --no-install sync-engine-catalog show concept/<name>\`. Supply command output inline;
+never read package trees or \`dist\` entries.
 `;
 
 /** The listing is derived: a hand-kept copy teaches mechanisms the catalog does not ship. */

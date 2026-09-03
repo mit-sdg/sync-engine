@@ -209,6 +209,47 @@ describe("deterministic prompt rendering", () => {
     });
   });
 
+  test("builds a read-only implementation review assignment", async () => {
+    const result = await buildPrompt({
+      role: "critic",
+      phase: "implementation",
+      workUnit: "tasking",
+      applicationRoot,
+      promptRoot: actualPromptRoot,
+      grant: {
+        readableAreas: [
+          { area: "application", path: "src" },
+          { area: "application", path: "tests" },
+        ],
+        writableAreas: [],
+        toolKinds: ["repository-read"],
+        projectShell: "project-validation",
+        network: false,
+        generatedOutput: false,
+        longRunningProcesses: false,
+      },
+      inputs: [
+        { id: "task", displayName: "review.md", content: "Review the implementation." },
+        { id: "brief", displayName: "brief.md", content: "Tasking is in scope." },
+        { id: "contracts", displayName: "Tasking.md", content: conceptContract },
+        {
+          id: "changed-source-and-tests",
+          displayName: "changed.diff",
+          content: "diff --git a/src/tasking.ts b/src/tasking.ts",
+        },
+      ],
+    });
+
+    expect(result.specification.templatePath).toBe("roles/critic-implementation.md");
+    expect(result.effectiveCapabilities).toMatchObject({
+      writableAreas: [],
+      projectShell: "project-validation",
+    });
+    expect(sectionRecord(promptSections(result.content))["Role and objective"]).toContain(
+      "Independently check implemented behavior",
+    );
+  });
+
   test("preserves fenced headings and a complete concept contract byte-for-byte", async () => {
     const result = await buildPrompt({
       role: "concept-worker",
@@ -523,7 +564,7 @@ describe("prompt build errors", () => {
       name: "PromptBuildError",
       code: "unknown-specification",
       message:
-        "Error: Unknown role specification designer/accepted; expected designer/decomposition, designer/contracts, critic/decomposition, critic/contracts, critic/verification, concept-worker/implementation, application-worker/implementation, frontend-worker/implementation, evidence-worker/evidence",
+        "Error: Unknown role specification designer/accepted; expected designer/decomposition, designer/contracts, critic/decomposition, critic/contracts, critic/implementation, critic/verification, concept-worker/implementation, application-worker/implementation, frontend-worker/implementation, evidence-worker/evidence",
     });
   });
 
@@ -568,6 +609,24 @@ describe("prompt build errors", () => {
       name: "PromptBuildError",
       code: "duplicate-input",
       message: "Duplicate input display name: task.md",
+    });
+
+    const repeatedTask = await readFile(fixtureInput("task.md"), "utf8");
+    expect(
+      await rejectedValue(
+        buildPrompt(
+          designerOptions({
+            inputs: [
+              { id: "task", path: fixtureInput("task.md") },
+              { id: "brief", displayName: "brief-copy.md", content: repeatedTask },
+            ],
+          }),
+        ),
+      ),
+    ).toEqual({
+      name: "PromptBuildError",
+      code: "duplicate-source",
+      message: "Duplicate prompt content: brief-copy.md repeats task.md",
     });
 
     expect(

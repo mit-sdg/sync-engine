@@ -3,6 +3,7 @@ sync-engine skill CLI — prompt builder and validator
 Usage:
   sync-engine-skill work start <slug>
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+    [--review <required|omitted>] [--execution <delegated|simulated|mixed>]
   sync-engine-skill work show <slug>
   sync-engine-skill work finish <slug>
   sync-engine-skill grant init --role <role> --phase <phase>
@@ -29,6 +30,7 @@ Roles and phases (valid pairs):
   designer/contracts
   critic/decomposition
   critic/contracts
+  critic/implementation
   critic/verification
   concept-worker/implementation
   application-worker/implementation
@@ -48,7 +50,8 @@ Options:
   --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
   CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
   selection; otherwise they inherit native settings. --harness on continue is valid only
-  together with --replace.
+  together with --replace. Work policy is chosen once at work start: required review binds
+  approvals to the current candidate digest, and execution policy limits delegated or simulated runs.
 
 Inputs:
   --task and --grant sources must be inside the application. --task supplies the reserved
@@ -60,6 +63,7 @@ Inputs:
   designer/contracts: brief (one, retained), accepted-decomposition (optional, retained), resolved-findings (optional, retained), affected-contracts (repeatable optional, retained), catalog-contracts (repeatable optional, retained), candidate-contracts (repeatable optional, inline), public-references (repeatable optional, retained), context (repeatable optional, retained)
   critic/decomposition: brief (one, retained), candidate-decomposition (one, inline), affected-design (repeatable optional, retained), context (repeatable optional, retained)
   critic/contracts: brief (one, retained), accepted-decomposition (optional, retained), changed-contracts (one or more, inline), affected-contracts (repeatable optional, retained), public-references (repeatable optional, retained), context (repeatable optional, retained)
+  critic/implementation: brief (one, retained), contracts (one or more, retained), accepted-decomposition (optional, retained), changed-source-and-tests (one or more, inline), public-references (repeatable optional, retained), context (repeatable optional, retained)
   critic/verification: brief (one, retained), original-findings (one, inline), revised-candidate (one or more, inline), affected-design (repeatable optional, retained), review-guidance (one or more, retained), context (repeatable optional, retained)
   concept-worker/implementation: brief (one, retained), specifications (one or more, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), starting-paths (one, inline), context (repeatable optional, retained)
   application-worker/implementation: brief (one, retained), types (one or more, retained), compositions (one or more, retained), obligations (repeatable optional, retained), concept-specifications (one or more, retained), concept-public-surfaces (one or more, retained), existing-wiring (repeatable optional, retained), public-references (repeatable optional, retained), examples (repeatable optional, retained), starting-paths (one, inline), context (repeatable optional, retained)
@@ -85,10 +89,15 @@ Completion:
   Delegated and simulated runs use the same prompt and response artifacts. Copy the role
   result verbatim to Response, then run the printed completion command. A simulated run
   records its reason, coordinator executor, and non-independent status without inventing
-  an agent identity. Completed status requires nonempty UTF-8.
+  an agent identity. Completed and blocked statuses require nonempty UTF-8. Completion
+  rejects project changes outside the write grant and a response that reports blocked while
+  the command claims completed. Work-unit brief, policy, and harness session state are
+  coordinator-owned. Critic review completion requires a parsable Verdict. Every completion
+  prints a concrete next-step cue.
 
 Status normalization:
   completed: complete, completed, idle, settled, success, succeeded
+  blocked: block, blocked
   failed: error, failed, failure
   cancelled: canceled, cancelled, stopped
   timed-out: timeout, timed-out, timed_out, "timed out"
@@ -96,12 +105,15 @@ Status normalization:
 Continuation and replacement:
   continue normally keeps the prior role, harness, and exact agent identity. It binds only
   unchanged retained sources known by that agent; unseen or changed sources are inline.
-  Each continuation records its current access grant. Same-phase expansion is allowed
-  with a warning; record consequential expansion in the work brief.
+  Each continuation records its current access grant. A simulation continuation uses the
+  same compact retained-context mechanism but records no agent identity. Same-phase
+  expansion is allowed with a warning; record consequential expansion in the work brief.
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
 Warnings:
   Finalize the current run before preparing another. work finish refuses handback while a
-  run remains prepared. Continuing with a release mismatch is explicit. Adapters report
-  prompt-guided capabilities when the harness does not enforce them.
+  run remains prepared. Changing policy after the first prepared run is rejected. Continuing
+  with a release mismatch is explicit. Adapters report prompt-guided capabilities when the
+  harness does not enforce them. Oversized public references, examples, and context should
+  be replaced with exact excerpts.
