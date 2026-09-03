@@ -60,6 +60,7 @@ function normalize(source: string): string {
 
 const byteLength = (source: string): number => Buffer.byteLength(source, "utf8");
 const digest = (source: string): string => createHash("sha256").update(source).digest("hex");
+export const promptSourceSha256 = (source: string): string => digest(normalize(source));
 const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
 function inside(root: string, path: string): boolean {
@@ -281,14 +282,14 @@ function capabilities(
   const never = neverGrantableCapabilities.map((value) => `\`${value}\``).join(", ");
   return `# Access
 
-Root: ${JSON.stringify(applicationRoot)}. The short native message explicitly authorizes reading this prompt file; all assignment context is inline below.
+Root: ${JSON.stringify(applicationRoot)}. The short native message explicitly authorizes reading this prompt file; all assignment context is inline below. This is already a compiled role assignment: do not load a skill, workflow, harness guide, or another instruction file.
 
 - Read: ${areaList(grant.readableAreas, applicationRoot, workUnit)}.
 - Write: ${areaList(grant.writableAreas, applicationRoot, workUnit)}.
 - Tools: ${grant.toolKinds.length === 0 ? "none" : grant.toolKinds.map((tool) => `\`${tool}\``).join(", ")}.
 - Shell: \`${grant.projectShell}\`; network: ${grant.network ? "yes" : "no"}; generated output: ${grant.generatedOutput ? "yes" : "no"}; long-running processes: ${grant.longRunningProcesses ? "yes" : "no"}.
 
-Inspect only listed files or directories. In coordinator simulation, this grant binds the coordinator itself; broader coordinator access and prior discovery are unavailable to the assignment. Project checks may transitively read other project files, but do not inspect them yourself. Never open \`node_modules\`, package \`dist\` files, or framework internals, including declarations; required public excerpts must be supplied inline. Exclude \`.git\`, \`.sync-engine\` except this prompt, harness/skill configuration, agent traces, parent directories, and unrelated generated output. Ask for context instead of searching outside the grant. Generated files come only from granted commands. Never grantable: ${never}.`;
+Inspect only listed files or directories. In coordinator simulation, this grant binds the coordinator itself; broader coordinator access and prior discovery are unavailable to the assignment. Project checks may transitively read other project files, but do not inspect them yourself. Use supplied or task-named package-owned public documentation; do not browse package trees. Never inspect package \`dist\`, framework internals, caches, sibling applications, or undeclared declarations. Exclude \`.git\`, \`.sync-engine\` except this prompt, harness/skill configuration, agent traces, parent directories, and unrelated generated output. Ask for context instead of searching outside the grant. Generated files come only from granted commands. Never grantable: ${never}.`;
 }
 
 function deltaCapabilities(grant: EffectiveCapabilityGrant): string {
@@ -372,6 +373,23 @@ export async function buildPrompt(options: BuildPromptOptions) {
     specification.guidancePaths.map((path) => canonicalSource(root, path, "guidance")),
   );
   const inputs = await materializeInputs(specification, options.inputs);
+  const contentOwners = new Map<string, string>();
+  for (const source of [role, ...guidance]) {
+    contentOwners.set(digest(source.content), source.displayName);
+  }
+  for (const contract of specification.inputs) {
+    for (const source of inputs.get(contract.id) ?? []) {
+      const hash = digest(source.content);
+      const prior = contentOwners.get(hash);
+      if (prior !== undefined) {
+        throw new PromptBuildError(
+          "duplicate-source",
+          `Duplicate prompt content: ${source.displayName} repeats ${prior}`,
+        );
+      }
+      contentOwners.set(hash, source.displayName);
+    }
+  }
   const sources: PromptSourceContribution[] = [];
   const retainedSources: RetainedSource[] = [];
 

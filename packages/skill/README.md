@@ -25,13 +25,13 @@ Build a durable team task board with projects, assignments, and a small web UI.
 Ask me before implementation.
 ```
 
-The coordinator creates or resumes `.sync-engine/work/<slug>/`, records consequential decisions, selects only useful roles, validates the result, and reports the evidence. `grant init` creates role-aware capability grants, `harness recommend` distinguishes a native execution harness from an outer supervisor, and `work finish` catches unfinished records before handback.
+The coordinator creates or resumes `.sync-engine/work/<slug>/`, follows its immutable review/execution policy, records consequential decisions, selects only useful roles, validates the result, and reports the evidence. `grant init` creates role-aware capability grants, `harness recommend` distinguishes a native execution harness from an outer supervisor, completion checks changed paths against the grant, and `work finish` catches unfinished records before handback.
 
 ## Adaptable coordination
 
 Independent design and criticism are recommended when behavior changes. Existing accepted design may go directly to implementation. Explicit user direction can skip, combine, replace, or simulate roles.
 
-When a role is delegated, the default first native message is a short instruction to read its generated prompt file. This avoids transporting a large assignment in the first message while keeping the complete prompt auditable. A simulated role uses the same prompt and result artifacts but records `coordinator` as executor and `independent: false` without inventing an agent identity.
+When a role is delegated, the default first native message is a short instruction to read its generated prompt file. This avoids transporting a large assignment in the first message while keeping the complete prompt auditable. A simulated role uses the same prompt and result artifacts but records `coordinator` as executor and `independent: false` without inventing an agent identity. Same-role simulation repairs use compact continuations.
 
 Roles receive inline authoritative context plus explicit read and write directories. The CLI warns when access exceeds a role recommendation. Roles do not inspect `node_modules`, framework internals, skills, traces, or unrelated project areas unless a higher-priority instruction explicitly changes the boundary.
 

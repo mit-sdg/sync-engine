@@ -17,6 +17,7 @@ import {
 } from "./harness.ts";
 import {
   buildPrompt,
+  promptSourceSha256,
   type BuiltPrompt,
   type PromptContextDelivery,
   type PromptInput,
@@ -33,6 +34,7 @@ import {
   type ExecutionHarness,
   type LaunchRecord,
   type PrepareLaunchResult,
+  type ReviewTarget,
 } from "./records.ts";
 import {
   capabilityRecommendationIssues,
@@ -48,10 +50,16 @@ import {
 } from "./roles.ts";
 import {
   canonicalPath,
+  executionPolicies,
   isPathInside,
+  readWorkPolicy,
   requireWorkUnit,
+  reviewPolicies,
   startWorkUnitFromTemplate,
   workUnitPath,
+  type ExecutionPolicy,
+  type ReviewPolicy,
+  type WorkPolicy,
   type WorkUnit,
 } from "./work.ts";
 
@@ -148,6 +156,7 @@ export function helpText(): string {
 Usage:
   ${commandName} work start <slug>
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
+    [--review <required|omitted>] [--execution <delegated|simulated|mixed>]
   ${commandName} work show <slug>
   ${commandName} work finish <slug>
   ${commandName} grant init --role <role> --phase <phase>
@@ -185,7 +194,8 @@ Options:
   --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
   CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
   selection; otherwise they inherit native settings. --harness on continue is valid only
-  together with --replace.
+  together with --replace. Work policy is chosen once at work start: required review binds
+  approvals to the current candidate digest, and execution policy limits delegated or simulated runs.
 
 Inputs:
   --task and --grant sources must be inside the application. --task supplies the reserved
@@ -214,10 +224,15 @@ Completion:
   Delegated and simulated runs use the same prompt and response artifacts. Copy the role
   result verbatim to Response, then run the printed completion command. A simulated run
   records its reason, coordinator executor, and non-independent status without inventing
-  an agent identity. Completed status requires nonempty UTF-8.
+  an agent identity. Completed and blocked statuses require nonempty UTF-8. Completion
+  rejects project changes outside the write grant and a response that reports blocked while
+  the command claims completed. Work-unit brief, policy, and harness session state are
+  coordinator-owned. Critic review completion requires a parsable Verdict. Every completion
+  prints a concrete next-step cue.
 
 Status normalization:
   completed: complete, completed, idle, settled, success, succeeded
+  blocked: block, blocked
   failed: error, failed, failure
   cancelled: canceled, cancelled, stopped
   timed-out: timeout, timed-out, timed_out, "timed out"
@@ -225,15 +240,18 @@ Status normalization:
 Continuation and replacement:
   continue normally keeps the prior role, harness, and exact agent identity. It binds only
   unchanged retained sources known by that agent; unseen or changed sources are inline.
-  Each continuation records its current access grant. Same-phase expansion is allowed
-  with a warning; record consequential expansion in the work brief.
+  Each continuation records its current access grant. A simulation continuation uses the
+  same compact retained-context mechanism but records no agent identity. Same-phase
+  expansion is allowed with a warning; record consequential expansion in the work brief.
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
 Warnings:
   Finalize the current run before preparing another. work finish refuses handback while a
-  run remains prepared. Continuing with a release mismatch is explicit. Adapters report
-  prompt-guided capabilities when the harness does not enforce them.
+  run remains prepared. Changing policy after the first prepared run is rejected. Continuing
+  with a release mismatch is explicit. Adapters report prompt-guided capabilities when the
+  harness does not enforce them. Oversized public references, examples, and context should
+  be replaced with exact excerpts.
 `;
 }
 
@@ -444,6 +462,23 @@ async function workRecords(unit: WorkUnit): Promise<Array<{ path: string; record
   );
 }
 
+async function requireConsistentPolicy(
+  unit: WorkUnit,
+  records: readonly { readonly record: LaunchRecord }[],
+): Promise<WorkPolicy> {
+  const current = await readWorkPolicy(unit);
+  const recorded = records
+    .map(({ record }) => record.policy)
+    .find((policy) => policy !== undefined);
+  if (
+    recorded !== undefined &&
+    (recorded.review !== current.review || recorded.execution !== current.execution)
+  ) {
+    throw new CliError(`Work policy changed after the first run was prepared`);
+  }
+  return recorded ?? current;
+}
+
 async function requireNoPreparedRun(unit: WorkUnit): Promise<void> {
   const prepared = (await workRecords(unit)).find(({ record }) => record.state === "prepared");
   if (prepared !== undefined) {
@@ -489,6 +524,126 @@ function capabilityExpansionIssue(
   return undefined;
 }
 
+function approvedReview(
+  records: readonly { readonly record: LaunchRecord }[],
+  target: ReviewTarget,
+): boolean {
+  return records.some(
+    ({ record }) =>
+      record.state === "finalized" &&
+      record.role === "critic" &&
+      record.result === "approve" &&
+      record.review?.subject === target.subject &&
+      record.review.digest === target.digest,
+  );
+}
+
+async function finalReviewIssue(
+  unit: WorkUnit,
+  records: readonly { readonly record: LaunchRecord }[],
+): Promise<string | undefined> {
+  const policy = await requireConsistentPolicy(unit, records);
+  if (policy.review === "omitted") return undefined;
+  const implementationStarted = records.some(
+    ({ record }) => record.state === "finalized" && record.phase === "implementation",
+  );
+  const designAuthored = records.some(
+    ({ record }) =>
+      record.state === "finalized" && record.role === "designer" && record.phase === "contracts",
+  );
+  if (!implementationStarted || !designAuthored) return undefined;
+  const digest = (await digestDesign(resolve(unit.applicationRoot, "design"))).digest;
+  return approvedReview(records, { subject: "design", digest })
+    ? undefined
+    : `final design digest ${digest} has no approving critic record`;
+}
+
+async function requireReviewed(
+  unit: WorkUnit,
+  target: ReviewTarget,
+  writerPhase: "decomposition" | "contracts",
+): Promise<void> {
+  const policy = await readWorkPolicy(unit);
+  if (policy.review === "omitted") return;
+  const records = await workRecords(unit);
+  const authored = records.some(
+    ({ record }) =>
+      record.state === "finalized" && record.role === "designer" && record.phase === writerPhase,
+  );
+  if (!authored || approvedReview(records, target)) return;
+  throw new CliError(
+    `${target.subject === "design" ? "Design" : "Decomposition"} changed after its last approving review`,
+    `Continue the critic through verification of the current candidate.`,
+  );
+}
+
+function reviewTargetFor(
+  built: BuiltPrompt,
+  design: { readonly digest: string } | undefined,
+  unit: WorkUnit,
+): ReviewTarget | undefined {
+  if (built.specification.id === "critic/contracts") {
+    return design === undefined ? undefined : { subject: "design", digest: design.digest };
+  }
+  if (built.specification.id === "critic/decomposition") {
+    const candidate = built.sources.find(
+      (source) => source.kind === "input" && source.inputId === "candidate-decomposition",
+    );
+    return candidate === undefined
+      ? undefined
+      : { subject: "decomposition", digest: candidate.sha256 };
+  }
+  if (built.specification.id === "critic/verification") {
+    const candidate = built.sources.find(
+      (source) => source.kind === "input" && source.inputId === "revised-candidate",
+    );
+    if (
+      candidate !== undefined &&
+      resolve(candidate.path) === resolve(unit.path, "decomposition.md")
+    ) {
+      return { subject: "decomposition", digest: candidate.sha256 };
+    }
+    return design === undefined ? undefined : { subject: "design", digest: design.digest };
+  }
+  return undefined;
+}
+
+function promptSourceReport(built: BuiltPrompt): string {
+  const totals = new Map<string, number>();
+  for (const source of built.sources) {
+    if (source.promptBytes === 0) continue;
+    const label = source.inputId ?? source.kind;
+    totals.set(label, (totals.get(label) ?? 0) + source.promptBytes);
+  }
+  return [...totals]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([label, bytes]) => `${label} ${bytes}`)
+    .join(", ");
+}
+
+function oversizedSourceWarnings(built: BuiltPrompt): string[] {
+  const kitBytes = built.sources
+    .filter(({ kind }) => kind === "role-template" || kind === "guidance")
+    .reduce((total, source) => total + source.sourceBytes, 0);
+  return built.sources
+    .filter(
+      (source) =>
+        source.kind === "input" &&
+        ["public-references", "examples", "context"].includes(source.inputId ?? "") &&
+        source.sourceBytes > kitBytes,
+    )
+    .map(
+      (source) =>
+        `${source.displayName} (${source.sourceBytes} bytes) exceeds the built-in role kit (${kitBytes}); prefer an exact excerpt.`,
+    );
+}
+
+function reviewTargetReport(record: LaunchRecord): string {
+  return record.review === undefined
+    ? ""
+    : `Review target: ${record.review.subject} ${record.review.digest}\n`;
+}
+
 interface PrepareCommandOptions {
   readonly cwd: string;
   readonly skillRoot: string;
@@ -504,7 +659,7 @@ interface PrepareCommandOptions {
   readonly target: LaunchTarget;
   readonly delivery: PromptContextDelivery;
   readonly relationship?: {
-    readonly kind: "continuation" | "replacement";
+    readonly kind: "continuation" | "replacement" | "simulation-continuation";
     readonly recordPath: string;
   };
   readonly design?: { readonly root: string; readonly digest: string };
@@ -521,6 +676,18 @@ async function prepareCommand(
   dependencies: CommandDependencies,
 ): Promise<void> {
   const unit = await requireWorkUnit(options.cwd, options.slug);
+  const existingRecords = await workRecords(unit);
+  const policy = await requireConsistentPolicy(unit, existingRecords);
+  const simulated = options.harness === "coordinator";
+  if (
+    (policy.execution === "delegated" && simulated) ||
+    (policy.execution === "simulated" && !simulated)
+  ) {
+    throw new CliError(
+      `Work item execution policy is ${policy.execution}`,
+      `Use the execution mode selected when the work item was created.`,
+    );
+  }
   await requireNoPreparedRun(unit);
   if (options.kind === "fresh" && options.role === "designer" && options.phase === "contracts") {
     const priorDesigner = (await workRecords(unit))
@@ -601,6 +768,27 @@ async function prepareCommand(
           digest: (await digestDesign(resolve(options.cwd, "design"))).digest,
         }
       : undefined);
+  if (built.specification.id === "designer/contracts") {
+    const decompositionPath = resolve(unit.path, "decomposition.md");
+    if (await pathExists(decompositionPath)) {
+      const decomposition = await utf8(decompositionPath, "Decomposition");
+      await requireReviewed(
+        unit,
+        { subject: "decomposition", digest: promptSourceSha256(decomposition.text) },
+        "decomposition",
+      );
+    }
+  }
+  if (
+    built.specification.phase === "implementation" &&
+    design !== undefined &&
+    !existingRecords.some(
+      ({ record }) => record.state === "finalized" && record.phase === "implementation",
+    )
+  ) {
+    await requireReviewed(unit, { subject: "design", digest: design.digest }, "contracts");
+  }
+  const review = reviewTargetFor(built, design, unit);
   const launch = await prepareLaunch({
     applicationRoot: options.cwd,
     slug: options.slug,
@@ -618,6 +806,7 @@ async function prepareCommand(
     grant: built.effectiveCapabilities,
     retainedSources: built.retainedSources,
     ...(design === undefined ? {} : { design }),
+    ...(review === undefined ? {} : { review }),
     ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
     ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
   });
@@ -630,6 +819,17 @@ async function prepareCommand(
   if (expansionIssue !== undefined) {
     out(
       `Warning: same-phase continuation access expands (${expansionIssue}). Record the choice in the work brief when consequential.\n`,
+    );
+  }
+  for (const warning of oversizedSourceWarnings(built)) out(`Warning: ${warning}\n`);
+  if (
+    built.specification.role === "critic" &&
+    built.specification.id !== "critic/implementation" &&
+    policy.review === "required" &&
+    review === undefined
+  ) {
+    out(
+      `Warning: this critic run binds no review target and will not satisfy the review policy.\n`,
     );
   }
   if (options.harness === "coordinator") {
@@ -660,9 +860,10 @@ Capabilities: ${launch.artifacts.capabilitiesPath}
 Prompt: ${launch.artifacts.promptPath}
 Response: ${launch.artifacts.responsePath}
 Record: ${launch.path}
-Reason: ${launch.record.simulationReason}
+${reviewTargetReport(launch.record)}Reason: ${launch.record.simulationReason}
 Prompt bytes: ${built.bytes}; sha256 ${built.sha256}
-Instruction: Execute the prompt directly now, within its exact access grant. Do not role-play, send an assignment, invoke an agent, narrate waiting, inspect broader coordinator context, node_modules, or package dist files. Write the result verbatim to Response, then run ${commandName} simulation complete ${launch.path} --status completed before resuming coordination.
+Prompt sources (bytes): ${promptSourceReport(built)}
+Instruction: Execute the prompt directly now, within its exact access grant. Do not role-play, send an assignment, invoke an agent, narrate waiting, inspect broader coordinator context, node_modules, or package dist files. Write the result verbatim to Response, then run ${commandName} simulation complete ${launch.path} --status completed before resuming coordination; use --status blocked instead when the result reports blocked.
 `);
 }
 
@@ -681,8 +882,8 @@ function launchAction(invocation: PreparedHarnessInvocation<EffectiveCapabilityG
   if (invocation.harness === "paseo") {
     const target =
       invocation.target.kind === "fresh"
-        ? `run --cwd ${JSON.stringify(invocation.cwd.path)} --title ${JSON.stringify(invocation.title.value)} --provider <current-provider> --model <current-model> [--thinking <current-thinking>]`
-        : `send ${JSON.stringify(invocation.target.agentId)}`;
+        ? `--json run --wait-timeout ${invocation.timeoutSeconds}s --cwd ${JSON.stringify(invocation.cwd.path)} --title ${JSON.stringify(invocation.title.value)} --provider <current-provider> --model <current-model> [--thinking <current-thinking>]`
+        : `--json send ${JSON.stringify(invocation.target.agentId)}`;
     return `paseo ${target} ${JSON.stringify(instruction)}`;
   }
   return `${invocation.native.mechanism}: ${invocation.native.operation}. ${invocation.native.instruction}`;
@@ -712,7 +913,8 @@ Capabilities: ${launch.artifacts.capabilitiesPath}
 Prompt: ${launch.artifacts.promptPath}
 Response: ${launch.artifacts.responsePath}
 Record: ${launch.path}
-${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}\n`);
+${reviewTargetReport(launch.record)}${design}Prompt bytes: ${built.bytes}; sha256 ${built.sha256}
+Prompt sources (bytes): ${promptSourceReport(built)}\n`);
   const target =
     invocation.target.kind === "fresh"
       ? "Target: fresh agent"
@@ -734,6 +936,11 @@ Instruction: ${invocation.native.instruction}\n`);
       `Warning: ${invocation.harness} capabilities are prompt-guided rather than harness-enforced.\n`,
     );
   }
+  if (invocation.harness === "paseo") {
+    out(
+      `Capture: After the foreground command settles, use its JSON agentId to read that agent's final assistant message; copy it verbatim to ${launch.artifacts.responsePath}.\n`,
+    );
+  }
   out(`Next: Finalize this record before preparing another role.\n`);
 }
 
@@ -741,7 +948,11 @@ async function workStart(
   args: readonly string[],
   dependencies: CommandDependencies,
 ): Promise<void> {
-  const parsed = parseTail(args, "work start", ["slug"], { "--conflict": "value" });
+  const parsed = parseTail(args, "work start", ["slug"], {
+    "--conflict": "value",
+    "--review": "value",
+    "--execution": "value",
+  });
   const cwd = commandRoot(dependencies);
   const skillRoot = resolve(dependencies.skillRoot ?? defaultSkillRoot);
   const slug = parsed.positionals[0]!;
@@ -756,6 +967,16 @@ async function workStart(
   ) {
     throw new CliError(
       `Unknown conflict choice ${conflict}; expected ${conflictChoices.join(", ")}`,
+    );
+  }
+  const review = (optional(parsed.options, "--review") ?? "required") as ReviewPolicy;
+  const execution = (optional(parsed.options, "--execution") ?? "mixed") as ExecutionPolicy;
+  if (!reviewPolicies.includes(review)) {
+    throw new CliError(`Unknown review policy ${review}; expected ${reviewPolicies.join(", ")}`);
+  }
+  if (!executionPolicies.includes(execution)) {
+    throw new CliError(
+      `Unknown execution policy ${execution}; expected ${executionPolicies.join(", ")}`,
     );
   }
   const bootstrap = dependencies.bootstrap ?? bootstrapApplication;
@@ -792,10 +1013,12 @@ async function workStart(
     applicationRoot: cwd,
     slug,
     briefTemplatePath,
+    policy: { review, execution },
   });
   out(`Bootstrap: ${result.outcome}; application ${result.plan.applicationRoot}
 Work unit: ${unit.path}
-Brief: ${unit.briefPath}\n`);
+Brief: ${unit.briefPath}
+Policy: review ${review}; execution ${execution}\n`);
 }
 
 async function grantInit(
@@ -967,6 +1190,65 @@ async function launchAdapter(
   );
 }
 
+async function completionNextStep(
+  unit: WorkUnit,
+  current: LaunchRecord,
+  records: readonly { readonly path: string; readonly record: LaunchRecord }[],
+): Promise<string> {
+  const policy = await requireConsistentPolicy(unit, records);
+  if (current.state !== "finalized") return "Finalize the current record.";
+  if (current.status === "blocked" || current.result === "blocked") {
+    const response = (await utf8(current.response.path, "Response", false)).text.toLowerCase();
+    if (/\bcontext\b/.test(response)) {
+      return "Prepare a new prompt with the exact missing context, then continue the blocked role.";
+    }
+    if (/\benvironment\b/.test(response)) {
+      return "Resolve the environment blocker, then continue the blocked role.";
+    }
+    return "Route the design blocker to the designer, then continue the blocked role with the resolution.";
+  }
+  if (current.role === "critic" && current.result === "revise") {
+    return "Continue the designer with these findings, then continue this critic for verification.";
+  }
+  if (
+    current.role === "critic" &&
+    current.result === "approve" &&
+    current.review?.subject === "decomposition"
+  ) {
+    return "Continue the decomposition designer into contracts with the approved decomposition.";
+  }
+  if (
+    current.role === "critic" &&
+    current.result === "approve" &&
+    current.review?.subject === "design" &&
+    !records.some(({ record }) => record.state === "finalized" && record.phase === "implementation")
+  ) {
+    return "Prepare the implementation roles against the approved design digest.";
+  }
+  if (current.phase === "implementation" && current.result === "complete") {
+    const issue = await finalReviewIssue(unit, records);
+    return issue === undefined
+      ? `Validate the application, then run \`${commandName} work finish ${unit.slug}\`.`
+      : "Continue the critic for verification of the current design, then retry handback.";
+  }
+  if (current.role === "designer" && current.result === "complete") {
+    return policy.review === "required"
+      ? `Prepare a critic for ${current.phase === "decomposition" ? "the decomposition" : "the design"}.`
+      : current.phase === "decomposition"
+        ? "Continue the designer into contracts."
+        : "Prepare the implementation roles.";
+  }
+  if (current.status !== "completed") {
+    return "Resolve the terminal run failure, then continue or replace this role explicitly.";
+  }
+  return `Inspect work readiness with \`${commandName} work show ${unit.slug}\`.`;
+}
+
+function unknownResultWarning(record: LaunchRecord): string | undefined {
+  if (record.state !== "finalized" || record.result !== "unknown") return undefined;
+  return `Response has no parsable required \`${record.role === "critic" ? "## Verdict" : "## Status"}\`; result recorded as unknown.`;
+}
+
 async function launchComplete(
   args: readonly string[],
   dependencies: CommandDependencies,
@@ -992,7 +1274,11 @@ async function launchComplete(
   } catch (error) {
     throw new CliError(error instanceof Error ? error.message : String(error));
   }
-  await utf8(record.response.path, "Native response", status === "completed");
+  await utf8(
+    record.response.path,
+    "Native response",
+    status === "completed" || status === "blocked",
+  );
   const validatedGrant = validateCapabilityGrant(
     getRoleSpecification(record.role, record.phase),
     record.grant,
@@ -1017,12 +1303,17 @@ async function launchComplete(
   out(`Launch finalized: ${recordPath}
 Response: ${finalized.response.path}
 Harness: ${finalized.harness}; agent ${finalized.agentId}
-Status: ${finalized.status}\n`);
+Status: ${finalized.status}; result: ${finalized.result}\n`);
   if (finalized.enforcement === "prompt-guided") {
     out(
       `Warning: ${finalized.harness} capabilities were prompt-guided rather than harness-enforced.\n`,
     );
   }
+  const warning = unknownResultWarning(finalized);
+  if (warning !== undefined) out(`Warning: ${warning}\n`);
+  const unit = await requireWorkUnit(cwd, finalized.work.slug);
+  const records = await workRecords(unit);
+  out(`Next: ${await completionNextStep(unit, finalized, records)}\n`);
 }
 
 async function simulationComplete(
@@ -1041,14 +1332,24 @@ async function simulationComplete(
   if (record.execution !== "simulated") {
     throw new CliError(`simulation complete requires a simulated run`);
   }
-  await utf8(record.response.path, "Simulated response", status === "completed");
+  await utf8(
+    record.response.path,
+    "Simulated response",
+    status === "completed" || status === "blocked",
+  );
   const finalized = await finalizeSimulation({ recordPath, status });
-  output(dependencies).out(`Simulation finalized: ${recordPath}
+  const { out } = output(dependencies);
+  out(`Simulation finalized: ${recordPath}
 Response: ${finalized.response.path}
 Executor: coordinator; independent: no
 Reason: ${finalized.simulationReason}
-Status: ${finalized.status}
+Status: ${finalized.status}; result: ${finalized.result}
 `);
+  const warning = unknownResultWarning(finalized);
+  if (warning !== undefined) out(`Warning: ${warning}\n`);
+  const unit = await requireWorkUnit(cwd, finalized.work.slug);
+  const records = await workRecords(unit);
+  out(`Next: ${await completionNextStep(unit, finalized, records)}\n`);
 }
 
 async function continueLaunch(
@@ -1091,21 +1392,21 @@ async function continueLaunch(
   const prior = await readLaunchRecord(priorPath);
   requireRecordApplication(prior, cwd);
   if (prior.state !== "finalized") throw new CliError(`continue requires a finalized record`);
-  if (
-    prior.execution !== "delegated" ||
-    prior.harness === "coordinator" ||
-    prior.agentId === undefined
-  ) {
-    throw new CliError(
-      `A simulated run has no agent identity; prepare another simulation or a fresh delegated run`,
-    );
+  const simulation = prior.execution === "simulated";
+  if (simulation && (replacing || selectedHarness !== undefined)) {
+    throw new CliError(`A simulation continuation cannot replace an agent or select a harness`);
+  }
+  if (!simulation && (prior.harness === "coordinator" || prior.agentId === undefined)) {
+    throw new CliError(`Delegated continuation requires a recorded agent identity`);
   }
   getRoleSpecification(prior.role, phase);
   const priorGrant = validateCapabilityGrant(
     getRoleSpecification(prior.role, prior.phase),
     prior.grant,
   );
-  const harnessId = harness(selectedHarness ?? prior.harness);
+  const harnessId: ExecutionHarness = simulation
+    ? "coordinator"
+    : harness(selectedHarness ?? prior.harness);
   if (prior.design !== undefined && designOption !== undefined) {
     throw new CliError(`Continue already has a bound design root; omit --design-root`);
   }
@@ -1130,9 +1431,16 @@ async function continueLaunch(
       grantPath,
       inputValues: parsed.options.get("--input") ?? [],
       harness: harnessId,
-      target: replacing ? { kind: "fresh" } : { kind: "continuation", agentId: prior.agentId },
+      ...(simulation ? { simulationReason: prior.simulationReason } : {}),
+      target:
+        simulation || replacing
+          ? { kind: "fresh" }
+          : { kind: "continuation", agentId: prior.agentId! },
       delivery: replacing ? "replacement" : phase === prior.phase ? "delta" : "continuation",
-      relationship: { kind: replacing ? "replacement" : "continuation", recordPath: priorPath },
+      relationship: {
+        kind: simulation ? "simulation-continuation" : replacing ? "replacement" : "continuation",
+        recordPath: priorPath,
+      },
       kind: replacing ? "replacement" : "continuation",
       ...(design === undefined ? {} : { design }),
       ...(!replacing ? { knownRetained: prior.retainedSources } : {}),
@@ -1151,7 +1459,9 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
   const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
   const brief = await utf8(unit.briefPath, "Work brief");
   const records = await workRecords(unit);
+  const policy = await requireConsistentPolicy(unit, records);
   const prepared = records.filter(({ record }) => record.state === "prepared");
+  const reviewIssue = await finalReviewIssue(unit, records);
   const lines = records.map(({ path, record }) => {
     const name = basename(path);
     const state = record.state === "prepared" ? "prepared — action required" : record.status;
@@ -1161,14 +1471,18 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
         : record.state === "finalized"
           ? `${record.harness}:${record.agentId}`
           : record.harness;
-    return `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}; ${executor}`;
+    const result = record.state === "finalized" ? `; result ${record.result}` : "";
+    return `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}${result}; ${executor}`;
   });
   const readiness =
-    prepared.length === 0
-      ? "Handback readiness: no unfinished runs."
-      : `ACTION REQUIRED: ${prepared.length} unfinished run${prepared.length === 1 ? "" : "s"}.\nHandback readiness: blocked until each prepared record is finalized.`;
+    prepared.length > 0
+      ? `ACTION REQUIRED: ${prepared.length} unfinished run${prepared.length === 1 ? "" : "s"}.\nHandback readiness: blocked until each prepared record is finalized.`
+      : reviewIssue === undefined
+        ? "Handback readiness: no unfinished runs; review policy is satisfied."
+        : `ACTION REQUIRED: ${reviewIssue}.\nHandback readiness: blocked until critic verification approves the final design.`;
   output(dependencies).out(`${readiness}\n\nWork unit: ${unit.slug}
 Path: ${unit.path}
+Policy: review ${policy.review}; execution ${policy.execution}
 
 ${brief.text.trimEnd()}
 
@@ -1183,14 +1497,25 @@ async function workFinish(
 ): Promise<void> {
   const parsed = parseTail(args, "work finish", ["slug"], {});
   const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
-  const prepared = (await workRecords(unit)).filter(({ record }) => record.state === "prepared");
+  const records = await workRecords(unit);
+  await requireConsistentPolicy(unit, records);
+  const prepared = records.filter(({ record }) => record.state === "prepared");
   if (prepared.length > 0) {
     throw new CliError(
       `Work item ${unit.slug} has ${prepared.length} unfinished prepared run${prepared.length === 1 ? "" : "s"}`,
       `Finalize each run, then rerun work finish before handback.`,
     );
   }
-  output(dependencies).out(`Work item ${unit.slug} is ready for handback: no unfinished runs.\n`);
+  const reviewIssue = await finalReviewIssue(unit, records);
+  if (reviewIssue !== undefined) {
+    throw new CliError(
+      `Work item ${unit.slug} cannot finish: ${reviewIssue}`,
+      `Continue the critic through verification of the current design, then rerun work finish.`,
+    );
+  }
+  output(dependencies).out(
+    `Work item ${unit.slug} is ready for handback: no unfinished runs; review policy is satisfied.\n`,
+  );
 }
 
 async function execute(args: readonly string[], dependencies: CommandDependencies): Promise<void> {

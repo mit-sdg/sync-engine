@@ -1,48 +1,42 @@
 # Decomposition
 
-Use compact `## Need placement`, `## Concepts`, and `## Obligations` tables. Add `## Open decisions` only for unresolved product choices. This is a decision index: omit signatures, algorithms, storage, evidence plans, catalog censuses, and brief restatements.
+Write a compact decision index with `## Need placement`, `## Concepts`, and `## Obligations`. Add `## Open decisions` only when product choices remain unresolved. Omit signatures, algorithms, storage, evidence plans, catalog censuses, and brief restatements.
 
-## Place needs before drawing boundaries
+## Place changed needs
 
-Give each affected need one owner and name its decision:
+Give each changed need one owner and name the decision:
 
 - **concept** — semantic state, lifecycle, and sole authority;
-- **composition** — cross-concept policy, coordination, and recovery;
+- **composition** — cross-concept policy and coordination;
 - **host** — protocol projection;
-- **implementation** — operational realization;
+- **implementation** — operational realization; or
 - **evidence** — proof.
 
-Placement does not automatically create a concept. Reference an approved contract when it already owns the need.
+Placement does not create a concept. Reuse an approved contract when it already owns the need.
 
-## Test every concept boundary
+## Choose minimum useful concepts
 
-A concept owns one reusable mechanism and one independent reason for state to change. Keep foreign subjects opaque; concepts never call or inspect peers.
+A concept owns one reusable mechanism and one independent reason for state to change. Keep foreign subjects opaque; concepts never inspect or call peers.
 
-For each new or changed concept, answer in one compact row:
+Give each new or changed concept one row covering:
 
-- Which needs does it serve?
-- What state and lifecycle does it alone own?
-- Which decision is it the sole authority for?
-- What foreign subject remains opaque?
-- Could an unrelated application reuse the whole mechanism unchanged?
-- What does the deletion test show for each independently nameable state family or decision?
-- What is the strongest plausible split, and why is it worse for semantic reasons rather than convenience or atomicity?
-- If this concept merged with its nearest neighbor, which independent authority or lifecycle would be lost? If none, why is it not needless fragmentation?
+- owned state, lifecycle, and sole decision;
+- the opaque subject and realistic reuse boundary; and
+- the strongest plausible split or merge concern.
 
-Split distinct purposes, lifecycles, authorities, failures, or independently reusable state. Apply a deletion test to every independently nameable state family: if removing it leaves the rest coherent and the removed family remains meaningful over an opaque subject, split it even when only composition triggers its changes. Treat a concept owning several such families as presumptively overloaded. Combine only when the parts have no useful independent life. Shared identity, workflow order, desired atomicity, fewer obligations, UI placement, or a product feature name does not justify a merge; composition and recoverable false intervals exist precisely to coordinate independent owners.
+Split independently meaningful authorities or lifecycles. Merge a namespace for another owner's records, a status marker whose only meaning is suppressing those records, a retry-only ledger, or coordination without its own product lifecycle. Shared identity, workflow order, desired atomicity, implementation convenience, or fewer obligations does not justify a merge. Conversely, theoretical reuse alone does not justify a concept whose state has no meaning apart from its neighbor.
 
-Also require every concept to pass a minimum-mechanism test: it owns a semantic lifecycle or decision meaningful apart from its neighbor. A namespace or index for another concept's primary records, a retry ledger introduced only to close an obligation, or coordination with no independent product lifecycle belongs with the owner or in composition. Prefer adapting an effect owner to accept a stable operation identity over inventing a helper concept solely for retry. A reaction that merely reassembles one authority's transition is evidence that the boundary may be wrong.
+Classify concepts as `new`, `changed`, `reused-unchanged`, or `unaffected-context`. Record catalog disposition only for selected concepts and reference unchanged contracts instead of restating them.
 
-Classify relevant concepts as `new`, `changed`, `reused-unchanged`, or `unaffected-context`. Record catalog disposition only for selected concepts. Reference reused contracts instead of restating them.
+## Record only material obligations
 
-## Make cross-owner consequences recoverable
+Add an obligation when a required effect crosses owners and failure can leave caller-visible contradictory state, when the effect must finish before acknowledgement, or when recovery is an explicit product guarantee. Synchronous calls are not atomic, but they do not need a recovery protocol when the accepted semantics simply refuse the request before acknowledgement.
 
-For each consequence crossing concept ownership, assign a stable obligation ID and record:
+For each material obligation, record:
 
-- triggering action;
-- reaction that closes it;
-- interval during which the joint condition may observably be false;
-- stable retry identity accepted by the effect owner; and
-- available recovery or compensation action.
+- trigger and effect owner;
+- acknowledgement boundary and possible false interval;
+- retry identity when retries are promised; and
+- available recovery, compensation, or explicit operational limit.
 
-A split with undeclared effects, duplicate effect owners, no stable retry, or no recoverable closure is incomplete.
+Choose a realizable server-side success boundary. Do not invent a two-phase concept or promise exactly-once client receipt to model transport-delivery uncertainty. State what the application counts or guarantees before acknowledgement and stop there.

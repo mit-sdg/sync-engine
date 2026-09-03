@@ -48,6 +48,15 @@ describe("prompt guidance", () => {
     expect(leaks).toEqual([]);
   });
 
+  test("keeps brief instructions out of rendered work content", () => {
+    const brief = read("../skills/sync-engine/prompts/brief.md");
+    expect(brief).toContain(
+      "<!-- Record only product or process choices that later work must know.",
+    );
+    expect(brief).not.toMatch(/^Record only choices/m);
+    expect(brief).not.toMatch(/^Keep a concise chronological record/m);
+  });
+
   test("documents endpoint entries as additive identity and path contracts", () => {
     const authored = read("../skills/sync-engine/prompts/guidance/design/authored-format.md");
     const composition = read("../skills/sync-engine/prompts/guidance/api/composition.md");
@@ -76,6 +85,10 @@ describe("prompt guidance", () => {
     const contracts = read("../skills/sync-engine/prompts/guidance/design/contracts.md");
     const decompositionCritic = read("../skills/sync-engine/prompts/roles/critic-decomposition.md");
     const contractCritic = read("../skills/sync-engine/prompts/roles/critic-contracts.md");
+    const implementationCritic = read(
+      "../skills/sync-engine/prompts/roles/critic-implementation.md",
+    );
+    const catalog = read("../skills/sync-engine/prompts/guidance/catalog.md");
     const concepts = read("../skills/sync-engine/prompts/guidance/implementation/concepts.md");
     const application = read(
       "../skills/sync-engine/prompts/guidance/implementation/application.md",
@@ -85,10 +98,10 @@ describe("prompt guidance", () => {
     );
 
     for (const phrase of [
-      "sole authority",
-      "unrelated application",
-      "strongest plausible split",
-      "stable retry identity accepted by the effect owner",
+      "sole decision",
+      "realistic reuse boundary",
+      "strongest plausible split or merge concern",
+      "retry identity when retries are promised",
     ]) {
       expect(decomposition).toContain(phrase);
     }
@@ -100,12 +113,18 @@ describe("prompt guidance", () => {
     ]) {
       expect(contracts).toContain(phrase);
     }
-    expect(decompositionCritic).toContain("boundary verdict");
-    expect(decomposition).toContain("deletion test");
-    expect(decomposition).toContain("minimum-mechanism test");
-    expect(decompositionCritic).toContain("desired atomicity, fewer obligations");
+    expect(decompositionCritic).toContain("one verdict");
+    expect(decompositionCritic).toContain("Overloaded");
+    expect(decompositionCritic).toContain("Fragmented");
+    expect(decompositionCritic).toContain("merely for atomicity");
     expect(decompositionCritic).toContain("retry-only ledger");
     expect(contractCritic).toContain("one compact assessment row per affected obligation");
+    expect(contractCritic).toContain(
+      "the absence of an application contract in supplied or granted design is a blocker",
+    );
+    expect(implementationCritic).toContain("acknowledgement order");
+    expect(implementationCritic).toContain("test adequacy");
+    expect(catalog).toContain("bunx --no-install sync-engine-catalog show concept/<name>");
     expect(concepts).toContain("`ConceptClass.length === 0`");
     expect(concepts).toContain("never the tuple union `[] | [Row]`");
     expect(application).toContain("import { conceptSet, registerConcept }");
@@ -113,8 +132,9 @@ describe("prompt guidance", () => {
     expect(application).toContain('import { assemble } from "@mit-sdg/sync-engine/assembly"');
     expect(application).toContain('import { composition } from "./composition.ts"');
     expect(application).toContain("applicationConceptSet.implementations()");
-    expect(frameworkSafety).toContain("Never open `node_modules`, package `dist` files");
-    expect(frameworkSafety).toContain("must be supplied inline");
+    expect(frameworkSafety).toContain("Do not browse package trees");
+    expect(frameworkSafety).toContain("Never inspect package `dist`");
+    expect(frameworkSafety).not.toContain("Do not reload a skill or workflow");
   });
 
   test("keeps application realization patterns byte-exact with tested examples", () => {

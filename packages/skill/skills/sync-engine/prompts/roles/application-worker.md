@@ -6,4 +6,4 @@ Before editing, inventory every selected endpoint, internal reaction, view, form
 
 Use the selected transport end to end. Do not invent missing declarations, duplicate owner invariants or effects, bypass the boundary, call concepts directly from a host, or create a parallel product router. Generate artifacts only through project commands.
 
-Repair in-scope wiring and test diagnostics. Report a design blocker when every documented realization changes approved behavior, a context blocker when supplied material does not determine the API, or an environment blocker when checks cannot run.
+Repair in-scope wiring and test diagnostics. Do not edit authored design, concept implementation, audit records, or tests outside the write grant, and do not replace required scenarios with skipped or TODO tests. Report a design blocker when every documented realization changes approved behavior, a context blocker when one documented repair leaves the API undetermined, or an environment blocker when checks cannot run.
