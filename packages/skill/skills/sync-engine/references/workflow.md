@@ -118,7 +118,7 @@ Simulation means doing the compiled assignment directly. Do not announce sending
 
 Permanent design is bound automatically when a prompt reads or writes it. Contract design may change only granted canonical design files; design is immutable for every other bound role. Completion also compares all project changes with the write grant. `--design-root design` remains available to introduce the same binding explicitly. Prompt preparation reports bytes by source slot and rejects duplicate content; remove irrelevant context when one slot dominates. A supplied real harness context limit may still reject an oversized prompt.
 
-Delegation sends only the printed short instruction to read the prompt file. Keep the launch in the foreground when the adapter supports it, copy its returned result verbatim to the response path, and complete the record before yielding. Simulation uses that same prompt as the coordinator's complete role assignment; never idle or return while its record is prepared. Copy the result verbatim to the response path and run the printed completion command.
+Delegation sends only the printed short instruction to read the prompt file. For Paseo, run the printed `launch paseo` command once, then repeat the exact printed `launch wait` command until it completes. Each call is short by design. Never end the turn while its record is prepared. If the harness ends the turn, resume by running `launch wait` again. Other adapters use their printed native launch action. Copy the returned result verbatim to the response path and complete the record before yielding. Simulation uses that same prompt as the coordinator's complete role assignment; never idle or return while its record is prepared. Copy the result verbatim to the response path and run the printed completion command.
 
 A simulated result records no agent identity and is not independent. Continue a finalized simulated record for a compact same-role repair; the coordinator still executes it directly. If independent review was explicitly required, ask before substituting simulation.
 
@@ -144,6 +144,8 @@ Contract design runs this syntax check only; source-agreement, generation, and f
 - **Context:** supplied material does not determine the API; add exact context.
 - **Design:** every documented realization changes visible behavior, ownership, ordering, failure semantics, or a selected declaration; revise and review design.
 - **Environment:** checks cannot run outside the role's assignment; resolve or report it.
+
+A child that reports it was interrupted, restarted, or cut off before finishing has an environment blocker, not a design blocker. Continue the same agent with the same assignment before doing anything else.
 
 Batch all currently visible blockers for one authority into one repair. When the same authority returns the same blocker category twice, do not continue it again without new context or changed authority; replace it when continuity is optional or hand back blocked. Do not turn missing public context into framework probing.
 

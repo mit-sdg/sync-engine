@@ -77,6 +77,18 @@ interface Invocation {
   readonly stderr: string;
 }
 
+function fakePaseo(
+  replies: Array<{ readonly exitCode?: number; readonly output: string }>,
+  calls: Array<{ readonly args: readonly string[]; readonly cwd: string }>,
+): NonNullable<CommandDependencies["paseoCommand"]> {
+  return async (args, cwd) => {
+    calls.push({ args, cwd });
+    const reply = replies.shift();
+    if (reply === undefined) throw new Error(`Unexpected Paseo call: ${args.join(" ")}`);
+    return { exitCode: reply.exitCode ?? 0, output: reply.output };
+  };
+}
+
 async function invoke(
   args: readonly string[],
   cwd: string,
@@ -602,6 +614,8 @@ describe("prompt preparation and completion", () => {
       sources: preparedOutput["Prompt sources (bytes)"],
       target: preparedOutput.Target,
       native: preparedOutput.Native,
+      launch: preparedOutput.Launch,
+      capture: preparedOutput.Capture,
       agentInstruction: preparedOutput["Agent instruction"],
       warning: preparedOutput.Warning,
     }).toEqual({
@@ -613,12 +627,14 @@ describe("prompt preparation and completion", () => {
       title: ["message-board-search — Designer; --title"],
       delivery: ["agent-file-instruction; the paseo run positional prompt"],
       cwd: [`${root}; explicit-application-cwd`],
-      timeout: [
-        "1800 seconds; coordinator-managed observation limit; CLI does not observe harness",
-      ],
+      timeout: ["1800 seconds; overall role limit"],
       sources: [expect.stringContaining("brief ")],
       target: ["fresh agent"],
       native: ["Paseo CLI; paseo run"],
+      launch: [
+        `sync-engine-skill launch paseo ${JSON.stringify(launch.recordPath)} --provider <provider> --model <model> [--thinking <id>]`,
+      ],
+      capture: undefined,
       agentInstruction: [
         `Read and follow the complete assignment in this prompt file:\n${launch.promptPath}`,
       ],
@@ -641,7 +657,7 @@ describe("prompt preparation and completion", () => {
     const configured = await prepareInitial(configuredRoot, { timeoutSeconds: 42 });
     expect(await readLaunchRecord(configured.recordPath)).toMatchObject({ timeoutSeconds: 42 });
     expect(parseLabeledOutput(configured.output).Timeout).toEqual([
-      "42 seconds; coordinator-managed observation limit; CLI does not observe harness",
+      "42 seconds; overall role limit",
     ]);
   });
 
@@ -682,6 +698,209 @@ describe("prompt preparation and completion", () => {
     const record = await readLaunchRecord(reported(prepared.stdout, "Record"));
     expect(record.grant.network).toBe(true);
     expect(await readFile(record.prompt.path, "utf8")).toContain("network: yes");
+  });
+
+  test("launches Paseo in the background and repeats short waits until idle", async () => {
+    const root = await application("paseo-wait-loop");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const calls: Array<{ readonly args: readonly string[]; readonly cwd: string }> = [];
+    const paseoCommand = fakePaseo(
+      [
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "timeout" }) },
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "idle" }) },
+        { output: "## Status\n\nComplete\n\n## Checks\n\nPassed\n" },
+      ],
+      calls,
+    );
+
+    const launched = await invoke(
+      [
+        "launch",
+        "paseo",
+        launch.recordPath,
+        "--provider",
+        "pi",
+        "--model",
+        "gpt-example",
+        "--thinking",
+        "high",
+      ],
+      root,
+      { paseoCommand },
+    );
+    expect(launched).toEqual({
+      code: 0,
+      stdout: `Paseo launched: ${launch.recordPath}\nAgent: paseo:${paseoAgentId}\nStatus: running\nNext: sync-engine-skill launch wait ${JSON.stringify(launch.recordPath)} --slice 45\n`,
+      stderr: "",
+    });
+    expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
+      state: "prepared",
+      launched: { agentId: paseoAgentId, at: instant.toISOString() },
+    });
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown.stdout).toContain("Run launch wait: 1 launched run still awaiting completion.");
+    expect(shown.stdout).toContain(`launched — awaiting paseo:${paseoAgentId}`);
+
+    const settled = await invoke(["launch", "wait", launch.recordPath], root, { paseoCommand });
+    expect(settled.code).toBe(0);
+    expect(settled.stderr).toBe("");
+    expect(settled.stdout).toContain(
+      `Status: idle\nResponse: ${launch.responsePath}\nRole result: complete\nComplete: sync-engine-skill launch complete ${JSON.stringify(launch.recordPath)} --status completed\n`,
+    );
+    expect(settled.stdout).toContain("Status: completed; result: complete");
+    expect(await readFile(launch.responsePath, "utf8")).toBe(
+      "## Status\n\nComplete\n\n## Checks\n\nPassed\n",
+    );
+    expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
+      state: "finalized",
+      agentId: paseoAgentId,
+      status: "completed",
+    });
+    expect(calls).toEqual([
+      {
+        args: [
+          "--json",
+          "run",
+          "-d",
+          "--cwd",
+          root,
+          "--title",
+          "message-board-search — Designer",
+          "--provider",
+          "pi",
+          "--model",
+          "gpt-example",
+          "--thinking",
+          "high",
+          `Read and follow the complete assignment in this prompt file:\n${launch.promptPath}`,
+        ],
+        cwd: root,
+      },
+      { args: ["wait", paseoAgentId, "--timeout", "45", "--json"], cwd: root },
+      { args: ["wait", paseoAgentId, "--timeout", "45", "--json"], cwd: root },
+      { args: ["logs", paseoAgentId, "--filter", "text", "--tail", "1"], cwd: root },
+    ]);
+  });
+
+  test("captures a blocked Paseo result and completes it as blocked", async () => {
+    const root = await application("paseo-blocked");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const calls: Array<{ readonly args: readonly string[]; readonly cwd: string }> = [];
+    const result = await invoke(["launch", "paseo", launch.recordPath], root, {
+      environment: { PASEO_PROVIDER: "pi", PASEO_MODEL: "gpt-example" },
+      paseoCommand: fakePaseo(
+        [
+          { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+          { output: JSON.stringify({ agentId: paseoAgentId, status: "idle" }) },
+          { output: "## Status\n\nBlocked\n\n## Blockers\n\nEnvironment unavailable.\n" },
+        ],
+        calls,
+      ),
+    });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Role result: blocked");
+    expect(result.stdout).toContain(`--status blocked\n`);
+    expect(result.stdout).toContain("Status: blocked; result: blocked");
+    expect(await readLaunchRecord(launch.recordPath)).toMatchObject({
+      state: "finalized",
+      status: "blocked",
+      result: "blocked",
+    });
+  });
+
+  test("supports manual capture with no-complete and recorded-agent completion", async () => {
+    const root = await application("paseo-no-complete");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const calls: Array<{ readonly args: readonly string[]; readonly cwd: string }> = [];
+    const paseoCommand = fakePaseo(
+      [
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "timeout" }) },
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "idle" }) },
+        { output: "## Status\n\nComplete\n" },
+      ],
+      calls,
+    );
+    expect(
+      await invoke(
+        ["launch", "paseo", launch.recordPath, "--provider", "pi", "--model", "gpt-example"],
+        root,
+        { paseoCommand },
+      ),
+    ).toMatchObject({ code: 0, stderr: "" });
+    const captured = await invoke(["launch", "wait", launch.recordPath, "--no-complete"], root, {
+      paseoCommand,
+    });
+    expect(captured.stdout).toContain("Role result: complete");
+    expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
+    expect(
+      await invoke(
+        [
+          "launch",
+          "complete",
+          launch.recordPath,
+          "--status",
+          "completed",
+          "--agent-id",
+          secondPaseoAgentId,
+        ],
+        root,
+      ),
+    ).toEqual(cliFailure("--agent-id does not match the agent recorded at launch"));
+    expect(
+      await invoke(["launch", "complete", launch.recordPath, "--status", "completed"], root),
+    ).toMatchObject({ code: 0, stderr: "" });
+  });
+
+  test("sends a Paseo continuation without waiting in the send call", async () => {
+    const root = await application("paseo-continuation-launch");
+    await started(root);
+    const initial = await prepareInitial(root);
+    await finalizeInitial(root, initial);
+    const task = await copyFixture(root, "follow-up-task.md");
+    const continuation = await invoke(
+      [
+        "continue",
+        initial.recordPath,
+        "--phase",
+        "decomposition",
+        "--task",
+        task,
+        "--grant",
+        initial.grantPath,
+        "--input",
+        `brief=${initial.briefPath}`,
+      ],
+      root,
+    );
+    const recordPath = reported(continuation.stdout, "Record");
+    const promptPath = reported(continuation.stdout, "Prompt");
+    const calls: Array<{ readonly args: readonly string[]; readonly cwd: string }> = [];
+    const launched = await invoke(["launch", "paseo", recordPath, "--slice", "12"], root, {
+      paseoCommand: fakePaseo(
+        [
+          { output: JSON.stringify({ agentId: paseoAgentId, status: "sent" }) },
+          { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+        ],
+        calls,
+      ),
+    });
+    expect(launched.code).toBe(0);
+    expect(launched.stdout).toContain(`launch wait ${JSON.stringify(recordPath)} --slice 12`);
+    expect(calls[0]).toEqual({
+      args: [
+        "--json",
+        "send",
+        "--no-wait",
+        paseoAgentId,
+        `Read and follow the complete assignment in this prompt file:\n${promptPath}`,
+      ],
+      cwd: root,
+    });
   });
 
   test("reads a verbatim native response, normalizes status, and finalizes", async () => {
@@ -1451,6 +1670,10 @@ describe("prompt preparation and completion", () => {
         "Prepare a new prompt with the exact missing context, then continue the blocked role.",
       ],
       ["environment", "Resolve the environment blocker, then continue the blocked role."],
+      [
+        "interrupted",
+        "Continue the same agent with the same assignment before doing anything else.",
+      ],
     ] as const) {
       const blockedRoot = await application(`next-${category}-blocker`);
       await started(blockedRoot);
@@ -1669,7 +1892,7 @@ describe("continuation and replacement", () => {
       prepared: ["designer/decomposition"],
       harness: ["paseo"],
       targetAgent: [paseoAgentId],
-      timeout: ["75 seconds; coordinator-managed observation limit; CLI does not observe harness"],
+      timeout: ["75 seconds; overall role limit"],
     });
     const continuationPath = reported(continuation.stdout, "Record");
     const continuedRecord = await readLaunchRecord(continuationPath);

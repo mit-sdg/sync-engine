@@ -251,6 +251,9 @@ describe("prepared and finalized records", () => {
     expect(inferRoleResult(encoded("### Verdict\n\napprove\n"))).toBe("approve");
     expect(inferRoleResult(encoded("## Verdict\n\n- approve\n"))).toBe("approve");
     expect(inferRoleResult(encoded("## Status\n\n✅ Complete\n"))).toBe("complete");
+    expect(
+      inferRoleResult(encoded("Waiting for the check to complete.## Status\n\nComplete\n")),
+    ).toBe("complete");
     expect(inferRoleResult(encoded("# Verdict — **revise**\n"))).toBe("revise");
     expect(inferRoleResult(encoded("## Summary\n\nComplete\n"))).toBe("unknown");
     expect(inferRoleResult(encoded("##### Verdict\n\napprove\n"))).toBe("unknown");

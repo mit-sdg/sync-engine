@@ -16,7 +16,11 @@ Usage:
     [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
     [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   sync-engine-skill launch adapter <prepared-record> --harness <harness>
-  sync-engine-skill launch complete <prepared-record> --agent-id <id>
+  sync-engine-skill launch paseo <prepared-record> [--provider <id>] [--model <id>]
+    [--thinking <id>] [--slice <seconds>]
+  sync-engine-skill launch wait <prepared-record> [--slice <seconds>]
+    [--complete|--no-complete]
+  sync-engine-skill launch complete <prepared-record> [--agent-id <id>]
     --status <native-status> [--model <id>]
   sync-engine-skill simulation complete <prepared-record> --status <status>
   sync-engine-skill continue <finalized-record> --phase <phase> --task <path>
@@ -47,9 +51,12 @@ Options:
   may explicitly introduce the same canonical <application>/design binding; continue
   recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
   --context-limit is a positive byte limit supplied by the selected harness or model.
-  --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
-  CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
-  selection; otherwise they inherit native settings. --harness on continue is valid only
+  --timeout is the role's overall launch limit in seconds (default 1800). Paseo launch and
+  wait use short observation slices (default 45 seconds); repeat the printed wait command
+  while running. Fresh Paseo launches require --provider and --model because Paseo-managed
+  shells expose no provider/model settings unless PASEO_PROVIDER and PASEO_MODEL are set.
+  PASEO_THINKING supplies optional thinking. Prompt --model and --reasoning carry an explicit
+  user selection; otherwise they inherit native settings. --harness on continue is valid only
   together with --replace. Work policy is chosen once at work start: required review binds
   approvals to the current candidate digest, and execution policy limits delegated or simulated runs.
 
@@ -86,8 +93,9 @@ Capability grant JSON (every field is required; use grant init for validated def
   to the work-unit decomposition. Those two write areas are exclusive to their design phases.
 
 Completion:
-  Delegated and simulated runs use the same prompt and response artifacts. Copy the role
-  result verbatim to Response, then run the printed completion command. A simulated run
+  Delegated and simulated runs use the same prompt and response artifacts. Paseo launch wait
+  captures the role result verbatim and completes by default; --no-complete leaves manual
+  completion. Other harnesses require copying the result and running the printed command. A simulated run
   records its reason, coordinator executor, and non-independent status without inventing
   an agent identity. Completed and blocked statuses require nonempty UTF-8. Completion
   rejects project changes outside the write grant and a response that reports blocked while
