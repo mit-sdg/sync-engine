@@ -88,6 +88,11 @@ export interface ReviewTarget {
   readonly digest: string;
 }
 
+export interface LaunchedAgent {
+  readonly agentId: string;
+  readonly at: string;
+}
+
 interface LaunchRecordBase {
   readonly state: "prepared" | "finalized";
   readonly work: { readonly slug: string; readonly path: string };
@@ -109,6 +114,7 @@ interface LaunchRecordBase {
   readonly review?: ReviewTarget;
   readonly reviewOverride?: string;
   readonly relationship?: LaunchRelationship;
+  readonly launched?: LaunchedAgent;
 }
 
 export interface PreparedLaunchRecord extends LaunchRecordBase {
@@ -294,6 +300,15 @@ function decodeRecord(value: unknown): LaunchRecord {
     hash(review["digest"], "Review target digest");
   }
   if (record["reviewOverride"] !== undefined) text(record["reviewOverride"], "Review override");
+  if (record["launched"] !== undefined) {
+    const launched = object(record["launched"], "Launched agent");
+    text(launched["agentId"], "Launched agent identity");
+    const at = text(launched["at"], "Launched agent timestamp");
+    if (Number.isNaN(Date.parse(at))) throw new RecordError(`Launched agent timestamp is invalid`);
+    if (execution !== "delegated" || selectedHarness !== "paseo") {
+      throw new RecordError(`Launched agent metadata requires delegated Paseo execution`);
+    }
+  }
 
   if (record["design"] !== undefined) {
     const design = object(record["design"], "Design binding");
@@ -461,6 +476,9 @@ export async function replacePreparedHarness(
   if (prepared.relationship?.kind === "continuation") {
     throw new RecordError(`A same-agent continuation cannot change harness`);
   }
+  if (prepared.launched !== undefined) {
+    throw new RecordError(`A launched run cannot change harness`);
+  }
   const response = await regularFile(prepared.response.path, prepared.work.path, "Response");
   if (response.byteLength !== 0) {
     throw new RecordError(`Harness replacement requires an empty response artifact`);
@@ -487,6 +505,74 @@ export async function replacePreparedHarness(
       ...(updated.review === undefined ? {} : { review: updated.review }),
       ...(updated.reviewOverride === undefined ? {} : { reviewOverride: updated.reviewOverride }),
       ...(updated.relationship === undefined ? {} : { relationship: updated.relationship }),
+    });
+    const revised = `${JSON.stringify(baseline, undefined, 2)}\n`;
+    await writeFile(updated.workspace.baseline.path, revised, "utf8");
+    updated = {
+      ...updated,
+      workspace: {
+        ...updated.workspace,
+        baseline: { ...updated.workspace.baseline, sha256: sha256(revised) },
+      },
+    };
+  }
+  await writeFile(loaded.path, `${JSON.stringify(updated, undefined, 2)}\n`, "utf8");
+  return updated;
+}
+
+export async function recordPaseoLaunch(
+  path: string,
+  agentId: string,
+  at: Date = new Date(),
+): Promise<PreparedLaunchRecord> {
+  const loaded = await loadRecord(path);
+  if (loaded.record.state !== "prepared") {
+    throw new RecordError(`Paseo launch requires a prepared record`);
+  }
+  const prepared = loaded.record;
+  if (prepared.execution !== "delegated" || prepared.harness !== "paseo") {
+    throw new RecordError(`Paseo launch requires a delegated Paseo record`);
+  }
+  text(agentId, "Agent identity");
+  const timestamp = at.toISOString();
+  if (prepared.launched !== undefined) {
+    if (prepared.launched.agentId !== agentId) {
+      throw new RecordError(`Prepared record already names another launched agent`);
+    }
+    return prepared;
+  }
+  if (
+    prepared.relationship?.kind === "continuation" &&
+    prepared.relationship.targetAgentId !== agentId
+  ) {
+    throw new RecordError(`Continuation must launch the snapshotted Paseo agent`);
+  }
+  let updated: PreparedLaunchRecord = {
+    ...prepared,
+    launched: { agentId, at: timestamp },
+  };
+  if (updated.workspace !== undefined) {
+    const content = await regularFile(
+      updated.workspace.baseline.path,
+      updated.work.path,
+      "Workspace baseline",
+    );
+    const baseline = object(JSON.parse(new TextDecoder().decode(content)), "Workspace baseline");
+    baseline["controlsSha256"] = protectedControls({
+      role: updated.role,
+      phase: updated.phase,
+      execution: updated.execution,
+      harness: updated.harness,
+      timeoutSeconds: updated.timeoutSeconds,
+      promptSha256: updated.prompt.sha256,
+      grant: updated.grant,
+      retainedSources: updated.retainedSources,
+      ...(updated.policy === undefined ? {} : { policy: updated.policy }),
+      ...(updated.design === undefined ? {} : { design: updated.design }),
+      ...(updated.review === undefined ? {} : { review: updated.review }),
+      ...(updated.reviewOverride === undefined ? {} : { reviewOverride: updated.reviewOverride }),
+      ...(updated.relationship === undefined ? {} : { relationship: updated.relationship }),
+      launched: updated.launched,
     });
     const revised = `${JSON.stringify(baseline, undefined, 2)}\n`;
     await writeFile(updated.workspace.baseline.path, revised, "utf8");
@@ -607,6 +693,7 @@ function protectedControls(record: {
   readonly review?: ReviewTarget;
   readonly reviewOverride?: string;
   readonly relationship?: LaunchRelationship;
+  readonly launched?: LaunchedAgent;
 }): string {
   return sha256(JSON.stringify(record));
 }
@@ -858,6 +945,7 @@ async function completedWorkspace(prepared: PreparedLaunchRecord): Promise<void>
     ...(prepared.review === undefined ? {} : { review: prepared.review }),
     ...(prepared.reviewOverride === undefined ? {} : { reviewOverride: prepared.reviewOverride }),
     ...(prepared.relationship === undefined ? {} : { relationship: prepared.relationship }),
+    ...(prepared.launched === undefined ? {} : { launched: prepared.launched }),
   });
   if (actualControls !== controlsSha256) {
     throw new RecordError(`Protected launch controls changed after preparation`);
@@ -939,6 +1027,9 @@ export function inferRoleResult(response: Uint8Array): RoleResult {
   } catch {
     return "unknown";
   }
+  // A captured transcript may glue a progress sentence onto the final message
+  // ("...waiting for it to complete.## Status"); restore the heading's line start.
+  content = content.replace(/([^\n#])(#{1,4}\s+(?:Status|Verdict)\b)/g, "$1\n$2");
   const heading = (name: "Status" | "Verdict"): string | undefined => {
     const expression = new RegExp(
       `^#{1,4}\\s+${name}(?:(?:\\s*:\\s*|\\s+(?:-|—)\\s+)([^\\n]*))?\\s*$`,
@@ -1020,6 +1111,10 @@ export async function finalizeLaunch(
   ]);
   if (sha256(serializeGrant(prepared.grant)) !== prepared.capabilities.sha256) {
     throw new RecordError(`Effective grant changed after preparation`);
+  }
+
+  if (prepared.launched !== undefined && options.agentId !== prepared.launched.agentId) {
+    throw new RecordError(`Completion agent does not match the agent recorded at launch`);
   }
 
   if (prepared.relationship?.kind === "continuation") {

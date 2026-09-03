@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrapApplication, conflictChoices, type BootstrapDependencies } from "./bootstrap.ts";
@@ -27,9 +27,11 @@ import {
   digestDesign,
   finalizeLaunch,
   finalizeSimulation,
+  inferRoleResult,
   normalizeLaunchStatus,
   prepareLaunch,
   readLaunchRecord,
+  recordPaseoLaunch,
   replacePreparedHarness,
   type ExecutionHarness,
   type LaunchRecord,
@@ -89,10 +91,14 @@ type DesignCheck = (
   paths: readonly string[],
   cwd: string,
 ) => Promise<{ readonly exitCode: number; readonly output: string }>;
+export type PaseoCommand = (
+  args: readonly string[],
+  cwd: string,
+) => Promise<{ readonly exitCode: number; readonly output: string }>;
 
-const runDesignCheck: DesignCheck = (paths, cwd) =>
-  new Promise((fulfill, reject) => {
-    const child = spawn("bunx", ["--no-install", "sync-engine", "check-design", ...paths], {
+const runCapturedCommand = (command: string, args: readonly string[], cwd: string) =>
+  new Promise<{ readonly exitCode: number; readonly output: string }>((fulfill, reject) => {
+    const child = spawn(command, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -107,6 +113,10 @@ const runDesignCheck: DesignCheck = (paths, cwd) =>
     child.once("close", (exitCode) => fulfill({ exitCode: exitCode ?? 1, output }));
   });
 
+const runDesignCheck: DesignCheck = (paths, cwd) =>
+  runCapturedCommand("bunx", ["--no-install", "sync-engine", "check-design", ...paths], cwd);
+const runPaseoCommand: PaseoCommand = (args, cwd) => runCapturedCommand("paseo", args, cwd);
+
 export interface CommandDependencies {
   readonly cwd?: string;
   readonly skillRoot?: string;
@@ -115,6 +125,7 @@ export interface CommandDependencies {
   readonly bootstrap?: Bootstrap;
   readonly bootstrapDependencies?: BootstrapDependencies;
   readonly designCheck?: DesignCheck;
+  readonly paseoCommand?: PaseoCommand;
   readonly environment?: NodeJS.ProcessEnv;
   readonly now?: () => Date;
 }
@@ -169,7 +180,11 @@ Usage:
     [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
     [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   ${commandName} launch adapter <prepared-record> --harness <harness>
-  ${commandName} launch complete <prepared-record> --agent-id <id>
+  ${commandName} launch paseo <prepared-record> [--provider <id>] [--model <id>]
+    [--thinking <id>] [--slice <seconds>]
+  ${commandName} launch wait <prepared-record> [--slice <seconds>]
+    [--complete|--no-complete]
+  ${commandName} launch complete <prepared-record> [--agent-id <id>]
     --status <native-status> [--model <id>]
   ${commandName} simulation complete <prepared-record> --status <status>
   ${commandName} continue <finalized-record> --phase <phase> --task <path>
@@ -191,9 +206,12 @@ Options:
   may explicitly introduce the same canonical <application>/design binding; continue
   recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
   --context-limit is a positive byte limit supplied by the selected harness or model.
-  --timeout is the coordinator's native-launch limit in seconds (default 1800); the skill
-  CLI reports it but does not wait or poll. --model and --reasoning carry an explicit user
-  selection; otherwise they inherit native settings. --harness on continue is valid only
+  --timeout is the role's overall launch limit in seconds (default 1800). Paseo launch and
+  wait use short observation slices (default 45 seconds); repeat the printed wait command
+  while running. Fresh Paseo launches require --provider and --model because Paseo-managed
+  shells expose no provider/model settings unless PASEO_PROVIDER and PASEO_MODEL are set.
+  PASEO_THINKING supplies optional thinking. Prompt --model and --reasoning carry an explicit
+  user selection; otherwise they inherit native settings. --harness on continue is valid only
   together with --replace. Work policy is chosen once at work start: required review binds
   approvals to the current candidate digest, and execution policy limits delegated or simulated runs.
 
@@ -221,8 +239,9 @@ Capability grant JSON (every field is required; use grant init for validated def
   to the work-unit decomposition. Those two write areas are exclusive to their design phases.
 
 Completion:
-  Delegated and simulated runs use the same prompt and response artifacts. Copy the role
-  result verbatim to Response, then run the printed completion command. A simulated run
+  Delegated and simulated runs use the same prompt and response artifacts. Paseo launch wait
+  captures the role result verbatim and completes by default; --no-complete leaves manual
+  completion. Other harnesses require copying the result and running the printed command. A simulated run
   records its reason, coordinator executor, and non-independent status without inventing
   an agent identity. Completed and blocked statuses require nonempty UTF-8. Completion
   rejects project changes outside the write grant and a response that reports blocked while
@@ -263,7 +282,10 @@ function parseTail(
   command: string,
   positionals: readonly string[],
   definitions: Readonly<Record<string, OptionMode>>,
-): { readonly positionals: readonly string[]; readonly options: ParsedOptions } {
+): {
+  readonly positionals: readonly string[];
+  readonly options: ParsedOptions;
+} {
   const foundPositionals: string[] = [];
   let index = 0;
   for (const name of positionals) {
@@ -335,16 +357,20 @@ function areaGrant(value: string, kind: "read" | "write"): ReadableAreaGrant | W
   if (separator <= 0 || separator === value.length - 1) {
     throw new CliError(`--${kind} must have the form <area>:<relative-path>: ${value}`);
   }
-  return { area: value.slice(0, separator), path: value.slice(separator + 1) } as
-    | ReadableAreaGrant
-    | WritableAreaGrant;
+  return {
+    area: value.slice(0, separator),
+    path: value.slice(separator + 1),
+  } as ReadableAreaGrant | WritableAreaGrant;
 }
 
 function commandRoot(dependencies: CommandDependencies): string {
   return canonicalPath(dependencies.cwd ?? process.cwd());
 }
 
-function output(dependencies: CommandDependencies): { out: WriteOutput; err: WriteOutput } {
+function output(dependencies: CommandDependencies): {
+  out: WriteOutput;
+  err: WriteOutput;
+} {
   return {
     out: dependencies.stdout ?? ((text) => process.stdout.write(text)),
     err: dependencies.stderr ?? ((text) => process.stderr.write(text)),
@@ -377,7 +403,11 @@ async function grantAt(path: string): Promise<unknown> {
   }
 }
 
-type FilePromptInput = Readonly<{ id: string; path: string; displayName: string }>;
+type FilePromptInput = Readonly<{
+  id: string;
+  path: string;
+  displayName: string;
+}>;
 
 function displayPath(cwd: string, path: string): string {
   return relative(cwd, path).split(sep).join("/") || basename(path);
@@ -718,7 +748,11 @@ async function prepareCommand(
   const suppliedInputs = promptInputs(options.inputValues, options.cwd, skillRoot, unit);
   for (const input of suppliedInputs) await utf8(input.path, `Prompt input ${input.id}`);
   const inputs: PromptInput[] = [
-    { id: "task", displayName: displayPath(options.cwd, taskPath), content: task.text },
+    {
+      id: "task",
+      displayName: displayPath(options.cwd, taskPath),
+      content: task.text,
+    },
     ...suppliedInputs,
   ];
   const built = await buildPrompt({
@@ -774,7 +808,10 @@ async function prepareCommand(
       const decomposition = await utf8(decompositionPath, "Decomposition");
       await requireReviewed(
         unit,
-        { subject: "decomposition", digest: promptSourceSha256(decomposition.text) },
+        {
+          subject: "decomposition",
+          digest: promptSourceSha256(decomposition.text),
+        },
         "decomposition",
       );
     }
@@ -867,7 +904,10 @@ Instruction: Execute the prompt directly now, within its exact access grant. Do 
 `);
 }
 
-function launchAction(invocation: PreparedHarnessInvocation<EffectiveCapabilityGrant>): string {
+function launchAction(
+  invocation: PreparedHarnessInvocation<EffectiveCapabilityGrant>,
+  recordPath?: string,
+): string {
   const instruction = invocation.prompt.agentInstruction ?? invocation.native.instruction;
   if (invocation.harness === "pi") {
     const sessionDirectory = resolve(dirname(invocation.prompt.path), "pi-sessions");
@@ -880,11 +920,12 @@ function launchAction(invocation: PreparedHarnessInvocation<EffectiveCapabilityG
     return `cd ${JSON.stringify(invocation.cwd.path)} && pi --mode json -p --session-dir ${JSON.stringify(sessionDirectory)}${target}${title} ${JSON.stringify(instruction)}`;
   }
   if (invocation.harness === "paseo") {
-    const target =
+    if (recordPath === undefined) throw new Error(`Paseo launch action requires a record path`);
+    const configuration =
       invocation.target.kind === "fresh"
-        ? `--json run --wait-timeout ${invocation.timeoutSeconds}s --cwd ${JSON.stringify(invocation.cwd.path)} --title ${JSON.stringify(invocation.title.value)} --provider <current-provider> --model <current-model> [--thinking <current-thinking>]`
-        : `--json send ${JSON.stringify(invocation.target.agentId)}`;
-    return `paseo ${target} ${JSON.stringify(instruction)}`;
+        ? " --provider <provider> --model <model> [--thinking <id>]"
+        : "";
+    return `${commandName} launch paseo ${JSON.stringify(recordPath)}${configuration}`;
   }
   return `${invocation.native.mechanism}: ${invocation.native.operation}. ${invocation.native.instruction}`;
 }
@@ -920,11 +961,11 @@ Prompt sources (bytes): ${promptSourceReport(built)}\n`);
       ? "Target: fresh agent"
       : `Target agent: ${invocation.target.agentId}`;
   out(`Harness: ${invocation.harness}
-Launch: ${launchAction(invocation)}
+Launch: ${launchAction(invocation, launch.path)}
 Agent title: ${invocation.title.value}${invocation.title.nativeField === undefined ? "" : `; ${invocation.title.nativeField}`}
 Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
 Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
-Timeout: ${launch.record.timeoutSeconds} seconds; coordinator-managed observation limit; CLI does not observe harness
+Timeout: ${launch.record.timeoutSeconds} seconds; overall role limit
 ${target}
 Native: ${invocation.native.mechanism}; ${invocation.native.operation}
 Instruction: ${invocation.native.instruction}\n`);
@@ -936,12 +977,11 @@ Instruction: ${invocation.native.instruction}\n`);
       `Warning: ${invocation.harness} capabilities are prompt-guided rather than harness-enforced.\n`,
     );
   }
-  if (invocation.harness === "paseo") {
-    out(
-      `Capture: After the foreground command settles, use its JSON agentId to read that agent's final assistant message; copy it verbatim to ${launch.artifacts.responsePath}.\n`,
-    );
-  }
-  out(`Next: Finalize this record before preparing another role.\n`);
+  out(
+    invocation.harness === "paseo"
+      ? `Next: Run the Launch command, then repeat the printed launch wait command until this record is finalized.\n`
+      : `Next: Finalize this record before preparing another role.\n`,
+  );
 }
 
 async function workStart(
@@ -1186,7 +1226,7 @@ async function launchAdapter(
     timeoutSeconds: record.timeoutSeconds,
   });
   output(dependencies).out(
-    `Prepared launch adapter changed: ${previous.harness} -> ${next}\nRecord: ${recordPath}\nLaunch: ${launchAction(invocation)}\n`,
+    `Prepared launch adapter changed: ${previous.harness} -> ${next}\nRecord: ${recordPath}\nLaunch: ${launchAction(invocation, recordPath)}\n`,
   );
 }
 
@@ -1199,6 +1239,9 @@ async function completionNextStep(
   if (current.state !== "finalized") return "Finalize the current record.";
   if (current.status === "blocked" || current.result === "blocked") {
     const response = (await utf8(current.response.path, "Response", false)).text.toLowerCase();
+    if (/\b(?:interrupted|restarted|cut off)\b/.test(response)) {
+      return "Continue the same agent with the same assignment before doing anything else.";
+    }
     if (/\bcontext\b/.test(response)) {
       return "Prepare a new prompt with the exact missing context, then continue the blocked role.";
     }
@@ -1249,6 +1292,212 @@ function unknownResultWarning(record: LaunchRecord): string | undefined {
   return `Response has no parsable required \`${record.role === "critic" ? "## Verdict" : "## Status"}\`; result recorded as unknown.`;
 }
 
+const defaultPaseoSliceSeconds = 45;
+
+async function paseoCall(
+  args: readonly string[],
+  cwd: string,
+  dependencies: CommandDependencies,
+  operation: string,
+): Promise<string> {
+  const result = await (dependencies.paseoCommand ?? runPaseoCommand)(args, cwd);
+  if (result.exitCode !== 0) {
+    throw new CliError(
+      `Paseo ${operation} failed${result.output.trim() === "" ? "" : `: ${result.output.trimEnd()}`}`,
+    );
+  }
+  return result.output;
+}
+
+function paseoJson(output: string, operation: string): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = JSON.parse(output) as unknown;
+  } catch {
+    throw new CliError(`Paseo ${operation} returned invalid JSON`);
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new CliError(`Paseo ${operation} returned invalid JSON`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function paseoAgentId(value: Record<string, unknown>, operation: string): string {
+  const agentId = value["agentId"];
+  if (typeof agentId !== "string" || agentId.trim() === "") {
+    throw new CliError(`Paseo ${operation} did not return an agentId`);
+  }
+  try {
+    return validateHarnessIdentity("paseo", agentId);
+  } catch (error) {
+    throw new CliError(error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function launchWaitRecord(
+  recordPath: string,
+  sliceSeconds: number,
+  complete: boolean,
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const cwd = commandRoot(dependencies);
+  const record = await readLaunchRecord(recordPath);
+  requireRecordApplication(record, cwd);
+  if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
+  if (record.harness !== "paseo" || record.execution !== "delegated") {
+    throw new CliError(`launch wait requires a prepared delegated Paseo record`);
+  }
+  if (record.launched === undefined) {
+    throw new CliError(`launch wait requires a recorded Paseo agent; run launch paseo first`);
+  }
+  const waitOutput = await paseoCall(
+    ["wait", record.launched.agentId, "--timeout", String(sliceSeconds), "--json"],
+    cwd,
+    dependencies,
+    "wait",
+  );
+  const wait = paseoJson(waitOutput, "wait");
+  const status = typeof wait["status"] === "string" ? wait["status"].toLowerCase() : undefined;
+  // `paseo wait --timeout` reports `timeout` when the slice expires on a running agent.
+  if (status === "running" || status === "timeout") {
+    output(dependencies).out(
+      `Status: running\nNext: ${commandName} launch wait ${JSON.stringify(recordPath)} --slice ${sliceSeconds}\n`,
+    );
+    return;
+  }
+  if (status !== "idle") {
+    throw new CliError(`Paseo wait returned unknown status: ${String(wait["status"])}`);
+  }
+  const response = await paseoCall(
+    ["logs", record.launched.agentId, "--filter", "text", "--tail", "1"],
+    cwd,
+    dependencies,
+    "logs",
+  );
+  await writeFile(record.response.path, response, "utf8");
+  const result = inferRoleResult(Buffer.from(response, "utf8"));
+  const completionStatus = result === "blocked" ? "blocked" : "completed";
+  const completionCommand = `${commandName} launch complete ${JSON.stringify(recordPath)} --status ${completionStatus}`;
+  output(dependencies).out(
+    `Status: idle\nResponse: ${record.response.path}\nRole result: ${result}\nComplete: ${completionCommand}\n`,
+  );
+  if (complete) {
+    await launchComplete([recordPath, "--status", completionStatus], dependencies);
+  }
+}
+
+async function launchPaseo(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "launch paseo", ["prepared-record"], {
+    "--provider": "value",
+    "--model": "value",
+    "--thinking": "value",
+    "--slice": "value",
+  });
+  const cwd = commandRoot(dependencies);
+  const recordPath = resolve(cwd, parsed.positionals[0]!);
+  const record = await readLaunchRecord(recordPath);
+  requireRecordApplication(record, cwd);
+  if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
+  if (record.execution !== "delegated" || record.harness !== "paseo") {
+    throw new CliError(`launch paseo requires a prepared delegated Paseo record`);
+  }
+  if (record.launched !== undefined) {
+    throw new CliError(
+      `Paseo agent is already recorded for this run`,
+      `Run ${commandName} launch wait ${recordPath}.`,
+    );
+  }
+  const sliceSeconds =
+    positiveInteger(optional(parsed.options, "--slice"), "--slice") ?? defaultPaseoSliceSeconds;
+  const environment = dependencies.environment ?? process.env;
+  const provider = optional(parsed.options, "--provider") ?? environment["PASEO_PROVIDER"];
+  const model = optional(parsed.options, "--model") ?? environment["PASEO_MODEL"];
+  const thinking = optional(parsed.options, "--thinking") ?? environment["PASEO_THINKING"];
+  const target = completionTarget(record);
+  let nativeArgs: string[];
+  if (target.kind === "fresh") {
+    if (provider === undefined || provider.trim() === "") {
+      throw new CliError(`Fresh Paseo launch requires --provider <value>`);
+    }
+    if (model === undefined || model.trim() === "") {
+      throw new CliError(`Fresh Paseo launch requires --model <value>`);
+    }
+    nativeArgs = [
+      "--json",
+      "run",
+      "-d",
+      "--cwd",
+      cwd,
+      "--title",
+      launchTitle(record.work.slug, record.role),
+      "--provider",
+      provider,
+      "--model",
+      model,
+      ...(thinking === undefined ? [] : ["--thinking", thinking]),
+      `Read and follow the complete assignment in this prompt file:\n${record.prompt.path}`,
+    ];
+  } else {
+    if (
+      optional(parsed.options, "--provider") !== undefined ||
+      optional(parsed.options, "--model") !== undefined ||
+      optional(parsed.options, "--thinking") !== undefined
+    ) {
+      throw new CliError(
+        `Provider, model, and thinking options apply only to a fresh Paseo launch`,
+      );
+    }
+    nativeArgs = [
+      "--json",
+      "send",
+      "--no-wait",
+      target.agentId,
+      `Read and follow the complete assignment in this prompt file:\n${record.prompt.path}`,
+    ];
+  }
+  const launchedOutput = await paseoCall(
+    nativeArgs,
+    cwd,
+    dependencies,
+    target.kind === "fresh" ? "run" : "send",
+  );
+  const launchedId = paseoAgentId(
+    paseoJson(launchedOutput, target.kind === "fresh" ? "run" : "send"),
+    target.kind === "fresh" ? "run" : "send",
+  );
+  if (target.kind === "continuation" && launchedId !== target.agentId) {
+    throw new CliError(`Paseo send returned a different agentId than the continuation target`);
+  }
+  await recordPaseoLaunch(recordPath, launchedId, dependencies.now?.() ?? new Date());
+  output(dependencies).out(`Paseo launched: ${recordPath}\nAgent: paseo:${launchedId}\n`);
+  await launchWaitRecord(recordPath, sliceSeconds, true, dependencies);
+}
+
+async function launchWait(
+  args: readonly string[],
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const parsed = parseTail(args, "launch wait", ["prepared-record"], {
+    "--slice": "value",
+    "--complete": "flag",
+    "--no-complete": "flag",
+  });
+  if (parsed.options.has("--complete") && parsed.options.has("--no-complete")) {
+    throw new CliError(`launch wait accepts only one of --complete or --no-complete`);
+  }
+  const sliceSeconds =
+    positiveInteger(optional(parsed.options, "--slice"), "--slice") ?? defaultPaseoSliceSeconds;
+  await launchWaitRecord(
+    resolve(commandRoot(dependencies), parsed.positionals[0]!),
+    sliceSeconds,
+    !parsed.options.has("--no-complete"),
+    dependencies,
+  );
+}
+
 async function launchComplete(
   args: readonly string[],
   dependencies: CommandDependencies,
@@ -1259,13 +1508,26 @@ async function launchComplete(
     "--model": "value",
   });
   const cwd = commandRoot(dependencies);
-  const agentId = required(parsed.options, "--agent-id", "launch complete");
+  const requestedAgentId = optional(parsed.options, "--agent-id");
   const status = normalizeLaunchStatus(required(parsed.options, "--status", "launch complete"));
   const model = optional(parsed.options, "--model");
   const recordPath = resolve(cwd, parsed.positionals[0]!);
   const record = await readLaunchRecord(recordPath);
   requireRecordApplication(record, cwd);
   if (record.state !== "prepared") throw new CliError(`Launch record is already finalized`);
+  if (
+    requestedAgentId !== undefined &&
+    record.launched !== undefined &&
+    requestedAgentId !== record.launched.agentId
+  ) {
+    throw new CliError(`--agent-id does not match the agent recorded at launch`);
+  }
+  const agentId = requestedAgentId ?? record.launched?.agentId;
+  if (agentId === undefined) {
+    throw new CliError(
+      `launch complete requires --agent-id <value> when no launched agent is recorded`,
+    );
+  }
   if (record.execution !== "delegated" || record.harness === "coordinator") {
     throw new CliError(`launch complete requires a delegated run`);
   }
@@ -1464,19 +1726,29 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
   const reviewIssue = await finalReviewIssue(unit, records);
   const lines = records.map(({ path, record }) => {
     const name = basename(path);
-    const state = record.state === "prepared" ? "prepared — action required" : record.status;
+    const state =
+      record.state === "prepared" && record.launched !== undefined
+        ? `launched — awaiting ${record.harness}:${record.launched.agentId}`
+        : record.state === "prepared"
+          ? "prepared — action required"
+          : record.status;
     const executor =
       record.execution === "simulated"
         ? `coordinator simulation (${record.simulationReason})`
         : record.state === "finalized"
           ? `${record.harness}:${record.agentId}`
-          : record.harness;
+          : record.launched === undefined
+            ? record.harness
+            : undefined;
     const result = record.state === "finalized" ? `; result ${record.result}` : "";
-    return `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}${result}; ${executor}`;
+    return `- ${name.replace(/\.record\.json$/, "")}: ${record.role}/${record.phase}; ${state}${result}${executor === undefined ? "" : `; ${executor}`}`;
   });
+  const launched = prepared.filter(({ record }) => record.launched !== undefined);
   const readiness =
     prepared.length > 0
-      ? `ACTION REQUIRED: ${prepared.length} unfinished run${prepared.length === 1 ? "" : "s"}.\nHandback readiness: blocked until each prepared record is finalized.`
+      ? launched.length === prepared.length
+        ? `Run launch wait: ${prepared.length} launched run${prepared.length === 1 ? "" : "s"} still awaiting completion.\nHandback readiness: blocked until each prepared record is finalized.`
+        : `ACTION REQUIRED: ${prepared.length} unfinished run${prepared.length === 1 ? "" : "s"}.\nHandback readiness: blocked until each prepared record is finalized.`
       : reviewIssue === undefined
         ? "Handback readiness: no unfinished runs; review policy is satisfied."
         : `ACTION REQUIRED: ${reviewIssue}.\nHandback readiness: blocked until critic verification approves the final design.`;
@@ -1534,6 +1806,8 @@ async function execute(args: readonly string[], dependencies: CommandDependencie
   if (args[0] === "prompt" && args[1] === "build") return promptBuild(args.slice(2), dependencies);
   if (args[0] === "launch" && args[1] === "adapter")
     return launchAdapter(args.slice(2), dependencies);
+  if (args[0] === "launch" && args[1] === "paseo") return launchPaseo(args.slice(2), dependencies);
+  if (args[0] === "launch" && args[1] === "wait") return launchWait(args.slice(2), dependencies);
   if (args[0] === "launch" && args[1] === "complete")
     return launchComplete(args.slice(2), dependencies);
   if (args[0] === "simulation" && args[1] === "complete")

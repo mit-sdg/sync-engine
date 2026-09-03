@@ -14,12 +14,12 @@ export const paseoAdapter = {
     mechanism: "Paseo CLI",
     operation: "paseo run",
     instruction:
-      "Inspect the current Paseo agent, then run paseo run in the foreground with its provider, model, and thinking settings plus the short generated file-reading instruction; retain the returned child agent ID and final response.",
+      "Start paseo run in the background with explicit provider and model settings plus the short generated file-reading instruction; record the returned child agent ID and observe it through short wait slices.",
   },
   continuation: {
     mechanism: "Paseo CLI",
     operation: "paseo send",
     instruction:
-      "Send the short generated file-reading instruction to the recorded Paseo agent ID.",
+      "Send the short generated file-reading instruction without waiting to the recorded Paseo agent ID, then observe it through short wait slices.",
   },
 } as const satisfies HarnessAdapterDefinition;

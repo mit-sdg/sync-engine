@@ -4,21 +4,24 @@ Use this reference only when delegating. Coordinator simulation does not invoke 
 
 ## Common launch contract
 
-The selected harness is the mechanism that creates and retains the role agent through completion. Run `sync-engine-skill harness recommend` before delegation; a detected supervising harness takes precedence over its embedded provider runtime. For Paseo-managed coordinators, inspect the current agent and pass its provider, model, and thinking settings to the foreground `paseo run`. Use `--json` and the record timeout so the returned agent ID and terminal status are unambiguous. Use the printed launch action from prompt preparation.
+The selected harness creates and retains the role agent through completion. Run `sync-engine-skill harness recommend` before delegation. A detected supervising harness takes precedence over its embedded provider runtime. Use the printed launch action from prompt preparation. Paseo-managed shells expose connection and agent IDs, but currently expose no provider, model, or thinking setting. Supply `--provider` and `--model` to a fresh `launch paseo` command. Supply `--thinking` when required. `PASEO_PROVIDER`, `PASEO_MODEL`, and `PASEO_THINKING` are accepted when a future or configured environment exposes them.
 
 For each delegated run:
 
 1. Build the role prompt. The CLI writes task, access, prompt, empty response, and prepared record artifacts.
-2. Invoke the selected harness from the application workspace. A fresh run creates a fresh identity; a continuation targets the exact recorded identity. Keep Paseo launches in the foreground so the coordinator receives the final response before continuing.
+2. Invoke the printed launch action from the application workspace. A fresh run creates a fresh identity. A continuation targets the exact recorded identity.
 3. Send only the printed short instruction: `Read and follow the complete assignment in <prompt-path>`. The prompt file is the complete role message. Do not paste, summarize, or prefix its contents.
-4. Let the foreground harness command wait until terminal status or timeout; do not schedule timers or narrate waiting. Preserve the returned identity. For Paseo, read the settled agent's final assistant message rather than reconstructing a result from progress summaries.
-5. Copy that response verbatim to the printed response path and run the printed `launch complete` command before preparing another role. Use `--status blocked` when its required Status or Verdict says blocked. Completion validates adapter-specific identity form.
+4. For Paseo, run `launch paseo` once. It starts or continues the child in the background, records the identity, and performs one short wait slice.
+5. Repeat the exact printed `launch wait` command while the status is running. Each call is short by design. Never resend the assignment.
+6. An idle Paseo wait captures `paseo logs <id> --filter text --tail 1` verbatim. It infers blocked versus completed and runs completion by default. Use `--no-complete` only for manual completion.
+7. For another harness, observe through its native mechanism. Copy its final response verbatim to the response path. Run the printed `launch complete` command.
+8. Use `--status blocked` when the required Status or Verdict says blocked. Completion validates adapter-specific identity form.
 
 If a fresh launch has not started and must use another adapter, run `sync-engine-skill launch adapter <prepared-record> --harness <harness>` before launching. A same-agent continuation cannot change adapter.
 
 The explicitly named prompt file is the only workflow artifact the role may read. The compiled prompt contains its task, context, access, and result guidance.
 
-A harmless status check may be repeated. Retry a fresh launch only when no identity was created and the prompt was not accepted. Otherwise preserve the attempt and choose a continuation, fresh replacement, simulation, or stop. If a foreground child settles but the coordinator is not resumed, report a supervising-harness lifecycle defect; do not add polling logic to the work item.
+A harmless status check may be repeated. Retry a fresh launch only when no identity was created and the prompt was not accepted. Otherwise preserve the attempt and choose a continuation, fresh replacement, simulation, or stop. Never end the turn while a record is prepared. If the harness ends the turn during a Paseo wait loop, resume by running `launch wait` again.
 
 ## Continuation
 
@@ -34,7 +37,7 @@ All supplied adapters currently communicate access through prompt guidance. Work
 
 | Adapter     | Fresh identity                             | Continuation                      | Workspace                                               |
 | ----------- | ------------------------------------------ | --------------------------------- | ------------------------------------------------------- |
-| Paseo       | `paseo run`; capture agent ID              | `paseo send` to that ID           | Set application root as `cwd`                           |
+| Paseo       | background `paseo run`; record agent ID    | no-wait `paseo send` to that ID   | Set application root as `cwd`                           |
 | Pi          | persistent JSON session; capture header ID | reopen the same session ID        | Application root; session directory under the work item |
 | Codex       | fresh worker thread                        | resume returned thread ID         | Inherit application workspace                           |
 | Claude Code | fresh general-purpose Agent                | resume returned agent ID          | Inherit workspace; no worktree isolation                |
