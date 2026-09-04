@@ -178,13 +178,13 @@ const output = (heading: string, required = true, guidance = ""): ReturnField =>
 });
 
 const designerReturn = [
-  output("Status", true, "Complete or blocked unless the task requests another format."),
+  output("Status", true, "First line is exactly `Complete` or `Blocked`; explanation goes below."),
   output("Changed", true, "Paths changed, or none."),
   output("Questions", true, "Material questions, or none."),
   output("Checks", false, "Command and outcome when applicable."),
 ];
 const criticReturn = [
-  output("Verdict", true, "Approve, revise, or blocked."),
+  output("Verdict", true, "First line is exactly `Approve`, `Revise`, or `Blocked`."),
   output(
     "Assessments",
     true,
@@ -193,7 +193,7 @@ const criticReturn = [
   output("Findings", true, "Stable-ID blocker or material findings, or none."),
 ];
 const workerReturn = [
-  output("Status", true, "Complete or blocked."),
+  output("Status", true, "First line is exactly `Complete` or `Blocked`; explanation goes below."),
   output("Changed", true, "Paths changed, or none."),
   output("Checks", true, "Exact command and pass/fail outcome."),
   output("Blockers", true, "Categorize as design, context, or environment."),

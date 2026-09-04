@@ -180,7 +180,7 @@ describe("typed role specifications", () => {
       {
         heading: "Status",
         required: true,
-        guidance: "Complete or blocked unless the task requests another format.",
+        guidance: "First line is exactly `Complete` or `Blocked`; explanation goes below.",
       },
       { heading: "Changed", required: true, guidance: "Paths changed, or none." },
       { heading: "Questions", required: true, guidance: "Material questions, or none." },
@@ -191,7 +191,11 @@ describe("typed role specifications", () => {
       },
     ]);
     expect(roleSpecifications["critic/decomposition"].returnShape).toEqual([
-      { heading: "Verdict", required: true, guidance: "Approve, revise, or blocked." },
+      {
+        heading: "Verdict",
+        required: true,
+        guidance: "First line is exactly `Approve`, `Revise`, or `Blocked`.",
+      },
       {
         heading: "Assessments",
         required: true,
@@ -205,7 +209,11 @@ describe("typed role specifications", () => {
       },
     ]);
     expect(roleSpecifications["critic/contracts"].returnShape).toEqual([
-      { heading: "Verdict", required: true, guidance: "Approve, revise, or blocked." },
+      {
+        heading: "Verdict",
+        required: true,
+        guidance: "First line is exactly `Approve`, `Revise`, or `Blocked`.",
+      },
       {
         heading: "Assessments",
         required: true,
@@ -218,7 +226,11 @@ describe("typed role specifications", () => {
       },
     ]);
     expect(roleSpecifications["critic/implementation"].returnShape).toEqual([
-      { heading: "Verdict", required: true, guidance: "Approve, revise, or blocked." },
+      {
+        heading: "Verdict",
+        required: true,
+        guidance: "First line is exactly `Approve`, `Revise`, or `Blocked`.",
+      },
       {
         heading: "Assessments",
         required: true,
@@ -232,7 +244,11 @@ describe("typed role specifications", () => {
       },
     ]);
     expect(roleSpecifications["concept-worker/implementation"].returnShape).toEqual([
-      { heading: "Status", required: true, guidance: "Complete or blocked." },
+      {
+        heading: "Status",
+        required: true,
+        guidance: "First line is exactly `Complete` or `Blocked`; explanation goes below.",
+      },
       { heading: "Changed", required: true, guidance: "Paths changed, or none." },
       { heading: "Checks", required: true, guidance: "Exact command and pass/fail outcome." },
       {

@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import type { BootstrapOptions, BootstrapResult } from "../skills/sync-engine/scripts/bootstrap.ts";
@@ -222,6 +222,41 @@ async function finalizeInitial(root: string, launch: InitialLaunch, response?: s
     root,
   );
   return { result, content };
+}
+
+async function finalizedSimulationRecord(
+  root: string,
+  role: "critic" | "application-worker",
+  phase: "verification" | "implementation",
+  response: string,
+  at: Date,
+): Promise<string> {
+  const launch = await prepareLaunch({
+    applicationRoot: root,
+    slug: "message-board-search",
+    role,
+    phase,
+    execution: "simulated",
+    harness: "coordinator",
+    simulationReason: "test fixture",
+    timeoutSeconds: 60,
+    task: "# Task\n\nTest.\n",
+    prompt: "# Prompt\n\nTest.\n",
+    grant: {
+      readableAreas: [],
+      writableAreas: [],
+      toolKinds: [],
+      projectShell: "none",
+      network: false,
+      generatedOutput: false,
+      longRunningProcesses: false,
+    },
+    retainedSources: [],
+    at,
+  });
+  await writeFile(launch.record.response.path, response, "utf8");
+  await finalizeSimulation({ recordPath: launch.path, status: "completed" });
+  return launch.path;
 }
 
 afterEach(async () => {
@@ -784,6 +819,33 @@ describe("prompt preparation and completion", () => {
     ]);
   });
 
+  test("auto-complete wait refuses an unknown result shape", async () => {
+    const root = await application("paseo-unknown-shape");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const paseoCommand = fakePaseo(
+      [
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+        { output: JSON.stringify({ agentId: paseoAgentId, status: "idle" }) },
+        { output: "The assignment is done.\n" },
+      ],
+      [],
+    );
+    await invoke(
+      ["launch", "paseo", launch.recordPath, "--provider", "pi", "--model", "gpt-example"],
+      root,
+      { paseoCommand },
+    );
+    const completed = await invoke(["launch", "wait", launch.recordPath], root, {
+      paseoCommand,
+    });
+    expect(completed.stderr).toBe(
+      "Error: Response has no parsable required `## Status`; expected `Complete` or `Blocked` for designer; fix the response file and rerun completion.\n",
+    );
+    expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
+  });
+
   test("captures a blocked Paseo result and completes it as blocked", async () => {
     const root = await application("paseo-blocked");
     await started(root);
@@ -927,26 +989,34 @@ describe("prompt preparation and completion", () => {
     });
   });
 
-  test("accepts a task-specific result format and preserves useful output", async () => {
+  test("refuses an unknown result shape until the response is fixed", async () => {
     const root = await application("shape-warning");
     await started(root);
     const launch = await prepareInitial(root);
     const useful = "The work is complete; no files changed.\n";
     const { result } = await finalizeInitial(root, launch, useful);
-    expect(result.code).toBe(0);
-    expect(parseLabeledOutput(result.stdout)).toEqual({
-      "Launch finalized": [launch.recordPath],
-      Response: [launch.responsePath],
-      Harness: [`paseo; agent ${paseoAgentId}`],
-      Status: ["completed; result: unknown"],
-      Warning: [
-        "paseo capabilities were prompt-guided rather than harness-enforced.",
-        "Response has no parsable required `## Status`; result recorded as unknown.",
-      ],
-      Next: ["Inspect work readiness with `sync-engine-skill work show message-board-search`."],
-    });
+    expect(result).toEqual(
+      cliFailure(
+        "Response has no parsable required `## Status`; expected `Complete` or `Blocked` for designer; fix the response file and rerun completion.",
+      ),
+    );
     expect(await readFile(launch.responsePath, "utf8")).toBe(useful);
-    expect((await readLaunchRecord(launch.recordPath)).state).toBe("finalized");
+    expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
+    await writeFile(launch.responsePath, "## Status\n\nComplete\n", "utf8");
+    expect(
+      await invoke(
+        [
+          "launch",
+          "complete",
+          launch.recordPath,
+          "--agent-id",
+          paseoAgentId,
+          "--status",
+          "completed",
+        ],
+        root,
+      ),
+    ).toMatchObject({ code: 0, stderr: "" });
   });
 
   test("records coordinator simulation without inventing an agent identity", async () => {
@@ -989,7 +1059,7 @@ describe("prompt preparation and completion", () => {
       simulationReason: "delegation-unavailable",
     });
 
-    await writeFile(responsePath, "A task-specific simulated result.\n", "utf8");
+    await writeFile(responsePath, "## Status\n\nComplete\n", "utf8");
     const completed = await invoke(
       ["simulation", "complete", recordPath, "--status", "completed"],
       root,
@@ -1201,7 +1271,7 @@ describe("prompt preparation and completion", () => {
       ),
     ).toEqual(
       cliFailure(
-        "Critic response has no parsable `## Verdict`; this record cannot satisfy the review policy. Fix the response file to state approve, revise, or blocked, then rerun completion.",
+        "Response has no parsable required `## Verdict`; expected `Approve`, `Revise`, or `Blocked` for critic; fix the response file and rerun completion.",
       ),
     );
   });
@@ -1304,6 +1374,8 @@ describe("prompt preparation and completion", () => {
         `brief=${resolve(unit, "brief.md")}`,
         "--input",
         `changed-contracts=${changed}`,
+        "--concepts-only",
+        "this application intentionally exposes concepts only",
       ],
       root,
       { designCheck: async () => ({ exitCode: 1, output: "duplicate H1\n" }) },
@@ -1813,6 +1885,225 @@ describe("prompt preparation and completion", () => {
       state: "prepared",
       harness: "paseo",
     });
+  });
+
+  test("gates handback on the latest critic and product boundaries with recorded acceptance", async () => {
+    const root = await application("handback-gates");
+    const unit = await started(root);
+    const criticPath = await finalizedSimulationRecord(
+      root,
+      "critic",
+      "verification",
+      "## Verdict\n\nRevise\n\n## Findings\n\n- D-7 Unresolved\n- API-2 regressed\n",
+      new Date("2026-08-19T09:10:00.000Z"),
+    );
+    await mkdir(resolve(root, "src/generated"), { recursive: true });
+    await writeFile(
+      resolve(root, "src/server.ts"),
+      'import thing from "../node_modules/example/dist/thing.js";\nconst pathname = new URL(req.url).pathname;\n',
+    );
+    await writeFile(
+      resolve(root, "src/handler.ts"),
+      'import { createSyncHandler } from "@mit-sdg/sync-engine-http";\nBun.serve({ fetch: createSyncHandler({} as never) });\n',
+    );
+    await writeFile(resolve(root, "src/generated/ignored.ts"), "Bun.serve({});\n");
+    await mkdir(resolve(root, "src/concepts"), { recursive: true });
+    await writeFile(
+      resolve(root, "src/concepts/Shortening.ts"),
+      "export const valid = (target: string) => new URL(target).pathname.length > 0;\n",
+    );
+
+    const stem = basename(criticPath).replace(/\.record\.json$/, "");
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown.stdout).not.toContain("src/concepts/Shortening.ts");
+    expect(shown.stdout).toContain(`Last critic verdict: revise (${stem})`);
+    expect(shown.stdout).toContain("Unresolved critic findings: D-7, API-2");
+    expect(shown.stdout).toContain("Internal imports: src/server.ts:1");
+    expect(shown.stdout).toContain("Parallel router: src/server.ts");
+    expect(shown.stdout).not.toContain("src/handler.ts,");
+
+    expect(await invoke(["work", "finish", "message-board-search"], root)).toEqual(
+      cliFailure(
+        `Work item message-board-search cannot finish: critic-verdict\nLast critic verdict: revise (${stem})\nUnresolved critic findings: D-7, API-2`,
+        "Resolve it or rerun with --accept critic-verdict=<reason>.",
+      ),
+    );
+    const accepted = await invoke(
+      [
+        "work",
+        "finish",
+        "message-board-search",
+        "--accept",
+        "critic-verdict=known review debt",
+        "--accept",
+        "internal-imports=temporary migration",
+        "--accept",
+        "parallel-router=legacy endpoint",
+      ],
+      root,
+    );
+    expect(accepted.stdout).toContain(
+      "Accepted handback check: critic-verdict (known review debt)",
+    );
+    expect(accepted.stdout).toContain(
+      "Accepted handback check: internal-imports (temporary migration)",
+    );
+    expect(accepted.stdout).toContain("Accepted handback check: parallel-router (legacy endpoint)");
+    expect(JSON.parse(await readFile(resolve(unit, "handback.json"), "utf8"))).toEqual({
+      accepted: [
+        { check: "critic-verdict", reason: "known review debt", at: instant.toISOString() },
+        { check: "internal-imports", reason: "temporary migration", at: instant.toISOString() },
+        { check: "parallel-router", reason: "legacy endpoint", at: instant.toISOString() },
+      ],
+    });
+    expect((await invoke(["work", "show", "message-board-search"], root)).stdout).toContain(
+      "Accepted handback check: critic-verdict (known review debt)",
+    );
+  });
+
+  test("requires an application contract or records a concepts-only review scope", async () => {
+    const root = await application("concepts-only");
+    const unit = await started(root);
+    const task = await copyFixture(root, "initial-task.md");
+    const concept = resolve(root, "design/concepts/Posting.md");
+    await mkdir(resolve(root, "design/concepts"), { recursive: true });
+    await writeFile(concept, "# Posting\n");
+    const grant = resolve(root, "coordination/critic-contract-grant.json");
+    await writeFile(
+      grant,
+      `${JSON.stringify({ readableAreas: [{ area: "design", path: "concepts/Posting.md" }], writableAreas: [], toolKinds: ["repository-read"], projectShell: "none", network: false, generatedOutput: false, longRunningProcesses: false })}\n`,
+    );
+    const args = [
+      "prompt",
+      "build",
+      "--work",
+      "message-board-search",
+      "--role",
+      "critic",
+      "--phase",
+      "contracts",
+      "--task",
+      task,
+      "--grant",
+      grant,
+      "--simulate",
+      "test",
+      "--input",
+      `brief=${resolve(unit, "brief.md")}`,
+      "--input",
+      `changed-contracts=${concept}`,
+    ];
+    expect(await invoke(args, root)).toEqual(
+      cliFailure(
+        "Application contract is missing: critic/contracts requires a contract under design/compositions/",
+        "Supply the application contract or rerun with --concepts-only <reason>.",
+      ),
+    );
+    const prepared = await invoke(
+      [...args, "--concepts-only", "library package has no application"],
+      root,
+      {
+        designCheck: async () => ({ exitCode: 0, output: "" }),
+      },
+    );
+    expect(prepared.stdout).toContain(
+      "Review scope: concepts only (library package has no application)",
+    );
+    expect(await readLaunchRecord(reported(prepared.stdout, "Record"))).toMatchObject({
+      reviewScope: { conceptsOnly: "library package has no application" },
+    });
+  });
+
+  test("warns for oversized decomposition and nudges batched final-design review", async () => {
+    const root = await application("review-warnings");
+    const unit = await started(root);
+    await finalizedSimulationRecord(
+      root,
+      "application-worker",
+      "implementation",
+      "## Status\n\nComplete\n",
+      new Date("2026-08-19T09:07:00.000Z"),
+    );
+    const task = await copyFixture(root, "initial-task.md");
+    const decomposition = resolve(unit, "decomposition.md");
+    const decompositionText = `# Decisions\n\n${"x".repeat(8_100)}\n`;
+    await writeFile(decomposition, decompositionText);
+    const emptyGrant = resolve(root, "coordination/critic-warning-grant.json");
+    await writeFile(
+      emptyGrant,
+      `${JSON.stringify({ readableAreas: [], writableAreas: [], toolKinds: [], projectShell: "none", network: false, generatedOutput: false, longRunningProcesses: false })}\n`,
+    );
+    const decompositionReview = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "critic",
+        "--phase",
+        "decomposition",
+        "--task",
+        task,
+        "--grant",
+        emptyGrant,
+        "--simulate",
+        "test",
+        "--input",
+        `brief=${resolve(unit, "brief.md")}`,
+        "--input",
+        `candidate-decomposition=${decomposition}`,
+      ],
+      root,
+    );
+    expect(decompositionReview.stdout).toContain(
+      `Warning: decomposition.md is ${Buffer.byteLength(decompositionText)} bytes; the rubric expects a compact decision index. Ask the designer to cut signatures, storage, and restatement before review.`,
+    );
+    await writeFile(reported(decompositionReview.stdout, "Response"), "## Verdict\n\nApprove\n");
+    await invoke(
+      [
+        "simulation",
+        "complete",
+        reported(decompositionReview.stdout, "Record"),
+        "--status",
+        "completed",
+      ],
+      root,
+    );
+
+    const composition = resolve(root, "design/compositions/App.md");
+    await mkdir(resolve(root, "design/compositions"), { recursive: true });
+    await writeFile(composition, "# App\n");
+    const contractReview = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "critic",
+        "--phase",
+        "contracts",
+        "--task",
+        task,
+        "--grant",
+        emptyGrant,
+        "--simulate",
+        "test",
+        "--input",
+        `brief=${resolve(unit, "brief.md")}`,
+        "--input",
+        `changed-contracts=${composition}`,
+      ],
+      root,
+      {
+        designCheck: async () => ({ exitCode: 0, output: "" }),
+        now: () => new Date("2026-08-19T09:09:00.000Z"),
+      },
+    );
+    expect(contractReview.stdout).toContain(
+      "Note: required review binds only the final design digest before work finish; batch further repairs before verifying unless a worker is blocked on this design.",
+    );
   });
 });
 
