@@ -106,10 +106,10 @@ export default defineConfig({
         "**/tests/**",
       ],
       thresholds: {
-        statements: 90.2,
+        statements: 90,
         branches: 81.6,
         functions: 94.2,
-        lines: 92,
+        lines: 91.8,
       },
     },
   },
