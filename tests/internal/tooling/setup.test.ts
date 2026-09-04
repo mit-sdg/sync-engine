@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setupProject } from "@command/setup";
@@ -338,6 +338,44 @@ describe("sync-engine setup", () => {
       ]);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a symbolic-link package without changing its target", async () => {
+    const root = await project();
+    const outside = await mkdtemp(join(tmpdir(), "sync-engine-setup-outside-"));
+    const target = join(outside, "package.json");
+    const original = '{"name":"faculty-course","private":true}\n';
+    try {
+      await writeFile(target, original);
+      await rm(join(root, "package.json"));
+      await symlink(target, join(root, "package.json"));
+
+      await expect(setupProject(root, { install: false })).rejects.toThrow(
+        "refuses symbolic link: package.json",
+      );
+      expect(await readFile(target, "utf8")).toBe(original);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a symbolic-link source directory before changing the manifest", async () => {
+    const root = await project();
+    const outside = await mkdtemp(join(tmpdir(), "sync-engine-setup-outside-"));
+    const original = await readFile(join(root, "package.json"), "utf8");
+    try {
+      await symlink(outside, join(root, "src"), "dir");
+
+      await expect(setupProject(root, { install: false })).rejects.toThrow(
+        "refuses symbolic link: src",
+      );
+      expect(await readFile(join(root, "package.json"), "utf8")).toBe(original);
+      await expect(readFile(join(outside, "main.ts"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
     }
   });
 });

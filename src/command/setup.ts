@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
 import ts from "typescript";
@@ -271,6 +271,43 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isMissing(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
+async function projectTarget(root: string, path: string): Promise<"file" | "missing"> {
+  const target = resolve(root, path);
+  const nested = relative(root, target);
+  if (nested === ".." || nested.startsWith(`..${sep}`) || isAbsolute(nested)) {
+    throw new Error(`sync-engine setup: target escapes the project: ${path}`);
+  }
+  const parts = nested.split(sep).filter(Boolean);
+  let current = root;
+  for (const [index, part] of parts.entries()) {
+    current = resolve(current, part);
+    let status;
+    try {
+      status = await lstat(current);
+    } catch (error) {
+      if (isMissing(error)) return "missing";
+      throw error;
+    }
+    if (status.isSymbolicLink()) {
+      throw new Error(`sync-engine setup: refuses symbolic link: ${relative(root, current)}`);
+    }
+    const final = index === parts.length - 1;
+    if ((!final && !status.isDirectory()) || (final && !status.isFile())) {
+      throw new Error(`sync-engine setup: expected a ${final ? "file" : "directory"}: ${path}`);
+    }
+  }
+  return "file";
+}
+
 /** Initialize a supported concept-free application without replacing application-owned files. */
 export async function setupProject(
   directory = ".",
@@ -280,7 +317,12 @@ export async function setupProject(
   if (!existsSync(root)) {
     throw new Error(`sync-engine setup: directory does not exist: ${directory}`);
   }
-  const packagePath = resolve(root, "package.json");
+  const canonicalRoot = await realpath(root);
+  const source = await templates();
+  for (const path of ["package.json", ...source.keys()]) {
+    await projectTarget(canonicalRoot, path);
+  }
+  const packagePath = resolve(canonicalRoot, "package.json");
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {
@@ -289,9 +331,10 @@ export async function setupProject(
     dependencies: { typescript: string };
     devDependencies: { "@types/bun": string; "@types/node": string };
   };
-  const manifest = existsSync(packagePath)
-    ? packageObject(await readFile(packagePath, "utf8"), relative(process.cwd(), packagePath))
-    : { private: true, type: "module" };
+  const manifest =
+    (await projectTarget(canonicalRoot, "package.json")) === "file"
+      ? packageObject(await readFile(packagePath, "utf8"), relative(process.cwd(), packagePath))
+      : { private: true, type: "module" };
   const manifestUpdated = updateManifest(manifest, {
     version: packageManifest.version,
     packageManager: packageManifest.packageManager,
@@ -303,6 +346,7 @@ export async function setupProject(
   const guidance: string[] = [];
   let installation: SetupResult["installation"] = "not-needed";
   if (manifestUpdated) {
+    await projectTarget(canonicalRoot, "package.json");
     await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
     if (options.install === false) {
       installation = "skipped";
@@ -322,11 +366,12 @@ export async function setupProject(
     }
   }
 
-  const source = await templates();
   const existing = new Map<string, string>();
   for (const path of source.keys()) {
-    const target = resolve(root, path);
-    if (existsSync(target)) existing.set(path, await readFile(target, "utf8"));
+    const target = resolve(canonicalRoot, path);
+    if ((await projectTarget(canonicalRoot, path)) === "file") {
+      existing.set(path, await readFile(target, "utf8"));
+    }
   }
 
   const verified: string[] = [];
@@ -378,8 +423,10 @@ export async function setupProject(
   try {
     for (const path of order) {
       if (!eligible.has(path)) continue;
-      const target = resolve(root, path);
+      const target = resolve(canonicalRoot, path);
+      await projectTarget(canonicalRoot, path);
       await mkdir(dirname(target), { recursive: true });
+      await projectTarget(canonicalRoot, path);
       await writeFile(target, source.get(path) ?? "", { flag: "wx" });
       written.push(path);
     }
