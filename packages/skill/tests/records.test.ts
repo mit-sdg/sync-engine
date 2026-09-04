@@ -93,7 +93,9 @@ async function finalizedTarget(
   overrides: Partial<Parameters<typeof prepareLaunch>[0]> = {},
 ): Promise<{ path: string; record: FinalizedLaunchRecord }> {
   const launch = await prepared(unit, overrides);
-  const record = await complete(launch.path, "Status: complete\n", {
+  const role = overrides.role ?? "concept-worker";
+  const response = role === "critic" ? "## Verdict\n\nApprove\n" : "## Status\n\nComplete\n";
+  const record = await complete(launch.path, response, {
     agentId: "agent-original",
   });
   return { path: launch.path, record };
@@ -132,7 +134,8 @@ describe("prepared and finalized records", () => {
       sha256(await readFile(launch.artifacts.capabilitiesPath)),
     );
 
-    const response = "verbatim\r\nresponse without a trailing newline";
+    const response =
+      "## Status\r\n\r\nComplete\r\n\r\nverbatim response without a trailing newline";
     await writeFile(launch.artifacts.responsePath, response);
     const final = await finalizeLaunch({
       recordPath: launch.path,
@@ -269,7 +272,7 @@ describe("prepared and finalized records", () => {
       review,
     });
     const message =
-      "Critic response has no parsable `## Verdict`; this record cannot satisfy the review policy. Fix the response file to state approve, revise, or blocked, then rerun completion.";
+      "Response has no parsable required `## Verdict`; expected `Approve`, `Revise`, or `Blocked` for critic; fix the response file and rerun completion.";
     expect(await rejectedValue(complete(delegated.path, "## Summary\n\nLooks good.\n"))).toEqual({
       name: "RecordError",
       message,
@@ -288,6 +291,19 @@ describe("prepared and finalized records", () => {
     expect(
       await rejectedValue(finalizeSimulation({ recordPath: simulated.path, status: "completed" })),
     ).toEqual({ name: "RecordError", message });
+  });
+
+  test("requires the role-specific result heading and values", async () => {
+    const unit = await work("worker-result-shape");
+    const launch = await prepared(unit, {
+      role: "evidence-worker",
+      phase: "evidence",
+    });
+    expect(await rejectedValue(complete(launch.path, "## Status\n\nRevise\n"))).toEqual({
+      name: "RecordError",
+      message:
+        "Response has no parsable required `## Status`; expected `Complete` or `Blocked` for evidence-worker; fix the response file and rerun completion.",
+    });
   });
 
   test("binds an approving review to its exact candidate digest", async () => {
@@ -375,7 +391,7 @@ describe("relationship identity snapshots", () => {
     });
     expect(
       await rejectedValue(
-        complete(reused.path, "independent review", { agentId: "agent-original" }),
+        complete(reused.path, "## Verdict\n\nApprove\n", { agentId: "agent-original" }),
       ),
     ).toEqual({ name: "RecordError", message: "Fresh launch must use a new agent identity" });
 
@@ -385,7 +401,7 @@ describe("relationship identity snapshots", () => {
       harness: "codex",
       at: new Date("2026-08-19T09:12:01.000Z"),
     });
-    const finalized = await complete(otherHarness.path, "independent review", {
+    const finalized = await complete(otherHarness.path, "## Verdict\n\nApprove\n", {
       agentId: "agent-original",
     });
     expect(finalized).toMatchObject({ harness: "codex", agentId: "agent-original" });
@@ -427,13 +443,17 @@ describe("relationship identity snapshots", () => {
       `${JSON.stringify({ ...target.record, harness: "codex", agentId: "mutated" }, undefined, 2)}\n`,
     );
     expect(
-      await rejectedValue(complete(next.path, "resolved", { agentId: "agent-other" })),
+      await rejectedValue(
+        complete(next.path, "## Verdict\n\nApprove\n", { agentId: "agent-other" }),
+      ),
     ).toEqual({
       name: "RecordError",
       message: "Continuation must use the snapshotted harness and agent",
     });
     await writeFile(target.path, `${JSON.stringify(target.record, undefined, 2)}\n`);
-    const final = await complete(next.path, undefined, { agentId: "agent-original" });
+    const final = await complete(next.path, "## Verdict\n\nApprove\n", {
+      agentId: "agent-original",
+    });
     expect(final.agentId).toBe("agent-original");
   });
 
@@ -445,9 +465,13 @@ describe("relationship identity snapshots", () => {
       at: new Date("2026-08-19T09:12:00.000Z"),
     });
     expect(
-      await rejectedValue(complete(replacement.path, "replacement", { agentId: "agent-original" })),
+      await rejectedValue(
+        complete(replacement.path, "## Status\n\nComplete\n", { agentId: "agent-original" }),
+      ),
     ).toEqual({ name: "RecordError", message: "Replacement must use a new agent identity" });
-    const final = await complete(replacement.path, undefined, { agentId: "agent-replacement" });
+    const final = await complete(replacement.path, "## Status\n\nComplete\n", {
+      agentId: "agent-replacement",
+    });
     expect(final.relationship?.kind).toBe("replacement");
   });
 });
@@ -475,7 +499,10 @@ describe("design lifecycle", () => {
     await mkdir(resolve(root, "concepts"), { recursive: true });
     await writeFile(resolve(root, "concepts/Posting.md"), "# Posting\n");
     const authored = await digestDesign(root);
-    const final = await complete(launch.path, "Changed: design/concepts/Posting.md\n");
+    const final = await complete(
+      launch.path,
+      "## Status\n\nComplete\n\nChanged: design/concepts/Posting.md\n",
+    );
 
     expect(authored.files).toBe(1);
     expect(final.design).toMatchObject({ root, before: empty.digest, after: authored.digest });
@@ -502,7 +529,10 @@ describe("design lifecycle", () => {
     });
     await writeFile(resolve(root, "compositions/Board.md"), "# Changed composition\n");
     const after = await digestDesign(root);
-    const final = await complete(launch.path, "Changed: design/composition.md\n");
+    const final = await complete(
+      launch.path,
+      "## Status\n\nComplete\n\nChanged: design/composition.md\n",
+    );
 
     expect(final.design).toMatchObject({ root, before: before.digest, after: after.digest });
     expect(final.design?.beforeFiles).toHaveLength(2);

@@ -31,7 +31,7 @@ Existing accepted design may proceed directly to implementation. The user may om
 
 One work item lives at `.sync-engine/work/<slug>/`. Its immutable `policy.json` fixes review and execution mode; `brief.md` records goal, active decisions, status, and concise activity. Timestamped artifacts preserve each task, access grant, compiled prompt, result, execution mode, identity, and status. Use `sync-engine-skill work show <slug>` for a readable overview.
 
-Finalize each run before preparing another. Never return, idle, or wait with a simulation record prepared. Finalize a role-reported blocker with `--status blocked`, not `completed`. Completion checks design immutability and changed paths against the write grant.
+Finalize each run before preparing another. Never return, idle, or wait with a simulation record prepared. Finalize a role-reported blocker with `--status blocked`, not `completed`. Completion rejects a result without an exact status or verdict line, and `work finish` gates on the last critic verdict and product-boundary checks. Completion checks design immutability and changed paths against the write grant.
 
 When execution budget is low, hand back before starting optional evidence. `work finish <slug>` refuses handback while a run remains prepared.
 
@@ -53,4 +53,4 @@ Use the built-in role kit once. Contract design receives exact authored, SSF, an
 
 ## Respect the work policy
 
-The coordinator chooses phases, context, access, validation, and handback within the immutable work policy selected at `work start`. Required review binds approval to the current decomposition before contracts and to design before first implementation and final handback; implementation repair may batch intermediate design changes. Omitted review records the user's choice once. Execution policy limits the item to delegated, simulated, or mixed runs.
+The coordinator chooses phases, context, access, validation, and handback within the immutable work policy selected at `work start`. Required review binds approval to the current decomposition before contracts and to design before first implementation and final handback; implementation repair may batch intermediate design changes. Omitted review records the user's choice once. Overrides are explicit and their reasons are recorded. Execution policy limits the item to delegated, simulated, or mixed runs.

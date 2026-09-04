@@ -71,7 +71,7 @@ Last by stable display name.
 
 Unless the task requests another format, return these headings in order. Omit progress narration.
 
-- `## Status` — required. Complete or blocked unless the task requests another format.
+- `## Status` — required. First line is exactly `Complete` or `Blocked`; explanation goes below.
 - `## Changed` — required. Paths changed, or none.
 - `## Questions` — required. Material questions, or none.
 - `## Checks` — optional. Command and outcome when applicable.

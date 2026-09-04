@@ -5,7 +5,7 @@ Usage:
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
     [--review <required|omitted>] [--execution <delegated|simulated|mixed>]
   sync-engine-skill work show <slug>
-  sync-engine-skill work finish <slug>
+  sync-engine-skill work finish <slug> [--accept <check>=<reason>]...
   sync-engine-skill grant init --role <role> --phase <phase>
     [--read <area>:<path>]... [--write <area>:<path>]...
     [--shell <level>] [--network] [--generated-output] [--long-running]
@@ -13,8 +13,8 @@ Usage:
   sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
     --task <path> --grant <json-path>
     (--harness <harness> | --simulate <reason>)
-    [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
-    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+    [--input <slot>=<path>]... [--design-root <path>] [--concepts-only <reason>]
+    [--context-limit <bytes>] [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   sync-engine-skill launch adapter <prepared-record> --harness <harness>
   sync-engine-skill launch paseo <prepared-record> [--provider <id>] [--model <id>]
     [--thinking <id>] [--slice <seconds>]

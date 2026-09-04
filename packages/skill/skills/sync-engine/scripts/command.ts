@@ -169,7 +169,7 @@ Usage:
     [--conflict <align-pinned-release|continue-with-warning|stop-unchanged>]
     [--review <required|omitted>] [--execution <delegated|simulated|mixed>]
   ${commandName} work show <slug>
-  ${commandName} work finish <slug>
+  ${commandName} work finish <slug> [--accept <check>=<reason>]...
   ${commandName} grant init --role <role> --phase <phase>
     [--read <area>:<path>]... [--write <area>:<path>]...
     [--shell <level>] [--network] [--generated-output] [--long-running]
@@ -177,8 +177,8 @@ Usage:
   ${commandName} prompt build --work <slug> --role <role> --phase <phase>
     --task <path> --grant <json-path>
     (--harness <harness> | --simulate <reason>)
-    [--input <slot>=<path>]... [--design-root <path>] [--context-limit <bytes>]
-    [--timeout <seconds>] [--model <id>] [--reasoning <id>]
+    [--input <slot>=<path>]... [--design-root <path>] [--concepts-only <reason>]
+    [--context-limit <bytes>] [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   ${commandName} launch adapter <prepared-record> --harness <harness>
   ${commandName} launch paseo <prepared-record> [--provider <id>] [--model <id>]
     [--thinking <id>] [--slice <seconds>]
@@ -482,6 +482,21 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function hasMarkdownFile(directory: string): Promise<boolean> {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new CliError(`Cannot inspect application contracts: ${String(error)}`);
+  }
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith(".md")) return true;
+    if (entry.isDirectory() && (await hasMarkdownFile(resolve(directory, entry.name)))) return true;
+  }
+  return false;
+}
+
 async function workRecords(unit: WorkUnit): Promise<Array<{ path: string; record: LaunchRecord }>> {
   const names = (await readdir(unit.path)).filter((name) => name.endsWith(".record.json")).sort();
   return Promise.all(
@@ -698,6 +713,7 @@ interface PrepareCommandOptions {
   readonly timeoutSeconds: number;
   readonly model?: string;
   readonly reasoning?: string;
+  readonly conceptsOnlyReason?: string;
   readonly kind: "fresh" | "continuation" | "replacement";
 }
 
@@ -781,6 +797,16 @@ async function prepareCommand(
     const changed = suppliedInputs
       .filter(({ id }) => id === "changed-contracts")
       .map(({ path }) => path);
+    const compositionsRoot = resolve(options.cwd, "design/compositions");
+    const changedComposition = changed.some((path) => isPathInside(compositionsRoot, path));
+    if (!changedComposition && !(await hasMarkdownFile(compositionsRoot))) {
+      if (options.conceptsOnlyReason === undefined) {
+        throw new CliError(
+          `Application contract is missing: critic/contracts requires a contract under design/compositions/`,
+          `Supply the application contract or rerun with --concepts-only <reason>.`,
+        );
+      }
+    }
     const checked = await (dependencies.designCheck ?? runDesignCheck)(changed, options.cwd);
     if (checked.exitCode !== 0) {
       throw new CliError(
@@ -844,6 +870,9 @@ async function prepareCommand(
     retainedSources: built.retainedSources,
     ...(design === undefined ? {} : { design }),
     ...(review === undefined ? {} : { review }),
+    ...(options.conceptsOnlyReason === undefined
+      ? {}
+      : { reviewScope: { conceptsOnly: options.conceptsOnlyReason } }),
     ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
     ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
   });
@@ -859,6 +888,30 @@ async function prepareCommand(
     );
   }
   for (const warning of oversizedSourceWarnings(built)) out(`Warning: ${warning}\n`);
+  const decompositionPath = resolve(unit.path, "decomposition.md");
+  if (suppliedInputs.some(({ path }) => path === decompositionPath)) {
+    const decompositionBytes = (await readFile(decompositionPath)).byteLength;
+    if (decompositionBytes > 8_000) {
+      out(
+        `Warning: decomposition.md is ${decompositionBytes} bytes; the rubric expects a compact decision index. Ask the designer to cut signatures, storage, and restatement before review.\n`,
+      );
+    }
+  }
+  if (
+    built.specification.role === "critic" &&
+    (built.specification.phase === "contracts" || built.specification.phase === "verification") &&
+    review?.subject === "design" &&
+    existingRecords.some(
+      ({ record }) => record.state === "finalized" && record.phase === "implementation",
+    )
+  ) {
+    out(
+      `Note: required review binds only the final design digest before work finish; batch further repairs before verifying unless a worker is blocked on this design.\n`,
+    );
+  }
+  if (options.conceptsOnlyReason !== undefined) {
+    out(`Review scope: concepts only (${options.conceptsOnlyReason})\n`);
+  }
   if (
     built.specification.role === "critic" &&
     built.specification.id !== "critic/implementation" &&
@@ -1133,6 +1186,7 @@ const promptDefinitions = {
   "--timeout": "value",
   "--model": "value",
   "--reasoning": "value",
+  "--concepts-only": "value",
 } as const;
 
 async function promptBuild(
@@ -1168,6 +1222,10 @@ async function promptBuild(
     positiveInteger(optional(parsed.options, "--timeout"), "--timeout") ?? defaultTimeoutSeconds;
   const model = optional(parsed.options, "--model");
   const reasoning = optional(parsed.options, "--reasoning");
+  const conceptsOnlyReason = optional(parsed.options, "--concepts-only");
+  if (conceptsOnlyReason !== undefined && (role !== "critic" || phase !== "contracts")) {
+    throw new CliError(`--concepts-only is valid only for critic/contracts`);
+  }
   await prepareCommand(
     {
       cwd,
@@ -1188,6 +1246,7 @@ async function promptBuild(
       timeoutSeconds,
       ...(model === undefined ? {} : { model }),
       ...(reasoning === undefined ? {} : { reasoning }),
+      ...(conceptsOnlyReason === undefined ? {} : { conceptsOnlyReason }),
     },
     dependencies,
   );
@@ -1716,6 +1775,151 @@ async function continueLaunch(
   );
 }
 
+type HandbackCheck = "critic-verdict" | "internal-imports" | "parallel-router";
+type HandbackAcceptance = Readonly<{ check: HandbackCheck; reason: string; at: string }>;
+
+interface ProductBoundaryChecks {
+  readonly internalImports: readonly string[];
+  readonly parallelRouters: readonly string[];
+}
+
+async function sourceFiles(directory: string, root = directory): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    const path = resolve(directory, entry.name);
+    const relativePath = relative(root, path).split(sep).join("/");
+    if (entry.isDirectory()) {
+      if (relativePath.split("/").some((part) => part === "generated" || part === "tests")) {
+        continue;
+      }
+      files.push(...(await sourceFiles(path, root)));
+    } else if (
+      entry.isFile() &&
+      entry.name.endsWith(".ts") &&
+      !/\.(?:test|spec)\.ts$/.test(entry.name)
+    ) {
+      files.push(path);
+    }
+  }
+  return files.sort();
+}
+
+async function productBoundaryChecks(applicationRoot: string): Promise<ProductBoundaryChecks> {
+  const files = await sourceFiles(resolve(applicationRoot, "src"));
+  const internalImports: string[] = [];
+  const parallelRouters: string[] = [];
+  for (const path of files) {
+    const content = await readFile(path, "utf8");
+    const display = relative(applicationRoot, path).split(sep).join("/");
+    for (const match of content.matchAll(
+      /(?:from\s*|import\s*(?:\(\s*)?|require\s*\()\s*["']([^"']+)["']/g,
+    )) {
+      const specifier = match[1]!;
+      if (!specifier.includes("node_modules/") && !specifier.includes("/dist/")) continue;
+      const line = content.slice(0, match.index).split("\n").length;
+      internalImports.push(`${display}:${line}`);
+    }
+    // Request routing, not URL parsing: a concept may read `new URL(target).pathname`
+    // to validate input without being a router.
+    const routesRequests =
+      /\breq(?:uest)?\.url\b|\bBun\.serve\s*\(|\bpathname\s*(?:\.match\s*\(|\.startsWith\s*\(|===?\s*["'`])/.test(
+        content,
+      );
+    if (routesRequests && !/["']@mit-sdg\/sync-engine-http(?:[/"'])/.test(content)) {
+      parallelRouters.push(display);
+    }
+  }
+  return { internalImports, parallelRouters };
+}
+
+function latestCritic(
+  records: readonly { readonly path: string; readonly record: LaunchRecord }[],
+) {
+  return records
+    .filter(({ record }) => record.state === "finalized" && record.role === "critic")
+    .at(-1);
+}
+
+async function criticReport(
+  records: readonly { readonly path: string; readonly record: LaunchRecord }[],
+): Promise<
+  | { readonly line: string; readonly unresolved: readonly string[]; readonly blocked: boolean }
+  | undefined
+> {
+  const latest = latestCritic(records);
+  if (latest === undefined || latest.record.state !== "finalized") return undefined;
+  const stem = basename(latest.path).replace(/\.record\.json$/, "");
+  const response = await readFile(latest.record.response.path, "utf8");
+  const findings =
+    /^#{1,4}\s+Findings\s*$([\s\S]*?)(?=^#{1,4}\s+|(?![\s\S]))/im.exec(response)?.[1] ?? "";
+  const unresolved = [
+    ...new Set(
+      findings
+        .split("\n")
+        .filter((line) => /\b(?:unresolved|regressed)\b/i.test(line))
+        .flatMap((line) => line.match(/\b[A-Za-z][A-Za-z0-9]*-\d+\b/g) ?? []),
+    ),
+  ];
+  return {
+    line: `Last critic verdict: ${latest.record.result} (${stem})`,
+    unresolved,
+    blocked: latest.record.result === "revise" || latest.record.result === "blocked",
+  };
+}
+
+async function readHandback(unit: WorkUnit): Promise<readonly HandbackAcceptance[]> {
+  const path = resolve(unit.path, "handback.json");
+  try {
+    const value = JSON.parse(await readFile(path, "utf8")) as { accepted?: unknown };
+    if (!Array.isArray(value.accepted)) throw new Error("accepted must be an array");
+    return value.accepted.filter(
+      (entry): entry is HandbackAcceptance =>
+        typeof entry === "object" &&
+        entry !== null &&
+        ["critic-verdict", "internal-imports", "parallel-router"].includes(
+          String((entry as HandbackAcceptance).check),
+        ) &&
+        typeof (entry as HandbackAcceptance).reason === "string" &&
+        typeof (entry as HandbackAcceptance).at === "string",
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw new CliError(`Handback acceptance is not readable JSON: ${path}`);
+  }
+}
+
+function parseAcceptances(values: readonly string[], at: Date): HandbackAcceptance[] {
+  return values.map((value) => {
+    const separator = value.indexOf("=");
+    const check = value.slice(0, separator) as HandbackCheck;
+    const reason = value.slice(separator + 1).trim();
+    if (
+      separator <= 0 ||
+      !["critic-verdict", "internal-imports", "parallel-router"].includes(check) ||
+      reason === ""
+    ) {
+      throw new CliError(
+        `--accept must have the form <critic-verdict|internal-imports|parallel-router>=<reason>: ${value}`,
+      );
+    }
+    return { check, reason, at: at.toISOString() };
+  });
+}
+
+function acceptanceLines(accepted: readonly HandbackAcceptance[]): string {
+  return accepted
+    .map(({ check, reason }) => `Accepted handback check: ${check} (${reason})`)
+    .join("\n");
+}
+
 async function workShow(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
   const parsed = parseTail(args, "work show", ["slug"], {});
   const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
@@ -1724,6 +1928,19 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
   const policy = await requireConsistentPolicy(unit, records);
   const prepared = records.filter(({ record }) => record.state === "prepared");
   const reviewIssue = await finalReviewIssue(unit, records);
+  const critic = await criticReport(records);
+  const boundaries = await productBoundaryChecks(unit.applicationRoot);
+  const accepted = await readHandback(unit);
+  const acceptedChecks = new Set(accepted.map(({ check }) => check));
+  const handbackIssues = [
+    ...(critic?.blocked && !acceptedChecks.has("critic-verdict") ? ["critic-verdict"] : []),
+    ...(boundaries.internalImports.length > 0 && !acceptedChecks.has("internal-imports")
+      ? ["internal-imports"]
+      : []),
+    ...(boundaries.parallelRouters.length > 0 && !acceptedChecks.has("parallel-router")
+      ? ["parallel-router"]
+      : []),
+  ];
   const lines = records.map(({ path, record }) => {
     const name = basename(path);
     const state =
@@ -1749,10 +1966,19 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
       ? launched.length === prepared.length
         ? `Run launch wait: ${prepared.length} launched run${prepared.length === 1 ? "" : "s"} still awaiting completion.\nHandback readiness: blocked until each prepared record is finalized.`
         : `ACTION REQUIRED: ${prepared.length} unfinished run${prepared.length === 1 ? "" : "s"}.\nHandback readiness: blocked until each prepared record is finalized.`
-      : reviewIssue === undefined
-        ? "Handback readiness: no unfinished runs; review policy is satisfied."
-        : `ACTION REQUIRED: ${reviewIssue}.\nHandback readiness: blocked until critic verification approves the final design.`;
-  output(dependencies).out(`${readiness}\n\nWork unit: ${unit.slug}
+      : reviewIssue !== undefined
+        ? `ACTION REQUIRED: ${reviewIssue}.\nHandback readiness: blocked until critic verification approves the final design.`
+        : handbackIssues.length > 0
+          ? `ACTION REQUIRED: handback checks require resolution or acceptance: ${handbackIssues.join(", ")}.\nHandback readiness: blocked by handback checks.`
+          : "Handback readiness: no unfinished runs; review policy and handback checks are satisfied.";
+  const criticLines =
+    critic === undefined
+      ? "Last critic verdict: none"
+      : `${critic.line}${critic.unresolved.length === 0 ? "" : `\nUnresolved critic findings: ${critic.unresolved.join(", ")}`}`;
+  const boundaryLines = `Internal imports: ${boundaries.internalImports.length === 0 ? "clear" : boundaries.internalImports.join(", ")}\nParallel router: ${boundaries.parallelRouters.length === 0 ? "clear" : boundaries.parallelRouters.join(", ")}`;
+  const acceptedLines = acceptanceLines(accepted);
+  output(dependencies)
+    .out(`${readiness}\n${criticLines}\n${boundaryLines}${acceptedLines === "" ? "" : `\n${acceptedLines}`}\n\nWork unit: ${unit.slug}
 Path: ${unit.path}
 Policy: review ${policy.review}; execution ${policy.execution}
 
@@ -1767,7 +1993,7 @@ async function workFinish(
   args: readonly string[],
   dependencies: CommandDependencies,
 ): Promise<void> {
-  const parsed = parseTail(args, "work finish", ["slug"], {});
+  const parsed = parseTail(args, "work finish", ["slug"], { "--accept": "repeatable" });
   const unit = await requireWorkUnit(commandRoot(dependencies), parsed.positionals[0]!);
   const records = await workRecords(unit);
   await requireConsistentPolicy(unit, records);
@@ -1785,8 +2011,46 @@ async function workFinish(
       `Continue the critic through verification of the current design, then rerun work finish.`,
     );
   }
+  const supplied = parseAcceptances(
+    parsed.options.get("--accept") ?? [],
+    dependencies.now?.() ?? new Date(),
+  );
+  const existing = await readHandback(unit);
+  const accepted = new Map(existing.map((entry) => [entry.check, entry]));
+  for (const entry of supplied) accepted.set(entry.check, entry);
+  const critic = await criticReport(records);
+  const boundaries = await productBoundaryChecks(unit.applicationRoot);
+  const issues: Array<{ readonly check: HandbackCheck; readonly detail: string }> = [];
+  if (critic?.blocked) {
+    issues.push({
+      check: "critic-verdict",
+      detail: `${critic.line}${critic.unresolved.length === 0 ? "" : `\nUnresolved critic findings: ${critic.unresolved.join(", ")}`}`,
+    });
+  }
+  if (boundaries.internalImports.length > 0) {
+    issues.push({ check: "internal-imports", detail: boundaries.internalImports.join(", ") });
+  }
+  if (boundaries.parallelRouters.length > 0) {
+    issues.push({ check: "parallel-router", detail: boundaries.parallelRouters.join(", ") });
+  }
+  const unaccepted = issues.filter(({ check }) => !accepted.has(check));
+  if (unaccepted.length > 0) {
+    const issue = unaccepted[0]!;
+    throw new CliError(
+      `Work item ${unit.slug} cannot finish: ${issue.check}\n${issue.detail}`,
+      `Resolve it or rerun with --accept ${issue.check}=<reason>.`,
+    );
+  }
+  if (supplied.length > 0) {
+    await writeFile(
+      resolve(unit.path, "handback.json"),
+      `${JSON.stringify({ accepted: [...accepted.values()] }, undefined, 2)}\n`,
+      "utf8",
+    );
+  }
+  const acceptedOutput = acceptanceLines([...accepted.values()]);
   output(dependencies).out(
-    `Work item ${unit.slug} is ready for handback: no unfinished runs; review policy is satisfied.\n`,
+    `Work item ${unit.slug} is ready for handback: no unfinished runs; review policy and handback checks are satisfied.\n${critic === undefined ? "Last critic verdict: none" : critic.line}\nInternal imports: ${boundaries.internalImports.length === 0 ? "clear" : boundaries.internalImports.join(", ")}\nParallel router: ${boundaries.parallelRouters.length === 0 ? "clear" : boundaries.parallelRouters.join(", ")}${acceptedOutput === "" ? "" : `\n${acceptedOutput}`}\n`,
   );
 }
 

@@ -88,6 +88,10 @@ export interface ReviewTarget {
   readonly digest: string;
 }
 
+export interface ReviewScope {
+  readonly conceptsOnly: string;
+}
+
 export interface LaunchedAgent {
   readonly agentId: string;
   readonly at: string;
@@ -112,6 +116,7 @@ interface LaunchRecordBase {
   readonly workspace?: WorkspaceBinding;
   readonly design?: DesignBinding;
   readonly review?: ReviewTarget;
+  readonly reviewScope?: ReviewScope;
   readonly reviewOverride?: string;
   readonly relationship?: LaunchRelationship;
   readonly launched?: LaunchedAgent;
@@ -298,6 +303,10 @@ function decodeRecord(value: unknown): LaunchRecord {
       throw new RecordError(`Review subject must be decomposition or design`);
     }
     hash(review["digest"], "Review target digest");
+  }
+  if (record["reviewScope"] !== undefined) {
+    const scope = object(record["reviewScope"], "Review scope");
+    text(scope["conceptsOnly"], "Concepts-only review reason");
   }
   if (record["reviewOverride"] !== undefined) text(record["reviewOverride"], "Review override");
   if (record["launched"] !== undefined) {
@@ -503,6 +512,7 @@ export async function replacePreparedHarness(
       ...(updated.policy === undefined ? {} : { policy: updated.policy }),
       ...(updated.design === undefined ? {} : { design: updated.design }),
       ...(updated.review === undefined ? {} : { review: updated.review }),
+      ...(updated.reviewScope === undefined ? {} : { reviewScope: updated.reviewScope }),
       ...(updated.reviewOverride === undefined ? {} : { reviewOverride: updated.reviewOverride }),
       ...(updated.relationship === undefined ? {} : { relationship: updated.relationship }),
     });
@@ -570,6 +580,7 @@ export async function recordPaseoLaunch(
       ...(updated.policy === undefined ? {} : { policy: updated.policy }),
       ...(updated.design === undefined ? {} : { design: updated.design }),
       ...(updated.review === undefined ? {} : { review: updated.review }),
+      ...(updated.reviewScope === undefined ? {} : { reviewScope: updated.reviewScope }),
       ...(updated.reviewOverride === undefined ? {} : { reviewOverride: updated.reviewOverride }),
       ...(updated.relationship === undefined ? {} : { relationship: updated.relationship }),
       launched: updated.launched,
@@ -691,6 +702,7 @@ function protectedControls(record: {
   readonly policy?: WorkPolicy;
   readonly design?: DesignBinding;
   readonly review?: ReviewTarget;
+  readonly reviewScope?: ReviewScope;
   readonly reviewOverride?: string;
   readonly relationship?: LaunchRelationship;
   readonly launched?: LaunchedAgent;
@@ -736,6 +748,7 @@ export interface PrepareLaunchOptions {
   readonly retainedSources: readonly RetainedSource[];
   readonly design?: { readonly root: string; readonly digest: string };
   readonly review?: ReviewTarget;
+  readonly reviewScope?: ReviewScope;
   readonly relationship?: Pick<LaunchRelationship, "kind" | "recordPath">;
   readonly at?: Date;
 }
@@ -776,6 +789,10 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
     options.review === undefined
       ? undefined
       : { subject: options.review.subject, digest: hash(options.review.digest, "Review digest") };
+  const reviewScope =
+    options.reviewScope === undefined
+      ? undefined
+      : { conceptsOnly: text(options.reviewScope.conceptsOnly, "Concepts-only review reason") };
   const relationship = await prepareRelationship(options.relationship, unit, role, selectedHarness);
   const workspaceFiles = await snapshotWorkspace(unit.applicationRoot, unit.path);
   const artifacts = await reserveRunArtifacts({
@@ -802,6 +819,7 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
       policy,
       ...(design === undefined ? {} : { design }),
       ...(review === undefined ? {} : { review }),
+      ...(reviewScope === undefined ? {} : { reviewScope }),
       ...(relationship === undefined ? {} : { relationship }),
     });
     const baseline = workspaceBaseline(workspaceFiles, controlsSha256);
@@ -838,6 +856,7 @@ export async function prepareLaunch(options: PrepareLaunchOptions): Promise<Prep
       },
       ...(design === undefined ? {} : { design }),
       ...(review === undefined ? {} : { review }),
+      ...(reviewScope === undefined ? {} : { reviewScope }),
       ...(relationship === undefined ? {} : { relationship }),
     };
     await writeFile(artifacts.recordPath, `${JSON.stringify(record, undefined, 2)}\n`, {
@@ -943,6 +962,7 @@ async function completedWorkspace(prepared: PreparedLaunchRecord): Promise<void>
     ...(prepared.policy === undefined ? {} : { policy: prepared.policy }),
     ...(prepared.design === undefined ? {} : { design: prepared.design }),
     ...(prepared.review === undefined ? {} : { review: prepared.review }),
+    ...(prepared.reviewScope === undefined ? {} : { reviewScope: prepared.reviewScope }),
     ...(prepared.reviewOverride === undefined ? {} : { reviewOverride: prepared.reviewOverride }),
     ...(prepared.relationship === undefined ? {} : { relationship: prepared.relationship }),
     ...(prepared.launched === undefined ? {} : { launched: prepared.launched }),
@@ -1061,13 +1081,14 @@ function validateRoleResult(
   status: LaunchStatus,
   result: RoleResult,
 ): void {
-  if (
-    prepared.review !== undefined &&
-    (prepared.policy === undefined || prepared.policy.review === "required") &&
-    result === "unknown"
-  ) {
+  const critic = prepared.role === "critic";
+  const acceptedResult = critic
+    ? result === "approve" || result === "revise" || result === "blocked"
+    : result === "complete" || result === "blocked";
+  if ((status === "completed" || status === "blocked") && !acceptedResult) {
+    const expected = critic ? "`Approve`, `Revise`, or `Blocked`" : "`Complete` or `Blocked`";
     throw new RecordError(
-      "Critic response has no parsable `## Verdict`; this record cannot satisfy the review policy. Fix the response file to state approve, revise, or blocked, then rerun completion.",
+      `Response has no parsable required \`${critic ? "## Verdict" : "## Status"}\`; expected ${expected} for ${prepared.role}; fix the response file and rerun completion.`,
     );
   }
   if (status === "completed" && result === "blocked") {

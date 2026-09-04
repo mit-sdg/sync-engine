@@ -83,6 +83,9 @@ describe("prompt guidance", () => {
   test("keeps normal role kits complete enough to design, review, and implement", () => {
     const decomposition = read("../skills/sync-engine/prompts/guidance/design/decomposition.md");
     const contracts = read("../skills/sync-engine/prompts/guidance/design/contracts.md");
+    const decompositionDesigner = read(
+      "../skills/sync-engine/prompts/roles/designer-decomposition.md",
+    );
     const decompositionCritic = read("../skills/sync-engine/prompts/roles/critic-decomposition.md");
     const contractCritic = read("../skills/sync-engine/prompts/roles/critic-contracts.md");
     const implementationCritic = read(
@@ -113,6 +116,8 @@ describe("prompt guidance", () => {
     ]) {
       expect(contracts).toContain(phrase);
     }
+    expect(decompositionDesigner).toContain("compact decision index under about 8 KB");
+    expect(decompositionDesigner).toContain("omit signatures, storage details");
     expect(decompositionCritic).toContain("one verdict");
     expect(decompositionCritic).toContain("Overloaded");
     expect(decompositionCritic).toContain("Fragmented");
@@ -122,6 +127,7 @@ describe("prompt guidance", () => {
     expect(contractCritic).toContain(
       "the absence of an application contract in supplied or granted design is a blocker",
     );
+    expect(contractCritic).toContain("not `Approve` with a note");
     expect(implementationCritic).toContain("acknowledgement order");
     expect(implementationCritic).toContain("test adequacy");
     expect(catalog).toContain("bunx --no-install sync-engine-catalog show concept/<name>");
@@ -132,8 +138,13 @@ describe("prompt guidance", () => {
     expect(application).toContain('import { assemble } from "@mit-sdg/sync-engine/assembly"');
     expect(application).toContain('import { composition } from "./composition.ts"');
     expect(application).toContain("applicationConceptSet.implementations()");
+    expect(application).toContain(
+      "Never build a request router outside the `@mit-sdg/sync-engine-http` handler and policy",
+    );
+    expect(application).toContain("may wrap the handler in `Bun.serve`");
     expect(frameworkSafety).toContain("Do not browse package trees");
     expect(frameworkSafety).toContain("Never inspect package `dist`");
+    expect(frameworkSafety).toContain("Never import from `node_modules/` or `dist/` paths");
     expect(frameworkSafety).not.toContain("Do not reload a skill or workflow");
   });
 
