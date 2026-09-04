@@ -209,7 +209,7 @@ describe("prepared and finalized records", () => {
       ),
     ).toEqual({
       name: "RecordError",
-      message: `Run changed paths outside its write grant: ${relative(unit.root, first.path)}`,
+      message: `Run changed paths outside its write grant: ${relative(unit.root, first.path).replaceAll("\\", "/")}`,
     });
 
     const original = (await readFile(first.path, "utf8")).trimEnd() + "\n";
