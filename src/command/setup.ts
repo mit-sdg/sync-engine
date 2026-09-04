@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
@@ -10,7 +10,7 @@ import { filesBelow } from "./files-below.ts";
 export type SetupInstaller = (root: string) => Promise<void>;
 
 export interface SetupOptions {
-  /** Override installation for tests, or use false for an explicit offline dry install. */
+  /** Override installation for a new package, or use false to skip it. */
   readonly install?: SetupInstaller | false;
 }
 
@@ -281,6 +281,8 @@ export async function setupProject(
     throw new Error(`sync-engine setup: directory does not exist: ${directory}`);
   }
   const packagePath = resolve(root, "package.json");
+  const packageExisted = existsSync(packagePath);
+  const directoryWasEmpty = !packageExisted && (await readdir(root)).length === 0;
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {
@@ -289,7 +291,7 @@ export async function setupProject(
     dependencies: { typescript: string };
     devDependencies: { "@types/bun": string; "@types/node": string };
   };
-  const manifest = existsSync(packagePath)
+  const manifest = packageExisted
     ? packageObject(await readFile(packagePath, "utf8"), relative(process.cwd(), packagePath))
     : { private: true, type: "module" };
   const manifestUpdated = updateManifest(manifest, {
@@ -304,7 +306,12 @@ export async function setupProject(
   let installation: SetupResult["installation"] = "not-needed";
   if (manifestUpdated) {
     await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
-    if (options.install === false) {
+    if (!directoryWasEmpty) {
+      installation = "skipped";
+      guidance.push(
+        "Review the project and updated package.json, then run `bun install` before validation.",
+      );
+    } else if (options.install === false) {
       installation = "skipped";
       guidance.push(
         "Bun installation was explicitly skipped; run `bun install` before validation.",

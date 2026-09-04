@@ -46,19 +46,21 @@ Then start a new slug from the application root:
 sync-engine-skill work start <slug>
 ```
 
-`work start` re-reads the release manifest, performs the pinned framework, analysis, and
-catalog install, runs standard `sync-engine setup`, verifies the declared Bun, Node, and
-TypeScript toolchain and executable targets, and creates `brief.md`. Its ability to create
-the same minimal manifest when an installed executable is invoked directly in an empty
-directory remains a fallback; coordinator-led work creates the manifest first.
+`work start` re-reads the release manifest and lists the pinned framework, analysis,
+catalog, and setup commands required by the existing scaffold. Review the application,
+run those commands explicitly, and rerun `work start`; it then verifies the declared Bun,
+Node, and TypeScript toolchain and executable targets and creates `brief.md`. When an
+installed executable is invoked directly in an empty directory with no `package.json`, it
+can still create the minimal manifest and complete the initial bootstrap automatically.
 
-For an existing application, keep its manifest and framework selection intact while
-adding missing required tooling. If the framework version conflicts with the pinned
-release, present three choices with a recommendation: align to the pinned release,
-continue with a recorded warning, or stop without changing the application. Continuing
-requires a usable installed core executable; otherwise align or stop. Any other
-installation, executable, toolchain, or setup failure stops the work unit. Do not try
-alternate package managers or versions.
+For an existing application, `work start` does not run package installation or a
+project-local setup executable. When either is needed, it stops and prints the exact
+commands. Review the application, run those commands explicitly, and rerun `work start`.
+If the framework version conflicts with the pinned release, present three choices with a
+recommendation: align to the pinned release, continue with a recorded warning, or stop
+without changing the application. Continuing requires a usable installed core
+executable; otherwise align or stop. Any other installation, executable, toolchain, or
+setup failure stops the work unit. Do not try alternate package managers or versions.
 
 If the command reports a framework conflict, present the choices above and rerun with the
 selected value:

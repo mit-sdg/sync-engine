@@ -14,18 +14,18 @@ sets exit status 1. Unknown, repeated, or mutually exclusive options, missing
 values, and extra operands are rejected before configuration is imported or
 files are written.
 
-| Command                                                                           | Result                                                                        | Writes files                                   |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                                                               | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
-| `check-design <paths...> [--format json]`                                         | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
-| `verify [--config path] [--fail-on-warnings] [--show-advisories] [--format json]` | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
-| `check [--config path] [--fail-on-warnings] [--show-advisories] [--format json]`  | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
-| `artifacts check [--config path] [--format json]`                                 | Compares configured artifacts with the complete selected design               | No                                             |
-| `artifacts pin [--config path]`                                                   | Regenerates both configured artifacts                                         | Yes                                            |
-| `artifacts pin-spec [--config path]`                                              | Regenerates generated Markdown only                                           | Yes                                            |
-| `artifacts pin-wire [--config path]`                                              | Regenerates generated TypeScript only                                         | Yes                                            |
-| `artifacts manifest/spec/wire [--config path]`                                    | Prints one derived representation                                             | No                                             |
-| `artifacts diff <old-manifest> [--config path]`                                   | Compares a saved manifest with the configured application                     | No                                             |
+| Command                                                                           | Result                                                                        | Writes files                                                                  |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `setup [directory]`                                                               | Completes a Bun package and initializes absent concept-free application files | `package.json`, missing templates, and Bun install only in an empty directory |
+| `check-design <paths...> [--format json]`                                         | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                                                            |
+| `verify [--config path] [--fail-on-warnings] [--show-advisories] [--format json]` | Runs configured design, application, and artifact checks and reports outcomes | No                                                                            |
+| `check [--config path] [--fail-on-warnings] [--show-advisories] [--format json]`  | Checks concept source, exact instances, bindings, and declaration coverage    | No                                                                            |
+| `artifacts check [--config path] [--format json]`                                 | Compares configured artifacts with the complete selected design               | No                                                                            |
+| `artifacts pin [--config path]`                                                   | Regenerates both configured artifacts                                         | Yes                                                                           |
+| `artifacts pin-spec [--config path]`                                              | Regenerates generated Markdown only                                           | Yes                                                                           |
+| `artifacts pin-wire [--config path]`                                              | Regenerates generated TypeScript only                                         | Yes                                                                           |
+| `artifacts manifest/spec/wire [--config path]`                                    | Prints one derived representation                                             | No                                                                            |
+| `artifacts diff <old-manifest> [--config path]`                                   | Compares a saved manifest with the configured application                     | No                                                                            |
 
 ## JSON validation output
 
@@ -99,12 +99,16 @@ The core declaration must equal the running core version; TypeScript, `@types/bu
 even when its command differs from the standard. Invalid fields, conflicting
 declarations, and incompatible ranges fail before `package.json` is written.
 
-When the manifest changes, setup writes `package.json` and then runs `bun install`
-before writing templates. An installation failure is reported as partial failure: the
-manifest, and any Bun lockfile work, may remain changed, while setup source and
-configuration templates remain unwritten. Rerun setup after correcting installation.
-An unchanged manifest does not run installation, so an unchanged second invocation is
-idempotent.
+When setup creates `package.json` in an empty directory, it runs `bun install` before
+writing templates. An installation failure is reported as partial failure: the manifest,
+and any Bun lockfile work, may remain changed, while setup source and configuration
+templates remain unwritten. Rerun setup after correcting installation.
+
+When setup changes an existing `package.json`, or creates one in a directory that already
+contains other files, it does not run the package manager. It writes the manifest and
+templates, then tells the user to review the project and run `bun install`. This prevents
+existing package scripts, dependency metadata, and package-manager configuration from
+executing during setup. An unchanged manifest also does not run installation.
 
 Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
 `src/assembly.ts`, and `src/main.ts`. The generated `tsconfig.json` loads both Bun and

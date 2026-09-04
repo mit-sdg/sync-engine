@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export const requiredPackages = [
@@ -30,6 +30,7 @@ export interface BootstrapFiles {
     containmentRoot: string,
   ) => Promise<"missing" | "regular" | "unsafe">;
   readonly ensureDirectory: (path: string) => Promise<void>;
+  readonly directoryEntries: (path: string) => Promise<readonly string[]>;
 }
 
 export interface RuntimeVersions {
@@ -128,6 +129,14 @@ export const realFiles: BootstrapFiles = {
   },
   async ensureDirectory(path) {
     await mkdir(path, { recursive: true });
+  },
+  async directoryEntries(path) {
+    try {
+      return await readdir(path);
+    } catch (error) {
+      if (missing(error)) return [];
+      throw error;
+    }
   },
 };
 
@@ -286,6 +295,10 @@ function setup(root: string): BootstrapCommand {
   return { executable: "bunx", args: ["--no-install", "sync-engine", "setup"], cwd: root };
 }
 
+function commandText(command: BootstrapCommand): string {
+  return [command.executable, ...command.args].join(" ");
+}
+
 function failed(root: string, error: unknown, release?: SkillRelease): BootstrapPlan {
   return {
     state: "failed",
@@ -309,6 +322,9 @@ export async function inspectApplication(
     const packagePath = resolve(root, "package.json");
     const packageKind = await files.fileKind(packagePath, root);
     if (packageKind === "missing") {
+      if ((await files.directoryEntries(root)).length > 0) {
+        throw new Error("Application directory is not empty and has no package.json");
+      }
       const packages = requiredPackages.map(([name]) => name);
       return {
         state: "new-app",
@@ -507,6 +523,30 @@ export async function bootstrapApplication(
     );
   }
 
+  const installPackages =
+    initial.state === "new-app" || (conflict && options.conflictChoice === "align-pinned-release")
+      ? requiredPackages.map(([name]) => name)
+      : initial.missingPackages;
+  const version = continuing ? initial.conflict!.selected! : initial.release!.skill;
+  const pending = [
+    ...(installPackages.length === 0
+      ? []
+      : [install(initial.applicationRoot, version, installPackages)]),
+    ...(initial.missingSetupFiles.length === 0 ? [] : [setup(initial.applicationRoot)]),
+  ];
+  if (initial.state !== "new-app" && pending.length > 0) {
+    return result(
+      "failed",
+      failed(
+        initial.applicationRoot,
+        `Review the existing application, run these commands yourself, then rerun work start: ${pending
+          .map(commandText)
+          .join("; ")}`,
+        initial.release,
+      ),
+    );
+  }
+
   try {
     if (initial.state === "new-app") {
       await files.ensureDirectory(initial.applicationRoot);
@@ -525,12 +565,7 @@ export async function bootstrapApplication(
       changed.add(resolve(initial.applicationRoot, "package.json"));
     }
 
-    const installPackages =
-      initial.state === "new-app" || (conflict && options.conflictChoice === "align-pinned-release")
-        ? requiredPackages.map(([name]) => name)
-        : initial.missingPackages;
     if (installPackages.length > 0) {
-      const version = continuing ? initial.conflict!.selected! : initial.release!.skill;
       const command = install(initial.applicationRoot, version, installPackages);
       commands.push(command);
       const output = await runner(command);
