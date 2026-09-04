@@ -8,6 +8,8 @@ Use it for applications built on sync-engine, not for changing the framework its
 
 Role access is prompt-guided unless the selected harness enforces it. The CLI validates and records declared paths, but it is not an operating-system sandbox. Run the skill only where that trust model is acceptable.
 
+Bootstrap runs package installation and setup automatically only for an empty application directory. In an existing application it prints those commands for explicit review instead of executing project-controlled code.
+
 ## Install and start
 
 Install `@mit-sdg/sync-engine-skill@VERSION` through the package or Agent Skill mechanism supported by the coordinator. Load its `skills/sync-engine/` directory and expose the `sync-engine-skill` binary. Load one copy so the `sync-engine` skill name is unambiguous.

@@ -16,7 +16,7 @@ files are written.
 
 | Command                                                                           | Result                                                                        | Writes files                                   |
 | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                                                               | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
+| `setup [directory]`                                                               | Completes a Bun package and initializes absent concept-free application files | Manifest and templates; installs only if empty |
 | `check-design <paths...> [--format json]`                                         | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
 | `verify [--config path] [--fail-on-warnings] [--show-advisories] [--format json]` | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
 | `check [--config path] [--fail-on-warnings] [--show-advisories] [--format json]`  | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
@@ -99,12 +99,16 @@ The core declaration must equal the running core version; TypeScript, `@types/bu
 even when its command differs from the standard. Invalid fields, conflicting
 declarations, and incompatible ranges fail before `package.json` is written.
 
-When the manifest changes, setup writes `package.json` and then runs `bun install`
-before writing templates. An installation failure is reported as partial failure: the
-manifest, and any Bun lockfile work, may remain changed, while setup source and
-configuration templates remain unwritten. Rerun setup after correcting installation.
-An unchanged manifest does not run installation, so an unchanged second invocation is
-idempotent.
+When setup creates `package.json` in an empty directory, it runs `bun install` before
+writing templates. An installation failure is reported as partial failure: the manifest,
+and any Bun lockfile work, may remain changed, while setup source and configuration
+templates remain unwritten. Rerun setup after correcting installation.
+
+When setup changes an existing `package.json`, or creates one in a directory that already
+contains other files, it does not run the package manager. It writes the manifest and
+templates, then tells the user to review the project and run `bun install`. This prevents
+existing package scripts and package-manager configuration from executing during setup.
+An unchanged manifest also does not run installation.
 
 Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
 `src/assembly.ts`, and `src/main.ts`. The generated `tsconfig.json` loads both Bun and
@@ -116,9 +120,11 @@ Before creating a file that imports another setup target, it checks that depende
 expected exports. A failed dependency check leaves the dependent file absent and
 prints the required integration.
 
-Template writes are not one filesystem transaction. A filesystem failure reports how
-many templates were written; existing application files remain untouched, and a later
-setup can complete the missing files.
+Setup rejects symbolic links and unexpected file types at every manifest or template
+path before making changes, and checks each path again before writing it. Template writes
+are not one filesystem transaction. A filesystem failure reports how many templates were
+written; existing application files remain untouched, and a later setup can complete the
+missing files.
 
 ## `sync-engine check-design`
 
