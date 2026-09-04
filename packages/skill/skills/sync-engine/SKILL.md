@@ -34,12 +34,14 @@ Before the first skill CLI invocation in an empty application directory, read
 
 This is the only pre-Bun administrative scaffold; create it without asking the user. Do
 not replace an existing application's manifest. Then run
-`sync-engine-skill work start <slug>` from the application root. It performs the pinned
-install and standard setup, verifies the framework, analysis, catalog, and toolchain
-environment, and creates the brief.
+`sync-engine-skill work start <slug>` from the application root. Because the scaffold is
+an existing package, the command lists the pinned install and setup commands instead of
+running them. Review the application, run those commands, and rerun `work start`; it then
+verifies the framework, analysis, catalog, and toolchain environment and creates the
+brief.
 
-- In an existing application, add missing required tooling without silently replacing its
-  framework version.
+- In an existing application, stop before running installation or project-local setup
+  commands. Show the commands so the user can review the project and run them explicitly.
 - On a framework version conflict, offer to align with the pinned release, continue with a
   warning when the installed core remains usable, or stop unchanged.
 - Stop on any other bootstrap failure; do not continue from an uncertain environment.

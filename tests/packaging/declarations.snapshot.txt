@@ -158,7 +158,7 @@ export {};
 === dist/command/setup.d.ts ===
 export type SetupInstaller = (root: string) => Promise<void>;
 export interface SetupOptions {
-    /** Override installation for tests, or use false for an explicit offline dry install. */
+    /** Override installation for a new package, or use false to skip it. */
     readonly install?: SetupInstaller | false;
 }
 export interface SetupResult {

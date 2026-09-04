@@ -54,8 +54,11 @@ harnesses, and command options.
 ## How coordination works
 
 At the start of a new work unit, the coordinator reads the skill's `release.json` and
-verifies or installs the matching framework, analysis, catalog, and toolchain setup. It
-does not silently replace an existing conflicting framework version: the user chooses
+verifies the matching framework, analysis, catalog, and toolchain setup. In an empty
+directory, it can create and install a new package. When the directory already contains
+an application, it stops before running project commands and lists the commands for the
+user to review and run. It does not silently replace an existing conflicting framework
+version: the user chooses
 whether to align versions, continue with a warning when possible, or stop unchanged.
 
 The coordinator owns setup, brief discussion, context and capability selection, role

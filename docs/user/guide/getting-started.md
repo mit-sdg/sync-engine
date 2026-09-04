@@ -28,7 +28,9 @@ bunx --package @mit-sdg/sync-engine@1.0.0-beta.16 sync-engine setup
 ranges, and the standard `generate`, `check`, and `start` scripts. Its generated
 `tsconfig.json` enables Bun and Node ambient types. It preserves
 every existing compatible declaration and every existing script, even when a script
-differs from the default. After a manifest edit it runs `bun install`.
+differs from the default. It runs `bun install` when it creates a package in an empty
+directory. If the directory already has a package or other files, it leaves installation
+to the user after review.
 
 The command never replaces existing source, config, or tsconfig. It creates this
 concept-free structure only where files are absent; `src/main.ts` is the initial host
