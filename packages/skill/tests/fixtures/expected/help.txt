@@ -117,12 +117,16 @@ Continuation and replacement:
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
-Handback checks (--accept <check>=<reason>): critic-verdict, internal-imports, parallel-router.
+Handback checks (--accept <check>=<reason>): critic-verdict, internal-imports, parallel-router, impure-computations.
   work finish refuses a prepared run.
   work finish refuses an unapproved final design digest when review is required.
   work finish refuses a last critic verdict of Revise or Blocked.
   work finish refuses imports from node_modules or dist paths.
   work finish refuses req.url, Bun.serve(, or pathname routing comparisons without @mit-sdg/sync-engine-http.
+  work finish refuses conceptSet computations that reference implementation instances,
+  module-level mutable bindings, implementations(), or underscore-prefixed member calls.
+  work show and work finish print the generated public interface and brief Done when list
+  together for reconciliation before handback.
 
 Warnings:
   Policy changes after preparation are rejected; release mismatches require explicit choice.

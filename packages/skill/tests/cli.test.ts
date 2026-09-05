@@ -1903,6 +1903,73 @@ describe("prompt preparation and completion", () => {
     });
   });
 
+  test("shows the generated public interface beside the brief Done when list", async () => {
+    const root = await application("handback-context");
+    const unit = await started(root);
+    await writeFile(
+      resolve(unit, "brief.md"),
+      [
+        "# Filtered board",
+        "",
+        "## Done when",
+        "",
+        "1. Filtered task listing by status or assignee.",
+        "2. Status counts are accurate.",
+        "",
+        "## Open questions",
+        "",
+        "None.",
+        "",
+      ].join("\n"),
+    );
+    await mkdir(resolve(root, "generated"), { recursive: true });
+    await writeFile(
+      resolve(root, "generated/application.md"),
+      [
+        "# Generated application",
+        "",
+        "## Endpoint input contracts",
+        "",
+        "Input contracts follow.",
+        "",
+        '- `/tasks/list` — requires `project`; fills `status` with "" when absent',
+        "- `/tasks/status-counts` — requires `project`",
+        "",
+        "## Sources",
+        "",
+        "- This is not an endpoint.",
+        "",
+      ].join("\n"),
+    );
+
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown).toMatchObject({ code: 0, stderr: "" });
+    expect(shown.stdout).toContain(
+      [
+        "Public interface:",
+        '  - /tasks/list — requires project; fills status with "" when absent',
+        "  - /tasks/status-counts — requires project",
+        "Done when:",
+        "  1. Filtered task listing by status or assignee.",
+        "  2. Status counts are accurate.",
+        "Reconcile each Done when outcome with the public interface before handback.",
+      ].join("\n"),
+    );
+  });
+
+  test("reports when the public interface has not been generated", async () => {
+    const root = await application("handback-context-not-generated");
+    await started(root);
+
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown).toMatchObject({ code: 0, stderr: "" });
+    expect(shown.stdout).toContain("Public interface: not generated");
+    expect(shown.stdout).toContain("Done when: none recorded");
+    expect(shown.stdout).not.toContain(
+      "Reconcile each Done when outcome with the public interface before handback.",
+    );
+  });
+
   test("gates handback on the latest critic and product boundaries with recorded acceptance", async () => {
     const root = await application("handback-gates");
     const unit = await started(root);
@@ -1976,6 +2043,99 @@ describe("prompt preparation and completion", () => {
     expect((await invoke(["work", "show", "message-board-search"], root)).stdout).toContain(
       "Accepted handback check: critic-verdict (known review debt)",
     );
+  });
+
+  test("gates impure conceptSet computations and records their acceptance", async () => {
+    const root = await application("impure-computations");
+    const unit = await started(root);
+    await mkdir(resolve(root, "src"), { recursive: true });
+    await writeFile(
+      resolve(root, "src/concepts.ts"),
+      [
+        "const conceptSet = (...args: unknown[]) => args;",
+        "",
+        "let currentInstances: unknown;",
+        "const applicationConceptSet = { implementations: () => ({}) };",
+        "const instances = applicationConceptSet.implementations();",
+        "",
+        "export const concepts = conceptSet(",
+        "  {},",
+        "  {",
+        "    fromMutable: () => currentInstances,",
+        "    fromInstances: () => instances,",
+        "    createsInstances: () => applicationConceptSet.implementations(),",
+        '    queriesInstances: () => instances.Tasking._byProject({ project: "p" }),',
+        "  },",
+        ");",
+        "",
+      ].join("\n"),
+    );
+
+    const references =
+      "src/concepts.ts:10, src/concepts.ts:11, src/concepts.ts:12, src/concepts.ts:13";
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown.stdout).toContain(`Impure computations: ${references}`);
+    expect(shown.stdout).toContain(
+      "ACTION REQUIRED: handback checks require resolution or acceptance: impure-computations.",
+    );
+    expect(await invoke(["work", "finish", "message-board-search"], root)).toEqual(
+      cliFailure(
+        `Work item message-board-search cannot finish:\nimpure-computations\n${references}`,
+        "Resolve impure-computations or rerun with --accept impure-computations=<reason>.",
+      ),
+    );
+
+    const accepted = await invoke(
+      [
+        "work",
+        "finish",
+        "message-board-search",
+        "--accept",
+        "impure-computations=legacy instance reads",
+      ],
+      root,
+    );
+    expect(accepted.stdout).toContain(
+      "Accepted handback check: impure-computations (legacy instance reads)",
+    );
+    expect(JSON.parse(await readFile(resolve(unit, "handback.json"), "utf8"))).toEqual({
+      accepted: [
+        {
+          check: "impure-computations",
+          reason: "legacy instance reads",
+          at: instant.toISOString(),
+        },
+      ],
+    });
+  });
+
+  test("allows pure conceptSet computations", async () => {
+    const root = await application("pure-computations");
+    await started(root);
+    await mkdir(resolve(root, "src"), { recursive: true });
+    await writeFile(
+      resolve(root, "src/concepts.ts"),
+      [
+        "const conceptSet = (...args: unknown[]) => args;",
+        "const registration = {};",
+        "export const concepts = conceptSet(",
+        "  { Example: registration },",
+        "  {",
+        "    normalizeTitle: ({ raw }: { raw: string }) => raw.trim(),",
+        "    identify: () => crypto.randomUUID(),",
+        "    timestamp: () => Date.now(),",
+        "  },",
+        ");",
+        "",
+      ].join("\n"),
+    );
+
+    const shown = await invoke(["work", "show", "message-board-search"], root);
+    expect(shown.stdout).toContain("Impure computations: clear");
+    expect(await invoke(["work", "finish", "message-board-search"], root)).toMatchObject({
+      code: 0,
+      stderr: "",
+    });
   });
 
   test("does not record acceptance for a check that is not failing", async () => {

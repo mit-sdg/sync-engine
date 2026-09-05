@@ -127,7 +127,8 @@ intentional alternatives.
 
 Declare each computation once as `name(inputs) : Result`, no space before its inputs, with
 an indented body where it is used, or in `design/types.md` when shared, and reference it as
-`[normalization](computation:normalizeTitle)`:
+`[normalization](computation:normalizeTitle)`. Its result is one bare type; a list or record
+read from concept state is not a computation result:
 
 ```computations
 normalizeTitle(raw: String) : String

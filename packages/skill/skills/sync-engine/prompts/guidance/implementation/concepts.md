@@ -8,6 +8,8 @@ Implement each concept as a plain TypeScript class. Actions take one named input
 - `optional` is annotated `Row[]` or `Array<Row>` and returns zero or one row; and
 - `many` returns an array in its promised stable ordering.
 
+Return each query's exact declared row shape. Do not add fields, including an identity merely because the caller supplied it. A query or action declared with no inputs takes no parameter at all. Raise only the exact refusal codes declared for each action.
+
 Registration reads the prototype. Keep undeclared helpers `#private` or module-level; TypeScript `private` still emits a prototype method. Provide an explicit constructor whose parameters have real defaults so runtime arity is zero:
 
 ```ts

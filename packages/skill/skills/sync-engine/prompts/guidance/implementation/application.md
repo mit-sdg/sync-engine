@@ -20,7 +20,7 @@ const posting = registerConcept({
 export const applicationConceptSet = conceptSet({ Posting: posting });
 ```
 
-Do not wrap, adapt, or subclass a concept merely for registration. When specializing a generic class, preserve the application-specific class name and authored external-type binding. Register each selected static instance once under its authored identity; do not reuse one raw instance under two identities or invent an undeclared instance.
+Do not wrap, adapt, or subclass a concept merely for registration. When specializing a generic class, preserve the application-specific class name and authored external-type binding. Register each selected static instance once under its authored identity; do not reuse one raw instance under two identities or invent an undeclared instance. Register computations as pure functions of their input record; a computation that would need concept state is a design blocker.
 
 For default-constructible concepts, assemble with fresh registered implementations:
 

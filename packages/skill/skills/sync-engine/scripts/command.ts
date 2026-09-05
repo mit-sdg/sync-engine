@@ -295,12 +295,16 @@ Continuation and replacement:
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
-Handback checks (--accept <check>=<reason>): critic-verdict, internal-imports, parallel-router.
+Handback checks (--accept <check>=<reason>): critic-verdict, internal-imports, parallel-router, impure-computations.
   work finish refuses a prepared run.
   work finish refuses an unapproved final design digest when review is required.
   work finish refuses a last critic verdict of Revise or Blocked.
   work finish refuses imports from node_modules or dist paths.
   work finish refuses req.url, Bun.serve(, or pathname routing comparisons without @mit-sdg/sync-engine-http.
+  work finish refuses conceptSet computations that reference implementation instances,
+  module-level mutable bindings, implementations(), or underscore-prefixed member calls.
+  work show and work finish print the generated public interface and brief Done when list
+  together for reconciliation before handback.
 
 Warnings:
   Policy changes after preparation are rejected; release mismatches require explicit choice.
@@ -1862,13 +1866,19 @@ async function continueLaunch(
   );
 }
 
-const handbackChecks = ["critic-verdict", "internal-imports", "parallel-router"] as const;
+const handbackChecks = [
+  "critic-verdict",
+  "internal-imports",
+  "parallel-router",
+  "impure-computations",
+] as const;
 type HandbackCheck = (typeof handbackChecks)[number];
 type HandbackAcceptance = Readonly<{ check: HandbackCheck; reason: string; at: string }>;
 
 interface ProductBoundaryChecks {
   readonly internalImports: readonly string[];
   readonly parallelRouters: readonly string[];
+  readonly impureComputations: readonly string[];
 }
 
 async function sourceFiles(directory: string): Promise<string[]> {
@@ -1887,10 +1897,129 @@ async function sourceFiles(directory: string): Promise<string[]> {
   }
 }
 
+function maskedTypeScript(source: string): string {
+  const masked = source.split("");
+  let index = 0;
+  while (index < source.length) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (character === "/" && next === "/") {
+      masked[index++] = " ";
+      masked[index++] = " ";
+      while (index < source.length && source[index] !== "\n") masked[index++] = " ";
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      masked[index++] = " ";
+      masked[index++] = " ";
+      while (index < source.length) {
+        if (source[index] === "*" && source[index + 1] === "/") {
+          masked[index++] = " ";
+          masked[index++] = " ";
+          break;
+        }
+        if (source[index] !== "\n") masked[index] = " ";
+        index++;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      const quote = character;
+      masked[index++] = " ";
+      while (index < source.length) {
+        if (source[index] === "\\") {
+          masked[index++] = " ";
+          if (index < source.length && source[index] !== "\n") masked[index] = " ";
+          index++;
+          continue;
+        }
+        const closes = source[index] === quote;
+        if (source[index] !== "\n") masked[index] = " ";
+        index++;
+        if (closes) break;
+      }
+      continue;
+    }
+    index++;
+  }
+  return masked.join("");
+}
+
+function conceptSetSecondArguments(source: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const call of source.matchAll(/\bconceptSet\s*\(/g)) {
+    const opening = call.index + call[0].lastIndexOf("(");
+    const brackets: string[] = ["("];
+    let separator: number | undefined;
+    for (let index = opening + 1; index < source.length; index++) {
+      const character = source[index]!;
+      if (character === "(" || character === "{" || character === "[") {
+        brackets.push(character);
+        continue;
+      }
+      if (character === ")" || character === "}" || character === "]") {
+        const expected = character === ")" ? "(" : character === "}" ? "{" : "[";
+        if (brackets.at(-1) !== expected) break;
+        brackets.pop();
+        if (brackets.length === 0) {
+          if (separator !== undefined) ranges.push({ start: separator + 1, end: index });
+          break;
+        }
+        continue;
+      }
+      if (character === "," && brackets.length === 1 && separator === undefined) {
+        separator = index;
+      }
+    }
+  }
+  return ranges;
+}
+
+function impureComputationReferences(content: string): number[] {
+  const source = maskedTypeScript(content);
+  const braceDepth: number[] = [];
+  let depth = 0;
+  for (let index = 0; index < source.length; index++) {
+    braceDepth[index] = depth;
+    if (source[index] === "{") depth++;
+    if (source[index] === "}") depth--;
+  }
+
+  const externalBindings = new Set<string>();
+  for (const declaration of source.matchAll(/\b(?:let|var)\s+([A-Za-z_$][\w$]*)/g)) {
+    if (braceDepth[declaration.index] === 0) externalBindings.add(declaration[1]!);
+  }
+  for (const assignment of source.matchAll(
+    /\b([A-Za-z_$][\w$]*)\s*(?::[^=;\n]+)?=\s*[^;\n]*?\.\s*implementations\s*\(/g,
+  )) {
+    externalBindings.add(assignment[1]!);
+  }
+
+  const references = new Set<number>();
+  for (const range of conceptSetSecondArguments(source)) {
+    const secondArgument = source.slice(range.start, range.end);
+    for (const identifier of secondArgument.matchAll(/\b[A-Za-z_$][\w$]*\b/g)) {
+      if (!externalBindings.has(identifier[0])) continue;
+      const reference = range.start + identifier.index;
+      const before = source.slice(range.start, reference).trimEnd().at(-1);
+      const after = source.slice(reference + identifier[0].length, range.end).trimStart()[0];
+      if (before !== "." && after !== ":") references.add(reference);
+    }
+    for (const implementationCall of secondArgument.matchAll(/\bimplementations\s*\(/g)) {
+      references.add(range.start + implementationCall.index);
+    }
+    for (const queryCall of secondArgument.matchAll(/\.\s*(_[A-Za-z0-9_$]*)\s*\(/g)) {
+      references.add(range.start + queryCall.index + queryCall[0].indexOf(queryCall[1]!));
+    }
+  }
+  return [...references].sort((left, right) => left - right);
+}
+
 async function productBoundaryChecks(applicationRoot: string): Promise<ProductBoundaryChecks> {
   const files = await sourceFiles(resolve(applicationRoot, "src"));
   const internalImports: string[] = [];
   const parallelRouters: string[] = [];
+  const impureComputations: string[] = [];
   for (const path of files) {
     const content = await readFile(path, "utf8");
     const display = posixRelative(applicationRoot, path);
@@ -1917,8 +2046,14 @@ async function productBoundaryChecks(applicationRoot: string): Promise<ProductBo
     if (routesRequests && !/["']@mit-sdg\/sync-engine-http(?:[/"'])/.test(content)) {
       parallelRouters.push(display);
     }
+    const impureLines = new Set(
+      impureComputationReferences(content).map(
+        (reference) => content.slice(0, reference).split("\n").length,
+      ),
+    );
+    for (const line of impureLines) impureComputations.push(`${display}:${line}`);
   }
-  return { internalImports, parallelRouters };
+  return { internalImports, parallelRouters, impureComputations };
 }
 
 function latestCritic(
@@ -1991,7 +2126,7 @@ function parseAcceptances(values: readonly string[], at: Date): HandbackAcceptan
     const reason = value.slice(separator + 1).trim();
     if (separator <= 0 || !handbackChecks.includes(check) || reason === "") {
       throw new CliError(
-        `--accept must have the form <critic-verdict|internal-imports|parallel-router>=<reason>: ${value}`,
+        `--accept must have the form <critic-verdict|internal-imports|parallel-router|impure-computations>=<reason>: ${value}`,
       );
     }
     return { check, reason, at: at.toISOString() };
@@ -2004,10 +2139,41 @@ function acceptanceLines(accepted: readonly HandbackAcceptance[]): string {
     .join("\n");
 }
 
-function handbackSummaryLines(
+function sectionListItems(content: string, heading: string, item: RegExp): string[] {
+  const lines = content.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => line === heading);
+  if (headingIndex < 0) return [];
+  const items: string[] = [];
+  for (const line of lines.slice(headingIndex + 1)) {
+    if (/^#{1,6}\s/.test(line)) break;
+    if (item.test(line)) {
+      items.push(line);
+      continue;
+    }
+    if (items.length > 0 && line.trim() === "") break;
+  }
+  return items;
+}
+
+async function publicInterface(applicationRoot: string): Promise<string[]> {
+  try {
+    const generated = await readFile(resolve(applicationRoot, "generated/application.md"), "utf8");
+    return sectionListItems(generated, "## Endpoint input contracts", /^- /).map((line) =>
+      line.replaceAll("`", ""),
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function handbackSummaryLines(
   critic: Awaited<ReturnType<typeof criticReport>>,
   boundaries: ProductBoundaryChecks,
-): string[] {
+  applicationRoot: string,
+  brief: string,
+): Promise<string[]> {
+  const interfaceItems = await publicInterface(applicationRoot);
+  const doneWhen = sectionListItems(brief, "## Done when", /^(?:[-*+] |\d+[.)] )/);
   return [
     critic === undefined ? "Last critic verdict: none" : critic.line,
     ...(critic?.unresolved.length
@@ -2015,6 +2181,16 @@ function handbackSummaryLines(
       : []),
     `Internal imports: ${boundaries.internalImports.length === 0 ? "clear" : boundaries.internalImports.join(", ")}`,
     `Parallel router: ${boundaries.parallelRouters.length === 0 ? "clear" : boundaries.parallelRouters.join(", ")}`,
+    `Impure computations: ${boundaries.impureComputations.length === 0 ? "clear" : boundaries.impureComputations.join(", ")}`,
+    ...(interfaceItems.length === 0
+      ? ["Public interface: not generated"]
+      : ["Public interface:", ...interfaceItems.map((line) => `  ${line}`)]),
+    ...(doneWhen.length === 0
+      ? ["Done when: none recorded"]
+      : ["Done when:", ...doneWhen.map((line) => `  ${line}`)]),
+    ...(interfaceItems.length > 0 && doneWhen.length > 0
+      ? ["Reconcile each Done when outcome with the public interface before handback."]
+      : []),
   ];
 }
 
@@ -2037,6 +2213,9 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
       : []),
     ...(boundaries.parallelRouters.length > 0 && !acceptedChecks.has("parallel-router")
       ? ["parallel-router"]
+      : []),
+    ...(boundaries.impureComputations.length > 0 && !acceptedChecks.has("impure-computations")
+      ? ["impure-computations"]
       : []),
   ];
   const lines = records.map(({ path, record }) => {
@@ -2069,7 +2248,9 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
         : handbackIssues.length > 0
           ? `ACTION REQUIRED: handback checks require resolution or acceptance: ${handbackIssues.join(", ")}.\nHandback readiness: blocked by handback checks.`
           : "Handback readiness: no unfinished runs; review policy and handback checks are satisfied.";
-  const summary = handbackSummaryLines(critic, boundaries).join("\n");
+  const summary = (
+    await handbackSummaryLines(critic, boundaries, unit.applicationRoot, brief.text)
+  ).join("\n");
   const acceptedLines = acceptanceLines(accepted);
   output(dependencies)
     .out(`${readiness}\n${summary}${acceptedLines === "" ? "" : `\n${acceptedLines}`}\n\nWork unit: ${unit.slug}
@@ -2124,6 +2305,12 @@ async function workFinish(
   if (boundaries.parallelRouters.length > 0) {
     issues.push({ check: "parallel-router", detail: boundaries.parallelRouters.join(", ") });
   }
+  if (boundaries.impureComputations.length > 0) {
+    issues.push({
+      check: "impure-computations",
+      detail: boundaries.impureComputations.join(", "),
+    });
+  }
   const failingChecks = new Set(issues.map(({ check }) => check));
   const applicableSupplied = supplied.filter(({ check }) => failingChecks.has(check));
   const existing = await readHandback(unit);
@@ -2148,7 +2335,10 @@ async function workFinish(
     );
   }
   const acceptedOutput = acceptanceLines([...accepted.values()]);
-  const summary = handbackSummaryLines(critic, boundaries).join("\n");
+  const brief = await utf8(unit.briefPath, "Work brief");
+  const summary = (
+    await handbackSummaryLines(critic, boundaries, unit.applicationRoot, brief.text)
+  ).join("\n");
   output(dependencies).out(
     `Work item ${unit.slug} is ready for handback: no unfinished runs; review policy and handback checks are satisfied.\n${summary}${acceptedOutput === "" ? "" : `\n${acceptedOutput}`}\n`,
   );

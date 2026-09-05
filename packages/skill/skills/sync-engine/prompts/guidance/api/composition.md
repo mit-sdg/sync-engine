@@ -99,8 +99,10 @@ former(name, (input, free) => where(...).form({ ...shape }));
   complete input mapping; undeclared fields are rejected recursively.
 - `compute(named, input, output)` is a condition line inside `where(...)`. It runs a pure
   function supplied as `conceptSet`'s optional second argument and exposed as
-  `set.computations`; it never takes a bare function. A variable output binds the complete
-  result. For a record-shaped, non-array result, an object output pattern binds or tests
+  `set.computations`; it never takes a bare function. The function receives only its input
+  record and must not read concept instances, `implementations()` results, or module-level
+  mutable state. A computation that needs state is a design error to block on. A variable
+  output binds the complete result. For a record-shaped, non-array result, an object output pattern binds or tests
   several fields, including nested fields, and each variable remains wire-traceable through
   its return-type path. Write
   `conceptSet({ ... }, { describe: ({ value }) => ({ label: String(value), rank: 1 }) })`,
