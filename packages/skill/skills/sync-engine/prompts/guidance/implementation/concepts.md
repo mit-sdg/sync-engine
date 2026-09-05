@@ -3,9 +3,9 @@
 Implement each concept as a plain TypeScript class. Actions take one named input object and return the exact object-shaped result:
 
 - `return (item: Item)` becomes `{ item }`;
-- `return ()` becomes `{}`, never `void` or `undefined`;
+- `return ()` becomes `{}`;
 - `one` returns one row object;
-- `optional` is annotated `Row[]` or `Array<Row>` and returns zero or one row, never the tuple union `[] | [Row]`; and
+- `optional` is annotated `Row[]` or `Array<Row>` and returns zero or one row; and
 - `many` returns an array in its promised stable ordering.
 
 Registration reads the prototype. Keep undeclared helpers `#private` or module-level; TypeScript `private` still emits a prototype method. Provide an explicit constructor whose parameters have real defaults so runtime arity is zero:

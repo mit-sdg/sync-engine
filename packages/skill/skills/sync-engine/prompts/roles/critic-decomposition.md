@@ -2,7 +2,7 @@
 
 Independently test changed need placement, concept boundaries, and material obligations against the brief and affected approved design.
 
-Give every concept one verdict: `overloaded`, `minimal`, or `fragmented`.
+Give every new or changed concept one verdict: `overloaded`, `minimal`, or `fragmented`.
 
 - **Overloaded:** removing one state family or decision leaves both the concept and removed mechanism meaningful on their own.
 - **Fragmented:** merging with the nearest owner erases no independent product lifecycle or authority. A namespace, suppression marker, retry-only ledger, or coordination helper is presumptively fragmented.

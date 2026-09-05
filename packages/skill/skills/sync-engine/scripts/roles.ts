@@ -548,6 +548,13 @@ export function capabilityRecommendationIssues(
       .filter((tool) => !recommended.toolKinds.includes(tool))
       .map((tool) => `tool kind ${tool}`),
   ];
+  for (const { area, path } of grant.writableAreas) {
+    if (area.startsWith("owned-") && !path.includes("/") && /\.[A-Za-z0-9]+$/.test(path)) {
+      issues.push(
+        `write path ${area}:${path} has no directory; application paths are relative to the application root, for example src/concepts/${path}`,
+      );
+    }
+  }
   if (spec.id === "application-worker/implementation") {
     for (const { area, path } of grant.writableAreas) {
       const parts = path.split("/");

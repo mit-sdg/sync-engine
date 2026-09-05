@@ -419,6 +419,18 @@ describe("effective capability grants", () => {
     ]);
   });
 
+  test("warns when an application write path has no directory", () => {
+    const specification = getRoleSpecification("concept-worker", "implementation");
+    const grant = initialCapabilityGrant(
+      specification,
+      [{ area: "application", path: "src/concepts" }],
+      [{ area: "owned-concept", path: "Shortening.ts" }],
+    );
+    expect(capabilityRecommendationIssues(specification, grant)).toEqual([
+      "write path owned-concept:Shortening.ts has no directory; application paths are relative to the application root, for example src/concepts/Shortening.ts",
+    ]);
+  });
+
   test("flags an application ownership path that covers concept work", () => {
     const specification = getRoleSpecification("application-worker", "implementation");
     const grant = validateCapabilityGrant(specification, {

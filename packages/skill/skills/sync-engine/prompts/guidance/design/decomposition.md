@@ -1,10 +1,11 @@
 # Decomposition
 
-Write a compact decision index with `## Need placement`, `## Concepts`, and `## Obligations`. Add `## Open decisions` only when product choices remain unresolved. Omit signatures, algorithms, storage, evidence plans, catalog censuses, and brief restatements.
+Write a compact decision index with `## Need placement`, `## Concepts`, and
+`## Obligations`. Add `## Open decisions` only when product choices remain unresolved.
+Omit signatures, algorithms, storage, evidence plans, catalog censuses, and brief
+restatements.
 
-## Place changed needs
-
-Give each changed need one owner and name the decision:
+Give each changed need one row with one owner and the decision it owns:
 
 - **concept** — semantic state, lifecycle, and sole authority;
 - **composition** — cross-concept policy and coordination;
@@ -12,31 +13,40 @@ Give each changed need one owner and name the decision:
 - **implementation** — operational realization; or
 - **evidence** — proof.
 
-Placement does not create a concept. Reuse an approved contract when it already owns the need.
+Placement does not create a concept. Reuse an approved contract when it already owns the
+need.
 
-## Choose minimum useful concepts
+Give each new or changed concept one row naming its owned state, lifecycle, sole decision,
+opaque subject, realistic reuse boundary, and strongest plausible split or merge concern.
+Split independent authorities or lifecycles. Merge state that has no product meaning apart
+from its nearest owner. Shared identity, workflow order, atomicity, implementation
+convenience, fewer obligations, or theoretical reuse alone does not decide a boundary.
 
-A concept owns one reusable mechanism and one independent reason for state to change. Keep foreign subjects opaque; concepts never inspect or call peers.
+Classify each concept as `new`, `changed`, `reused-unchanged`, or `unaffected-context`.
+Record catalog disposition only for selected concepts; reference unchanged contracts.
 
-Give each new or changed concept one row covering:
+Add one row for each material cross-owner obligation when failure can expose contradictory
+state, work must finish before acknowledgement, or recovery is promised. Name the trigger,
+effect owner, acknowledgement boundary, possible false interval, retry identity when
+retries are promised, and recovery, compensation, or operational limit. Do not add a
+recovery protocol when refusal before acknowledgement is the accepted semantics. Choose a
+realizable server-side success boundary rather than exactly-once client receipt.
 
-- owned state, lifecycle, and sole decision;
-- the opaque subject and realistic reuse boundary; and
-- the strongest plausible split or merge concern.
+A compact decomposition looks like this:
 
-Split independently meaningful authorities or lifecycles. Merge a namespace for another owner's records, a status marker whose only meaning is suppressing those records, a retry-only ledger, or coordination without its own product lifecycle. Shared identity, workflow order, desired atomicity, implementation convenience, or fewer obligations does not justify a merge. Conversely, theoretical reuse alone does not justify a concept whose state has no meaning apart from its neighbor.
+```markdown
+## Need placement
 
-Classify concepts as `new`, `changed`, `reused-unchanged`, or `unaffected-context`. Record catalog disposition only for selected concepts and reference unchanged contracts instead of restating them.
+- Prevent overlapping loans — concept: Lending owns item availability.
+- Notify a borrower — composition: connect accepted loans to Notifying.
 
-## Record only material obligations
+## Concepts
 
-Add an obligation when a required effect crosses owners and failure can leave caller-visible contradictory state, when the effect must finish before acknowledgement, or when recovery is an explicit product guarantee. Synchronous calls are not atomic, but they do not need a recovery protocol when the accepted semantics simply refuse the request before acknowledgement.
+- Lending (`new`) — loans and return lifecycle; decides item availability; Borrower and Item stay opaque; reusable for equipment; strongest split concern is reservation versus active loan.
+- Notifying (`reused-unchanged`) — reuse `design/concepts/Notifying.md`.
+- Cataloging (`unaffected-context`) — still owns item descriptions.
 
-For each material obligation, record:
+## Obligations
 
-- trigger and effect owner;
-- acknowledgement boundary and possible false interval;
-- retry identity when retries are promised; and
-- available recovery, compensation, or explicit operational limit.
-
-Choose a realizable server-side success boundary. Do not invent a two-phase concept or promise exactly-once client receipt to model transport-delivery uncertainty. State what the application counts or guarantees before acknowledgement and stop there.
+- Loan notice — after `Lending.checkout`, Notifying sends before success; a send failure leaves the loan active but unacknowledged; retry by loan; retry is the operational recovery limit.
+```

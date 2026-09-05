@@ -1,5 +1,5 @@
 import { realpathSync } from "node:fs";
-import { lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export const workflowDirectory = ".sync-engine";
@@ -36,6 +36,61 @@ export function canonicalPath(path: string): string {
 export function isPathInside(root: string, candidate: string): boolean {
   const child = relative(root, candidate);
   return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
+}
+
+export function posixRelative(root: string, candidate: string): string {
+  return relative(root, candidate).split(sep).join("/");
+}
+
+export function pathCoveredBy(path: string, granted: string, dotCoversAll = false): boolean {
+  return (dotCoversAll && granted === ".") || path === granted || path.startsWith(`${granted}/`);
+}
+
+export function plainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function decodeUtf8(
+  value: Uint8Array,
+  invalid: () => Error,
+  empty: (() => Error) | false = invalid,
+): string {
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(value);
+  } catch {
+    throw invalid();
+  }
+  if (empty !== false && text.trim() === "") throw empty();
+  return text;
+}
+
+interface WalkFilesOptions {
+  readonly enter?: (path: string, relativePath: string) => boolean;
+  readonly symlink?: (path: string) => void;
+}
+
+export async function walkFiles(
+  root: string,
+  include: (path: string, relativePath: string) => boolean,
+  options: WalkFilesOptions = {},
+): Promise<string[]> {
+  const files: string[] = [];
+  const visit = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = resolve(directory, entry.name);
+      const relativePath = posixRelative(root, path);
+      if (entry.isSymbolicLink()) {
+        options.symlink?.(path);
+      } else if (entry.isDirectory()) {
+        if (options.enter?.(path, relativePath) !== false) await visit(path);
+      } else if (entry.isFile() && include(path, relativePath)) {
+        files.push(path);
+      }
+    }
+  };
+  await visit(root);
+  return files.sort();
 }
 
 function requireSafeName(value: string, kind: string): string {
@@ -172,13 +227,11 @@ export function requirePathInWorkUnit(path: string, workUnit: string): string {
 function templateBytes(template: string | Uint8Array): Uint8Array {
   const bytes =
     typeof template === "string" ? Buffer.from(template, "utf8") : Buffer.from(template);
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw new WorkError(`Brief template is not readable UTF-8`);
-  }
-  if (text.trim() === "") throw new WorkError(`Brief template is empty`);
+  decodeUtf8(
+    bytes,
+    () => new WorkError(`Brief template is not readable UTF-8`),
+    () => new WorkError(`Brief template is empty`),
+  );
   return bytes;
 }
 
@@ -278,6 +331,23 @@ export interface RunArtifacts {
   readonly promptPath: string;
   readonly responsePath: string;
   readonly recordPath: string;
+}
+
+export const runArtifactSuffixes = [
+  ".task.md",
+  ".capabilities.json",
+  ".baseline.json",
+  ".prompt.md",
+  ".response.md",
+  ".record.json",
+] as const;
+
+export function applicationRootFromWorkPath(workPath: string): string {
+  return resolve(workPath, "..", "..", "..");
+}
+
+export function decompositionPath(workPath: string): string {
+  return resolve(workPath, "decomposition.md");
 }
 
 function artifactPaths(unit: string, stem: string): RunArtifacts {

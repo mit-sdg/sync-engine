@@ -4,13 +4,18 @@ Use this reference only when delegating. Coordinator simulation does not invoke 
 
 ## Common launch contract
 
-The selected harness creates and retains the role agent through completion. Run `sync-engine-skill harness recommend` before delegation. A detected supervising harness takes precedence over its embedded provider runtime. Use the printed launch action from prompt preparation. Paseo-managed shells expose connection and agent IDs, but currently expose no provider, model, or thinking setting. Supply `--provider` and `--model` to a fresh `launch paseo` command. Supply `--thinking` when required. `PASEO_PROVIDER`, `PASEO_MODEL`, and `PASEO_THINKING` are accepted when a future or configured environment exposes them.
+The selected harness creates and retains the role agent through completion. Use the printed launch action from prompt preparation. For a fresh Paseo launch, the coordinator passes its own provider and model when known; otherwise it passes the user's requested values, asking if neither is available. Pass `--thinking` when required and record the selected settings.
 
 For each delegated run:
 
 1. Build the role prompt. The CLI writes task, access, prompt, empty response, and prepared record artifacts.
 2. Invoke the printed launch action from the application workspace. A fresh run creates a fresh identity. A continuation targets the exact recorded identity.
-3. Send only the printed short instruction: `Read and follow the complete assignment in <prompt-path>`. The prompt file is the complete role message. Do not paste, summarize, or prefix its contents.
+3. Send only the printed short instruction, with the path on the next line:
+   ```text
+   Read and follow the complete assignment in this prompt file:
+   <prompt-path>
+   ```
+   The prompt file is the complete role message. Do not paste, summarize, or prefix its contents.
 4. For Paseo, run `launch paseo` once. It starts or continues the child in the background, records the identity, and performs one short wait slice.
 5. Repeat the exact printed `launch wait` command while the status is running. Each call is short by design. Never resend the assignment.
 6. An idle Paseo wait captures `paseo logs <id> --filter text --tail 1` verbatim. It infers blocked versus completed and runs completion by default. Use `--no-complete` only for manual completion.
@@ -21,7 +26,7 @@ If a fresh launch has not started and must use another adapter, run `sync-engine
 
 The explicitly named prompt file is the only workflow artifact the role may read. The compiled prompt contains its task, context, access, and result guidance.
 
-A harmless status check may be repeated. Retry a fresh launch only when no identity was created and the prompt was not accepted. Otherwise preserve the attempt and choose a continuation, fresh replacement, simulation, or stop. Never end the turn while a record is prepared. If the harness ends the turn during a Paseo wait loop, resume by running `launch wait` again.
+A harmless status check may be repeated. Retry a fresh launch only when no identity was created and the prompt was not accepted. Otherwise preserve the attempt and choose a continuation, fresh replacement, simulation, or stop. Never end the turn while a record is prepared. If the harness ends the turn during a Paseo wait loop, resume by running `launch wait` again. An Antigravity coordinator turn under Paseo ends after five minutes regardless of state; expect that cut and resume from `work show`.
 
 ## Continuation
 
@@ -44,4 +49,4 @@ All supplied adapters currently communicate access through prompt guidance. Work
 | Antigravity | fresh inherited-workspace subagent         | continue returned conversation ID | Inherit application workspace                           |
 | Cursor      | fresh CLI session; capture `session_id`    | `--resume` the same ID            | Pass application root with `--workspace`                |
 
-Model and reasoning inherit from the coordinator unless the user requests a role-specific override. Report when an adapter cannot represent the request.
+Report when an adapter cannot represent the selected model or reasoning setting.

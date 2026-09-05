@@ -1,6 +1,6 @@
 import { globSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vite-plus/test";
-import { CreateLink } from "./fixtures/application-examples.ts";
+import { CreateReminder } from "./fixtures/application-examples.ts";
 import { markdownSections, sectionRecord } from "./test-support.ts";
 
 function read(relative: string): string {
@@ -80,6 +80,24 @@ describe("prompt guidance", () => {
     }
   });
 
+  test("keeps authored, computation, and HTTP examples internally consistent", () => {
+    const authored = read("../skills/sync-engine/prompts/guidance/design/authored-format.md");
+    const application = read("../skills/sync-engine/prompts/guidance/api/application-example.md");
+    const httpClient = read("../skills/sync-engine/prompts/guidance/api/http-client.md");
+    const httpHost = read("../skills/sync-engine/prompts/guidance/api/http-host.md");
+
+    expect(authored).toContain("`opaque Name`");
+    expect(authored).toContain("external Owner");
+    expect(authored).toContain("create (owner: Owner");
+    expect(authored).toContain("Owner is Person");
+    expect(application).toContain("reminderSet.computations.hasDeadline");
+    expect(httpHost).toContain("pinned `@mit-sdg/sync-engine-http`");
+    expect(httpHost).toContain('path: "/go/{code}"');
+    expect(httpHost).toContain('new URL("./design/compositions/Links.md"');
+    expect(httpClient).toContain('baseUrl: "/"');
+    expect(httpClient).toContain("client.links.resolve");
+  });
+
   test("keeps normal role kits complete enough to design, review, and implement", () => {
     const decomposition = read("../skills/sync-engine/prompts/guidance/design/decomposition.md");
     const contracts = read("../skills/sync-engine/prompts/guidance/design/contracts.md");
@@ -104,7 +122,7 @@ describe("prompt guidance", () => {
       "sole decision",
       "realistic reuse boundary",
       "strongest plausible split or merge concern",
-      "retry identity when retries are promised",
+      "retry identity",
     ]) {
       expect(decomposition).toContain(phrase);
     }
@@ -116,9 +134,10 @@ describe("prompt guidance", () => {
     ]) {
       expect(contracts).toContain(phrase);
     }
-    expect(decompositionDesigner).toContain("compact decision index under about 8 KB");
-    expect(decompositionDesigner).toContain("omit signatures, storage details");
-    expect(decompositionCritic).toContain("one verdict");
+    expect(decompositionDesigner).toContain("compact decision index");
+    expect(decompositionDesigner).not.toContain("8 KB");
+    expect(decompositionDesigner).toContain("omit signatures, algorithms, storage");
+    expect(decompositionCritic).toContain("every new or changed concept one verdict");
     expect(decompositionCritic).toContain("Overloaded");
     expect(decompositionCritic).toContain("Fragmented");
     expect(decompositionCritic).toContain("merely for atomicity");
@@ -132,7 +151,8 @@ describe("prompt guidance", () => {
     expect(implementationCritic).toContain("test adequacy");
     expect(catalog).toContain("bunx --no-install sync-engine-catalog show concept/<name>");
     expect(concepts).toContain("`ConceptClass.length === 0`");
-    expect(concepts).toContain("never the tuple union `[] | [Row]`");
+    expect(concepts).toContain("returns zero or one row");
+    expect(concepts).not.toContain("tuple union");
     expect(application).toContain("import { conceptSet, registerConcept }");
     expect(application).toContain("import { InvalidContent, PostingConcept }");
     expect(application).toContain('import { assemble } from "@mit-sdg/sync-engine/assembly"');
@@ -145,6 +165,7 @@ describe("prompt guidance", () => {
     expect(frameworkSafety).toContain("Do not browse package trees");
     expect(frameworkSafety).toContain("Never inspect package `dist`");
     expect(frameworkSafety).toContain("Never import from `node_modules/` or `dist/` paths");
+    expect(frameworkSafety).toContain("Repair ordinary diagnostics through the project checks");
     expect(frameworkSafety).not.toContain("Do not reload a skill or workflow");
   });
 
@@ -169,9 +190,16 @@ describe("prompt guidance", () => {
       excerpt(board, "const AddComment = endpoint(", "\n\n/**\n * Commenting enforces"),
     );
     expect(typescriptFence(sections["Computed optional-input branches"]!)).toBe(
-      excerpt(skillExamples, "export const CreateLink = endpoint(", "\n);\n") + "\n);",
+      [
+        excerpt(
+          skillExamples,
+          "const reminderSet = conceptSet(",
+          "\n\nexport const CreateReminder",
+        ),
+        excerpt(skillExamples, "export const CreateReminder = endpoint(", "\n);\n") + "\n);",
+      ].join("\n\n"),
     );
-    expect(CreateLink).toBeDefined();
+    expect(CreateReminder).toBeDefined();
     expect(typescriptFence(sections["Intentionally separate reaction"]!)).toBe(
       excerpt(circle, "const SelectedReadingOpensDiscussion = reaction(", "\n\nconst CirclePage"),
     );
