@@ -1,6 +1,6 @@
 import { globSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vite-plus/test";
-import { CreateLink } from "./fixtures/application-examples.ts";
+import { CreateReminder } from "./fixtures/application-examples.ts";
 import { markdownSections, sectionRecord } from "./test-support.ts";
 
 function read(relative: string): string {
@@ -48,6 +48,15 @@ describe("prompt guidance", () => {
     expect(leaks).toEqual([]);
   });
 
+  test("keeps brief instructions out of rendered work content", () => {
+    const brief = read("../skills/sync-engine/prompts/brief.md");
+    expect(brief).toContain(
+      "<!-- Record only product or process choices that later work must know.",
+    );
+    expect(brief).not.toMatch(/^Record only choices/m);
+    expect(brief).not.toMatch(/^Keep a concise chronological record/m);
+  });
+
   test("documents endpoint entries as additive identity and path contracts", () => {
     const authored = read("../skills/sync-engine/prompts/guidance/design/authored-format.md");
     const composition = read("../skills/sync-engine/prompts/guidance/api/composition.md");
@@ -71,6 +80,95 @@ describe("prompt guidance", () => {
     }
   });
 
+  test("keeps authored, computation, and HTTP examples internally consistent", () => {
+    const authored = read("../skills/sync-engine/prompts/guidance/design/authored-format.md");
+    const application = read("../skills/sync-engine/prompts/guidance/api/application-example.md");
+    const httpClient = read("../skills/sync-engine/prompts/guidance/api/http-client.md");
+    const httpHost = read("../skills/sync-engine/prompts/guidance/api/http-host.md");
+
+    expect(authored).toContain("`opaque Name`");
+    expect(authored).toContain("external Owner");
+    expect(authored).toContain("create (owner: Owner");
+    expect(authored).toContain("Owner is Person");
+    expect(application).toContain("reminderSet.computations.hasDeadline");
+    expect(httpHost).toContain("pinned `@mit-sdg/sync-engine-http`");
+    expect(httpHost).toContain('path: "/go/{code}"');
+    expect(httpHost).toContain('new URL("./design/compositions/Links.md"');
+    expect(httpClient).toContain('baseUrl: "/"');
+    expect(httpClient).toContain("client.links.resolve");
+  });
+
+  test("keeps normal role kits complete enough to design, review, and implement", () => {
+    const decomposition = read("../skills/sync-engine/prompts/guidance/design/decomposition.md");
+    const contracts = read("../skills/sync-engine/prompts/guidance/design/contracts.md");
+    const decompositionDesigner = read(
+      "../skills/sync-engine/prompts/roles/designer-decomposition.md",
+    );
+    const decompositionCritic = read("../skills/sync-engine/prompts/roles/critic-decomposition.md");
+    const contractCritic = read("../skills/sync-engine/prompts/roles/critic-contracts.md");
+    const implementationCritic = read(
+      "../skills/sync-engine/prompts/roles/critic-implementation.md",
+    );
+    const catalog = read("../skills/sync-engine/prompts/guidance/catalog.md");
+    const concepts = read("../skills/sync-engine/prompts/guidance/implementation/concepts.md");
+    const application = read(
+      "../skills/sync-engine/prompts/guidance/implementation/application.md",
+    );
+    const frameworkSafety = read(
+      "../skills/sync-engine/prompts/guidance/implementation/framework-safety.md",
+    );
+
+    for (const phrase of [
+      "sole decision",
+      "realistic reuse boundary",
+      "strongest plausible split or merge concern",
+      "retry identity",
+    ]) {
+      expect(decomposition).toContain(phrase);
+    }
+    for (const phrase of [
+      "unchanged post-refusal state",
+      "ordering of required effects relative to acknowledgement",
+      "bypassable authorization",
+      "exactly one matching `Declaration.Identity at /path` entry",
+    ]) {
+      expect(contracts).toContain(phrase);
+    }
+    expect(decompositionDesigner).toContain("compact decision index");
+    expect(decompositionDesigner).not.toContain("8 KB");
+    expect(decompositionDesigner).toContain("omit signatures, algorithms, storage");
+    expect(decompositionCritic).toContain("every new or changed concept one verdict");
+    expect(decompositionCritic).toContain("Overloaded");
+    expect(decompositionCritic).toContain("Fragmented");
+    expect(decompositionCritic).toContain("merely for atomicity");
+    expect(decompositionCritic).toContain("retry-only ledger");
+    expect(contractCritic).toContain("one compact assessment row per affected obligation");
+    expect(contractCritic).toContain(
+      "the absence of an application contract in supplied or granted design is a blocker",
+    );
+    expect(contractCritic).toContain("not `Approve` with a note");
+    expect(implementationCritic).toContain("acknowledgement order");
+    expect(implementationCritic).toContain("test adequacy");
+    expect(catalog).toContain("bunx --no-install sync-engine-catalog show concept/<name>");
+    expect(concepts).toContain("`ConceptClass.length === 0`");
+    expect(concepts).toContain("returns zero or one row");
+    expect(concepts).not.toContain("tuple union");
+    expect(application).toContain("import { conceptSet, registerConcept }");
+    expect(application).toContain("import { InvalidContent, PostingConcept }");
+    expect(application).toContain('import { assemble } from "@mit-sdg/sync-engine/assembly"');
+    expect(application).toContain('import { composition } from "./composition.ts"');
+    expect(application).toContain("applicationConceptSet.implementations()");
+    expect(application).toContain(
+      "Never build a request router outside the `@mit-sdg/sync-engine-http` handler and policy",
+    );
+    expect(application).toContain("may wrap the handler in `Bun.serve`");
+    expect(frameworkSafety).toContain("Do not browse package trees");
+    expect(frameworkSafety).toContain("Never inspect package `dist`");
+    expect(frameworkSafety).toContain("Never import from `node_modules/` or `dist/` paths");
+    expect(frameworkSafety).toContain("Repair ordinary diagnostics through the project checks");
+    expect(frameworkSafety).not.toContain("Do not reload a skill or workflow");
+  });
+
   test("keeps application realization patterns byte-exact with tested examples", () => {
     const guide = read("../skills/sync-engine/prompts/guidance/api/application-example.md");
     const sections = sectionRecord(
@@ -92,9 +190,16 @@ describe("prompt guidance", () => {
       excerpt(board, "const AddComment = endpoint(", "\n\n/**\n * Commenting enforces"),
     );
     expect(typescriptFence(sections["Computed optional-input branches"]!)).toBe(
-      excerpt(skillExamples, "export const CreateLink = endpoint(", "\n);\n") + "\n);",
+      [
+        excerpt(
+          skillExamples,
+          "const reminderSet = conceptSet(",
+          "\n\nexport const CreateReminder",
+        ),
+        excerpt(skillExamples, "export const CreateReminder = endpoint(", "\n);\n") + "\n);",
+      ].join("\n\n"),
     );
-    expect(CreateLink).toBeDefined();
+    expect(CreateReminder).toBeDefined();
     expect(typescriptFence(sections["Intentionally separate reaction"]!)).toBe(
       excerpt(circle, "const SelectedReadingOpensDiscussion = reaction(", "\n\nconst CirclePage"),
     );

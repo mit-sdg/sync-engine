@@ -2,31 +2,31 @@ import { conceptSet } from "@mit-sdg/sync-engine/assembly";
 import { endpoint, receive, respond } from "@mit-sdg/sync-engine/boundary";
 import { compute, is, where } from "@mit-sdg/sync-engine/language";
 
-const inputs = conceptSet(
+const reminderSet = conceptSet(
   {},
   {
-    hasExpiry: ({ expiresAt }: { expiresAt: string | null }) => expiresAt !== null,
-    defaultCode: (_input: Record<string, never>) => "generated",
+    hasDeadline: ({ dueAt }: { dueAt: string | null }) => dueAt !== null,
+    defaultPriority: (_input: Record<string, never>) => "normal",
   },
 );
 
-export const CreateLink = endpoint(
-  "/links",
-  ({ expiresAt, hasExpiry, code }) =>
-    receive({ expiresAt }).then(
+export const CreateReminder = endpoint(
+  "/reminders",
+  ({ dueAt, hasDeadline, priority }) =>
+    receive({ dueAt }).then(
       where(
-        compute(inputs.computations.hasExpiry, { expiresAt }, hasExpiry),
-        is.among(hasExpiry, [true]),
+        compute(reminderSet.computations.hasDeadline, { dueAt }, hasDeadline),
+        is.among(hasDeadline, [true]),
       )
-        .then(respond({ mode: "expiring" }))
-        .named("with-expiry"),
+        .then(respond({ mode: "scheduled" }))
+        .named("with-deadline"),
       where(
-        compute(inputs.computations.hasExpiry, { expiresAt }, hasExpiry),
-        is.among(hasExpiry, [false]),
-        compute(inputs.computations.defaultCode, {}, code),
+        compute(reminderSet.computations.hasDeadline, { dueAt }, hasDeadline),
+        is.among(hasDeadline, [false]),
+        compute(reminderSet.computations.defaultPriority, {}, priority),
       )
-        .then(respond({ mode: "permanent", code }))
-        .named("without-expiry"),
+        .then(respond({ mode: "open", priority }))
+        .named("without-deadline"),
     ),
-  { input: { defaults: { expiresAt: null } } },
+  { input: { defaults: { dueAt: null } } },
 );

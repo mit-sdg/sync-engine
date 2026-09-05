@@ -1,46 +1,34 @@
-# Application implementation guidance
+# Application integration
 
-Application integration realizes approved composition, types, instance registration,
-assembly, configuration, boundary projection, hosting, and artifact wiring. Use public
-package subpaths and the supplied declaration references.
+Own assigned concept registration, instance construction, composition, assembly, configuration, boundary projection, hosting, generated-artifact commands, and integration tests. Use public package subpaths and the supplied declarations.
 
-Use each implemented concept class directly; do not wrap, adapt, subclass, or replace it.
-This assignment owns production registration. Import the approved Markdown specification as
-text, map every declared refusal code to the supplied stable error class, and pass the
-resulting descriptor—not the raw class—to `conceptSet`:
+## Register concepts and instances
+
+Import each approved Markdown specification as text. Register the raw implementation class and map every declared refusal code to its stable error class:
 
 ```ts
 import { conceptSet, registerConcept } from "@mit-sdg/sync-engine/assembly";
 import spec from "@design/concepts/Posting.md" with { type: "text" };
-import { InvalidPostContent, PostingConcept } from "./concepts/Posting.ts";
+import { InvalidContent, PostingConcept } from "./concepts/Posting.ts";
 
 const posting = registerConcept({
   class: PostingConcept,
   spec,
-  refusals: { INVALID_POST_CONTENT: InvalidPostContent },
+  refusals: { INVALID_CONTENT: InvalidContent },
 });
+
 export const applicationConceptSet = conceptSet({ Posting: posting });
 ```
 
-When a generic concept class represents an authored external type, name the
-application-specific class and register that name:
+Do not wrap, adapt, or subclass a concept merely for registration. When specializing a generic class, preserve the application-specific class name and authored external-type binding. Register each selected static instance once under its authored identity; do not reuse one raw instance under two identities or invent an undeclared instance.
+
+For default-constructible concepts, assemble with fresh registered implementations:
 
 ```ts
-const Examining = ExaminingConcept<ExaminationOutcome>;
-const examining = registerConcept({ class: Examining, spec });
-```
+import { assemble } from "@mit-sdg/sync-engine/assembly";
+import { applicationConceptSet } from "./concepts.ts";
+import { composition } from "./composition.ts";
 
-The instantiation expression preserves concrete action and query signatures, including
-generated wire projections, without creating a wrapper or subclass. The authored
-`Outcome is ExaminationOutcome` binding remains a separate semantic contract; keep the
-source specialization aligned with it.
-
-Register every selected static instance exactly once under its authored identity. Never
-reuse one raw instance under two names or invent storage for an authored instance. For
-default-constructible concepts, assemble the registered set with explicit fresh
-implementations:
-
-```ts
 assemble({
   conceptSet: applicationConceptSet,
   instances: applicationConceptSet.implementations(),
@@ -48,32 +36,12 @@ assemble({
 });
 ```
 
-Implement the exact authored endpoint reaction, selected internal reaction, view, former,
-and computation links. An `endpoint(...)` is the reaction declaration named by its
-`reaction:` link and uses the exact pathname from that identity's `endpoints` entry; it may
-coordinate every consequence behaviorally assigned to that endpoint. Do not wrap it or
-create it from prose alone. A separate internal reaction exists only when approved design
-gives it a distinct link; do not duplicate its effect in the endpoint.
+## Realize selected declarations
 
-Before coding, compare every requested endpoint with both the complete supplied link
-inventory and endpoint entries, then block on absence or disagreement. Keep module, group,
-declaration name, and endpoint pathname aligned with those contracts, and register every
-declared computation once. Within those
-identities, choose documented stages, guards, binding flow, and fallback construction that
-preserve the behavioral commitments. Composition coordinates concepts but does not absorb
-their invariants or make separate owners atomic. Hosts project the application boundary
-and stay free of product policy already owned by design. Do not infer registration shapes
-or refusal maps from runtime failures; the supplied specifications and public surfaces
-contain those facts.
+Implement only declarations selected by exact authored links. An endpoint is the reaction named by its `reaction:` link and uses the pathname from its matching endpoint entry. A separate internal reaction requires its own link. Keep module, group, declaration, computation, and path identities aligned.
 
-Source-agreement diagnostics are semantic signals as well as wiring failures:
-`MISSING_COVERAGE` and `UNRESOLVED_LINK` mean an authored executable link is absent or
-cannot resolve. `UNRESOLVED_ENDPOINT`, `ENDPOINT_PATH_MISMATCH`, and `DUPLICATE_ENDPOINT`
-mean endpoint identity/path declarations disagree with the selected assembly.
-`UNDECLARED_SELECTED_INSTANCE` means wiring needs an identity the design did not select;
-`UNREGISTERED_COMPUTATION` means an authored computation lacks its one implementation
-registration. Do not conceal these conditions with alternate wiring.
+Composition coordinates owners but does not absorb their invariants or make them atomic. Implement required effects before acknowledgement unless approved failure semantics say otherwise. Give retries a stable identity accepted by the effect owner and implement the designed recovery action.
 
-Generated artifacts must come from the project's generation command and must never be
-edited by hand. Construct a gateway with the generated core wire named by `wireName`, not
-a transport projection type.
+Hosts project the boundary and contain no product policy. Never build a request router outside the `@mit-sdg/sync-engine-http` handler and policy. A host may wrap the handler in `Bun.serve` but must not match paths itself. A supplied transport owns its routing, wire, and error policy; do not duplicate it with a hand-written router or direct concept calls.
+
+Treat source-agreement diagnostics as contract mismatches rather than hiding them with alternate wiring. Run generation through the project command and never edit generated files. Use the generated core wire for gateways; transport projections are caller contracts, not assembly input.

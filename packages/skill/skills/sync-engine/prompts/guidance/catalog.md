@@ -9,6 +9,10 @@ expected answer rather than a fault. Mark an entry `catalog-unchanged` only when
 product needs every listed action and query; otherwise mark it `catalog-adapted` and keep
 only the needed surface during contract authoring.
 
+Obtain full contracts with `bunx --no-install sync-engine-catalog list` and
+`bunx --no-install sync-engine-catalog show concept/<name>`. Supply command output inline;
+never read package trees or `dist` entries.
+
 - **Alerting** — Keep an addressed matter visible until its recipient acknowledges it, so pending attention survives retries and does not depend on memory. Surface: `raise`, `acknowledge`, `_openFor`, `_get`.
 - **Approving** — Separate a request from an assigned reviewer's durable decision, so pending work is not mistaken for accepted work and a requester cannot approve the request alone. Surface: `request`, `approve`, `reject`, `withdraw`, `_get`, `_pendingFor`, `_history`.
 - **Auditing** — Keep a permanent numbered record of who did what to which target, so past activity can be attributed and read back afterwards instead of being reconstructed from state that shows only its current values. Surface: `record`, `_get`, `_since`, `_byActor`, `_forTarget`, `_extent`.

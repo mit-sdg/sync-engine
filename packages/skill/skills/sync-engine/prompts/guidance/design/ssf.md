@@ -35,23 +35,21 @@ indented under a declaration; SSF keeps its TEXT verbatim and proves nothing. A 
 rule ends the preceding declaration body. End a first line with `with` only when a field
 or `unique` line follows, and always then; a `Rule:` line attaches without `with`.
 
-SSF owns structures, subsets, and accepted aliases. Named State fields and
-action/query signatures supply alias candidates; SSF invents none. Vendored
-`plur` must relate one candidate to one non-element owner, one-to-one, and yields no
-transitive/third spelling. Declarations win; externals, primitives, elements, and
-ambiguous candidates get no automatic alias.
+SSF accepts automatic singular/plural aliases for owned sets, sequences, and subsets when
+an authored State field or action/query signature supplies one unambiguous matching name.
+Declare an explicit `alias` for a synonym or an ambiguous singular/plural relationship;
+the explicit declaration takes precedence.
 
-Declare an alias for a synonym or ambiguous pair; it overrides automatic evidence.
-Target a unique valid structure or subset, never an alias. Parent a subset on a structure,
-subset, or either alias; forward chains work. Unresolved, external, primitive, and
-invalid-alias parents, duplicate or ambiguous structures, self-parents, and cycles are
-rejected.
+An alias targets one unique valid owned set, sequence, or subset. It cannot target another
+alias, an element, an external, an opaque or enum type, a primitive, a duplicate, or an
+unresolved name. A subset parent resolves to an owned set, sequence, or subset, directly or
+through a valid alias. Alias collisions and chains, ambiguous automatic relationships,
+self-parenting, and parent cycles are rejected.
 
 Structures, aliases, externals, local types, and primitives share one type universe. A
-field cannot be named `optional`, `unique`, `set`, or `seq`.
-Keep fieldNames unique per declaration and VALUEs per enum. Resolve State first so
-signature evidence can establish a plural join, then reject every signature name absent
-from the resolved owned inventory, externals, local types, and primitives.
+field cannot be named `optional`, `unique`, `set`, or `seq`. Keep fieldNames unique per
+declaration and VALUEs per enum. Every State and signature type must resolve to an owned,
+external, local, or primitive type.
 
 Mark a field `unique` when its values must be unique among members of that declaration; a
 unique collection field compares the whole collection. A `unique` line names the fields of

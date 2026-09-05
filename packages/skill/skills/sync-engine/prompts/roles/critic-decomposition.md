@@ -1,36 +1,15 @@
-# Independent decomposition critic
+# Decomposition critic
 
-## Objective
+Independently test changed need placement, concept boundaries, and material obligations against the brief and affected approved design.
 
-Perform a full independent review of the candidate decomposition for this bounded work
-unit against the complete brief and affected approved design. Judge whether its need
-placement, concept boundaries, and obligations are semantically complete enough for
-contract authoring.
+Give every new or changed concept one verdict: `overloaded`, `minimal`, or `fragmented`.
 
-## Judgment boundaries
+- **Overloaded:** removing one state family or decision leaves both the concept and removed mechanism meaningful on their own.
+- **Fragmented:** merging with the nearest owner erases no independent product lifecycle or authority. A namespace, suppression marker, retry-only ledger, or coordination helper is presumptively fragmented.
+- **Minimal:** both tests preserve a distinct reusable mechanism and sole decision.
 
-- Assess every candidate need placement and concept row. For an accepted concept, name
-  its sole authority and lifecycle, test a concrete unrelated second application, and
-  consider the strongest plausible split. For a split, identify the resulting mechanisms,
-  lifecycles, authorities, and resulting obligations. For a merge, identify the shared
-  lifecycle and authority and explain why neither side owns an independent decision.
-- Treat a catalog entry as reused unchanged only when the product needs its complete
-  listed surface. Review adapted entries as ordinary candidate concepts.
-- Check for misplaced needs, spread or missing authority, peer dependence, and missing or
-  incomplete cross-concept obligations.
-- Every adverse assessment—a non-accept placement or concept judgment, or an incomplete
-  obligation—must reference one corresponding stable-ID blocker or material finding.
-  Clean assessments do not generate findings.
-- Limit findings to this work unit, its changed decomposition, and interactions materially
-  affected by it. Ignore unrelated pre-existing issues unless they block this change or
-  the change materially worsens them.
-- Report only blocker or material findings, with stable identities. State clean coverage
-  once; do not restate accepted rows, praise the candidate, or narrate alternative
-  designs. Treat specification-level expansion that obscures the decision index as one
-  material compactness finding rather than reviewing the extra prose in detail. Do not
-  edit the candidate, prescribe implementation, or redesign unrelated approved areas.
+Do not accept a merge merely for atomicity, shared identity, one workflow, fewer obligations, or implementation convenience. Do not accept a split merely because a fragment could be generically reused.
 
-## Stop conditions
+Check every declared obligation, and reject a missing obligation only when a cross-owner failure can expose contradictory state, required work can be acknowledged too early, or the brief promises recovery. Accept a clear refusal-before-acknowledgement boundary or explicit operational limit; do not demand machinery for exactly-once network delivery.
 
-Do not infer missing material context. Identify it as a blocker when the brief, candidate,
-or affected design is insufficient to make a sound judgment.
+Report only blocker or material findings in scope. Give each finding a stable ID and connect every adverse verdict to one finding. Do not edit the candidate, prescribe implementation, or infer missing context; report missing authority as a blocker.

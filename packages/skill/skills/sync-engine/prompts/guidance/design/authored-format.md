@@ -1,7 +1,8 @@
 # Authored formats
 
-Each concept has one gerund identifier H1 naming its mechanism (`# Tasking`, never
-`# Tasks` or `# Task Management`) and these H2s, in order;
+Write each concept to `design/concepts/<Gerund>.md`, each application composition to `design/compositions/<Name>.md`, and application-owned concrete types to `design/types.md`. These are the only authored-design locations; decomposition remains the work-unit `decomposition.md`.
+
+Each concept has one gerund identifier H1 naming its mechanism and these H2s, in order;
 no other headings or fences:
 
 ````text
@@ -15,7 +16,7 @@ Unfenced prose.
 
 ## Types
 ```types
-external Person
+external Owner
   Optional explanation.
 ```
 
@@ -26,14 +27,14 @@ external Person
 
 ## Actions
 ```actions
-create (owner: Person, title: String, dueAt?: DateTime) : return (item: Item)
+create (owner: Owner, title: String, dueAt?: DateTime) : return (item: Item)
+  where title is invalid
+  then
+    refuse INVALID_TITLE "A valid title is required."
   where title is valid
   then
     create the item
     return item
-  where title is invalid
-  then
-    refuse INVALID_TITLE "A valid title is required."
 
 delete (item: Item) : return ()
   where true
@@ -44,25 +45,26 @@ delete (item: Item) : return ()
 
 ## Queries
 ```queries
-_items (owner: Person) : many (item: Item, title: String)
+_items (owner: Owner) : many (item: Item, title: String)
   answers the owner's items with their titles
   answers no rows when the owner has none
   orders rows by Item identity
 ```
 ````
 
-A concept's Types section contains only `external Name` declarations, or is empty. State uses supplied SSF;
-keep every State line inside its fence and prefix every invariant prose line with exact
-`Rule:`. Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named
-results, and one or more `where`/`then` branches. Indent `where` and `then` equally and
-each branch body deeper. Terminal success returns exactly the declared names. Declare an
-empty result `: return ()` and end its branches with bare `return`, never `return ()` or
-a standalone `()`. Refuse with `refuse CODE "Normative sentence."`; keep codes unique
-within an action and never shared across actions. Return declared names only: `return account`, never prose such as `return the session
-account`. A returned name is a declared parameter, the row the branch created or changed,
-or a value an earlier line in that branch binds, as in `count the Tallies with subject as
-total`. Order an action's branches with its refusals first and its terminal success last,
-and give each branch a condition the others cannot also match.
+A concept's Types section contains `external Name`, `opaque Name`, and
+`Name is VALUE or VALUE` declarations, or is empty. State uses supplied SSF; keep every
+State line inside its fence and prefix every invariant prose line with exact `Rule:`.
+Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named results,
+and one or more `where`/`then` branches. Indent `where` and `then` equally and each branch
+body deeper. Terminal success returns exactly the declared names. Declare an empty result
+`: return ()` and end its branches with bare `return`. Refuse with
+`refuse CODE "Normative sentence."`; keep codes unique within an action and never shared
+across actions. A returned name is a declared parameter, the row the branch created or
+changed, or a value an earlier line in that branch binds, as in
+`count the Tallies with subject as total`. Order an action's branches with its refusals
+first and its terminal success last, and give each branch a condition the others cannot
+also match.
 
 Actions start with a letter; queries start `_` and use `one`, `optional`, or `many`
 before the named row. Mark optional State values in the row `field?: Type`. A `one` body

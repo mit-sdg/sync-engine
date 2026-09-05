@@ -1,64 +1,11 @@
-# Independent contract critic
+# Contract critic
 
-## Objective
+Independently review the complete changed contract set after authored syntax validation. Use the brief, affected approved contracts, and supplied decomposition as authority.
 
-Perform a full independent review of the complete changed contract set for this bounded
-work unit against the brief, affected approved contracts, and the accepted decomposition
-when supplied. Judge material semantic fitness after authored-form syntax has passed.
+Check scope, sole mechanism ownership, opaque peer identities, action success and refusal state, repetition, lifecycle, query cardinality and ordering, authorization enforcement, effect ownership, acknowledgement order, and recoverable obligations.
 
-## Judgment boundaries
+Record one compact assessment row per affected obligation covering trigger, closing reaction, visible success, false interval, acknowledgement order, retry identity, whether the owner accepts that identity, recovery action, and duplicate-effect risk. Inventory selected endpoints, internal reactions, views, formers, computations, links, and endpoint paths.
 
-When supplied, treat the accepted decomposition as fixed. Without one, treat the brief
-plus affected approved contracts as the boundary authority. Reopen a boundary only when
-no valid contract can realize the required behavior without moving it, and identify the
-conflicting mechanisms precisely. For every affected obligation, compare its trigger,
-closing reaction, observable false interval, retry identity, and recovery with that
-boundary authority. Record one compact assessment row per obligation before reaching a
-verdict. Each row states the visible success, whether required effects precede or follow
-acknowledgement, whether the owning action actually accepts the claimed retry identity,
-which available owner action performs recovery, and whether another obligation assigns
-the same effect. Use `none` when a field is intentionally absent; do not infer hidden state
-or implementation.
+Missing authority, bypassable authorization, duplicate ownership, unrecoverable required work, or behavior required for visible success/refusal is a blocker. When the brief or decomposition requires endpoints, links, or cross-concept behavior, the absence of an application contract in supplied or granted design is a blocker. Return a `Blocked` verdict for that absence, not `Approve` with a note. Give other consequential mismatches stable material-finding IDs. Ignore naming polish, parser mechanics, implementation staging, and unrelated pre-existing issues.
 
-Check material mismatches in this order:
-
-1. **Scope:** required visible successes and refusals are deliverable, and no unrequested
-   behavior appears.
-2. **Concepts and ownership:** purpose and Principle establish one mechanism, with no peer
-   dependence, interpreted peer fact, duplicate authority, or unowned decision.
-3. **Actions:** refusals and post-refusal state, lifecycle, repetition, deletion, repair,
-   absent input identities, query cardinality, and stable `many` ordering agree.
-4. **Composition:** authorization enforcement, visible results, obligation recovery, and
-   acknowledgement ordering agree. Reject required work placed after visible success when
-   failure could lose that work; duplicate ownership of one effect; compensation without
-   an available owner action; and idempotency claims whose owner action accepts no stable
-   operation identity. Do not simulate framework lowering or require implementation-stage
-   dataflow in the prose.
-5. **Application documents:** there are no external aliases, unused concretes, inferred
-   storage, or concept actions posed as declarations. Inventory every selected endpoint,
-   internal reaction, view, former, and computation and require its exact matching typed
-   link. Each endpoint needs a `reaction:` link under its intended module, group, and
-   declaration name plus exactly one `Declaration.Identity at /path` entry whose identity
-   agrees with that link and whose path fits the selected boundary. A prose route label
-   does not count. A separate internal reaction
-   must represent an intentional deferred behavior rather than duplicate an effect the
-   endpoint already owns.
-
-Ignore naming polish, redundant explanation, parser-enforced mechanics, framework-stage
-realization, informational advisories, and merely conceivable unspecified behavior. Do
-not judge whether prose determines framework stages, bindings, or lowering; those are not
-contract-review criteria. Missing authority, bypassable
-authorization, ownership conflict, unrecoverable obligation, or behavior required for
-visible success or refusal is a blocker; another consequential contract mismatch is
-material. Give material findings stable identities.
-
-Limit findings to changed contracts and affected interactions. Ignore unrelated
-pre-existing issues unless they block this change or are materially worsened by it. Do
-not edit the design or prescribe implementation. An `Approve` verdict still requires the
-compact assessment rows; `Findings: none` alone is not evidence of review.
-
-## Stop conditions
-
-Do not infer missing material context. Identify it as a blocker when the brief, any
-supplied decomposition, candidate contracts, or affected existing contracts are
-insufficient for a sound review.
+Do not edit design, prescribe implementation, or infer missing context.

@@ -6,8 +6,11 @@
 
 Import an approved specification through the `@design` alias, which the installed
 `tsconfig.json` maps to the design root: `import spec from "@design/concepts/Name.md" with
-{ type: "text" }`. `generated.config.ts` lists the same documents as URLs, written
-`new URL("./design/types.md", import.meta.url)`.
+{ type: "text" }`. `generated.config.ts` lists only the application documents,
+`design/types.md` and `design/compositions/*.md`, as URLs written
+`new URL("./design/types.md", import.meta.url)`. Concept specifications enter through
+`registerConcept({ spec })` and are never listed there; the application-design loader
+rejects a concept file with "types fence accepts only `concrete Name` declarations".
 
 ## Reactions
 
@@ -61,8 +64,17 @@ former(name, (input, free) => where(...).form({ ...shape }));
 - A view's `.holds()`, `.one()`, `.optional()`, or `.many()` follows the closing
   `view(...)`; it is never called on `where(...)`.
 - Builders receive binding bags. Reading a property, including by destructuring, declares a
-  stable logic variable in that partition. Completed views and formers take one
-  object-shaped input mapping.
+  stable logic variable in that partition. Bind query outputs with `.is({ ... })`; do not
+  destructure the query call itself:
+
+  ```ts
+  const targetFor = view("target for (code)", ({ code }, { target }, _free) =>
+    where(Shortening._resolve({ code }).is({ target })),
+  ).one();
+  ```
+
+  Completed views and formers take one object-shaped input mapping.
+
 - A view with no output binding is a predicate and ends in `.holds()`. A view that binds
   output rows returns `.many()` by default and may state `.one()` or `.optional()` instead.
   Stacked `where` blocks are alternatives, and local bindings do not escape the view.
@@ -93,10 +105,9 @@ former(name, (input, free) => where(...).form({ ...shape }));
   its return-type path. Write
   `conceptSet({ ... }, { describe: ({ value }) => ({ label: String(value), rank: 1 }) })`,
   then `compute(set.computations.describe, { value }, { label, rank })`. A no-input
-  computation uses `{}`. Test a computed boolean with `is.among(live, [true])` or
-  `is.among(live, [false])`; `is` is not itself callable and has no `eq`, `same`, or
-  `equal` member. Build the computation record before the set; references from separate
-  sets do not mix.
+  computation uses `{}`. `is` exposes `.lt`, `.le`, `.gt`, `.ge`, and `.among`; test a
+  computed boolean with `is.among(live, [true])` or `is.among(live, [false])`. Build the
+  computation record before the set; references from separate sets do not mix.
 - A query's `"one" | "optional" | "many"` promise links to a record return for `"one"` and
   an array of records otherwise, at type level and at runtime.
 
