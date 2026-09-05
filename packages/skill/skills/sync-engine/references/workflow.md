@@ -1,10 +1,10 @@
 # Coordinate an application change
 
-Use this procedure for one bounded sync-engine application work item. Defaults are recommendations; explicit user direction wins unless safety or repository instructions conflict.
+Use this procedure for one bounded sync-engine application work item.
 
 ## 1. Start or resume the work item
 
-Read application instructions and inspect `.sync-engine/work/`. Resume the matching slug when clear; otherwise choose a short kebab-case slug.
+Read application instructions and inspect `.sync-engine/work/`. Each work item lives at `.sync-engine/work/<slug>/`; resume the matching slug when clear, otherwise choose a short kebab-case slug.
 
 Run from the application root; the explicit policy flags show their defaults:
 
@@ -25,7 +25,7 @@ In an empty application, the command reads the skill release and creates only th
 }
 ```
 
-The command does not replace an existing manifest. It installs and verifies the pinned sync-engine setup and creates `brief.md` plus immutable `policy.json`. Review is `required` by default; use `omitted` only for an explicit user decision. Execution defaults to `mixed`; select `delegated` or `simulated` when the requested condition must not change later. A framework version conflict requires an explicit choice to align, continue with a warning when usable, or stop unchanged. Stop on other bootstrap failures.
+For an existing manifest, the command preserves its fields and adds the exact `packageManager` field when absent. It installs and verifies the pinned sync-engine setup and creates `brief.md` plus immutable `policy.json`. Review is `required` by default; use `omitted` only for an explicit user decision. Execution defaults to `mixed`; select `delegated` or `simulated` when the requested condition must not change later. A framework version conflict requires an explicit choice to align, continue with a warning when usable, or stop unchanged. Stop on other bootstrap failures.
 
 ## 2. Shape the brief and record decisions
 
@@ -41,7 +41,7 @@ Under `Active decisions`, record only product or process choices later work must
 
 Use plain language. No waiver IDs or ceremony are required. When a decision changes, preserve the old entry and mark the new one active. Include relevant active decisions in later prompts.
 
-Ask concise questions only for material choices. Active mode asks before implementation; auto mode proceeds on conservative assumptions. Every mode stops for unsafe ambiguity or a blocker.
+Ask concise questions only for material choices. When the harness lets the coordinator ask the user, ask before implementation. Otherwise proceed on conservative assumptions and record them under `Active decisions`. Always stop for unsafe ambiguity or a blocker.
 
 ## 3. Select the shortest sufficient path
 
@@ -90,13 +90,13 @@ Grant explicit files or bounded directories. For implementation review or verifi
 - application workers: assigned integration areas and read-only concept public surfaces;
 - frontend/evidence workers: assigned source/test areas and the public interface.
 
-Do not grant framework internals, package `dist`, skills, harness configuration, traces, sibling workspaces, caches, or unrelated work artifacts. The coordinator supplies exact public package material inline or names one package-owned public guide/example for the task; do not browse package trees. Never inspect internal declarations, runtime exports, or another application's source. Do not reinstall dependencies after bootstrap unless the user explicitly changes setup. If a role needs another file, add it in a new prompt. Project checks may transitively read the wider project.
+Do not grant framework internals, package `dist`, skills, harness configuration, traces, sibling workspaces, caches, or unrelated work artifacts. The coordinator supplies exact public package material inline or names one package-owned public guide/example for the task; do not browse package trees. Never inspect internal declarations, runtime exports, or another application's source. The pinned setup excludes the HTTP package; when the brief requires an HTTP boundary, the coordinator adds `@mit-sdg/sync-engine-http` at the exact pinned framework version before implementation and records it under `Active decisions`. Roles never install dependencies, and no other dependency changes happen unless the user explicitly changes setup. If a role needs another file, add it in a new prompt. Project checks may transitively read the wider project.
 
 Role capability recommendations are starting points, not gates. The CLI warns when a grant exceeds the role recommendation or a same-phase continuation expands prior access. Inspect the warning and record only consequential choices under `Active decisions`; the grant artifact already preserves the exact access.
 
 ## 5. Build and execute the prompt
 
-Before delegation, run `sync-engine-skill harness recommend`. Use a detected supervising harness for role creation rather than its embedded provider adapter. Preserve the coordinator's provider, model, and reasoning through the adapter when supported.
+Before delegation, run `sync-engine-skill harness recommend`. Use a detected supervising harness for role creation rather than its embedded provider adapter. Follow the [harness reference](harnesses.md) for provider, model, launch, wait, and completion behavior.
 
 For delegation:
 
@@ -114,17 +114,15 @@ sync-engine-skill prompt build --work <slug> --role <role> --phase <phase>
   --input <slot>=<path> ...
 ```
 
-Simulation means doing the compiled assignment directly. Do not announce sending, invoking, or waiting for a role agent. From prompt preparation through completion, use only its supplied context and access grant; if more context is needed, finalize or abandon the attempt and prepare a new prompt rather than inspecting it as coordinator.
+Simulate when the user requests it or delegation is unavailable. Simulation means doing the compiled assignment directly. Do not announce sending, invoking, or waiting for a role agent. From prompt preparation through completion, use only its supplied context and access grant; if more context is needed, finalize or abandon the attempt and prepare a new prompt rather than inspecting it as coordinator.
 
-Permanent design is bound automatically when a prompt reads or writes it. Contract design may change only granted canonical design files; design is immutable for every other bound role. Completion also compares all project changes with the write grant. `--design-root design` remains available to introduce the same binding explicitly. Contract-critic preparation requires an application contract under `design/compositions/` in supplied or existing design; use `--concepts-only <reason>` only when the review intentionally covers concepts alone. Prompt preparation reports bytes by source slot, warns when `decomposition.md` exceeds 8,000 bytes, and rejects duplicate content; remove irrelevant context when one slot dominates. A supplied real harness context limit may still reject an oversized prompt.
+Permanent design is bound automatically when a prompt reads or writes it. Contract design may change only granted canonical design files; design is immutable for every other bound role. Completion also compares all project changes with the write grant. Contract-critic preparation requires an application contract under `design/compositions/` in supplied or existing design; use `--concepts-only <reason>` only when the review intentionally covers concepts alone. Prompt preparation reports bytes by source slot, warns when `decomposition.md` exceeds 8,000 bytes, and rejects duplicate content; remove irrelevant context when one slot dominates. A supplied real harness context limit may still reject an oversized prompt.
 
-Delegation sends only the printed short instruction to read the prompt file. For Paseo, run the printed `launch paseo` command once, then repeat the exact printed `launch wait` command until it completes. Each call is short by design. Never end the turn while its record is prepared. If the harness ends the turn, resume by running `launch wait` again. Other adapters use their printed native launch action. Copy the returned result verbatim to the response path and complete the record before yielding. Simulation uses that same prompt as the coordinator's complete role assignment; never idle or return while its record is prepared. Copy the result verbatim to the response path and run the printed completion command.
-
-A simulated result records no agent identity and is not independent. Continue a finalized simulated record for a compact same-role repair; the coordinator still executes it directly. If independent review was explicitly required, ask before substituting simulation.
+A simulated result records no agent identity and is not independent. Copy its result verbatim to the response path and run the printed completion command without idling or returning while the record is prepared. Continue a finalized simulated record for a compact same-role repair; the coordinator still executes it directly. If independent review was explicitly required, ask before substituting simulation. A later delegated review replaces or supplements a simulation; it does not continue one.
 
 ## 6. Design and review only when needed
 
-Create only the work-unit `decomposition.md` when product boundaries, need placement, or cross-owner obligations change; never copy decomposition into permanent design. Continue its finalized designer record into contracts with `sync-engine-skill continue <record> --phase contracts ...`. A fresh designer requires an intentional replacement. A distinct critic performs one full design review. `critic/verification` verifies only supplied finding or routed-blocker IDs after repair; it never discovers new findings.
+Create only the work-unit `decomposition.md` when product boundaries, need placement, or cross-owner obligations change; never copy decomposition into permanent design. Continue its finalized designer record into contracts with `sync-engine-skill continue <record> --phase contracts ...`. A fresh designer requires an intentional replacement. A distinct critic performs one full design review. `critic/verification` verifies only supplied finding or routed-blocker IDs after repair; it never discovers new findings. Give its prompt every guidance file used for the original review through repeated `--input review-guidance=<path>` options. Skill-root guidance paths are accepted inputs, and the prompt retains these files for a continued critic.
 
 After implementation, optionally run `critic/implementation` to review implemented behavior and tests against approved contracts and obligations. Treat its findings as implementation defects or routed design blockers, not as design approval.
 
@@ -136,7 +134,7 @@ Validate authored design with the application command before returning contract 
 bunx --no-install sync-engine check-design <files...>
 ```
 
-Contract design runs this syntax check only; source-agreement, generation, and full application checks belong after implementation exists. Return syntax diagnostics to the designer. Under the default `required` review policy, an approving critic record is bound to the exact candidate digest. Decomposition must be current before contracts, and design must be current before first implementation. During implementation, required review binds only the final design digest before handback. Batch repairs and verify them once unless a worker is blocked on the design. Critic preparation during implementation prints this final-digest rule. Select `--review omitted` only at `work start` when the user explicitly omits review. Workers report design gaps instead of editing design unless the user's explicit assignment changes that ownership.
+Contract design runs this syntax check only; source-agreement, generation, and full application checks belong after implementation exists. Return syntax diagnostics to the designer. Under the default `required` review policy, an approving critic record is bound to the exact candidate digest. Decomposition must be current before contracts, and design must be current before first implementation. During implementation, required review binds only the final design digest before handback. Batch repairs and verify them once unless a worker is blocked on the design. Critic preparation during implementation prints this final-digest rule. Workers report design gaps instead of editing design unless the user's explicit assignment changes that ownership.
 
 ## 7. Route blockers by authority
 
@@ -151,13 +149,13 @@ Batch all currently visible blockers for one authority into one repair. After a 
 
 ## 8. Validate and hand back
 
-Choose checks from the brief, changed areas, design, and repository instructions. Optionally complete implementation review before final validation. Confirm relevant design syntax, generation, types, tests, host/frontend behavior, scenarios, and Done When evidence. Use `critic/verification` only for supplied finding IDs. Route defects to the responsible role and rerun only affected checks.
+Choose checks from the brief, changed areas, design, and repository instructions. Optionally complete implementation review before final validation. Confirm relevant design syntax, generation, types, tests, host/frontend behavior, scenarios, and Done When evidence. Route defects to the responsible role and rerun only affected checks. When execution budget is low, hand back before starting optional evidence.
 
-A completed or blocked record requires the first `## Status` line from a designer or worker to be exactly `Complete` or `Blocked`. A completed or blocked critic record requires the first `## Verdict` line to be exactly `Approve`, `Revise`, or `Blocked`. Finalize a `Blocked` status or verdict with `--status blocked`; completion rejects a contradictory `completed` status. Run:
+Completion requires a parsable `Status` line from a designer or worker, or `Verdict` line from a critic. Its first result word must be `Complete` or `Blocked`, or `Approve`, `Revise`, or `Blocked`, respectively; parsing is case-insensitive, strips Markdown emphasis, and accepts the result inline with the heading. Finalize a result beginning with `Blocked` using `--status blocked`; completion rejects a contradictory `completed` status. Run:
 
 ```sh
 sync-engine-skill work show <slug>
 sync-engine-skill work finish <slug>
 ```
 
-`work finish` prints the last critic verdict and refuses handback when it is `Revise` or `Blocked`; override only with `--accept critic-verdict=<reason>`. It also refuses source imports from `node_modules/` or `/dist/` paths and source that routes on `pathname` or `req.url` without importing `@mit-sdg/sync-engine-http`; override only with `--accept internal-imports=<reason>` or `--accept parallel-router=<reason>`. Override reasons are recorded in `.sync-engine/work/<slug>/handback.json` and shown by `work show`. Handback must reproduce unresolved findings verbatim from the last critic record. `work finish` also blocks while any run is still prepared or required review does not approve the final design digest. Update the activity section with validation and status. Hand back the goal, changed areas, delegated and simulated roles, identities where present, independent-review limitations, checks, unresolved findings, assumptions, and omitted evidence. Stop after the requested outcome and relevant checks pass.
+`work finish` prints the last critic verdict and refuses handback when it is `Revise` or `Blocked`; override only with `--accept critic-verdict=<reason>`. It also flags source imports from `node_modules/` or `dist/` paths, and any source file that references `req.url` or `request.url`, routes by `pathname`, or calls `Bun.serve(` without referencing `@mit-sdg/sync-engine-http`; override only with `--accept internal-imports=<reason>` or `--accept parallel-router=<reason>`. Override reasons are recorded in `.sync-engine/work/<slug>/handback.json` and shown by `work show`. Handback must reproduce unresolved findings verbatim from the last critic record. `work finish` also blocks while any run is still prepared or required review does not approve the final design digest. Update the activity section with validation and status. Hand back the goal, changed areas, delegated and simulated roles, identities where present, independent-review limitations, checks, unresolved findings, assumptions, and omitted evidence. Stop after the requested outcome and relevant checks pass.

@@ -16,10 +16,9 @@ Usage:
     [--input <slot>=<path>]... [--design-root <path>] [--concepts-only <reason>]
     [--context-limit <bytes>] [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   sync-engine-skill launch adapter <prepared-record> --harness <harness>
-  sync-engine-skill launch paseo <prepared-record> [--provider <id>] [--model <id>]
+  sync-engine-skill launch paseo <prepared-record> --provider <id> --model <id>
     [--thinking <id>] [--slice <seconds>]
-  sync-engine-skill launch wait <prepared-record> [--slice <seconds>]
-    [--complete|--no-complete]
+  sync-engine-skill launch wait <prepared-record> [--slice <seconds>] [--no-complete]
   sync-engine-skill launch complete <prepared-record> [--agent-id <id>]
     --status <native-status> [--model <id>]
   sync-engine-skill simulation complete <prepared-record> --status <status>
@@ -51,12 +50,11 @@ Options:
   may explicitly introduce the same canonical <application>/design binding; continue
   recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
   --context-limit is a positive byte limit supplied by the selected harness or model.
-  --timeout is the role's overall launch limit in seconds (default 1800). Paseo launch and
-  wait use short observation slices (default 45 seconds); repeat the printed wait command
-  while running. Fresh Paseo launches require --provider and --model because Paseo-managed
-  shells expose no provider/model settings unless PASEO_PROVIDER and PASEO_MODEL are set.
-  PASEO_THINKING supplies optional thinking. Prompt --model and --reasoning carry an explicit
-  user selection; otherwise they inherit native settings. --harness on continue is valid only
+  --timeout is the observation limit carried in the launch instruction (default 1800); the
+  CLI does not enforce it. Paseo launch and wait use 45-second observation slices by default.
+  Fresh Paseo launches require --provider and --model; provider, model, and thinking options
+  are irrelevant for continuations. Prompt --model and --reasoning carry an explicit user
+  selection; otherwise they inherit native settings. --harness on continue is valid only
   together with --replace. Work policy is chosen once at work start: required review binds
   approvals to the current candidate digest, and execution policy limits delegated or simulated runs.
 
@@ -119,9 +117,13 @@ Continuation and replacement:
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
+Handback checks (--accept <check>=<reason>): critic-verdict, internal-imports, parallel-router.
+  work finish refuses a prepared run.
+  work finish refuses an unapproved final design digest when review is required.
+  work finish refuses a last critic verdict of Revise or Blocked.
+  work finish refuses imports from node_modules or dist paths.
+  work finish refuses req.url, Bun.serve(, or pathname routing comparisons without @mit-sdg/sync-engine-http.
+
 Warnings:
-  Finalize the current run before preparing another. work finish refuses handback while a
-  run remains prepared. Changing policy after the first prepared run is rejected. Continuing
-  with a release mismatch is explicit. Adapters report prompt-guided capabilities when the
-  harness does not enforce them. Oversized public references, examples, and context should
-  be replaced with exact excerpts.
+  Policy changes after preparation are rejected; release mismatches require explicit choice.
+  Harness capabilities may be prompt-guided. Prefer exact excerpts to oversized context.

@@ -240,7 +240,7 @@ describe("harness adapter conformance", () => {
     });
   });
 
-  test("summarizes support conservatively and rejects incomplete adapters", () => {
+  test("summarizes support conservatively and rejects incomplete adapter registries", () => {
     const map = (level: CapabilitySupport) =>
       Object.fromEntries(capabilityCategories.map((kind) => [kind, level])) as CapabilitySupportMap;
     expect(summarizeCapabilitySupport(map("harness-enforced"))).toBe("harness-enforced");
@@ -251,12 +251,9 @@ describe("harness adapter conformance", () => {
       "unsupported",
     );
 
-    const broken = structuredClone(harnessAdapters) as Array<Partial<HarnessAdapterDefinition>>;
-    (broken[0]!.identity as { stableContinuation: boolean }).stableContinuation = false;
-    delete (broken[2] as { continuation?: unknown }).continuation;
-    expect(validateHarnessAdapters(broken)).toEqual([
-      "paseo: stable continuation identity is required",
-      "codex: incomplete continuation action",
+    expect(validateHarnessAdapters(harnessAdapters.slice(1))).toEqual(["missing adapter paseo"]);
+    expect(validateHarnessAdapters([...harnessAdapters, harnessAdapters[0]!])).toEqual([
+      "paseo: duplicate id",
     ]);
   });
 });

@@ -226,8 +226,8 @@ async function finalizeInitial(root: string, launch: InitialLaunch, response?: s
 
 async function finalizedSimulationRecord(
   root: string,
-  role: "critic" | "application-worker",
-  phase: "verification" | "implementation",
+  role: "designer" | "critic" | "application-worker",
+  phase: "decomposition" | "verification" | "implementation",
   response: string,
   at: Date,
 ): Promise<string> {
@@ -323,6 +323,7 @@ describe("skill CLI help and arguments", () => {
       ["launch", "complete", "record.json", "extra"],
       "Unexpected positional argument for launch complete: extra",
     ],
+    [["launch", "wait", "record.json", "--complete"], "Unknown option for launch wait: --complete"],
   ])("rejects unknown, duplicate, and misplaced arguments", async (args, message) => {
     const root = await application("arguments");
     expect(await invoke(args, root)).toEqual(cliFailure(message));
@@ -662,7 +663,7 @@ describe("prompt preparation and completion", () => {
       title: ["message-board-search — Designer; --title"],
       delivery: ["agent-file-instruction; the paseo run positional prompt"],
       cwd: [`${root}; explicit-application-cwd`],
-      timeout: ["1800 seconds; overall role limit"],
+      timeout: ["1800 seconds; observation limit carried in instruction (CLI does not enforce)"],
       sources: [expect.stringContaining("brief ")],
       target: ["fresh agent"],
       native: ["Paseo CLI; paseo run"],
@@ -692,7 +693,7 @@ describe("prompt preparation and completion", () => {
     const configured = await prepareInitial(configuredRoot, { timeoutSeconds: 42 });
     expect(await readLaunchRecord(configured.recordPath)).toMatchObject({ timeoutSeconds: 42 });
     expect(parseLabeledOutput(configured.output).Timeout).toEqual([
-      "42 seconds; overall role limit",
+      "42 seconds; observation limit carried in instruction (CLI does not enforce)",
     ]);
   });
 
@@ -819,7 +820,7 @@ describe("prompt preparation and completion", () => {
     ]);
   });
 
-  test("auto-complete wait refuses an unknown result shape", async () => {
+  test("leaves an unknown Paseo result for manual inspection and completion", async () => {
     const root = await application("paseo-unknown-shape");
     await started(root);
     const launch = await prepareInitial(root);
@@ -840,10 +841,22 @@ describe("prompt preparation and completion", () => {
     const completed = await invoke(["launch", "wait", launch.recordPath], root, {
       paseoCommand,
     });
-    expect(completed.stderr).toBe(
-      "Error: Response has no parsable required `## Status`; expected `Complete` or `Blocked` for designer; fix the response file and rerun completion.\n",
+    expect(completed).toMatchObject({ code: 0, stderr: "" });
+    expect(completed.stdout).toContain(`Response: ${launch.responsePath}`);
+    expect(completed.stdout).toContain(
+      `Role result: unknown\nManual completion after inspecting Response: sync-engine-skill launch complete ${JSON.stringify(launch.recordPath)} --status <completed|blocked>`,
     );
     expect((await readLaunchRecord(launch.recordPath)).state).toBe("prepared");
+  });
+
+  test("does not infer fresh Paseo configuration from environment variables", async () => {
+    const root = await application("paseo-no-environment-fallback");
+    await started(root);
+    const launch = await prepareInitial(root);
+    const result = await invoke(["launch", "paseo", launch.recordPath], root, {
+      environment: { PASEO_PROVIDER: "pi", PASEO_MODEL: "gpt-example" },
+    });
+    expect(result).toEqual(cliFailure("Fresh Paseo launch requires --provider <value>"));
   });
 
   test("captures a blocked Paseo result and completes it as blocked", async () => {
@@ -851,17 +864,20 @@ describe("prompt preparation and completion", () => {
     await started(root);
     const launch = await prepareInitial(root);
     const calls: Array<{ readonly args: readonly string[]; readonly cwd: string }> = [];
-    const result = await invoke(["launch", "paseo", launch.recordPath], root, {
-      environment: { PASEO_PROVIDER: "pi", PASEO_MODEL: "gpt-example" },
-      paseoCommand: fakePaseo(
-        [
-          { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
-          { output: JSON.stringify({ agentId: paseoAgentId, status: "idle" }) },
-          { output: "## Status\n\nBlocked\n\n## Blockers\n\nEnvironment unavailable.\n" },
-        ],
-        calls,
-      ),
-    });
+    const result = await invoke(
+      ["launch", "paseo", launch.recordPath, "--provider", "pi", "--model", "gpt-example"],
+      root,
+      {
+        paseoCommand: fakePaseo(
+          [
+            { output: JSON.stringify({ agentId: paseoAgentId, status: "running" }) },
+            { output: JSON.stringify({ agentId: paseoAgentId, status: "idle" }) },
+            { output: "## Status\n\nBlocked\n\n## Blockers\n\nEnvironment unavailable.\n" },
+          ],
+          calls,
+        ),
+      },
+    );
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Role result: blocked");
     expect(result.stdout).toContain(`--status blocked\n`);
@@ -1902,6 +1918,7 @@ describe("prompt preparation and completion", () => {
       resolve(root, "src/server.ts"),
       'import thing from "../node_modules/example/dist/thing.js";\nconst pathname = new URL(req.url).pathname;\n',
     );
+    await writeFile(resolve(root, "src/direct.ts"), 'import thing from "dist/thing.js";\n');
     await writeFile(
       resolve(root, "src/handler.ts"),
       'import { createSyncHandler } from "@mit-sdg/sync-engine-http";\nBun.serve({ fetch: createSyncHandler({} as never) });\n',
@@ -1918,14 +1935,14 @@ describe("prompt preparation and completion", () => {
     expect(shown.stdout).not.toContain("src/concepts/Shortening.ts");
     expect(shown.stdout).toContain(`Last critic verdict: revise (${stem})`);
     expect(shown.stdout).toContain("Unresolved critic findings: D-7, API-2");
-    expect(shown.stdout).toContain("Internal imports: src/server.ts:1");
+    expect(shown.stdout).toContain("Internal imports: src/direct.ts:1, src/server.ts:1");
     expect(shown.stdout).toContain("Parallel router: src/server.ts");
     expect(shown.stdout).not.toContain("src/handler.ts,");
 
     expect(await invoke(["work", "finish", "message-board-search"], root)).toEqual(
       cliFailure(
-        `Work item message-board-search cannot finish: critic-verdict\nLast critic verdict: revise (${stem})\nUnresolved critic findings: D-7, API-2`,
-        "Resolve it or rerun with --accept critic-verdict=<reason>.",
+        `Work item message-board-search cannot finish:\ncritic-verdict\nLast critic verdict: revise (${stem})\nUnresolved critic findings: D-7, API-2\ninternal-imports\nsrc/direct.ts:1, src/server.ts:1\nparallel-router\nsrc/server.ts`,
+        "Resolve critic-verdict or rerun with --accept critic-verdict=<reason>. Resolve internal-imports or rerun with --accept internal-imports=<reason>. Resolve parallel-router or rerun with --accept parallel-router=<reason>.",
       ),
     );
     const accepted = await invoke(
@@ -1959,6 +1976,24 @@ describe("prompt preparation and completion", () => {
     expect((await invoke(["work", "show", "message-board-search"], root)).stdout).toContain(
       "Accepted handback check: critic-verdict (known review debt)",
     );
+  });
+
+  test("does not record acceptance for a check that is not failing", async () => {
+    const root = await application("nonfailing-acceptance");
+    const unit = await started(root);
+    const result = await invoke(
+      [
+        "work",
+        "finish",
+        "message-board-search",
+        "--accept",
+        "internal-imports=not currently failing",
+      ],
+      root,
+    );
+    expect(result).toMatchObject({ code: 0, stderr: "" });
+    await expect(readFile(resolve(unit, "handback.json"), "utf8")).rejects.toThrow();
+    expect(result.stdout).not.toContain("Accepted handback check");
   });
 
   test("requires an application contract or records a concepts-only review scope", async () => {
@@ -2144,6 +2179,47 @@ describe("continuation and replacement", () => {
       "A finalized decomposition designer already owns this work item",
     );
     expect(result.stderr).toContain(`Continue ${initial.recordPath} into contracts`);
+
+    const simulatedRoot = await application("simulated-designer-phase-default");
+    const simulatedUnit = await started(simulatedRoot);
+    const prior = await finalizedSimulationRecord(
+      simulatedRoot,
+      "designer",
+      "decomposition",
+      "## Status\n\nComplete\n",
+      new Date("2026-08-19T09:08:00.000Z"),
+    );
+    const simulatedDecomposition = resolve(simulatedUnit, "decomposition.md");
+    await writeFile(simulatedDecomposition, "# Accepted decomposition\n");
+    const simulatedTask = await copyFixture(simulatedRoot, "follow-up-task.md");
+    const simulatedGrant = await copyFixture(simulatedRoot, "designer-contracts-grant.json");
+    const simulated = await invoke(
+      [
+        "prompt",
+        "build",
+        "--work",
+        "message-board-search",
+        "--role",
+        "designer",
+        "--phase",
+        "contracts",
+        "--task",
+        simulatedTask,
+        "--grant",
+        simulatedGrant,
+        "--simulate",
+        "test",
+        "--input",
+        `brief=${resolve(simulatedUnit, "brief.md")}`,
+        "--input",
+        `accepted-decomposition=${simulatedDecomposition}`,
+      ],
+      simulatedRoot,
+    );
+    expect(simulated.stderr).toContain(
+      "A finalized decomposition designer already owns this work item",
+    );
+    expect(simulated.stderr).toContain(`Continue ${prior} into contracts`);
   });
 
   test("keeps identity and harness with retained bindings, while replacement expands context", async () => {
@@ -2183,7 +2259,7 @@ describe("continuation and replacement", () => {
       prepared: ["designer/decomposition"],
       harness: ["paseo"],
       targetAgent: [paseoAgentId],
-      timeout: ["75 seconds; overall role limit"],
+      timeout: ["75 seconds; observation limit carried in instruction (CLI does not enforce)"],
     });
     const continuationPath = reported(continuation.stdout, "Record");
     const continuedRecord = await readLaunchRecord(continuationPath);

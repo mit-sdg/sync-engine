@@ -9,6 +9,10 @@ import { capabilityCategories, type EffectiveCapabilityGrant } from "./roles.ts"
 
 export const harnessIds = ["paseo", "pi", "codex", "claude-code", "antigravity", "cursor"] as const;
 export type HarnessId = (typeof harnessIds)[number];
+
+export function isHarnessId(value: unknown): value is HarnessId {
+  return harnessIds.includes(value as HarnessId);
+}
 export type CapabilitySupport = EnforcementLevel | "unsupported";
 export type CapabilitySupportMap = Readonly<
   Record<(typeof capabilityCategories)[number], CapabilitySupport>
@@ -163,14 +167,13 @@ export function validateHarnessIdentity(id: HarnessId, identity: string): string
 
 export function recommendHarness(environment: NodeJS.ProcessEnv): {
   readonly harness?: HarnessId;
-  readonly outerSupervisor?: HarnessId;
+  readonly outerSupervisor?: "paseo";
   readonly reason: string;
 } {
-  const outerSupervisor = environment["PASEO_AGENT_ID"] === undefined ? undefined : "paseo";
-  if (outerSupervisor !== undefined) {
+  if (environment["PASEO_AGENT_ID"] !== undefined) {
     return {
       harness: "paseo",
-      outerSupervisor,
+      outerSupervisor: "paseo",
       reason: "detected Paseo-managed coordinator; Paseo retains role ownership and completion",
     };
   }
@@ -183,14 +186,10 @@ export function recommendHarness(environment: NodeJS.ProcessEnv): {
   if (environment["CURSOR_SESSION_ID"] !== undefined) {
     return {
       harness: "cursor",
-      ...(outerSupervisor === undefined ? {} : { outerSupervisor }),
       reason: "detected native Cursor coordinator",
     };
   }
-  return {
-    ...(outerSupervisor === undefined ? {} : { outerSupervisor }),
-    reason: "no native coordinator harness was detected",
-  };
+  return { reason: "no native coordinator harness was detected" };
 }
 
 /** Prepare declarative data only; the coordinator performs the native invocation. */
@@ -286,56 +285,16 @@ export function summarizeCapabilitySupport(
   return levels.includes("prompt-guided") ? "prompt-guided" : "harness-enforced";
 }
 
-/** Types cover shape; runtime conformance checks only meaningful adapter invariants. */
-export function validateHarnessAdapters(
-  adapters: readonly Partial<HarnessAdapterDefinition>[],
-): string[] {
+/** Static types prove adapter shape; runtime checks prove registry completeness and uniqueness. */
+export function validateHarnessAdapters(adapters: readonly HarnessAdapterDefinition[]): string[] {
   const issues: string[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<HarnessId>();
   for (const adapter of adapters) {
-    const name = adapter.id ?? "unknown";
-    if (adapter.id === undefined || !harnessIds.includes(adapter.id))
-      issues.push(`${name}: invalid id`);
-    else if (seen.has(adapter.id)) issues.push(`${name}: duplicate id`);
-    else seen.add(adapter.id);
-    if (
-      !adapter.identity ||
-      !text(adapter.identity.label) ||
-      adapter.identity.stableContinuation !== true
-    ) {
-      issues.push(`${name}: stable continuation identity is required`);
-    }
-    if (
-      !adapter.promptDelivery ||
-      !completePromptTransport(adapter.promptDelivery.fresh) ||
-      !completePromptTransport(adapter.promptDelivery.continuation)
-    ) {
-      issues.push(`${name}: complete prompt delivery is required`);
-    }
-    if (!adapter.cwd) issues.push(`${name}: application cwd behavior is required`);
-    if (!adapter.configurationInheritance) {
-      issues.push(`${name}: configuration inheritance is required`);
-    }
-    if (adapter.freshTitleField !== undefined && !text(adapter.freshTitleField)) {
-      issues.push(`${name}: fresh title field is invalid`);
-    }
-    if (!completeAction(adapter.fresh)) issues.push(`${name}: incomplete fresh action`);
-    if (!completeAction(adapter.continuation)) {
-      issues.push(`${name}: incomplete continuation action`);
-    }
+    if (seen.has(adapter.id)) issues.push(`${adapter.id}: duplicate id`);
+    seen.add(adapter.id);
   }
   for (const id of harnessIds) if (!seen.has(id)) issues.push(`missing adapter ${id}`);
   return issues;
-}
-
-function completePromptTransport(transport: PromptTransport | undefined): boolean {
-  return Boolean(
-    transport &&
-    ["native-prompt-file", "shell-file-expansion", "agent-file-instruction"].includes(
-      transport.mode,
-    ) &&
-    text(transport.field),
-  );
 }
 
 function promptTransportInstruction(transport: PromptTransport): string {
@@ -347,12 +306,6 @@ function promptTransportInstruction(transport: PromptTransport): string {
     case "agent-file-instruction":
       return "Give the agent the generated file-reading instruction.";
   }
-}
-
-function completeAction(action: NativeAction | undefined): boolean {
-  return Boolean(
-    action && text(action.mechanism) && text(action.operation) && text(action.instruction),
-  );
 }
 
 function configurationInstruction(

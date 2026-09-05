@@ -65,34 +65,43 @@ evidence—not warning elimination—decides the behavior.
 ## Computed optional-input branches
 
 A computation is a condition line inside `where(...)`, not an action passed to `.then(...)`.
-Use `is.among(flag, [true])` and `is.among(flag, [false])` for disjoint boolean branches.
-A computation with no inputs receives `{}`:
+`reminderSet` comes from `conceptSet(...)`; its second argument is exposed as
+`reminderSet.computations`. Use `is.among(flag, [true])` and `is.among(flag, [false])` for
+disjoint boolean branches. A computation with no inputs receives `{}`:
 
 ```ts
-export const CreateLink = endpoint(
-  "/links",
-  ({ expiresAt, hasExpiry, code }) =>
-    receive({ expiresAt }).then(
+const reminderSet = conceptSet(
+  {},
+  {
+    hasDeadline: ({ dueAt }: { dueAt: string | null }) => dueAt !== null,
+    defaultPriority: (_input: Record<string, never>) => "normal",
+  },
+);
+
+export const CreateReminder = endpoint(
+  "/reminders",
+  ({ dueAt, hasDeadline, priority }) =>
+    receive({ dueAt }).then(
       where(
-        compute(inputs.computations.hasExpiry, { expiresAt }, hasExpiry),
-        is.among(hasExpiry, [true]),
+        compute(reminderSet.computations.hasDeadline, { dueAt }, hasDeadline),
+        is.among(hasDeadline, [true]),
       )
-        .then(respond({ mode: "expiring" }))
-        .named("with-expiry"),
+        .then(respond({ mode: "scheduled" }))
+        .named("with-deadline"),
       where(
-        compute(inputs.computations.hasExpiry, { expiresAt }, hasExpiry),
-        is.among(hasExpiry, [false]),
-        compute(inputs.computations.defaultCode, {}, code),
+        compute(reminderSet.computations.hasDeadline, { dueAt }, hasDeadline),
+        is.among(hasDeadline, [false]),
+        compute(reminderSet.computations.defaultPriority, {}, priority),
       )
-        .then(respond({ mode: "permanent", code }))
-        .named("without-expiry"),
+        .then(respond({ mode: "open", priority }))
+        .named("without-deadline"),
     ),
-  { input: { defaults: { expiresAt: null } } },
+  { input: { defaults: { dueAt: null } } },
 );
 ```
 
-The endpoint contract supplies `null` when the optional field is absent; do not ask two
-`receive(...)` alternatives to distinguish presence.
+The endpoint contract supplies `null` when the optional field is absent; one
+`receive(...)` handles both branches.
 
 ## Intentionally separate reaction
 

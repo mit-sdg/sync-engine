@@ -2,12 +2,13 @@
 
 import { spawn } from "node:child_process";
 import { lstat, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, dirname, relative, resolve, sep } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrapApplication, conflictChoices, type BootstrapDependencies } from "./bootstrap.ts";
 import {
   configurationWithUserOverrides,
   harnessIds,
+  isHarnessId,
   prepareHarnessInvocation,
   recommendHarness,
   validateHarnessIdentity,
@@ -52,12 +53,17 @@ import {
 } from "./roles.ts";
 import {
   canonicalPath,
+  decodeUtf8,
   executionPolicies,
   isPathInside,
+  pathCoveredBy,
+  plainObject,
+  posixRelative,
   readWorkPolicy,
   requireWorkUnit,
   reviewPolicies,
   startWorkUnitFromTemplate,
+  walkFiles,
   workUnitPath,
   type ExecutionPolicy,
   type ReviewPolicy,
@@ -75,7 +81,10 @@ export function defaultSkillRootForCommand(commandPath: string): string {
 }
 
 const defaultSkillRoot = defaultSkillRootForCommand(fileURLToPath(import.meta.url));
-const defaultTimeoutSeconds = 1800;
+// Thirty minutes is the documented observation budget carried with a full role launch.
+const defaultTimeoutSeconds = 1_800;
+// The rubric expects decomposition.md to remain a compact decision index.
+const decompositionWarningBytes = 8_000;
 
 function launchTitle(slug: string, role: string): string {
   const name = role
@@ -85,13 +94,36 @@ function launchTitle(slug: string, role: string): string {
   return `${slug} — ${name}`;
 }
 
+function roleInvocation(options: {
+  readonly harness: HarnessId;
+  readonly target: LaunchTarget;
+  readonly promptPath: string;
+  readonly cwd: string;
+  readonly slug: string;
+  readonly role: string;
+  readonly effectiveCapabilities: EffectiveCapabilityGrant;
+  readonly timeoutSeconds: number;
+  readonly configuration?: ReturnType<typeof configurationWithUserOverrides>;
+}): PreparedHarnessInvocation<EffectiveCapabilityGrant> {
+  return prepareHarnessInvocation({
+    harness: options.harness,
+    target: options.target,
+    promptPath: options.promptPath,
+    cwd: options.cwd,
+    title: launchTitle(options.slug, options.role),
+    effectiveCapabilities: options.effectiveCapabilities,
+    timeoutSeconds: options.timeoutSeconds,
+    ...(options.configuration === undefined ? {} : { configuration: options.configuration }),
+  });
+}
+
 type WriteOutput = (text: string) => void;
 type Bootstrap = typeof bootstrapApplication;
 type DesignCheck = (
   paths: readonly string[],
   cwd: string,
 ) => Promise<{ readonly exitCode: number; readonly output: string }>;
-export type PaseoCommand = (
+type PaseoCommand = (
   args: readonly string[],
   cwd: string,
 ) => Promise<{ readonly exitCode: number; readonly output: string }>;
@@ -130,7 +162,7 @@ export interface CommandDependencies {
   readonly now?: () => Date;
 }
 
-export class CliError extends Error {
+class CliError extends Error {
   override readonly name = "CliError";
   constructor(
     message: string,
@@ -147,7 +179,7 @@ const cardinality = {
   "zero-or-more": "repeatable optional",
 } as const;
 
-export function helpText(): string {
+function helpText(): string {
   const inputs = roleSpecificationIds
     .map((id) => {
       const specification = roleSpecifications[id];
@@ -180,10 +212,9 @@ Usage:
     [--input <slot>=<path>]... [--design-root <path>] [--concepts-only <reason>]
     [--context-limit <bytes>] [--timeout <seconds>] [--model <id>] [--reasoning <id>]
   ${commandName} launch adapter <prepared-record> --harness <harness>
-  ${commandName} launch paseo <prepared-record> [--provider <id>] [--model <id>]
+  ${commandName} launch paseo <prepared-record> --provider <id> --model <id>
     [--thinking <id>] [--slice <seconds>]
-  ${commandName} launch wait <prepared-record> [--slice <seconds>]
-    [--complete|--no-complete]
+  ${commandName} launch wait <prepared-record> [--slice <seconds>] [--no-complete]
   ${commandName} launch complete <prepared-record> [--agent-id <id>]
     --status <native-status> [--model <id>]
   ${commandName} simulation complete <prepared-record> --status <status>
@@ -206,12 +237,11 @@ Options:
   may explicitly introduce the same canonical <application>/design binding; continue
   recomputes an existing binding and accepts this option only when the prior record has none. Completion uses the recorded root.
   --context-limit is a positive byte limit supplied by the selected harness or model.
-  --timeout is the role's overall launch limit in seconds (default 1800). Paseo launch and
-  wait use short observation slices (default 45 seconds); repeat the printed wait command
-  while running. Fresh Paseo launches require --provider and --model because Paseo-managed
-  shells expose no provider/model settings unless PASEO_PROVIDER and PASEO_MODEL are set.
-  PASEO_THINKING supplies optional thinking. Prompt --model and --reasoning carry an explicit
-  user selection; otherwise they inherit native settings. --harness on continue is valid only
+  --timeout is the observation limit carried in the launch instruction (default 1800); the
+  CLI does not enforce it. Paseo launch and wait use 45-second observation slices by default.
+  Fresh Paseo launches require --provider and --model; provider, model, and thinking options
+  are irrelevant for continuations. Prompt --model and --reasoning carry an explicit user
+  selection; otherwise they inherit native settings. --harness on continue is valid only
   together with --replace. Work policy is chosen once at work start: required review binds
   approvals to the current candidate digest, and execution policy limits delegated or simulated runs.
 
@@ -265,12 +295,16 @@ Continuation and replacement:
   Bound design is redigested automatically. --replace prepares a fresh agent, expands
   retained inputs in full, and may select --harness; it remains a replacement.
 
+Handback checks (--accept <check>=<reason>): critic-verdict, internal-imports, parallel-router.
+  work finish refuses a prepared run.
+  work finish refuses an unapproved final design digest when review is required.
+  work finish refuses a last critic verdict of Revise or Blocked.
+  work finish refuses imports from node_modules or dist paths.
+  work finish refuses req.url, Bun.serve(, or pathname routing comparisons without @mit-sdg/sync-engine-http.
+
 Warnings:
-  Finalize the current run before preparing another. work finish refuses handback while a
-  run remains prepared. Changing policy after the first prepared run is rejected. Continuing
-  with a release mismatch is explicit. Adapters report prompt-guided capabilities when the
-  harness does not enforce them. Oversized public references, examples, and context should
-  be replaced with exact excerpts.
+  Policy changes after preparation are rejected; release mismatches require explicit choice.
+  Harness capabilities may be prompt-guided. Prefer exact excerpts to oversized context.
 `;
 }
 
@@ -346,10 +380,10 @@ function positiveInteger(value: string | undefined, option: string): number | un
 }
 
 function harness(value: string): HarnessId {
-  if (!harnessIds.includes(value as HarnessId)) {
+  if (!isHarnessId(value)) {
     throw new CliError(`Unknown harness ${value}; expected ${harnessIds.join(", ")}`);
   }
-  return value as HarnessId;
+  return value;
 }
 
 function areaGrant(value: string, kind: "read" | "write"): ReadableAreaGrant | WritableAreaGrant {
@@ -384,13 +418,11 @@ async function utf8(path: string, name: string, nonempty = true) {
   } catch (error) {
     throw new CliError(`${name} is unreadable: ${path}: ${String(error)}`);
   }
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw new CliError(`${name} is not valid UTF-8: ${path}`);
-  }
-  if (nonempty && text.trim() === "") throw new CliError(`${name} is empty: ${path}`);
+  const text = decodeUtf8(
+    bytes,
+    () => new CliError(`${name} is not valid UTF-8: ${path}`),
+    nonempty ? () => new CliError(`${name} is empty: ${path}`) : false,
+  );
   return { bytes, text };
 }
 
@@ -410,7 +442,7 @@ type FilePromptInput = Readonly<{
 }>;
 
 function displayPath(cwd: string, path: string): string {
-  return relative(cwd, path).split(sep).join("/") || basename(path);
+  return posixRelative(cwd, path) || basename(path);
 }
 
 const decompositionInputs = [
@@ -483,18 +515,14 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 async function hasMarkdownFile(directory: string): Promise<boolean> {
-  let entries;
   try {
-    entries = await readdir(directory, { withFileTypes: true });
+    return (
+      (await walkFiles(directory, (_path, relativePath) => relativePath.endsWith(".md"))).length > 0
+    );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw new CliError(`Cannot inspect application contracts: ${String(error)}`);
   }
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith(".md")) return true;
-    if (entry.isDirectory() && (await hasMarkdownFile(resolve(directory, entry.name)))) return true;
-  }
-  return false;
 }
 
 async function workRecords(unit: WorkUnit): Promise<Array<{ path: string; record: LaunchRecord }>> {
@@ -524,18 +552,17 @@ async function requireConsistentPolicy(
   return recorded ?? current;
 }
 
-async function requireNoPreparedRun(unit: WorkUnit): Promise<void> {
-  const prepared = (await workRecords(unit)).find(({ record }) => record.state === "prepared");
+function requireNoPreparedRun(
+  unit: WorkUnit,
+  records: readonly { readonly path: string; readonly record: LaunchRecord }[],
+): void {
+  const prepared = records.find(({ record }) => record.state === "prepared");
   if (prepared !== undefined) {
     throw new CliError(
       `Work item ${unit.slug} already has an unfinished prepared run: ${prepared.path}`,
       `Finalize it, change its adapter, or record a terminal failure before preparing another run.`,
     );
   }
-}
-
-function pathCovered(path: string, prior: string): boolean {
-  return prior === "." || path === prior || path.startsWith(`${prior}/`);
 }
 
 function capabilityExpansionIssue(
@@ -547,7 +574,7 @@ function capabilityExpansionIssue(
       if (
         !prior[field].some(
           (existing) =>
-            existing.area === candidate.area && pathCovered(candidate.path, existing.path),
+            existing.area === candidate.area && pathCoveredBy(candidate.path, existing.path, true),
         )
       ) {
         return `${field} expands at ${candidate.area}:${candidate.path}`;
@@ -603,14 +630,13 @@ async function finalReviewIssue(
     : `final design digest ${digest} has no approving critic record`;
 }
 
-async function requireReviewed(
-  unit: WorkUnit,
+function requireReviewed(
   target: ReviewTarget,
   writerPhase: "decomposition" | "contracts",
-): Promise<void> {
-  const policy = await readWorkPolicy(unit);
+  policy: WorkPolicy,
+  records: readonly { readonly record: LaunchRecord }[],
+): void {
   if (policy.review === "omitted") return;
-  const records = await workRecords(unit);
   const authored = records.some(
     ({ record }) =>
       record.state === "finalized" && record.role === "designer" && record.phase === writerPhase,
@@ -689,6 +715,38 @@ function reviewTargetReport(record: LaunchRecord): string {
     : `Review target: ${record.review.subject} ${record.review.digest}\n`;
 }
 
+async function validateContractComposition(
+  built: BuiltPrompt,
+  suppliedInputs: readonly FilePromptInput[],
+  cwd: string,
+  conceptsOnlyReason: string | undefined,
+  dependencies: CommandDependencies,
+): Promise<void> {
+  if (built.specification.id !== "critic/contracts") return;
+  const changed = suppliedInputs
+    .filter(({ id }) => id === "changed-contracts")
+    .map(({ path }) => path);
+  const compositionsRoot = resolve(cwd, "design/compositions");
+  const changedComposition = changed.some((path) => isPathInside(compositionsRoot, path));
+  if (
+    !changedComposition &&
+    !(await hasMarkdownFile(compositionsRoot)) &&
+    conceptsOnlyReason === undefined
+  ) {
+    throw new CliError(
+      `Application contract is missing: critic/contracts requires a contract under design/compositions/`,
+      `Supply the application contract or rerun with --concepts-only <reason>.`,
+    );
+  }
+  const checked = await (dependencies.designCheck ?? runDesignCheck)(changed, cwd);
+  if (checked.exitCode !== 0) {
+    throw new CliError(
+      `Contract syntax validation failed before semantic criticism${checked.output.trim() === "" ? "" : `:\n${checked.output.trimEnd()}`}`,
+      `Continue the contract designer with these diagnostics, then rerun the critic preparation.`,
+    );
+  }
+}
+
 interface PrepareCommandOptions {
   readonly cwd: string;
   readonly skillRoot: string;
@@ -717,6 +775,82 @@ interface PrepareCommandOptions {
   readonly kind: "fresh" | "continuation" | "replacement";
 }
 
+async function printPreparationWarnings(options: {
+  readonly built: BuiltPrompt;
+  readonly recommendationIssues: readonly string[];
+  readonly expansionIssue: string | undefined;
+  readonly suppliedInputs: readonly FilePromptInput[];
+  readonly unit: WorkUnit;
+  readonly review: ReviewTarget | undefined;
+  readonly records: readonly { readonly path: string; readonly record: LaunchRecord }[];
+  readonly policy: WorkPolicy;
+  readonly conceptsOnlyReason: string | undefined;
+  readonly kind: PrepareCommandOptions["kind"];
+  readonly dependencies: CommandDependencies;
+}): Promise<void> {
+  const { out } = output(options.dependencies);
+  const retainedCritic =
+    options.kind === "fresh" && options.built.specification.id === "critic/contracts"
+      ? options.records.findLast(
+          ({ record }) =>
+            record.state === "finalized" &&
+            record.role === "critic" &&
+            record.phase === "contracts",
+        )
+      : undefined;
+  if (retainedCritic !== undefined) {
+    out(
+      `Note: a finalized contract critic already exists (${retainedCritic.path}). For a repair, continue it with \`${commandName} continue ${JSON.stringify(retainedCritic.path)} --phase verification ...\` and the finding IDs instead of a fresh full review; a fresh critic is for a changed boundary or materially expanded interactions.\n`,
+    );
+  }
+  if (options.recommendationIssues.length > 0) {
+    out(
+      `Warning: ${options.built.specification.id} access exceeds role recommendations: ${options.recommendationIssues.join(", ")}. Record the choice in the work brief when consequential.\n`,
+    );
+  }
+  if (options.expansionIssue !== undefined) {
+    out(
+      `Warning: same-phase continuation access expands (${options.expansionIssue}). Record the choice in the work brief when consequential.\n`,
+    );
+  }
+  for (const warning of oversizedSourceWarnings(options.built)) out(`Warning: ${warning}\n`);
+  const decomposition = resolve(options.unit.path, "decomposition.md");
+  if (options.suppliedInputs.some(({ path }) => path === decomposition)) {
+    const bytes = (await readFile(decomposition)).byteLength;
+    if (bytes > decompositionWarningBytes) {
+      out(
+        `Warning: decomposition.md is ${bytes} bytes; the rubric expects a compact decision index. Ask the designer to cut signatures, storage, and restatement before review.\n`,
+      );
+    }
+  }
+  if (
+    options.built.specification.role === "critic" &&
+    (options.built.specification.phase === "contracts" ||
+      options.built.specification.phase === "verification") &&
+    options.review?.subject === "design" &&
+    options.records.some(
+      ({ record }) => record.state === "finalized" && record.phase === "implementation",
+    )
+  ) {
+    out(
+      `Note: required review binds only the final design digest before work finish; batch further repairs before verifying unless a worker is blocked on this design.\n`,
+    );
+  }
+  if (options.conceptsOnlyReason !== undefined) {
+    out(`Review scope: concepts only (${options.conceptsOnlyReason})\n`);
+  }
+  if (
+    options.built.specification.role === "critic" &&
+    options.built.specification.id !== "critic/implementation" &&
+    options.policy.review === "required" &&
+    options.review === undefined
+  ) {
+    out(
+      `Warning: this critic run binds no review target and will not satisfy the review policy.\n`,
+    );
+  }
+}
+
 async function prepareCommand(
   options: PrepareCommandOptions,
   dependencies: CommandDependencies,
@@ -734,13 +868,12 @@ async function prepareCommand(
       `Use the execution mode selected when the work item was created.`,
     );
   }
-  await requireNoPreparedRun(unit);
+  requireNoPreparedRun(unit, existingRecords);
   if (options.kind === "fresh" && options.role === "designer" && options.phase === "contracts") {
-    const priorDesigner = (await workRecords(unit))
+    const priorDesigner = existingRecords
       .filter(
         ({ record }) =>
           record.state === "finalized" &&
-          record.execution === "delegated" &&
           record.role === "designer" &&
           record.phase === "decomposition",
       )
@@ -793,28 +926,13 @@ async function prepareCommand(
     options.priorGrant === undefined
       ? undefined
       : capabilityExpansionIssue(built.effectiveCapabilities, options.priorGrant);
-  if (built.specification.id === "critic/contracts") {
-    const changed = suppliedInputs
-      .filter(({ id }) => id === "changed-contracts")
-      .map(({ path }) => path);
-    const compositionsRoot = resolve(options.cwd, "design/compositions");
-    const changedComposition = changed.some((path) => isPathInside(compositionsRoot, path));
-    if (!changedComposition && !(await hasMarkdownFile(compositionsRoot))) {
-      if (options.conceptsOnlyReason === undefined) {
-        throw new CliError(
-          `Application contract is missing: critic/contracts requires a contract under design/compositions/`,
-          `Supply the application contract or rerun with --concepts-only <reason>.`,
-        );
-      }
-    }
-    const checked = await (dependencies.designCheck ?? runDesignCheck)(changed, options.cwd);
-    if (checked.exitCode !== 0) {
-      throw new CliError(
-        `Contract syntax validation failed before semantic criticism${checked.output.trim() === "" ? "" : `:\n${checked.output.trimEnd()}`}`,
-        `Continue the contract designer with these diagnostics, then rerun the critic preparation.`,
-      );
-    }
-  }
+  await validateContractComposition(
+    built,
+    suppliedInputs,
+    options.cwd,
+    options.conceptsOnlyReason,
+    dependencies,
+  );
   const inferredDesign =
     built.specification.id === "designer/contracts" ||
     built.effectiveCapabilities.readableAreas.some(({ area }) => area === "design") ||
@@ -832,13 +950,14 @@ async function prepareCommand(
     const decompositionPath = resolve(unit.path, "decomposition.md");
     if (await pathExists(decompositionPath)) {
       const decomposition = await utf8(decompositionPath, "Decomposition");
-      await requireReviewed(
-        unit,
+      requireReviewed(
         {
           subject: "decomposition",
           digest: promptSourceSha256(decomposition.text),
         },
         "decomposition",
+        policy,
+        existingRecords,
       );
     }
   }
@@ -849,7 +968,12 @@ async function prepareCommand(
       ({ record }) => record.state === "finalized" && record.phase === "implementation",
     )
   ) {
-    await requireReviewed(unit, { subject: "design", digest: design.digest }, "contracts");
+    requireReviewed(
+      { subject: "design", digest: design.digest },
+      "contracts",
+      policy,
+      existingRecords,
+    );
   }
   const review = reviewTargetFor(built, design, unit);
   const launch = await prepareLaunch({
@@ -876,62 +1000,30 @@ async function prepareCommand(
     ...(options.relationship === undefined ? {} : { relationship: options.relationship }),
     ...(dependencies.now === undefined ? {} : { at: dependencies.now() }),
   });
-  const { out } = output(dependencies);
-  if (recommendationIssues.length > 0) {
-    out(
-      `Warning: ${built.specification.id} access exceeds role recommendations: ${recommendationIssues.join(", ")}. Record the choice in the work brief when consequential.\n`,
-    );
-  }
-  if (expansionIssue !== undefined) {
-    out(
-      `Warning: same-phase continuation access expands (${expansionIssue}). Record the choice in the work brief when consequential.\n`,
-    );
-  }
-  for (const warning of oversizedSourceWarnings(built)) out(`Warning: ${warning}\n`);
-  const decompositionPath = resolve(unit.path, "decomposition.md");
-  if (suppliedInputs.some(({ path }) => path === decompositionPath)) {
-    const decompositionBytes = (await readFile(decompositionPath)).byteLength;
-    if (decompositionBytes > 8_000) {
-      out(
-        `Warning: decomposition.md is ${decompositionBytes} bytes; the rubric expects a compact decision index. Ask the designer to cut signatures, storage, and restatement before review.\n`,
-      );
-    }
-  }
-  if (
-    built.specification.role === "critic" &&
-    (built.specification.phase === "contracts" || built.specification.phase === "verification") &&
-    review?.subject === "design" &&
-    existingRecords.some(
-      ({ record }) => record.state === "finalized" && record.phase === "implementation",
-    )
-  ) {
-    out(
-      `Note: required review binds only the final design digest before work finish; batch further repairs before verifying unless a worker is blocked on this design.\n`,
-    );
-  }
-  if (options.conceptsOnlyReason !== undefined) {
-    out(`Review scope: concepts only (${options.conceptsOnlyReason})\n`);
-  }
-  if (
-    built.specification.role === "critic" &&
-    built.specification.id !== "critic/implementation" &&
-    policy.review === "required" &&
-    review === undefined
-  ) {
-    out(
-      `Warning: this critic run binds no review target and will not satisfy the review policy.\n`,
-    );
-  }
+  await printPreparationWarnings({
+    built,
+    recommendationIssues,
+    expansionIssue,
+    suppliedInputs,
+    unit,
+    review,
+    records: existingRecords,
+    policy,
+    conceptsOnlyReason: options.conceptsOnlyReason,
+    kind: options.kind,
+    dependencies,
+  });
   if (options.harness === "coordinator") {
     printSimulated(built, launch, dependencies);
     return;
   }
-  const invocation = prepareHarnessInvocation({
+  const invocation = roleInvocation({
     harness: options.harness,
     target: options.target,
     promptPath: launch.artifacts.promptPath,
     cwd: options.cwd,
-    title: launchTitle(options.slug, built.specification.role),
+    slug: options.slug,
+    role: built.specification.role,
     effectiveCapabilities: built.effectiveCapabilities,
     timeoutSeconds: options.timeoutSeconds,
     configuration,
@@ -1018,7 +1110,7 @@ Launch: ${launchAction(invocation, launch.path)}
 Agent title: ${invocation.title.value}${invocation.title.nativeField === undefined ? "" : `; ${invocation.title.nativeField}`}
 Prompt delivery: ${invocation.prompt.delivery}; ${invocation.prompt.nativeField}
 Working directory: ${invocation.cwd.path}; ${invocation.cwd.behavior}
-Timeout: ${launch.record.timeoutSeconds} seconds; overall role limit
+Timeout: ${launch.record.timeoutSeconds} seconds; observation limit carried in instruction (CLI does not enforce)
 ${target}
 Native: ${invocation.native.mechanism}; ${invocation.native.operation}
 Instruction: ${invocation.native.instruction}\n`);
@@ -1166,9 +1258,7 @@ function harnessRecommend(dependencies: CommandDependencies): void {
   const supervisorLine =
     recommendation.outerSupervisor === undefined
       ? "Outer supervisor: none detected"
-      : recommendation.harness === recommendation.outerSupervisor
-        ? `Current supervisor: ${recommendation.outerSupervisor} (use it to create and retain role agents)`
-        : `Outer supervisor: ${recommendation.outerSupervisor}`;
+      : `Current supervisor: ${recommendation.outerSupervisor} (use it to create and retain role agents)`;
   output(dependencies).out(`${harnessLine}\n${supervisorLine}\nReason: ${recommendation.reason}\n`);
 }
 
@@ -1275,12 +1365,13 @@ async function launchAdapter(
     getRoleSpecification(record.role, record.phase),
     record.grant,
   );
-  const invocation = prepareHarnessInvocation({
+  const invocation = roleInvocation({
     harness: next,
     target: completionTarget(record),
     promptPath: record.prompt.path,
     cwd,
-    title: launchTitle(record.work.slug, record.role),
+    slug: record.work.slug,
+    role: record.role,
     effectiveCapabilities: grant,
     timeoutSeconds: record.timeoutSeconds,
   });
@@ -1351,6 +1442,7 @@ function unknownResultWarning(record: LaunchRecord): string | undefined {
   return `Response has no parsable required \`${record.role === "critic" ? "## Verdict" : "## Status"}\`; result recorded as unknown.`;
 }
 
+// A 45-second slice fits inside common harness shell timeouts of roughly 60 seconds.
 const defaultPaseoSliceSeconds = 45;
 
 async function paseoCall(
@@ -1375,10 +1467,8 @@ function paseoJson(output: string, operation: string): Record<string, unknown> {
   } catch {
     throw new CliError(`Paseo ${operation} returned invalid JSON`);
   }
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new CliError(`Paseo ${operation} returned invalid JSON`);
-  }
-  return value as Record<string, unknown>;
+  if (!plainObject(value)) throw new CliError(`Paseo ${operation} returned invalid JSON`);
+  return value;
 }
 
 function paseoAgentId(value: Record<string, unknown>, operation: string): string {
@@ -1435,12 +1525,13 @@ async function launchWaitRecord(
   );
   await writeFile(record.response.path, response, "utf8");
   const result = inferRoleResult(Buffer.from(response, "utf8"));
-  const completionStatus = result === "blocked" ? "blocked" : "completed";
-  const completionCommand = `${commandName} launch complete ${JSON.stringify(recordPath)} --status ${completionStatus}`;
+  const completionStatus =
+    result === "unknown" ? undefined : result === "blocked" ? "blocked" : "completed";
+  const completionCommand = `${commandName} launch complete ${JSON.stringify(recordPath)} --status ${completionStatus ?? "<completed|blocked>"}`;
   output(dependencies).out(
-    `Status: idle\nResponse: ${record.response.path}\nRole result: ${result}\nComplete: ${completionCommand}\n`,
+    `Status: idle\nResponse: ${record.response.path}\nRole result: ${result}\n${completionStatus === undefined ? "Manual completion after inspecting Response" : "Complete"}: ${completionCommand}\n`,
   );
-  if (complete) {
+  if (complete && completionStatus !== undefined) {
     await launchComplete([recordPath, "--status", completionStatus], dependencies);
   }
 }
@@ -1471,10 +1562,9 @@ async function launchPaseo(
   }
   const sliceSeconds =
     positiveInteger(optional(parsed.options, "--slice"), "--slice") ?? defaultPaseoSliceSeconds;
-  const environment = dependencies.environment ?? process.env;
-  const provider = optional(parsed.options, "--provider") ?? environment["PASEO_PROVIDER"];
-  const model = optional(parsed.options, "--model") ?? environment["PASEO_MODEL"];
-  const thinking = optional(parsed.options, "--thinking") ?? environment["PASEO_THINKING"];
+  const provider = optional(parsed.options, "--provider");
+  const model = optional(parsed.options, "--model");
+  const thinking = optional(parsed.options, "--thinking");
   const target = completionTarget(record);
   let nativeArgs: string[];
   if (target.kind === "fresh") {
@@ -1541,12 +1631,8 @@ async function launchWait(
 ): Promise<void> {
   const parsed = parseTail(args, "launch wait", ["prepared-record"], {
     "--slice": "value",
-    "--complete": "flag",
     "--no-complete": "flag",
   });
-  if (parsed.options.has("--complete") && parsed.options.has("--no-complete")) {
-    throw new CliError(`launch wait accepts only one of --complete or --no-complete`);
-  }
   const sliceSeconds =
     positiveInteger(optional(parsed.options, "--slice"), "--slice") ?? defaultPaseoSliceSeconds;
   await launchWaitRecord(
@@ -1604,12 +1690,13 @@ async function launchComplete(
     getRoleSpecification(record.role, record.phase),
     record.grant,
   );
-  const invocation = prepareHarnessInvocation({
+  const invocation = roleInvocation({
     harness: record.harness,
     target: completionTarget(record),
     promptPath: record.prompt.path,
     cwd,
-    title: launchTitle(record.work.slug, record.role),
+    slug: record.work.slug,
+    role: record.role,
     effectiveCapabilities: validatedGrant,
     timeoutSeconds: record.timeoutSeconds,
   });
@@ -1775,7 +1862,8 @@ async function continueLaunch(
   );
 }
 
-type HandbackCheck = "critic-verdict" | "internal-imports" | "parallel-router";
+const handbackChecks = ["critic-verdict", "internal-imports", "parallel-router"] as const;
+type HandbackCheck = (typeof handbackChecks)[number];
 type HandbackAcceptance = Readonly<{ check: HandbackCheck; reason: string; at: string }>;
 
 interface ProductBoundaryChecks {
@@ -1783,33 +1871,20 @@ interface ProductBoundaryChecks {
   readonly parallelRouters: readonly string[];
 }
 
-async function sourceFiles(directory: string, root = directory): Promise<string[]> {
-  let entries;
+async function sourceFiles(directory: string): Promise<string[]> {
   try {
-    entries = await readdir(directory, { withFileTypes: true });
+    return await walkFiles(
+      directory,
+      (path) => path.endsWith(".ts") && !/\.(?:test|spec)\.ts$/.test(path),
+      {
+        enter: (_path, relativePath) =>
+          !relativePath.split("/").some((part) => part === "generated" || part === "tests"),
+      },
+    );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) continue;
-    const path = resolve(directory, entry.name);
-    const relativePath = relative(root, path).split(sep).join("/");
-    if (entry.isDirectory()) {
-      if (relativePath.split("/").some((part) => part === "generated" || part === "tests")) {
-        continue;
-      }
-      files.push(...(await sourceFiles(path, root)));
-    } else if (
-      entry.isFile() &&
-      entry.name.endsWith(".ts") &&
-      !/\.(?:test|spec)\.ts$/.test(entry.name)
-    ) {
-      files.push(path);
-    }
-  }
-  return files.sort();
 }
 
 async function productBoundaryChecks(applicationRoot: string): Promise<ProductBoundaryChecks> {
@@ -1818,12 +1893,18 @@ async function productBoundaryChecks(applicationRoot: string): Promise<ProductBo
   const parallelRouters: string[] = [];
   for (const path of files) {
     const content = await readFile(path, "utf8");
-    const display = relative(applicationRoot, path).split(sep).join("/");
+    const display = posixRelative(applicationRoot, path);
     for (const match of content.matchAll(
       /(?:from\s*|import\s*(?:\(\s*)?|require\s*\()\s*["']([^"']+)["']/g,
     )) {
       const specifier = match[1]!;
-      if (!specifier.includes("node_modules/") && !specifier.includes("/dist/")) continue;
+      if (
+        !specifier.includes("node_modules/") &&
+        !specifier.startsWith("dist/") &&
+        !specifier.includes("/dist/")
+      ) {
+        continue;
+      }
       const line = content.slice(0, match.index).split("\n").length;
       internalImports.push(`${display}:${line}`);
     }
@@ -1842,9 +1923,18 @@ async function productBoundaryChecks(applicationRoot: string): Promise<ProductBo
 
 function latestCritic(
   records: readonly { readonly path: string; readonly record: LaunchRecord }[],
-) {
+):
+  | { readonly path: string; readonly record: Extract<LaunchRecord, { state: "finalized" }> }
+  | undefined {
   return records
-    .filter(({ record }) => record.state === "finalized" && record.role === "critic")
+    .filter(
+      (
+        entry,
+      ): entry is {
+        readonly path: string;
+        readonly record: Extract<LaunchRecord, { state: "finalized" }>;
+      } => entry.record.state === "finalized" && entry.record.role === "critic",
+    )
     .at(-1);
 }
 
@@ -1855,7 +1945,7 @@ async function criticReport(
   | undefined
 > {
   const latest = latestCritic(records);
-  if (latest === undefined || latest.record.state !== "finalized") return undefined;
+  if (latest === undefined) return undefined;
   const stem = basename(latest.path).replace(/\.record\.json$/, "");
   const response = await readFile(latest.record.response.path, "utf8");
   const findings =
@@ -1884,9 +1974,7 @@ async function readHandback(unit: WorkUnit): Promise<readonly HandbackAcceptance
       (entry): entry is HandbackAcceptance =>
         typeof entry === "object" &&
         entry !== null &&
-        ["critic-verdict", "internal-imports", "parallel-router"].includes(
-          String((entry as HandbackAcceptance).check),
-        ) &&
+        handbackChecks.includes((entry as HandbackAcceptance).check) &&
         typeof (entry as HandbackAcceptance).reason === "string" &&
         typeof (entry as HandbackAcceptance).at === "string",
     );
@@ -1901,11 +1989,7 @@ function parseAcceptances(values: readonly string[], at: Date): HandbackAcceptan
     const separator = value.indexOf("=");
     const check = value.slice(0, separator) as HandbackCheck;
     const reason = value.slice(separator + 1).trim();
-    if (
-      separator <= 0 ||
-      !["critic-verdict", "internal-imports", "parallel-router"].includes(check) ||
-      reason === ""
-    ) {
+    if (separator <= 0 || !handbackChecks.includes(check) || reason === "") {
       throw new CliError(
         `--accept must have the form <critic-verdict|internal-imports|parallel-router>=<reason>: ${value}`,
       );
@@ -1918,6 +2002,20 @@ function acceptanceLines(accepted: readonly HandbackAcceptance[]): string {
   return accepted
     .map(({ check, reason }) => `Accepted handback check: ${check} (${reason})`)
     .join("\n");
+}
+
+function handbackSummaryLines(
+  critic: Awaited<ReturnType<typeof criticReport>>,
+  boundaries: ProductBoundaryChecks,
+): string[] {
+  return [
+    critic === undefined ? "Last critic verdict: none" : critic.line,
+    ...(critic?.unresolved.length
+      ? [`Unresolved critic findings: ${critic.unresolved.join(", ")}`]
+      : []),
+    `Internal imports: ${boundaries.internalImports.length === 0 ? "clear" : boundaries.internalImports.join(", ")}`,
+    `Parallel router: ${boundaries.parallelRouters.length === 0 ? "clear" : boundaries.parallelRouters.join(", ")}`,
+  ];
 }
 
 async function workShow(args: readonly string[], dependencies: CommandDependencies): Promise<void> {
@@ -1971,14 +2069,10 @@ async function workShow(args: readonly string[], dependencies: CommandDependenci
         : handbackIssues.length > 0
           ? `ACTION REQUIRED: handback checks require resolution or acceptance: ${handbackIssues.join(", ")}.\nHandback readiness: blocked by handback checks.`
           : "Handback readiness: no unfinished runs; review policy and handback checks are satisfied.";
-  const criticLines =
-    critic === undefined
-      ? "Last critic verdict: none"
-      : `${critic.line}${critic.unresolved.length === 0 ? "" : `\nUnresolved critic findings: ${critic.unresolved.join(", ")}`}`;
-  const boundaryLines = `Internal imports: ${boundaries.internalImports.length === 0 ? "clear" : boundaries.internalImports.join(", ")}\nParallel router: ${boundaries.parallelRouters.length === 0 ? "clear" : boundaries.parallelRouters.join(", ")}`;
+  const summary = handbackSummaryLines(critic, boundaries).join("\n");
   const acceptedLines = acceptanceLines(accepted);
   output(dependencies)
-    .out(`${readiness}\n${criticLines}\n${boundaryLines}${acceptedLines === "" ? "" : `\n${acceptedLines}`}\n\nWork unit: ${unit.slug}
+    .out(`${readiness}\n${summary}${acceptedLines === "" ? "" : `\n${acceptedLines}`}\n\nWork unit: ${unit.slug}
 Path: ${unit.path}
 Policy: review ${policy.review}; execution ${policy.execution}
 
@@ -2015,9 +2109,6 @@ async function workFinish(
     parsed.options.get("--accept") ?? [],
     dependencies.now?.() ?? new Date(),
   );
-  const existing = await readHandback(unit);
-  const accepted = new Map(existing.map((entry) => [entry.check, entry]));
-  for (const entry of supplied) accepted.set(entry.check, entry);
   const critic = await criticReport(records);
   const boundaries = await productBoundaryChecks(unit.applicationRoot);
   const issues: Array<{ readonly check: HandbackCheck; readonly detail: string }> = [];
@@ -2033,15 +2124,23 @@ async function workFinish(
   if (boundaries.parallelRouters.length > 0) {
     issues.push({ check: "parallel-router", detail: boundaries.parallelRouters.join(", ") });
   }
+  const failingChecks = new Set(issues.map(({ check }) => check));
+  const applicableSupplied = supplied.filter(({ check }) => failingChecks.has(check));
+  const existing = await readHandback(unit);
+  const accepted = new Map(existing.map((entry) => [entry.check, entry]));
+  for (const entry of applicableSupplied) accepted.set(entry.check, entry);
   const unaccepted = issues.filter(({ check }) => !accepted.has(check));
   if (unaccepted.length > 0) {
-    const issue = unaccepted[0]!;
     throw new CliError(
-      `Work item ${unit.slug} cannot finish: ${issue.check}\n${issue.detail}`,
-      `Resolve it or rerun with --accept ${issue.check}=<reason>.`,
+      `Work item ${unit.slug} cannot finish:\n${unaccepted
+        .map(({ check, detail }) => `${check}\n${detail}`)
+        .join("\n")}`,
+      unaccepted
+        .map(({ check }) => `Resolve ${check} or rerun with --accept ${check}=<reason>.`)
+        .join(" "),
     );
   }
-  if (supplied.length > 0) {
+  if (applicableSupplied.length > 0) {
     await writeFile(
       resolve(unit.path, "handback.json"),
       `${JSON.stringify({ accepted: [...accepted.values()] }, undefined, 2)}\n`,
@@ -2049,8 +2148,9 @@ async function workFinish(
     );
   }
   const acceptedOutput = acceptanceLines([...accepted.values()]);
+  const summary = handbackSummaryLines(critic, boundaries).join("\n");
   output(dependencies).out(
-    `Work item ${unit.slug} is ready for handback: no unfinished runs; review policy and handback checks are satisfied.\n${critic === undefined ? "Last critic verdict: none" : critic.line}\nInternal imports: ${boundaries.internalImports.length === 0 ? "clear" : boundaries.internalImports.join(", ")}\nParallel router: ${boundaries.parallelRouters.length === 0 ? "clear" : boundaries.parallelRouters.join(", ")}${acceptedOutput === "" ? "" : `\n${acceptedOutput}`}\n`,
+    `Work item ${unit.slug} is ready for handback: no unfinished runs; review policy and handback checks are satisfied.\n${summary}${acceptedOutput === "" ? "" : `\n${acceptedOutput}`}\n`,
   );
 }
 

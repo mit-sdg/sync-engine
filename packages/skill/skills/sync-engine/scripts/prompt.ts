@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, resolve } from "node:path";
 import {
   getRoleSpecification,
   neverGrantableCapabilities,
@@ -8,6 +8,7 @@ import {
   type RoleSpecification,
   validateCapabilityGrant,
 } from "./roles.ts";
+import { isPathInside } from "./work.ts";
 
 const contextDeliveries = ["fresh", "continuation", "delta", "replacement"] as const;
 export type PromptContextDelivery = (typeof contextDeliveries)[number];
@@ -63,11 +64,6 @@ const digest = (source: string): string => createHash("sha256").update(source).d
 export const promptSourceSha256 = (source: string): string => digest(normalize(source));
 const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
-function inside(root: string, path: string): boolean {
-  const child = relative(root, path);
-  return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
-}
-
 function hasControl(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
@@ -115,12 +111,12 @@ async function promptRoot(path: string): Promise<string> {
 
 async function canonicalSource(root: string, path: string, label: string): Promise<Source> {
   const target = resolve(root, path);
-  if (!inside(root, target)) {
+  if (!isPathInside(root, target)) {
     throw new PromptBuildError("unreadable-input", `${label} escapes prompt root: ${path}`);
   }
   try {
     const real = await realpath(target);
-    if (!inside(root, real)) throw new Error("escaping source");
+    if (!isPathInside(root, real)) throw new Error("escaping source");
     return {
       path: real,
       displayName: path.replaceAll("\\", "/"),
