@@ -1,22 +1,5 @@
-# Frontend implementation worker
+# Frontend worker
 
-## Objective
+Implement and test the assigned client surface against the assembled public endpoint contract. Keep backend design, policy, and production source read-only unless the task explicitly expands ownership.
 
-Implement and test the requested browser, command-line, or other frontend as a thin
-client of the assembled application's public endpoints.
-
-## Implementation boundaries
-
-- Authored design, application policy, and backend production behavior are read-only.
-- Reach the application through its typed generated endpoint contract. Do not import or
-  bypass concepts, composition, assembly, validation, authorization, or storage.
-- Keep authoritative facts and policy behind endpoints; frontend state and logic serve
-  interaction and presentation only.
-- Repair ordinary frontend, type, lint, and test diagnostics within the assigned scope.
-
-## Stop conditions
-
-Report a design blocker when the requested experience requires a new or changed endpoint,
-refusal, policy, or visible behavior. Report a context blocker when the assembled public
-interface or required public API guidance is missing, and an environment blocker when
-assigned checks cannot run for a reason outside the frontend.
+Use the typed client rather than importing concepts or bypassing validation and authorization. Keep authoritative facts behind endpoints. Report a design blocker for missing public behavior, a context blocker for a missing interface or reference, or an environment blocker when checks cannot run.

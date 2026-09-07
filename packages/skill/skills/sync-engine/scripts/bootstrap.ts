@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { resolve } from "node:path";
+import { isPathInside, plainObject } from "./work.ts";
 
 export const requiredPackages = [
   ["@mit-sdg/sync-engine", "sync-engine"],
@@ -14,9 +15,9 @@ export const conflictChoices = [
   "continue-with-warning",
   "stop-unchanged",
 ] as const;
-export type ConflictChoice = (typeof conflictChoices)[number];
+type ConflictChoice = (typeof conflictChoices)[number];
 
-export interface SkillRelease {
+interface SkillRelease {
   readonly skill: string;
   readonly toolchain: Readonly<{ bun: string; node: string; typescript: string }>;
   readonly packages: Readonly<Record<RequiredPackage, string>>;
@@ -32,7 +33,7 @@ export interface BootstrapFiles {
   readonly ensureDirectory: (path: string) => Promise<void>;
 }
 
-export interface RuntimeVersions {
+interface RuntimeVersions {
   readonly bun?: string;
   readonly node: string;
 }
@@ -43,17 +44,12 @@ export interface BootstrapCommand {
   readonly cwd: string;
 }
 
-export type CommandResult = Readonly<{ exitCode: number }>;
+type CommandResult = Readonly<{ exitCode: number }>;
 
 export type CommandRunner = (command: BootstrapCommand) => Promise<CommandResult>;
-export type BootstrapState =
-  | "ready"
-  | "new-app"
-  | "missing-tooling"
-  | "version-conflict"
-  | "failed";
+type BootstrapState = "ready" | "new-app" | "missing-tooling" | "version-conflict" | "failed";
 
-export interface VersionConflict {
+interface VersionConflict {
   readonly expected: string;
   readonly found: readonly string[];
   readonly selected?: string;
@@ -61,7 +57,7 @@ export interface VersionConflict {
   readonly choices: typeof conflictChoices;
 }
 
-export interface BootstrapPlan {
+interface BootstrapPlan {
   readonly state: BootstrapState;
   readonly applicationRoot: string;
   readonly release?: SkillRelease;
@@ -120,7 +116,7 @@ export const realFiles: BootstrapFiles = {
       const info = await lstat(path);
       if (!info.isFile() || info.isSymbolicLink()) return "unsafe";
       const [actual, boundary] = await Promise.all([realpath(path), realpath(containmentRoot)]);
-      return inside(boundary, actual) ? "regular" : "unsafe";
+      return isPathInside(boundary, actual) ? "regular" : "unsafe";
     } catch (error) {
       if (missing(error)) return "missing";
       throw error;
@@ -131,7 +127,7 @@ export const realFiles: BootstrapFiles = {
   },
 };
 
-export const realRuntime: RuntimeVersions = {
+const realRuntime: RuntimeVersions = {
   node: process.versions.node,
   ...(process.versions.bun === undefined ? {} : { bun: process.versions.bun }),
 };
@@ -146,10 +142,6 @@ export const runCommand: CommandRunner = (command) =>
     child.once("close", (exitCode) => fulfill({ exitCode: exitCode ?? 1 }));
   });
 
-function record(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function objectFrom(text: string, path: string): Record<string, unknown> {
   let value: unknown;
   try {
@@ -157,7 +149,7 @@ function objectFrom(text: string, path: string): Record<string, unknown> {
   } catch {
     throw new Error(`Invalid JSON in ${path}`);
   }
-  if (!record(value)) throw new Error(`Expected a JSON object in ${path}`);
+  if (!plainObject(value)) throw new Error(`Expected a JSON object in ${path}`);
   return value;
 }
 
@@ -176,8 +168,8 @@ export async function readSkillRelease(
   if (
     typeof value.skill !== "string" ||
     value.skill.trim() === "" ||
-    !record(value.toolchain) ||
-    !record(value.packages) ||
+    !plainObject(value.toolchain) ||
+    !plainObject(value.packages) ||
     ![value.toolchain.bun, value.toolchain.node, value.toolchain.typescript].every(
       (item) => typeof item === "string" && item.trim() !== "",
     )
@@ -205,8 +197,11 @@ function satisfiesMajorRange(version: string, range: string): boolean {
 }
 
 function verifyRuntime(release: SkillRelease, runtime: RuntimeVersions): void {
-  if (runtime.bun !== undefined && runtime.bun !== release.toolchain.bun) {
-    throw new Error(`Running Bun ${runtime.bun} does not match ${release.toolchain.bun}`);
+  if (runtime.bun !== undefined) {
+    if (runtime.bun !== release.toolchain.bun) {
+      throw new Error(`Running Bun ${runtime.bun} does not match ${release.toolchain.bun}`);
+    }
+    return;
   }
   if (!satisfiesMajorRange(runtime.node, release.toolchain.node)) {
     throw new Error(`Running Node ${runtime.node} does not satisfy ${release.toolchain.node}`);
@@ -214,11 +209,6 @@ function verifyRuntime(release: SkillRelease, runtime: RuntimeVersions): void {
 }
 
 type InstalledPackage = Readonly<{ version?: string; usable: boolean }>;
-
-function inside(root: string, path: string): boolean {
-  const child = relative(root, path);
-  return child === "" || (!isAbsolute(child) && child !== ".." && !child.startsWith(`..${sep}`));
-}
 
 async function installedPackage(
   root: string,
@@ -240,13 +230,16 @@ async function installedPackage(
     return { usable: false };
   }
   const version = typeof manifest.version === "string" ? manifest.version : undefined;
+  if (manifest.name !== name) {
+    return { ...(version === undefined ? {} : { version }), usable: false };
+  }
   const bin = manifest.bin;
-  const target = typeof bin === "string" ? bin : record(bin) ? bin[executable] : undefined;
-  if (manifest.name !== name || typeof target !== "string" || target === "") {
+  const target = typeof bin === "string" ? bin : plainObject(bin) ? bin[executable] : undefined;
+  if (typeof target !== "string" || target === "") {
     return { ...(version === undefined ? {} : { version }), usable: false };
   }
   const executablePath = resolve(packageRoot, target);
-  if (!inside(packageRoot, executablePath))
+  if (!isPathInside(packageRoot, executablePath))
     throw new Error(`Escaping executable target: ${target}`);
   const targetKind = await files.fileKind(executablePath, packageRoot);
   if (targetKind === "unsafe") throw new Error(`Unsafe executable target: ${executablePath}`);
@@ -260,7 +253,7 @@ function declaredVersions(manifest: Record<string, unknown>, name: RequiredPacka
   for (const section of dependencySections) {
     const dependencies = manifest[section];
     if (dependencies === undefined) continue;
-    if (!record(dependencies)) throw new Error(`package.json ${section} must be an object`);
+    if (!plainObject(dependencies)) throw new Error(`package.json ${section} must be an object`);
     const version = dependencies[name];
     if (version !== undefined && typeof version !== "string") {
       throw new Error(`package.json ${section}.${name} must be a string`);
@@ -298,7 +291,7 @@ function failed(root: string, error: unknown, release?: SkillRelease): Bootstrap
   };
 }
 
-export async function inspectApplication(
+async function inspectApplication(
   options: Pick<BootstrapOptions, "applicationRoot"> & { readonly release: SkillRelease },
   files: BootstrapFiles = realFiles,
   runtime: RuntimeVersions = realRuntime,

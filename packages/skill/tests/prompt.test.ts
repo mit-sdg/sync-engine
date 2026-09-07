@@ -141,10 +141,10 @@ describe("deterministic prompt rendering", () => {
     expect(Buffer.from(first.content)).toEqual(Buffer.from(expectedForPlatform(expected)));
     expect(promptSections(first.content).map(({ heading }) => heading)).toEqual([
       "Role and objective",
-      "Capabilities",
+      "Access",
       "Guidance",
       "Context",
-      "Return shape",
+      "Result",
     ]);
 
     expect(second.content).toBe(first.content);
@@ -209,6 +209,47 @@ describe("deterministic prompt rendering", () => {
     });
   });
 
+  test("builds a read-only implementation review assignment", async () => {
+    const result = await buildPrompt({
+      role: "critic",
+      phase: "implementation",
+      workUnit: "tasking",
+      applicationRoot,
+      promptRoot: actualPromptRoot,
+      grant: {
+        readableAreas: [
+          { area: "application", path: "src" },
+          { area: "application", path: "tests" },
+        ],
+        writableAreas: [],
+        toolKinds: ["repository-read"],
+        projectShell: "project-validation",
+        network: false,
+        generatedOutput: false,
+        longRunningProcesses: false,
+      },
+      inputs: [
+        { id: "task", displayName: "review.md", content: "Review the implementation." },
+        { id: "brief", displayName: "brief.md", content: "Tasking is in scope." },
+        { id: "contracts", displayName: "Tasking.md", content: conceptContract },
+        {
+          id: "changed-source-and-tests",
+          displayName: "changed.diff",
+          content: "diff --git a/src/tasking.ts b/src/tasking.ts",
+        },
+      ],
+    });
+
+    expect(result.specification.templatePath).toBe("roles/critic-implementation.md");
+    expect(result.effectiveCapabilities).toMatchObject({
+      writableAreas: [],
+      projectShell: "project-validation",
+    });
+    expect(sectionRecord(promptSections(result.content))["Role and objective"]).toContain(
+      "Independently check implemented behavior",
+    );
+  });
+
   test("preserves fenced headings and a complete concept contract byte-for-byte", async () => {
     const result = await buildPrompt({
       role: "concept-worker",
@@ -242,7 +283,7 @@ describe("deterministic prompt rendering", () => {
       "Additional public framework references": inlineSource("authored-format.md", fencedHeadings),
       "Exact starting paths": inlineSource("paths.md", "src/concepts/tasking"),
     });
-    expect(sectionRecord(promptSections(result.content)).Capabilities).toBe(
+    expect(sectionRecord(promptSections(result.content)).Access).toBe(
       expectedForPlatform(
         await readFile(resolve(expectedRoot, "read-application.capabilities.md"), "utf8"),
       ).trimEnd(),
@@ -378,9 +419,9 @@ describe("deterministic prompt rendering", () => {
     expect(delta.bytes).toBeLessThan(fresh.bytes / 2);
     expect(sectionRecord(promptSections(delta.content))).toMatchObject({
       "Role and objective": expect.stringContaining("prior same-phase role contract"),
-      Capabilities: expect.stringContaining("Current effective grant:"),
+      Access: expect.stringContaining("This grant replaces prior access; other rules remain."),
       Guidance: expect.stringContaining("Unchanged from the prior same-agent context"),
-      "Return shape": expect.stringContaining("`## Status`, `## Changed`, `## Questions`"),
+      Result: expect.stringContaining("`## Status`, `## Changed`, `## Questions`"),
     });
     expect(
       delta.sources
@@ -523,7 +564,7 @@ describe("prompt build errors", () => {
       name: "PromptBuildError",
       code: "unknown-specification",
       message:
-        "Error: Unknown role specification designer/accepted; expected designer/decomposition, designer/contracts, critic/decomposition, critic/contracts, critic/verification, concept-worker/implementation, application-worker/implementation, frontend-worker/implementation, evidence-worker/evidence",
+        "Error: Unknown role specification designer/accepted; expected designer/decomposition, designer/contracts, critic/decomposition, critic/contracts, critic/implementation, critic/verification, concept-worker/implementation, application-worker/implementation, frontend-worker/implementation, evidence-worker/evidence",
     });
   });
 
@@ -570,6 +611,24 @@ describe("prompt build errors", () => {
       message: "Duplicate input display name: task.md",
     });
 
+    const repeatedTask = await readFile(fixtureInput("task.md"), "utf8");
+    expect(
+      await rejectedValue(
+        buildPrompt(
+          designerOptions({
+            inputs: [
+              { id: "task", path: fixtureInput("task.md") },
+              { id: "brief", displayName: "brief-copy.md", content: repeatedTask },
+            ],
+          }),
+        ),
+      ),
+    ).toEqual({
+      name: "PromptBuildError",
+      code: "duplicate-source",
+      message: "Duplicate prompt content: brief-copy.md repeats task.md",
+    });
+
     expect(
       await rejectedValue(
         buildPrompt(
@@ -606,21 +665,11 @@ describe("prompt build errors", () => {
     });
   });
 
-  test("wraps an effective grant that exceeds the role maximum", async () => {
-    expect(
-      await rejectedValue(
-        buildPrompt(
-          designerOptions({
-            grant: { ...designerGrant, network: true },
-          }),
-        ),
-      ),
-    ).toEqual({
-      name: "PromptBuildError",
-      code: "invalid-grant",
-      message:
-        "Error: Invalid capability grant for designer/decomposition: network exceeds the role maximum",
-    });
+  test("accepts a role deviation expressed in the grant", async () => {
+    const result = await buildPrompt(
+      designerOptions({ grant: { ...designerGrant, network: true } }),
+    );
+    expect(result.effectiveCapabilities.network).toBe(true);
   });
 
   test("does not require predecessor records or review acceptance", async () => {

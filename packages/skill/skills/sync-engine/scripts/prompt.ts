@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, resolve } from "node:path";
 import {
   getRoleSpecification,
   neverGrantableCapabilities,
@@ -8,6 +8,7 @@ import {
   type RoleSpecification,
   validateCapabilityGrant,
 } from "./roles.ts";
+import { isPathInside } from "./work.ts";
 
 const contextDeliveries = ["fresh", "continuation", "delta", "replacement"] as const;
 export type PromptContextDelivery = (typeof contextDeliveries)[number];
@@ -60,12 +61,8 @@ function normalize(source: string): string {
 
 const byteLength = (source: string): number => Buffer.byteLength(source, "utf8");
 const digest = (source: string): string => createHash("sha256").update(source).digest("hex");
+export const promptSourceSha256 = (source: string): string => digest(normalize(source));
 const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
-
-function inside(root: string, path: string): boolean {
-  const child = relative(root, path);
-  return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
-}
 
 function hasControl(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
@@ -114,12 +111,12 @@ async function promptRoot(path: string): Promise<string> {
 
 async function canonicalSource(root: string, path: string, label: string): Promise<Source> {
   const target = resolve(root, path);
-  if (!inside(root, target)) {
+  if (!isPathInside(root, target)) {
     throw new PromptBuildError("unreadable-input", `${label} escapes prompt root: ${path}`);
   }
   try {
     const real = await realpath(target);
-    if (!inside(root, real)) throw new Error("escaping source");
+    if (!isPathInside(root, real)) throw new Error("escaping source");
     return {
       path: real,
       displayName: path.replaceAll("\\", "/"),
@@ -279,33 +276,24 @@ function capabilities(
   workUnit: string,
 ): string {
   const never = neverGrantableCapabilities.map((value) => `\`${value}\``).join(", ");
-  const broadApplicationRead = grant.readableAreas.some(
-    ({ area, path }) => area === "application" && path === ".",
-  );
-  const applicationBoundary = broadApplicationRead
-    ? "Application read `.` excludes `.git`, `.sync-engine`, `.cursor`, `.claude`, `.pi`, `.codex`, `.agents`, `node_modules`, every `SKILL.md`, framework internals, and generated/build output unless separately supplied or granted.\n\n"
-    : "";
-  return `# Capabilities
+  return `# Access
 
-## Repository boundary
-
-The application root is ${JSON.stringify(applicationRoot)}. Resolve every relative path from that root and stay inside it. You are a bounded role worker, not the coordinator. Even if the harness advertises skills, do not load, invoke, follow, search, or inspect any project-local or global skill, any \`SKILL.md\`, or any harness configuration directory. Do not inspect another generated prompt, task, grant, record, response, agent trace, prior implementation, or prior trial output. Never search, list, read, or write a parent directory, sibling repository or trial, home-directory configuration, or temporary directory. This generated prompt and its supplied context are your complete role contract: do not reread their task, brief, decomposition, contracts, guidance, or role files from disk. Use repository reads only for expressly granted application or design context that is not already embedded.
+Root: ${JSON.stringify(applicationRoot)}. The short native message explicitly authorizes reading this prompt file; all assignment context is inline below. This is already a compiled role assignment: do not load a skill, workflow, harness guide, or another instruction file.
 
 - Read: ${areaList(grant.readableAreas, applicationRoot, workUnit)}.
 - Write: ${areaList(grant.writableAreas, applicationRoot, workUnit)}.
 - Tools: ${grant.toolKinds.length === 0 ? "none" : grant.toolKinds.map((tool) => `\`${tool}\``).join(", ")}.
-- Project shell: \`${grant.projectShell}\`.
-- Network: ${grant.network ? "granted" : "not granted"}.
-- Generated output: ${grant.generatedOutput ? "granted" : "not granted"}.
-- Long-running processes: ${grant.longRunningProcesses ? "granted" : "not granted"}.
+- Shell: \`${grant.projectShell}\`; network: ${grant.network ? "yes" : "no"}; generated output: ${grant.generatedOutput ? "yes" : "no"}; long-running processes: ${grant.longRunningProcesses ? "yes" : "no"}.
 
-${applicationBoundary}Anything not granted above is unavailable. Generated output may only come from a granted project command and must not be edited manually. Never grantable: ${never}.`;
+Inspect only listed files or directories. In coordinator simulation, this grant binds the coordinator itself; broader coordinator access and prior discovery are unavailable to the assignment. Project checks may transitively read other project files, but do not inspect them yourself. Use supplied or task-named package-owned public documentation; do not browse package trees. Never inspect package \`dist\`, framework internals, caches, sibling applications, or undeclared declarations. Exclude \`.git\`, \`.sync-engine\` except this prompt, harness/skill configuration, agent traces, parent directories, and unrelated generated output. Ask for context instead of searching outside the grant. Generated files come only from granted commands. Never grantable: ${never}.`;
 }
 
 function deltaCapabilities(grant: EffectiveCapabilityGrant): string {
-  return `# Capabilities
+  return `# Access
 
-The prior repository boundary remains in force. Current effective grant:
+This grant replaces prior access; other rules remain.
+
+Current grant:
 
 \`\`\`json
 ${JSON.stringify(grant)}
@@ -317,7 +305,7 @@ function returnShape(specification: RoleSpecification, compact = false): string 
     const headings = specification.returnShape
       .map(({ heading, required }) => `\`## ${heading}\`${required ? "" : " (optional)"}`)
       .join(", ");
-    return `# Return shape\n\nReturn a small result using the prior contract's fields in this order: ${headings}.`;
+    return `# Result\n\nUnless the task requests another format, use these prior fields: ${headings}.`;
   }
   const fields = specification.returnShape
     .map((field) => {
@@ -325,9 +313,9 @@ function returnShape(specification: RoleSpecification, compact = false): string 
       return `- \`## ${field.heading}\` — ${field.required ? "required" : "optional"}.${guidance}`;
     })
     .join("\n");
-  return `# Return shape
+  return `# Result
 
-Return a small result with these headings in order; omit progress narrative and routine notes.
+Unless the task requests another format, return these headings in order. Omit progress narration.
 
 ${fields}`;
 }
@@ -381,6 +369,23 @@ export async function buildPrompt(options: BuildPromptOptions) {
     specification.guidancePaths.map((path) => canonicalSource(root, path, "guidance")),
   );
   const inputs = await materializeInputs(specification, options.inputs);
+  const contentOwners = new Map<string, string>();
+  for (const source of [role, ...guidance]) {
+    contentOwners.set(digest(source.content), source.displayName);
+  }
+  for (const contract of specification.inputs) {
+    for (const source of inputs.get(contract.id) ?? []) {
+      const hash = digest(source.content);
+      const prior = contentOwners.get(hash);
+      if (prior !== undefined) {
+        throw new PromptBuildError(
+          "duplicate-source",
+          `Duplicate prompt content: ${source.displayName} repeats ${prior}`,
+        );
+      }
+      contentOwners.set(hash, source.displayName);
+    }
+  }
   const sources: PromptSourceContribution[] = [];
   const retainedSources: RetainedSource[] = [];
 

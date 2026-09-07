@@ -264,7 +264,7 @@ describe("bootstrap", () => {
     });
   });
 
-  test("rejects mismatched Bun and Node runtimes", async () => {
+  test("validates the active Bun or Node runtime without treating Bun compatibility as Node", async () => {
     const files = filesWithRelease();
     const root = resolve(fixtureRoot, "runtime-app");
     const bunMismatch = await planBootstrap(
@@ -276,9 +276,15 @@ describe("bootstrap", () => {
       error: "Running Bun 1.3.14 does not match 1.4.0",
     });
 
+    const bunCompatibilityNode = await planBootstrap(
+      { applicationRoot: root, releaseManifestPath: releasePath },
+      { files, runtime: { bun: bunVersion, node: "26.0.0" } },
+    );
+    expect(bunCompatibilityNode.state).toBe("new-app");
+
     const nodeMismatch = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files, runtime: { bun: bunVersion, node: "23.9.0" } },
+      { files, runtime: { node: "23.9.0" } },
     );
     expect(nodeMismatch).toMatchObject({
       state: "failed",

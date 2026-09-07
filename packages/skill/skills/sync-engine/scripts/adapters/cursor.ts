@@ -4,8 +4,8 @@ export const cursorAdapter = {
   id: "cursor",
   identity: { kind: "conversation-id", label: "Cursor session ID", stableContinuation: true },
   promptDelivery: {
-    fresh: { mode: "shell-file-expansion", field: "the prompt argument" },
-    continuation: { mode: "shell-file-expansion", field: "the resumed prompt argument" },
+    fresh: { mode: "agent-file-instruction", field: "the prompt argument" },
+    continuation: { mode: "agent-file-instruction", field: "the resumed prompt argument" },
   },
   cwd: { mode: "explicit-application-cwd", field: "--workspace" },
   configurationInheritance: "coordinator-supplied",

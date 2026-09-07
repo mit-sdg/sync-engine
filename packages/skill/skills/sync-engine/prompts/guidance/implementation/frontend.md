@@ -1,21 +1,5 @@
-# Frontend implementation guidance
+# Frontend implementation
 
-A frontend is a client of the application's generated endpoint contract. Browser code
-uses the typed HTTP client; command-line or in-process code may use the local client over
-the same contract. Do not call application endpoints with raw `fetch`, import backend
-concepts or composition, or bypass endpoint validation, authorization, and refusal
-handling.
+Use the generated typed endpoint client. Do not call raw `fetch`, import backend concepts or composition, or bypass validation and authorization. Treat endpoint results as success-or-error unions; distinguish declared refusals from transport faults, timeout, and cancellation.
 
-Treat every endpoint response as its declared success-or-error union. Present expected
-refusals as deliberate user-visible outcomes rather than swallowing or silently retrying
-them. Cancellation, timeouts, and transport faults are distinct from declared domain
-refusals.
-
-Keep the frontend thin: adapt user interaction to endpoint calls and render the resulting
-state. Local state may own transient presentation concerns, but authoritative product
-facts, persistence, authorization, and policy remain behind the endpoints. Do not infer
-or recreate backend rules from UI state.
-
-Test the user-visible success and refusal paths introduced by the frontend, including
-loading, empty, and transport-failure states when they are material to the requested
-experience.
+Keep authoritative facts and policy behind endpoints. Test the requested success and refusal paths plus material loading, empty, and transport-failure states.

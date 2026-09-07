@@ -9,6 +9,10 @@ import { capabilityCategories, type EffectiveCapabilityGrant } from "./roles.ts"
 
 export const harnessIds = ["paseo", "pi", "codex", "claude-code", "antigravity", "cursor"] as const;
 export type HarnessId = (typeof harnessIds)[number];
+
+export function isHarnessId(value: unknown): value is HarnessId {
+  return harnessIds.includes(value as HarnessId);
+}
 export type CapabilitySupport = EnforcementLevel | "unsupported";
 export type CapabilitySupportMap = Readonly<
   Record<(typeof capabilityCategories)[number], CapabilitySupport>
@@ -148,6 +152,46 @@ export function getHarnessAdapter(id: HarnessId): HarnessAdapterDefinition {
   return harnessAdapters.find((adapter) => adapter.id === id)!;
 }
 
+const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuidV7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function validateHarnessIdentity(id: HarnessId, identity: string): string {
+  requireText(identity, "agent identity");
+  const expected =
+    id === "pi" ? uuidV7 : id === "paseo" || id === "antigravity" ? uuidV4 : undefined;
+  if (expected !== undefined && !expected.test(identity)) {
+    throw new Error(`${identity} is not a valid ${getHarnessAdapter(id).identity.label} for ${id}`);
+  }
+  return identity;
+}
+
+export function recommendHarness(environment: NodeJS.ProcessEnv): {
+  readonly harness?: HarnessId;
+  readonly outerSupervisor?: "paseo";
+  readonly reason: string;
+} {
+  if (environment["PASEO_AGENT_ID"] !== undefined) {
+    return {
+      harness: "paseo",
+      outerSupervisor: "paseo",
+      reason: "detected Paseo-managed coordinator; Paseo retains role ownership and completion",
+    };
+  }
+  if (environment["PI_CODING_AGENT"] === "true" || environment["PI_SESSION_ID"] !== undefined) {
+    return {
+      harness: "pi",
+      reason: "detected native Pi coordinator outside Paseo",
+    };
+  }
+  if (environment["CURSOR_SESSION_ID"] !== undefined) {
+    return {
+      harness: "cursor",
+      reason: "detected native Cursor coordinator",
+    };
+  }
+  return { reason: "no native coordinator harness was detected" };
+}
+
 /** Prepare declarative data only; the coordinator performs the native invocation. */
 export function prepareHarnessInvocation<Capabilities>(
   request: PrepareHarnessRequest<Capabilities>,
@@ -241,56 +285,16 @@ export function summarizeCapabilitySupport(
   return levels.includes("prompt-guided") ? "prompt-guided" : "harness-enforced";
 }
 
-/** Types cover shape; runtime conformance checks only meaningful adapter invariants. */
-export function validateHarnessAdapters(
-  adapters: readonly Partial<HarnessAdapterDefinition>[],
-): string[] {
+/** Static types prove adapter shape; runtime checks prove registry completeness and uniqueness. */
+export function validateHarnessAdapters(adapters: readonly HarnessAdapterDefinition[]): string[] {
   const issues: string[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<HarnessId>();
   for (const adapter of adapters) {
-    const name = adapter.id ?? "unknown";
-    if (adapter.id === undefined || !harnessIds.includes(adapter.id))
-      issues.push(`${name}: invalid id`);
-    else if (seen.has(adapter.id)) issues.push(`${name}: duplicate id`);
-    else seen.add(adapter.id);
-    if (
-      !adapter.identity ||
-      !text(adapter.identity.label) ||
-      adapter.identity.stableContinuation !== true
-    ) {
-      issues.push(`${name}: stable continuation identity is required`);
-    }
-    if (
-      !adapter.promptDelivery ||
-      !completePromptTransport(adapter.promptDelivery.fresh) ||
-      !completePromptTransport(adapter.promptDelivery.continuation)
-    ) {
-      issues.push(`${name}: complete prompt delivery is required`);
-    }
-    if (!adapter.cwd) issues.push(`${name}: application cwd behavior is required`);
-    if (!adapter.configurationInheritance) {
-      issues.push(`${name}: configuration inheritance is required`);
-    }
-    if (adapter.freshTitleField !== undefined && !text(adapter.freshTitleField)) {
-      issues.push(`${name}: fresh title field is invalid`);
-    }
-    if (!completeAction(adapter.fresh)) issues.push(`${name}: incomplete fresh action`);
-    if (!completeAction(adapter.continuation)) {
-      issues.push(`${name}: incomplete continuation action`);
-    }
+    if (seen.has(adapter.id)) issues.push(`${adapter.id}: duplicate id`);
+    seen.add(adapter.id);
   }
   for (const id of harnessIds) if (!seen.has(id)) issues.push(`missing adapter ${id}`);
   return issues;
-}
-
-function completePromptTransport(transport: PromptTransport | undefined): boolean {
-  return Boolean(
-    transport &&
-    ["native-prompt-file", "shell-file-expansion", "agent-file-instruction"].includes(
-      transport.mode,
-    ) &&
-    text(transport.field),
-  );
 }
 
 function promptTransportInstruction(transport: PromptTransport): string {
@@ -302,12 +306,6 @@ function promptTransportInstruction(transport: PromptTransport): string {
     case "agent-file-instruction":
       return "Give the agent the generated file-reading instruction.";
   }
-}
-
-function completeAction(action: NativeAction | undefined): boolean {
-  return Boolean(
-    action && text(action.mechanism) && text(action.operation) && text(action.instruction),
-  );
 }
 
 function configurationInstruction(

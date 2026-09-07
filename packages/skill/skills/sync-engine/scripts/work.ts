@@ -1,10 +1,19 @@
 import { realpathSync } from "node:fs";
-import { lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export const workflowDirectory = ".sync-engine";
 export const workDirectory = "work";
 export const briefFileName = "brief.md";
+export const policyFileName = "policy.json";
+export const reviewPolicies = ["required", "omitted"] as const;
+export const executionPolicies = ["delegated", "simulated", "mixed"] as const;
+export type ReviewPolicy = (typeof reviewPolicies)[number];
+export type ExecutionPolicy = (typeof executionPolicies)[number];
+export interface WorkPolicy {
+  readonly review: ReviewPolicy;
+  readonly execution: ExecutionPolicy;
+}
 
 const safeName = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const maximumNameLength = 80;
@@ -27,6 +36,61 @@ export function canonicalPath(path: string): string {
 export function isPathInside(root: string, candidate: string): boolean {
   const child = relative(root, candidate);
   return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
+}
+
+export function posixRelative(root: string, candidate: string): string {
+  return relative(root, candidate).split(sep).join("/");
+}
+
+export function pathCoveredBy(path: string, granted: string, dotCoversAll = false): boolean {
+  return (dotCoversAll && granted === ".") || path === granted || path.startsWith(`${granted}/`);
+}
+
+export function plainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function decodeUtf8(
+  value: Uint8Array,
+  invalid: () => Error,
+  empty: (() => Error) | false = invalid,
+): string {
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(value);
+  } catch {
+    throw invalid();
+  }
+  if (empty !== false && text.trim() === "") throw empty();
+  return text;
+}
+
+interface WalkFilesOptions {
+  readonly enter?: (path: string, relativePath: string) => boolean;
+  readonly symlink?: (path: string) => void;
+}
+
+export async function walkFiles(
+  root: string,
+  include: (path: string, relativePath: string) => boolean,
+  options: WalkFilesOptions = {},
+): Promise<string[]> {
+  const files: string[] = [];
+  const visit = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = resolve(directory, entry.name);
+      const relativePath = posixRelative(root, path);
+      if (entry.isSymbolicLink()) {
+        options.symlink?.(path);
+      } else if (entry.isDirectory()) {
+        if (options.enter?.(path, relativePath) !== false) await visit(path);
+      } else if (entry.isFile() && include(path, relativePath)) {
+        files.push(path);
+      }
+    }
+  };
+  await visit(root);
+  return files.sort();
 }
 
 function requireSafeName(value: string, kind: string): string {
@@ -84,6 +148,7 @@ export interface WorkUnit {
   readonly slug: string;
   readonly path: string;
   readonly briefPath: string;
+  readonly policyPath: string;
 }
 
 function describeWorkUnit(applicationRoot: string, slug: string): WorkUnit {
@@ -96,6 +161,7 @@ function describeWorkUnit(applicationRoot: string, slug: string): WorkUnit {
     slug,
     path,
     briefPath: resolve(path, briefFileName),
+    policyPath: resolve(path, policyFileName),
   };
 }
 
@@ -118,6 +184,37 @@ export async function requireWorkUnit(applicationRoot: string, slug: string): Pr
   return unit;
 }
 
+export async function readWorkPolicy(unit: WorkUnit): Promise<WorkPolicy> {
+  const entry = await lstat(unit.policyPath).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  });
+  if (entry === undefined) return { review: "required", execution: "mixed" };
+  if (entry.isSymbolicLink() || !entry.isFile()) {
+    throw new WorkError(`Work policy must be a regular file: ${unit.policyPath}`);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(await readFile(unit.policyPath, "utf8")) as unknown;
+  } catch (error) {
+    throw new WorkError(`Work policy is not readable JSON: ${String(error)}`);
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new WorkError(`Work policy must be an object`);
+  }
+  const policy = value as Record<string, unknown>;
+  if (
+    !reviewPolicies.includes(policy["review"] as ReviewPolicy) ||
+    !executionPolicies.includes(policy["execution"] as ExecutionPolicy)
+  ) {
+    throw new WorkError(`Work policy is invalid`);
+  }
+  return {
+    review: policy["review"] as ReviewPolicy,
+    execution: policy["execution"] as ExecutionPolicy,
+  };
+}
+
 export function requirePathInWorkUnit(path: string, workUnit: string): string {
   const root = canonicalPath(workUnit);
   const candidate = canonicalPath(path);
@@ -130,13 +227,11 @@ export function requirePathInWorkUnit(path: string, workUnit: string): string {
 function templateBytes(template: string | Uint8Array): Uint8Array {
   const bytes =
     typeof template === "string" ? Buffer.from(template, "utf8") : Buffer.from(template);
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    throw new WorkError(`Brief template is not readable UTF-8`);
-  }
-  if (text.trim() === "") throw new WorkError(`Brief template is empty`);
+  decodeUtf8(
+    bytes,
+    () => new WorkError(`Brief template is not readable UTF-8`),
+    () => new WorkError(`Brief template is empty`),
+  );
   return bytes;
 }
 
@@ -145,6 +240,7 @@ export interface StartWorkUnitOptions {
   readonly slug: string;
   /** Template bytes are copied verbatim to brief.md. */
   readonly briefTemplate: string | Uint8Array;
+  readonly policy?: WorkPolicy;
 }
 
 /** Create one work unit and its brief. An existing slug is never reused or overwritten. */
@@ -180,8 +276,14 @@ export async function startWorkUnit(options: StartWorkUnitOptions): Promise<Work
       throw new WorkError(`Created work unit is not a directory: ${lexicalUnit}`);
     }
     const briefPath = requirePathInWorkUnit(resolve(lexicalUnit, briefFileName), lexicalUnit);
+    const policyPath = requirePathInWorkUnit(resolve(lexicalUnit, policyFileName), lexicalUnit);
+    const policy = options.policy ?? { review: "required", execution: "mixed" };
+    if (!reviewPolicies.includes(policy.review) || !executionPolicies.includes(policy.execution)) {
+      throw new WorkError(`Work policy is invalid`);
+    }
     await writeFile(briefPath, bytes, { flag: "wx" });
-    return { ...unit, path: canonicalPath(lexicalUnit), briefPath };
+    await writeFile(policyPath, `${JSON.stringify(policy, undefined, 2)}\n`, { flag: "wx" });
+    return { ...unit, path: canonicalPath(lexicalUnit), briefPath, policyPath };
   } catch (error) {
     await rm(lexicalUnit, { recursive: true, force: true });
     if (error instanceof WorkError) throw error;
@@ -193,6 +295,7 @@ export interface StartWorkUnitFromTemplateOptions {
   readonly applicationRoot: string;
   readonly slug: string;
   readonly briefTemplatePath: string;
+  readonly policy?: WorkPolicy;
 }
 
 export async function startWorkUnitFromTemplate(
@@ -210,6 +313,7 @@ export async function startWorkUnitFromTemplate(
     applicationRoot: options.applicationRoot,
     slug: options.slug,
     briefTemplate: template,
+    ...(options.policy === undefined ? {} : { policy: options.policy }),
   });
 }
 
@@ -223,9 +327,27 @@ export interface RunArtifacts {
   readonly stem: string;
   readonly taskPath: string;
   readonly capabilitiesPath: string;
+  readonly baselinePath: string;
   readonly promptPath: string;
   readonly responsePath: string;
   readonly recordPath: string;
+}
+
+export const runArtifactSuffixes = [
+  ".task.md",
+  ".capabilities.json",
+  ".baseline.json",
+  ".prompt.md",
+  ".response.md",
+  ".record.json",
+] as const;
+
+export function applicationRootFromWorkPath(workPath: string): string {
+  return resolve(workPath, "..", "..", "..");
+}
+
+export function decompositionPath(workPath: string): string {
+  return resolve(workPath, "decomposition.md");
 }
 
 function artifactPaths(unit: string, stem: string): RunArtifacts {
@@ -233,6 +355,7 @@ function artifactPaths(unit: string, stem: string): RunArtifacts {
     stem,
     taskPath: resolve(unit, `${stem}.task.md`),
     capabilitiesPath: resolve(unit, `${stem}.capabilities.json`),
+    baselinePath: resolve(unit, `${stem}.baseline.json`),
     promptPath: resolve(unit, `${stem}.prompt.md`),
     responsePath: resolve(unit, `${stem}.response.md`),
     recordPath: resolve(unit, `${stem}.record.json`),
@@ -274,6 +397,7 @@ export async function reserveRunArtifacts(options: ReserveRunOptions): Promise<R
     const paths = [
       artifacts.taskPath,
       artifacts.capabilitiesPath,
+      artifacts.baselinePath,
       artifacts.promptPath,
       artifacts.responsePath,
       artifacts.recordPath,

@@ -5,9 +5,9 @@ derives CORS, request-origin checks, cookie attributes, direct GET routes, publi
 mapping, and wire projection. Authentication and authorization stay in concepts and
 composition.
 
-Matching HTTP support must already be installed in the application. If it is absent or
-incompatible, report an environment blocker instead of installing or replacing it. The
-package exposes ordinary endpoints as POST/JSON by their unchanged endpoint pathname;
+The pinned `@mit-sdg/sync-engine-http` package is installed at the exact framework version
+before HTTP work is assigned. Use that version; do not install, replace, or upgrade it. If
+it is absent or incompatible, report an environment blocker. The package exposes ordinary endpoints as POST/JSON by their unchanged endpoint pathname;
 policy `direct` adds only GET redirects. It does not turn arbitrary brief-selected dynamic
 GET or POST paths into endpoint inputs. If an exact selected method or path cannot be
 represented, report the mismatch instead of substituting another interface. Do not
@@ -74,10 +74,8 @@ export const appHttpPolicy = httpPolicy({
   publicErrors: {
     INVALID_URL: "INVALID_REQUEST",
     NOT_FOUND: "NOT_FOUND",
-    INVALID_SECRET: "FORBIDDEN",
-    ALIAS_EXISTS: "CONFLICT",
   },
-  direct: [{ method: "GET", path: "/{code}", endpoint: "/links/resolve", redirect: "target" }],
+  direct: [{ method: "GET", path: "/go/{code}", endpoint: "/links/resolve", redirect: "target" }],
 });
 ```
 
@@ -96,7 +94,7 @@ export default {
     version: 1,
     documents: [
       new URL("./design/types.md", import.meta.url),
-      new URL("./design/composition.md", import.meta.url),
+      new URL("./design/compositions/Links.md", import.meta.url),
     ],
   },
   projections: [httpWire({ policy: appHttpPolicy, name: "AppWireHttp" })],

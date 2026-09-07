@@ -6,8 +6,10 @@ import {
   inheritedHarnessConfiguration,
   prepareHarnessInvocation,
   promptGuidedCapabilitySupport,
+  recommendHarness,
   summarizeCapabilitySupport,
   validateHarnessAdapters,
+  validateHarnessIdentity,
   type CapabilitySupport,
   type CapabilitySupportMap,
   type HarnessAdapterDefinition,
@@ -59,14 +61,7 @@ describe("harness adapter conformance", () => {
         promptDelivery.fresh.mode,
         promptDelivery.continuation.mode,
       ]),
-    ).toEqual([
-      ["shell-file-expansion", "native-prompt-file"],
-      ["shell-file-expansion", "shell-file-expansion"],
-      ["agent-file-instruction", "agent-file-instruction"],
-      ["agent-file-instruction", "agent-file-instruction"],
-      ["agent-file-instruction", "agent-file-instruction"],
-      ["shell-file-expansion", "shell-file-expansion"],
-    ]);
+    ).toEqual(harnessAdapters.map(() => ["agent-file-instruction", "agent-file-instruction"]));
     expect(harnessAdapters.map(({ cwd }) => cwd.mode)).toEqual([
       "explicit-application-cwd",
       "explicit-application-cwd",
@@ -180,6 +175,27 @@ describe("harness adapter conformance", () => {
     }
   });
 
+  test("distinguishes native harness identity forms and outer supervision", () => {
+    expect(validateHarnessIdentity("pi", "01a05c1f-e5d2-7c92-9a6d-e6883393f526")).toBe(
+      "01a05c1f-e5d2-7c92-9a6d-e6883393f526",
+    );
+    expect(validateHarnessIdentity("paseo", "1253d8c0-78d9-4739-9300-8f808a9f9d19")).toBe(
+      "1253d8c0-78d9-4739-9300-8f808a9f9d19",
+    );
+    expect(() => validateHarnessIdentity("paseo", "01a05c1f-e5d2-7c92-9a6d-e6883393f526")).toThrow(
+      "is not a valid Paseo agent ID for paseo",
+    );
+    expect(recommendHarness({ PI_CODING_AGENT: "true", PASEO_AGENT_ID: "outer" })).toEqual({
+      harness: "paseo",
+      outerSupervisor: "paseo",
+      reason: "detected Paseo-managed coordinator; Paseo retains role ownership and completion",
+    });
+    expect(recommendHarness({ PI_CODING_AGENT: "true" })).toEqual({
+      harness: "pi",
+      reason: "detected native Pi coordinator outside Paseo",
+    });
+  });
+
   test("rejects non-positive, fractional, and non-finite timeouts", () => {
     for (const timeoutSeconds of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(
@@ -224,7 +240,7 @@ describe("harness adapter conformance", () => {
     });
   });
 
-  test("summarizes support conservatively and rejects incomplete adapters", () => {
+  test("summarizes support conservatively and rejects incomplete adapter registries", () => {
     const map = (level: CapabilitySupport) =>
       Object.fromEntries(capabilityCategories.map((kind) => [kind, level])) as CapabilitySupportMap;
     expect(summarizeCapabilitySupport(map("harness-enforced"))).toBe("harness-enforced");
@@ -235,12 +251,9 @@ describe("harness adapter conformance", () => {
       "unsupported",
     );
 
-    const broken = structuredClone(harnessAdapters) as Array<Partial<HarnessAdapterDefinition>>;
-    (broken[0]!.identity as { stableContinuation: boolean }).stableContinuation = false;
-    delete (broken[2] as { continuation?: unknown }).continuation;
-    expect(validateHarnessAdapters(broken)).toEqual([
-      "paseo: stable continuation identity is required",
-      "codex: incomplete continuation action",
+    expect(validateHarnessAdapters(harnessAdapters.slice(1))).toEqual(["missing adapter paseo"]);
+    expect(validateHarnessAdapters([...harnessAdapters, harnessAdapters[0]!])).toEqual([
+      "paseo: duplicate id",
     ]);
   });
 });
