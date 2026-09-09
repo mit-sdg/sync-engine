@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
 const root = resolve(import.meta.dirname, "../../..");
@@ -22,9 +23,17 @@ afterAll(() => {
 function preflight(version: string): string {
   writeFileSync(resolve(fixture, "package.json"), JSON.stringify({ type: "module", version }));
   // A deliberately wrong tag stops accepted versions before any git or registry access.
+  const source = pathToFileURL(resolve(fixture, "scripts/check-release-source.ts")).href;
+  // Drain the native TypeScript loader after expected failures instead of taking
+  // Node's uncaught-exception exit path (which can crash during Windows teardown).
   const result = spawnSync(
     process.execPath,
-    [resolve(fixture, "scripts/check-release-source.ts")],
+    [
+      "--input-type=module",
+      "--eval",
+      `try { await import(${JSON.stringify(source)}); }
+catch (error) { console.error(error.message); process.exitCode = 1; }`,
+    ],
     {
       cwd: fixture,
       env: { ...process.env, GITHUB_REF_NAME: "not-a-release-tag" },
@@ -33,7 +42,7 @@ function preflight(version: string): string {
     },
   );
   expect(result.error).toBeUndefined();
-  expect(result.status).toBe(1);
+  expect(result.status, result.stderr).toBe(1);
   return result.stderr;
 }
 
