@@ -1,6 +1,6 @@
 # Execution semantics
 
-This current-beta contract covers actions, reactions, reads, formed results, and
+This stable-v1 contract covers actions, reactions, reads, formed results, and
 application boundaries. Storage, transport, and lifecycle policy remain
 host-owned. See the [Public API](public-api.md) and [read construction
 cookbook](../guide/read-construction.md).
@@ -675,9 +675,10 @@ evaluates projectors in declaration order, and a projector or validation failure
 occurs before any artifact comparison or write.
 
 Generated assembly compatibility is governed by the application manifest
-format and package SemVer. This pre-1.0 beta reset keeps schema version 1 but has
-no decoder for the earlier beta shape or any prior version. Upgrading across the
-reset requires regenerating all manifests and generated artifacts.
+format and package SemVer. Stable v1 fixes the version-1 schema; incompatible
+structural or semantic changes require a new integer format version and new
+public type names. Earlier beta shapes have no compatibility decoder. Upgrading
+from an incompatible beta requires regenerating manifests and generated artifacts.
 
 The manifest inventories selected computations, canonical concept definitions,
 authored application instance declarations and bindings, SSF-derived definition-owned

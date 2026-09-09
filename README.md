@@ -1,10 +1,10 @@
 # sync-engine
 
-[![npm: core](https://img.shields.io/npm/v/@mit-sdg/sync-engine/beta?label=core)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
-[![npm: analysis](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/beta?label=analysis)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
-[![npm: HTTP](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/beta?label=HTTP)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
-[![npm: catalog](https://img.shields.io/npm/v/@mit-sdg/sync-engine-catalog/beta?label=catalog)](https://www.npmjs.com/package/@mit-sdg/sync-engine-catalog)
-[![npm: skill](https://img.shields.io/npm/v/@mit-sdg/sync-engine-skill/beta?label=skill)](https://www.npmjs.com/package/@mit-sdg/sync-engine-skill)
+[![npm: core](https://img.shields.io/npm/v/@mit-sdg/sync-engine/latest?label=core)](https://www.npmjs.com/package/@mit-sdg/sync-engine)
+[![npm: analysis](https://img.shields.io/npm/v/@mit-sdg/sync-engine-analysis/latest?label=analysis)](https://www.npmjs.com/package/@mit-sdg/sync-engine-analysis)
+[![npm: HTTP](https://img.shields.io/npm/v/@mit-sdg/sync-engine-http/latest?label=HTTP)](https://www.npmjs.com/package/@mit-sdg/sync-engine-http)
+[![npm: catalog](https://img.shields.io/npm/v/@mit-sdg/sync-engine-catalog/latest?label=catalog)](https://www.npmjs.com/package/@mit-sdg/sync-engine-catalog)
+[![npm: skill](https://img.shields.io/npm/v/@mit-sdg/sync-engine-skill/latest?label=skill)](https://www.npmjs.com/package/@mit-sdg/sync-engine-skill)
 [![CI](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mit-sdg/sync-engine/actions/workflows/ci.yml?query=branch%3Amain)
 
 sync-engine builds an application out of independent pieces called concepts. A
@@ -26,7 +26,7 @@ everything that was assembled.
 ## Install
 
 ```sh
-bun add @mit-sdg/sync-engine@beta
+bun add --exact @mit-sdg/sync-engine@1.0.0
 ```
 
 To start a new project:
@@ -34,13 +34,13 @@ To start a new project:
 ```sh
 mkdir board
 cd board
-bunx --package @mit-sdg/sync-engine@beta sync-engine setup
+bunx --package @mit-sdg/sync-engine@1.0.0 sync-engine setup
 ```
 
 `setup` completes the package manifest, adds development dependencies and
 standard scripts, and writes any application files that are missing, without
-overwriting anything that is already there. Pin an exact version in place of `@beta`
-when the result has to be reproducible.
+overwriting anything that is already there. These commands pin the release for
+reproducible coursework; upgrade that pin deliberately.
 
 [Getting started](docs/user/guide/getting-started.md) runs the empty
 application.
@@ -168,7 +168,7 @@ index](examples/README.md) lists the install and start commands for each.
 ### Coding agents
 
 Start with the installed package's [`docs/user/llms.txt`](docs/user/llms.txt);
-its links match the installed beta. Treat `docs/user/`, the shipped examples,
+its links match the installed release. Treat `docs/user/`, the shipped examples,
 and the declared public entrypoints as the whole surface. Do not infer contracts
 from `dist/`, from repository source, or from deep imports; when the public
 docs fall short, report that as a documentation gap.
@@ -188,8 +188,8 @@ what the host is responsible for.
 
 ## Versions
 
-Version 1 is in beta, and only the newest beta is supported. A newer beta can
-break the one before it, so read the [changelog](CHANGELOG.md), regenerate the
+Version 1 is stable. Public APIs follow Semantic Versioning, and only the newest
+stable 1.x release receives fixes. Read the [changelog](CHANGELOG.md), regenerate
 pinned artifacts, and typecheck consumers before moving a pin.
 
 The library is ESM-only and runs on Node.js 24. The CLI, `setup`, and the

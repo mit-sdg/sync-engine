@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine",
-  "version": "1.0.0-beta.16",
+  "version": "1.0.0",
   "description": "A TypeScript library for composing independent application behaviors declaratively",
   "keywords": [
     "concept",
@@ -63,7 +63,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "beta"
+    "tag": "latest"
   },
   "scripts": {
     "benchmark:http": "LOG_LEVEL=error bun scripts/benchmark-http.ts",
@@ -95,9 +95,9 @@
     "@types/bun": "^1.4.0",
     "@types/node": "^24.0.0",
     "@types/semver": "^7.7.1",
-    "@vitest/coverage-istanbul": "4.1.10",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6",
-    "vite-plus": "0.2.6"
+    "@vitest/coverage-istanbul": "4.1.11",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",
+    "vite-plus": "0.3.1"
   },
   "overrides": {
     "@mit-sdg/sync-engine": "file:.",

@@ -12,16 +12,16 @@
     "check": "vp check && bun run design:check && bun run test && bun run artifacts:check"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.16"
+    "@mit-sdg/sync-engine": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": ">=6 <7",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6",
-    "vite-plus": "0.2.6"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",
+    "vite-plus": "0.3.1"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.6"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1"
   },
   "engines": {
     "bun": ">=1.4.0 <1.5",

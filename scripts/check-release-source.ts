@@ -42,9 +42,13 @@ function git(args: string[]): string {
 
 const core = manifest("package.json");
 const version = typeof core.version === "string" ? core.version : undefined;
-const beta = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(version ?? "");
-if (beta === null || !Number.isSafeInteger(Number(beta[1]))) {
-  fail("package.json version must be a canonical 1.0.0-beta.N version");
+const stable = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version ?? "");
+if (
+  stable === null ||
+  stable[0] !== version ||
+  !stable.slice(1).every((part) => Number.isSafeInteger(Number(part)))
+) {
+  fail("package.json version must be a canonical stable 1.MINOR.PATCH version");
 }
 const refName = process.env.GITHUB_REF_NAME;
 if (refName !== `v${version}`) fail(`expected tag v${version}; received ${String(refName)}`);

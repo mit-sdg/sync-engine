@@ -8,7 +8,7 @@ the current project.
 Install it as a development dependency, then browse a design before choosing source:
 
 ```sh
-bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0-beta.16
+bun add --dev --exact @mit-sdg/sync-engine-catalog@1.0.0
 bunx --no-install sync-engine-catalog list
 bunx --no-install sync-engine-catalog show concept/labeling
 bunx --no-install sync-engine-catalog show recipe/review-queue
@@ -44,6 +44,15 @@ The catalog neither assumes nor creates that layout. Recipe assets import adjace
 Markdown and export it as `spec`. They use an entry-local relative import because one
 packaged catalog typecheck covers many independent entries, while an application-owned
 `@design/*` alias has application-specific targets.
+
+## Support
+
+Stable 1.x follows Semantic Versioning for the documented command and manifest
+contracts. Only the newest stable 1.x release receives fixes. Catalog entries are
+adaptable examples, not additional framework API contracts; pin the package when
+coursework depends on exact entry contents. See the [support
+policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md) and [private
+security reporting process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
 
 See [`public-surface.md`](public-surface.md) for the exact command and manifest contract.
 Entry authors should read [`CONTRIBUTING.md`](CONTRIBUTING.md).

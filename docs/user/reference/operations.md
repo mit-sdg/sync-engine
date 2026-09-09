@@ -2,7 +2,7 @@
 
 Sync-engine is an in-process execution component. Storage, transport, traffic
 control, and restart policy remain application and host responsibilities in the
-current beta. [Execution semantics](semantics.md) defines the runtime contract.
+stable v1. [Execution semantics](semantics.md) defines the runtime contract.
 
 ## Deployment fit at a glance
 
@@ -29,9 +29,9 @@ requires cross-concept transactions, distributed serialization, synchronous
 cancellation, occurrence replay, automatic restart recovery, or exactly-once
 processing.
 
-## Beta compatibility
+## Stable compatibility
 
-A newer beta may make incompatible changes to every public subpath, including
+Stable 1.x follows Semantic Versioning across every public subpath, including
 `/advanced`. Pin an exact version, review the changelog, regenerate artifacts,
 and typecheck each consuming application and generated client before upgrading. The [support
 policy](../../../SUPPORT.md) defines the support window and generated-format rules.
@@ -214,7 +214,7 @@ keep its output out of public errors and ordinary logs.
 
 Before serving an assembly outside a test environment:
 
-1. Pin an exact beta and review its changelog and support window.
+1. Pin an exact stable release and review its changelog and support window.
 2. Define concept-state transactions, persistence, retry, deduplication, and
    recovery.
 3. Add runtime validators and host traffic limits.

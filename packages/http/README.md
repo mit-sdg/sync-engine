@@ -8,14 +8,14 @@ a route prefix, body limits, or public error mappings; browser policy adds CORS.
 ## Install
 
 The HTTP package is published separately and declares an exact peer dependency
-on the matching core beta. Pin both packages to the same exact version and
+on the matching core release. Pin both packages to the same exact version and
 upgrade them together:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0-beta.16 @mit-sdg/sync-engine-http@1.0.0-beta.16
+bun add --exact @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-http@1.0.0
 ```
 
-The current beta is ESM-only and supports Node.js 24 (`>=24 <25`). The package
+Stable v1 is ESM-only and supports Node.js 24 (`>=24 <25`). The package
 has no root export and no supported deep imports.
 
 | Public subpath                      | Purpose                                      |
@@ -358,8 +358,9 @@ There are no aliases or compatibility adapters.
 
 ## Support and security
 
-Only the newest beta is supported. Pin exact matching core and HTTP versions,
-and review the repository changelog before upgrading. Report suspected
+Stable 1.x follows Semantic Versioning; only the newest stable 1.x release
+receives fixes. Pin exact matching core and HTTP versions, and review the
+repository changelog before upgrading. Report suspected
 vulnerabilities through the repository's [private reporting
 process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
 

@@ -124,13 +124,11 @@ export class TypeScriptProjectGraph {
 
     const parsed = this.loadProjectConfigs();
     const parsedByPath = new Map(parsed.map((project) => [project.configPath, project.parsed]));
-    const projects = parsed.map(
-      (project): LoadedTypeScriptProject => ({
-        configPath: project.configPath,
-        parsed: project.parsed,
-        program: this.createProgram(project, parsedByPath),
-      }),
-    );
+    const projects = parsed.map((project): LoadedTypeScriptProject => ({
+      configPath: project.configPath,
+      parsed: project.parsed,
+      program: this.createProgram(project, parsedByPath),
+    }));
     this.projects = projects;
     this.projectReferences = parsed
       .filter(({ configPath }) => configPath !== this.rootConfigPath)

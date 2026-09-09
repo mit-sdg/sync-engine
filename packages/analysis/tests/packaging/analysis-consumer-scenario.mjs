@@ -24,6 +24,11 @@ import {
 
 const bunVersion = process.versions.bun;
 const runtime = bunVersion === undefined ? `Node ${process.versions.node}` : `Bun ${bunVersion}`;
+const consumer = dirname(fileURLToPath(import.meta.url));
+const installedVersion = (name) =>
+  JSON.parse(readFileSync(resolve(consumer, "node_modules", name, "package.json"), "utf8")).version;
+const coreVersion = installedVersion("@mit-sdg/sync-engine");
+const analysisVersion = installedVersion("@mit-sdg/sync-engine-analysis");
 
 function assert(condition, message) {
   if (!condition) throw new Error(`[${runtime}] ${message}`);
@@ -49,9 +54,10 @@ const manifest = parseApplicationManifest(
   renderApplicationManifest(applicationManifest(application)),
 );
 assert(manifest.version === 1, "packed consumer did not generate and parse a V1 manifest");
-assert(manifest.generator.version === "1.0.0-beta.16", "packed core provenance is not beta.16");
-
-const consumer = dirname(fileURLToPath(import.meta.url));
+assert(
+  manifest.generator.version === coreVersion,
+  "packed core provenance does not match its package",
+);
 const projectDirectory = resolve(consumer, "analysis-project");
 rmSync(projectDirectory, { recursive: true, force: true });
 console.log(`[${runtime}] running packed analysis consumer scenario`);
@@ -108,8 +114,8 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
       ? await analyzeApplicationProject(projectOptions)
       : loadApplicationProject(projectOptions);
   assert(
-    project.provenance.analyzer.version === "1.0.0-beta.16",
-    "packed analyzer provenance is not beta.16",
+    project.provenance.analyzer.version === analysisVersion,
+    "packed analyzer provenance does not match its package",
   );
   assert(project.version === 3, "packed project analysis is not V3");
   assert(project.applicationIndex.version === 3, "packed application index is not V3");
@@ -120,8 +126,8 @@ export const application = assemble({ vocabulary: words, composition: { RecordNo
     "packed project byte usage is not derivable from file records",
   );
   assert(
-    project.provenance.manifest.generator.version === "1.0.0-beta.16",
-    "packed project core provenance is not beta.16",
+    project.provenance.manifest.generator.version === coreVersion,
+    "packed project core provenance does not match its package",
   );
   assert(
     project.provenance.files.every(({ path }) => !path.startsWith("..")),

@@ -44,13 +44,11 @@ function shellLines(markdown: string): string[] {
 async function json(path: string): Promise<{
   name?: string;
   version?: string;
-  publishConfig?: { tag?: string };
   scripts?: Record<string, string>;
 }> {
   return JSON.parse(await readFile(new URL(path, root), "utf8")) as {
     name?: string;
     version?: string;
-    publishConfig?: { tag?: string };
     scripts?: Record<string, string>;
   };
 }
@@ -115,7 +113,7 @@ describe("executable documentation examples", () => {
     }
   });
 
-  test("the package-qualified first-run command works through the local CLI", async () => {
+  test("the exactly pinned first-run command works through the local CLI", async () => {
     const readme = await readFile(documents.readme, "utf8");
     const manifest = await json("package.json");
     const command = shellLines(readme).find((line) => line.includes(" sync-engine setup"));
@@ -126,9 +124,11 @@ describe("executable documentation examples", () => {
     expect(words.slice(0, executable)).toEqual([
       "bunx",
       "--package",
-      `${manifest.name}@${manifest.publishConfig?.tag}`,
+      `${manifest.name}@${manifest.version}`,
     ]);
     expect(words.slice(executable + 1)).toEqual(["setup"]);
+    const tutorial = await readFile(new URL("docs/user/guide/getting-started.md", root), "utf8");
+    expect(shellLines(tutorial)).toContain(command);
 
     const temporary = await mkdtemp(join(tmpdir(), "sync-engine-docs-"));
     const project = join(temporary, "workshop-app");

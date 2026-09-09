@@ -61,9 +61,10 @@ Its version-1 IR retains:
 - query inputs, cardinality, named rows, and optional prose bodies; and
 - one-based source locations.
 
-The format remains named `sync-engine.concept-specification`, version `1`. This
-is a beta redefinition, not compatibility with the former version-1 grammar.
-There is no legacy parser or format auto-detection.
+The stable format is `sync-engine.concept-specification`, version `1`. Its
+pre-stable grammar resets do not provide compatibility with earlier beta shapes.
+There is no legacy parser or format auto-detection. Stable changes must follow
+the public compatibility policy.
 
 ### State has a bounded structural parser
 
@@ -241,8 +242,9 @@ Canonical provenance includes normalized complete contents of every registered
 application document, not only extracted links. A prose-only change changes the
 input digest.
 
-The application manifest remains `sync-engine.application-manifest`, version
-`1` under the intentional pre-1.0 beta reset. It retains full State text, structured
+The stable application manifest is `sync-engine.application-manifest`, version
+`1`. Incompatible changes require a new integer format version and new public
+type names. It retains full State text, structured
 action/query declarations, authored definition/instance provenance,
 instance-owned normalized bindings, application-type resolution, source locations,
 and design digests. The earlier beta version-1 shape and prior versions are
@@ -276,13 +278,14 @@ Repository-owned catalog validation may use internal validation until a
 supported low-level checker is designed. The installed CLI no longer exposes
 `--vocabulary-module` or an unconfigured concept-set mode.
 
-## Hard beta migration
+## Migration from older betas
 
-Implementation and repository migration replace the old format in one break:
-there is no compatibility flag, legacy parser, automatic detection, old-manifest
-decoder, runtime composition/design Markdown import, or partial artifact
-success. Examples, catalog data, packaging fixtures, tests, declarations, docs,
-and generated artifacts must move together before downstream applications.
+Pre-stable format resets replaced the old format in one break: there is no
+compatibility flag, legacy parser, automatic detection, old-manifest decoder,
+runtime composition/design Markdown import, or partial artifact success. Older
+beta applications must migrate design and artifacts together. Stable releases
+must not repeat an incompatible reset in place; follow the [support
+policy](../../SUPPORT.md#generated-contracts).
 
 ## Deferred design questions
 

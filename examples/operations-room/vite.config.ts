@@ -27,6 +27,7 @@ export default defineConfig({
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "unicorn/no-thenable": "off",
       "typescript/no-base-to-string": "off",
       "typescript/no-unsafe-declaration-merging": "off",

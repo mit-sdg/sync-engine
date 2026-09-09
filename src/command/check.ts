@@ -487,19 +487,19 @@ async function checkConfiguredApplication(
 }
 
 function sourceFailureDiagnostics(failures: readonly string[]): DiagnosticRecord[] {
-  return failures.map(
-    (message): DiagnosticRecord => ({
-      code: "CONCEPT_SOURCE_CHECK_FAILURE",
-      severity: "error",
-      message,
-    }),
-  );
+  return failures.map((message): DiagnosticRecord => ({
+    code: "CONCEPT_SOURCE_CHECK_FAILURE",
+    severity: "error",
+    message,
+  }));
 }
 
 function applicationDiagnostics(diagnostics: readonly ApplicationDiagnostic[]): DiagnosticRecord[] {
-  return diagnostics.map(
-    ({ code, severity, message }): DiagnosticRecord => ({ code, severity, message }),
-  );
+  return diagnostics.map(({ code, severity, message }): DiagnosticRecord => ({
+    code,
+    severity,
+    message,
+  }));
 }
 
 function applicationDiagnosticFailure(

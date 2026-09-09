@@ -33,9 +33,11 @@ type ImplementationMember<Member> = Member extends (...args: infer Args) => infe
   : Member;
 
 export type ConceptImplementation<C extends ConceptClass> = object & {
-  [Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown
-    ? Name
-    : never]: ImplementationMember<InstanceType<C>[Name]>;
+  [
+    Name in keyof InstanceType<C> as InstanceType<C>[Name] extends (...args: never[]) => unknown
+      ? Name
+      : never
+  ]: ImplementationMember<InstanceType<C>[Name]>;
 };
 
 type AnyConceptSelection =

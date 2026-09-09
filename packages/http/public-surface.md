@@ -4,7 +4,7 @@
 registers below are exact; generated declarations define complete structural
 types.
 
-Install the HTTP companion and core at the same exact beta version. The HTTP
+Install the HTTP companion and core at the same exact release version. The HTTP
 package is ESM-only and supports Node.js 24 (`>=24 <25`).
 
 | Package path                                    | Role                                  |

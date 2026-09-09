@@ -4,7 +4,7 @@ This reference lists every supported core subpath and export. Root and deep
 imports are unsupported. Registers are exact; generated TypeScript declarations
 define complete signatures.
 
-The [support policy](../../../SUPPORT.md) defines beta compatibility,
+The [support policy](../../../SUPPORT.md) defines stable compatibility,
 generated-assembly compatibility, and format-version rules. The
 [security policy](../../../SECURITY.md) defines the supported security-fix window.
 
@@ -571,14 +571,15 @@ settlement frontiers. It re-evaluates `where` at each frontier until the match
 qualifies or the flow finalizes. When absent, qualification happens where the
 trigger lands. Imported IR with another value is rejected. Standalone deferred
 `ReactionIR` must be consumed by a package version that recognizes the field;
-during beta, use the same package version to produce and consume IR. The
+use the same package version to produce and consume standalone IR. The
 versioned manifest protects application IR carried inside a manifest from
 incompatible tooling.
 
 The application manifest has format `sync-engine.application-manifest`, version
-`1`, and is canonical JSON-round-trippable application data. This pre-1.0 beta
-reset replaces the version-1 schema in place; earlier beta shapes and prior
-versions are rejected without upconversion. It
+`1`, and is canonical JSON-round-trippable application data. Stable v1 fixes
+this schema; incompatible structural or semantic changes require a new integer
+format version and new public type names. Incompatible earlier beta shapes are
+rejected without upconversion. It
 contains executable application and wire facts plus structured concept
 contracts, full State text, authored definition/instance declarations and external
 bindings, SSF-derived definition-owned type inventories, resolved application types,
@@ -742,7 +743,7 @@ defines derivation guarantees.
 <!-- register:advanced:end -->
 
 Use `/advanced` only for low-level declarations, manual engine construction, or explicit escape hatches.
-It follows the same beta compatibility policy as other public subpaths.
+It follows the same stable compatibility policy as other public subpaths.
 
 | API                         | Compact signature / role                             |
 | --------------------------- | ---------------------------------------------------- |
