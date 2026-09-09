@@ -1,4 +1,15 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
@@ -175,7 +186,16 @@ function successfulRunner(
   beforeInstall?: () => void | Promise<void>,
 ): CommandRunner {
   return async (command) => {
-    if (command.executable === "bun") {
+    if (command.executable === "bun" && command.args[0] === "install") {
+      writeTypescript(files, command.cwd);
+      for (const name of ["@types/bun", "@types/node"]) {
+        files.set(
+          resolve(command.cwd, "node_modules", name, "package.json"),
+          JSON.stringify({ name, version: "24.0.0" }),
+        );
+      }
+      files.set(resolve(command.cwd, "bun.lock"), "reconciled\n");
+    } else if (command.executable === "bun") {
       await beforeInstall?.();
       const path = resolve(command.cwd, "package.json");
       const manifest = JSON.parse((await files.readText(path))!) as Record<string, unknown>;
@@ -200,13 +220,92 @@ function successfulRunner(
     } else {
       files.set(resolve(command.cwd, "tsconfig.json"), "{}\n");
       files.set(resolve(command.cwd, "generated.config.ts"), "export default {};\n");
-      writeTypescript(files, command.cwd);
+      const path = resolve(command.cwd, "package.json");
+      const manifest = JSON.parse((await files.readText(path))!);
+      Object.assign(manifest.devDependencies, {
+        typescript: ">=6 <7",
+        "@types/bun": "^1.4.0",
+        "@types/node": "^24.0.0",
+      });
+      files.set(path, JSON.stringify(manifest));
     }
     return { exitCode: 0 };
   };
 }
 
 describe("bootstrap", () => {
+  test("accepts a selected root alias and replaces hard links without following their inode", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "sync-engine-bootstrap-links-"));
+    temporary.push(root);
+    await mkdir(resolve(root, "outside"));
+    await symlink(resolve(root, "outside"), resolve(root, "application"));
+    await expect(
+      realFiles.fileKind(resolve(root, "application/package.json"), resolve(root, "application")),
+    ).resolves.toBe("missing");
+    await writeFile(resolve(root, "outside.json"), "original");
+    await chmod(resolve(root, "outside.json"), 0o600);
+    await link(resolve(root, "outside.json"), resolve(root, "package.json"));
+    await realFiles.writeText(resolve(root, "package.json"), "replacement");
+    if (process.platform !== "win32")
+      expect((await lstat(resolve(root, "package.json"))).mode & 0o777).toBe(0o600);
+    expect(await readFile(resolve(root, "outside.json"), "utf8")).toBe("original");
+  });
+
+  test("retries a failed fresh bootstrap, uses one stage, and publishes once after reconciliation", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "sync-engine-bootstrap-install-"));
+    temporary.push(root);
+    const app = resolve(root, "apps/app");
+    await mkdir(app, { recursive: true });
+    const localRelease = resolve(root, "release.json");
+    await writeDisk(localRelease, release());
+    await writeDisk(
+      resolve(root, "package.json"),
+      JSON.stringify({
+        private: true,
+        workspaces: ["apps/*"],
+        scripts: { preinstall: "touch ancestor-executed" },
+      }),
+    );
+    const options = { applicationRoot: app, releaseManifestPath: localRelease };
+    const failed = await bootstrapApplication(options, {
+      runtime,
+      runCommand: async () => ({ exitCode: 7 }),
+    });
+    expect(failed.outcome).toBe("failed");
+    expect(failed.changedPaths).toEqual([]);
+    expect(await readdir(app)).toEqual([]);
+
+    const memory = new MemoryFiles();
+    const runner = successfulRunner(memory);
+    const stages = new Set<string>();
+    const result = await bootstrapApplication(options, {
+      runtime,
+      runCommand: async (command) => {
+        stages.add(command.cwd);
+        expect(command.cwd.startsWith(root)).toBe(false);
+        expect(await readdir(app)).toEqual([]);
+        memory.set(
+          resolve(command.cwd, "package.json"),
+          await readFile(resolve(command.cwd, "package.json"), "utf8"),
+        );
+        const output = await runner(command);
+        for (const [path, contents] of memory.values) await writeDisk(path, contents);
+        if (command.executable === "bunx")
+          await writeDisk(resolve(command.cwd, "future-setup-artifact.txt"), "retained");
+        return output;
+      },
+    });
+    expect(result.outcome).toBe("changed");
+    expect(result.plan.applicationRoot).toBe(app);
+    expect(result.commands.map((command) => command.cwd)).toEqual([app, app, app]);
+    expect(stages.size).toBe(1);
+    expect(await realFiles.readText(resolve(app, "future-setup-artifact.txt"))).toBe("retained");
+    expect(await realFiles.readText(resolve(root, "bun.lock"))).toBeUndefined();
+    expect(await realFiles.readText(resolve(root, "ancestor-executed"))).toBeUndefined();
+    for (const stage of stages)
+      expect(await realFiles.readText(resolve(stage, "package.json"))).toBeUndefined();
+  });
+
   test("uses the real filesystem and command adapters without hiding failures", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-real-"));
     const outside = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-outside-"));
@@ -379,9 +478,12 @@ describe("bootstrap", () => {
       ...requiredPackages.map(([name]) => `${name}@${releaseVersion}`),
     ]);
     expect(result.commands[1]!.args).toEqual(["--no-install", "sync-engine", "setup"]);
+    expect(result.commands[2]!.args).toEqual(["install"]);
+    expect(await files.readText(resolve(root, "bun.lock"))).toBe("reconciled\n");
     expect(result.changedPaths).toEqual([
       resolve(root, "package.json"),
       ...expectedSetupFiles.map((file) => resolve(root, file)),
+      resolve(root, "bun.lock"),
     ]);
   });
 
@@ -636,6 +738,27 @@ describe("bootstrap", () => {
       "Review the existing application, run these commands yourself, then rerun work start: bunx --no-install sync-engine setup",
     );
     expect(files.values).toEqual(before);
+  });
+
+  test("does not report success when the post-setup install fails or omits type packages", async () => {
+    for (const exitCode of [0, 7]) {
+      const files = filesWithRelease();
+      const root = resolve(fixtureRoot, `failed-reconciliation-${exitCode}`);
+      const runner = successfulRunner(files);
+      const result = await bootstrapApplication(
+        { applicationRoot: root, releaseManifestPath: releasePath },
+        {
+          files,
+          runtime,
+          runCommand: async (command) =>
+            command.args[0] === "install" ? { exitCode } : runner(command),
+        },
+      );
+      expect(result.outcome).toBe("failed");
+      expect(result.plan.error).toContain(
+        exitCode === 0 ? "required setup dependency" : "Install exited 7",
+      );
+    }
   });
 
   test("stops cleanly when install fails", async () => {

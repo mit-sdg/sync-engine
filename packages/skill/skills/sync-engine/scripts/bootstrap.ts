@@ -1,6 +1,18 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { isPathInside, plainObject } from "./work.ts";
 
 export const requiredPackages = [
@@ -110,7 +122,22 @@ export const realFiles: BootstrapFiles = {
     }
   },
   async writeText(path, contents) {
-    await writeFile(path, contents, "utf8");
+    const root = dirname(path);
+    const temporary = await mkdtemp(resolve(root, ".sync-engine-manifest-"));
+    try {
+      const staged = resolve(temporary, "value");
+      const previous = await lstat(path).catch((error: unknown) => {
+        if (missing(error)) return undefined;
+        throw error;
+      });
+      await writeFile(staged, contents, {
+        flag: "wx",
+        mode: previous === undefined ? 0o666 : previous.mode & 0o777,
+      });
+      await rename(staged, path);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   },
   async fileKind(path, containmentRoot) {
     try {
@@ -141,9 +168,88 @@ const realRuntime: RuntimeVersions = {
   ...(process.versions.bun === undefined ? {} : { bun: process.versions.bun }),
 };
 
+/** Run the complete fresh bootstrap in one stage, and publish only a verified result. */
+async function stagedBootstrap(
+  options: BootstrapOptions,
+  dependencies: BootstrapDependencies,
+): Promise<BootstrapResult> {
+  const root = resolve(options.applicationRoot);
+  const stage = await mkdtemp(join(tmpdir(), "sync-engine-install-"));
+  try {
+    // Bun searches upward even when the immediate package declares workspaces: [].
+    for (let parent = dirname(stage); ; parent = dirname(parent)) {
+      for (const name of ["package.json", "bunfig.toml", ".npmrc"]) {
+        try {
+          await lstat(join(parent, name));
+          throw new Error(`Unsafe installation staging ancestor: ${join(parent, name)}`);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+      }
+      if (parent === dirname(parent)) break;
+    }
+    const result = await bootstrapInPlace({ ...options, applicationRoot: stage }, dependencies);
+    const commandAtRoot = (command: BootstrapCommand): BootstrapCommand => ({
+      ...command,
+      cwd: root,
+    });
+    const remapped: BootstrapResult = {
+      ...result,
+      plan: {
+        ...result.plan,
+        applicationRoot: root,
+        commands: result.plan.commands.map(commandAtRoot),
+      },
+      commands: result.commands.map(commandAtRoot),
+      changedPaths:
+        result.outcome === "failed"
+          ? []
+          : result.changedPaths.map((path) => resolve(root, relative(stage, path))),
+    };
+    if (result.outcome === "failed") return remapped;
+    await realFiles.ensureDirectory(root);
+    if ((await readdir(root)).length !== 0)
+      throw new Error("Bootstrap destination is no longer empty");
+    const transfer = await mkdtemp(join(root, ".sync-engine-install-"));
+    const published: string[] = [];
+    try {
+      const artifacts = await readdir(stage);
+      for (const name of artifacts) {
+        await cp(join(stage, name), join(transfer, name), {
+          recursive: true,
+          verbatimSymlinks: true,
+        });
+      }
+      for (const name of artifacts) {
+        await rename(join(transfer, name), join(root, name));
+        published.push(name);
+      }
+    } catch (error) {
+      for (const name of published.reverse())
+        await rm(join(root, name), { recursive: true, force: true });
+      throw error;
+    } finally {
+      await rm(transfer, { recursive: true, force: true });
+    }
+    return remapped;
+  } catch (error) {
+    return {
+      outcome: "failed",
+      plan: failed(root, error),
+      commands: [],
+      changedPaths: [],
+      warnings: [],
+    };
+  } finally {
+    await rm(stage, { recursive: true, force: true });
+  }
+}
+
 export const runCommand: CommandRunner = (command) =>
   new Promise((fulfill, reject) => {
-    const child = spawn(command.executable, [...command.args], {
+    const args =
+      command.executable === "bun" ? [...command.args, "--ignore-scripts"] : [...command.args];
+    const child = spawn(command.executable, args, {
       cwd: command.cwd,
       stdio: "inherit",
     });
@@ -487,6 +593,17 @@ export async function bootstrapApplication(
   options: BootstrapOptions,
   dependencies: BootstrapDependencies = {},
 ): Promise<BootstrapResult> {
+  const initial = await planBootstrap(options, dependencies);
+  if (initial.state === "new-app" && (dependencies.files ?? realFiles) === realFiles) {
+    return stagedBootstrap(options, dependencies);
+  }
+  return bootstrapInPlace(options, dependencies);
+}
+
+async function bootstrapInPlace(
+  options: BootstrapOptions,
+  dependencies: BootstrapDependencies,
+): Promise<BootstrapResult> {
   const files = dependencies.files ?? realFiles;
   const runner = dependencies.runCommand ?? runCommand;
   const runtime = dependencies.runtime ?? realRuntime;
@@ -583,6 +700,27 @@ export async function bootstrapApplication(
       for (const file of current.missingSetupFiles) {
         changed.add(resolve(initial.applicationRoot, file));
       }
+      // Setup adds TypeScript and type packages after the initial tooling install.
+      // Reconcile the final manifest before declaring the application ready.
+      const reconcile: BootstrapCommand = {
+        executable: "bun",
+        args: ["install"],
+        cwd: initial.applicationRoot,
+      };
+      commands.push(reconcile);
+      const installed = await runner(reconcile);
+      if (installed.exitCode !== 0) throw new Error(`Install exited ${installed.exitCode}`);
+      for (const name of ["typescript", "@types/bun", "@types/node"]) {
+        const path = resolve(initial.applicationRoot, "node_modules", name, "package.json");
+        if ((await files.fileKind(path, initial.applicationRoot)) !== "regular") {
+          throw new Error(`Install did not establish required setup dependency: ${name}`);
+        }
+      }
+      const lock = resolve(initial.applicationRoot, "bun.lock");
+      if ((await files.fileKind(lock, initial.applicationRoot)) !== "regular") {
+        throw new Error("Install did not establish bun.lock");
+      }
+      changed.add(lock);
       current = await inspectApplication(
         { applicationRoot: initial.applicationRoot, release: initial.release! },
         files,

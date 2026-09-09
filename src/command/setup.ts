@@ -1,11 +1,21 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
 import ts from "typescript";
 import { filesBelow } from "./files-below.ts";
+import { bunInstall, stageProject } from "./isolated-install.ts";
 
 export type SetupInstaller = (root: string) => Promise<void>;
 
@@ -248,23 +258,23 @@ function updateManifest(manifest: Record<string, unknown>, required: PackageRequ
   return changed;
 }
 
-async function bunInstall(root: string): Promise<void> {
-  await new Promise<void>((resolveInstall, rejectInstall) => {
-    const child = spawn("bun", ["install"], { cwd: root, stdio: "inherit" });
-    child.once("error", rejectInstall);
-    child.once("close", (code, signal) => {
-      if (code === 0) resolveInstall();
-      else {
-        rejectInstall(
-          new Error(
-            signal === null
-              ? `bun install exited with status ${String(code)}`
-              : `bun install ended from signal ${signal}`,
-          ),
-        );
-      }
+async function replaceManifest(root: string, contents: string): Promise<void> {
+  const temporary = await mkdtemp(resolve(root, ".sync-engine-manifest-"));
+  try {
+    const path = resolve(temporary, "package.json");
+    const previous = await lstat(resolve(root, "package.json")).catch((error: unknown) => {
+      if (isMissing(error)) return undefined;
+      throw error;
     });
-  });
+    await writeFile(path, contents, {
+      flag: "wx",
+      mode: previous === undefined ? 0o666 : previous.mode & 0o777,
+    });
+    await projectTarget(root, "package.json");
+    await rename(path, resolve(root, "package.json"));
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 function describe(error: unknown): string {
@@ -318,6 +328,21 @@ export async function setupProject(
     throw new Error(`sync-engine setup: directory does not exist: ${directory}`);
   }
   const canonicalRoot = await realpath(root);
+  if (options.install !== false && (await readdir(canonicalRoot)).length === 0) {
+    try {
+      const result = await stageProject(canonicalRoot, (stage) => setupInPlace(stage, options));
+      return { ...result, root };
+    } catch (error) {
+      throw new Error(
+        `sync-engine setup: fresh setup failed (${describe(error)}). Rerun setup to retry.`,
+      );
+    }
+  }
+  return setupInPlace(canonicalRoot, options);
+}
+
+async function setupInPlace(root: string, options: SetupOptions): Promise<SetupResult> {
+  const canonicalRoot = root;
   const source = await templates();
   const packageExisted = (await projectTarget(canonicalRoot, "package.json")) === "file";
   const directoryWasEmpty = !packageExisted && (await readdir(canonicalRoot)).length === 0;
@@ -346,7 +371,7 @@ export async function setupProject(
   let installation: SetupResult["installation"] = "not-needed";
   if (manifestUpdated) {
     await projectTarget(canonicalRoot, "package.json");
-    await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await replaceManifest(canonicalRoot, `${JSON.stringify(manifest, null, 2)}\n`);
     if (!directoryWasEmpty) {
       installation = "skipped";
       guidance.push(
@@ -358,15 +383,8 @@ export async function setupProject(
         "Bun installation was explicitly skipped; run `bun install` before validation.",
       );
     } else {
-      try {
-        await (options.install ?? bunInstall)(root);
-        installation = "completed";
-      } catch (error) {
-        throw new Error(
-          `sync-engine setup: package.json was updated, but Bun installation failed (${describe(error)}). ` +
-            "No setup source or configuration files were written; fix the installation and rerun setup.",
-        );
-      }
+      await (options.install ?? bunInstall)(root);
+      installation = "completed";
     }
   }
 

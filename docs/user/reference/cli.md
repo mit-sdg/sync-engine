@@ -99,10 +99,15 @@ The core declaration must equal the running core version; TypeScript, `@types/bu
 even when its command differs from the standard. Invalid fields, conflicting
 declarations, and incompatible ranges fail before `package.json` is written.
 
-When setup creates `package.json` in an empty directory, it runs `bun install` before
-writing templates. An installation failure is reported as partial failure: the manifest,
-and any Bun lockfile work, may remain changed, while setup source and configuration
-templates remain unwritten. Rerun setup after correcting installation.
+For an empty application directory, setup prepares the manifest, installed dependencies,
+lockfile, and templates in one private temporary directory outside the application's workspace.
+Its Bun install disables lifecycle scripts but preserves the caller's environment, user-level
+configuration, credentials, and cache. Application-ancestor workspace/configuration files are
+not used; the temporary directory's ancestors must not contain `package.json`, `bunfig.toml`,
+or `.npmrc`. Only after preparation succeeds does setup copy the completed project into the
+application. A failed preparation leaves the application empty, so rerunning setup automatically
+retries installation without additional commands. Publication errors trigger cleanup of entries
+already published; abrupt process termination or cleanup failure can still leave partial files.
 
 When setup changes an existing `package.json`, or creates one in a directory that already
 contains other files, it does not run the package manager. It writes the manifest and
@@ -120,9 +125,12 @@ Before creating a file that imports another setup target, it checks that depende
 expected exports. A failed dependency check leaves the dependent file absent and
 prints the required integration.
 
-Setup rejects symbolic links and unexpected file types at every manifest or template
-path before making changes, and checks each path again before writing it. Template writes
-are not one filesystem transaction. A filesystem failure reports how many templates were
+The selected application root is canonicalized, so directory aliases (including symlinked
+home and system paths) are supported. Within that root, setup rejects symbolic links and
+unexpected file types at manifest/template targets and their intermediate components before
+making changes. Manifest updates replace the directory entry rather than modifying a hard-linked
+inode. These checks are not a sandbox against a concurrent hostile filesystem writer; run setup
+in a trusted environment. Template writes are not one filesystem transaction. A filesystem failure reports how many templates were
 written; existing application files remain untouched, and a later setup can complete the
 missing files.
 

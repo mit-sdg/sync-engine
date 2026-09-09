@@ -239,7 +239,7 @@ export const workspaceCatalog = [
       "skills/sync-engine/scripts/roles.ts",
       "skills/sync-engine/scripts/work.ts",
     ],
-    packageBudget: { files: 64, packedBytes: 140_000, unpackedBytes: 560_000 },
+    packageBudget: { files: 64, packedBytes: 145_000, unpackedBytes: 570_000 },
     assets: [],
     bins: ["dist/command.js"],
   },
