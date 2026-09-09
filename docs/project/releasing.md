@@ -1,6 +1,6 @@
 # Contributor release procedure
 
-This procedure publishes an approved v1 beta release after its changes are
+This procedure publishes an approved stable v1 release after its changes are
 merged. Published versions, tags, and tarballs are immutable.
 
 ## External settings
@@ -23,10 +23,10 @@ Configure these external settings manually and recheck them before every tag:
 - Require CODEOWNERS review for workflow, release, support, and security-policy
   files during ordinary pull-request merges. An administrator bypass of those
   reviews must follow the recorded-bypass rule above.
-- Protect the `v1.0.0-beta.*` tag namespace against movement, deletion, and
-  creation by unapproved actors.
-- Keep the GitHub environment identity `npm`. Restrict it to the
-  `v1.0.0-beta.*` tag policy, configure no required reviewers or wait timer, and
+- Protect the `v1.*` tag namespace against movement, deletion, and
+  creation by unapproved actors. The existing `v*` protection also covers it.
+- Keep the GitHub environment identity `npm`. Allow the
+  `v1.*.*` tag policy, configure no required reviewers or wait timer, and
   verify `can_admins_bypass=false`. Publication begins automatically after the
   unprivileged verification job succeeds.
 - Configure npm trusted publishing for `@mit-sdg/sync-engine`,
@@ -38,13 +38,13 @@ Configure these external settings manually and recheck them before every tag:
 - Before the first release of a new workspace, bootstrap its npm package under
   the `mit-sdg` organization, set public access, and verify ownership before
   configuring the trusted publisher. Do not bootstrap with the intended release
-  version or the `beta` tag. If npm requires a placeholder publication, use only
+  version or the `latest` tag. If npm requires a placeholder publication, use only
   version `0.0.0` under a `bootstrap` tag; the protected workflow remains the
   first publisher of the real release version.
 - Verify npm package and organization ownership, require 2FA for owners and
   maintainers, remove stale owners, and confirm recovery access is controlled.
-  Beta publications use the `beta` dist-tag and must not create or move
-  `latest`.
+  Stable publications use the `latest` dist-tag. Leave historical `alpha`,
+  `beta`, and `bootstrap` tags unchanged; no prerelease may move `latest`.
 
 Record the checks in the release review.
 
@@ -62,13 +62,14 @@ exact tagged commit.
 Confirm that the exact version is unused for every published workspace:
 `@mit-sdg/sync-engine`, `@mit-sdg/sync-engine-analysis`,
 `@mit-sdg/sync-engine-http`, `@mit-sdg/sync-engine-catalog`, and
-`@mit-sdg/sync-engine-skill`. Beta versions have the form `1.0.0-beta.N`, with
-no leading zero in `N`, and use the `beta` dist-tag. Never reuse an npm version
+`@mit-sdg/sync-engine-skill`. Stable versions have the form `1.MINOR.PATCH`,
+with non-negative safe-integer components, no leading zeroes, and no prerelease
+or build suffix. They use the `latest` dist-tag. Never reuse an npm version
 or move an existing release tag.
 
 ### Version surfaces
 
-In the root `package.json`, set the release version and confirm the `beta`
+In the root `package.json`, set the release version and confirm the `latest`
 `publishConfig` tag. The root version, engines, TypeScript dependency,
 `packageManager`, and publication settings are canonical. Then run these
 commands in order:
@@ -102,7 +103,7 @@ its immutable tag.
 
 ### Source enforcement
 
-Run `bun run release:check`. It validates v1 beta syntax and tag policy, every
+Run `bun run release:check`. It validates stable v1 syntax and tag policy, every
 owned version location, mandatory changelog sections and links, runtime and
 toolchain ranges, shipped policies, reviewed workflow pins, and publication
 workflow source facts.
@@ -139,9 +140,10 @@ version or moves or reuses a release tag or tarball.
 1. Set `VERSION` to the exact manifest version. Verify the commit is an ancestor
    of `origin/main`, then create and push one annotated `v$VERSION` tag. Never
    move or reuse a release tag.
-2. Review the triggered **Publish beta** workflow. It accepts
-   `v1.0.0-beta.N` tags only. Its unprivileged `verify` job checks exact tag
-   equality, canonical beta version syntax, `origin/main`
+2. Review the triggered **Publish stable** workflow. Its `v1.*.*` trigger is
+   deliberately broader than the source validator: only canonical
+   `v1.MINOR.PATCH` tags are accepted. Its unprivileged `verify` job checks exact
+   tag equality, stable version syntax, `origin/main`
    ancestry, release facts, all gates, and the audit. It has no environment and
    no OIDC permission.
 3. After `verify` succeeds, the publication job starts automatically in the
@@ -151,40 +153,44 @@ version or moves or reuses a release tag or tarball.
    binds each packed `package.json` name and version to the validated source
    manifest. It rejects an artifact directory that is not exactly the reviewed
    tarball/checksum set. It then publishes each npm workspace in catalog build
-   order under `beta` with public access, stopping at the first failure. No
+   order under `latest` with public access, stopping at the first failure. No
    publication step installs dependencies, runs Bun, packs, prepackages, or
    rebuilds a package.
 4. Do not publish manually after a workflow failure until npm confirms the
    version was not accepted. The workflow does not create a GitHub release.
-   After npm verification, manually create a GitHub prerelease from the same
-   immutable tag using the changelog entry and exact comparison.
+   After npm verification, manually create a non-prerelease GitHub release from
+   the same immutable tag using the changelog entry and exact comparison.
 
 ## Verify the registry
 
-- Retire the unsupported alpha without moving `latest`:
+- After all stable packages are verified, retire reviewed unsupported prereleases
+  without changing dist-tags:
 
   ```sh
-  npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION "Unsupported; install @mit-sdg/sync-engine@$VERSION or use @beta."
+  npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION "Unsupported; install @mit-sdg/sync-engine@$VERSION or use @latest."
   ```
 
-  Review every older version that already has a deprecation message pointing to
-  `@alpha` and replace that message with the same exact beta guidance. Do not
-  deprecate a supported beta or use an unreviewed range. Published releases are
-  immutable: never
+  Review older versions with deprecation messages pointing to `@alpha` or
+  `@beta` and replace those messages with the same exact stable guidance. Apply
+  equivalent guidance to each companion package's reviewed prereleases. Do not
+  deprecate a supported stable version or use an unreviewed range. Published
+  releases are immutable: never
   overwrite an existing tag or tarball.
 
 - For each published workspace, confirm `npm view <package> dist-tags versions`
-  shows the new exact version under `beta` and that `latest` did not move.
-- Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows alpha
-  versions as unsupported, with historical messages pointing at the exact beta
-  or `@beta`, never `@alpha`.
+  shows the new exact version under `latest` and unchanged prerelease tags.
+- Confirm `npm view @mit-sdg/sync-engine versions deprecated --json` shows the
+  retired prereleases as unsupported, with messages pointing at the exact stable
+  version or `@latest`, never another unsupported prerelease.
 - Check each npm package page for GitHub Actions provenance and verify tarball
   integrity, repository, license, executable, policy files, and file metadata.
-- In clean directories, install every exact registry version with npm and Bun,
+- In clean directories, install every exact registry version with Bun and the
+  npm consumer procedure used by `bun run package:check`,
   exercise each package's documented public entrypoints or command, and
   typecheck with the supported TypeScript major.
 - Run the core command help and setup flow, then run the generated application's
-  generation, check, and start commands. Run each package-owned registry smoke
+  generation, check, and start commands. Pin the course starter and its lockfile
+  to the verified exact release. Run each package-owned registry smoke
   test documented by its README. Leave `node_modules` unchanged while checking
   generated artifacts.
 - Reconfirm the npm trusted publisher identity, ownership/2FA, GitHub
@@ -196,9 +202,11 @@ version or moves or reuses a release tag or tarball.
 Cancel the workflow before the publication job starts if the release must stop.
 If npm accepted any package version, do not retag, overwrite, recreate, or
 republish it. Mark any GitHub release and npm version as affected, deprecate the
-exact version with a clear message, move `beta` back to the last known-good beta
-when appropriate, and publish a new incremented beta
-containing the fix and migration notes. If any earlier package succeeded but a
+exact version with a clear message, move `latest` back to the last known-good
+stable version when one exists, and publish a new incremented stable release
+containing the fix and migration notes. If the first stable release fails, do
+not relabel an unsupported prerelease as stable; stop and issue a corrected
+stable release. If any earlier package succeeded but a
 later package failed, do not rerun or manually replace the accepted package; use
 new versions for the corrected release.
 Use npm unpublish only when package owners agree it meets npm policy; prefer

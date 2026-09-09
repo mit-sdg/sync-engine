@@ -1,9 +1,85 @@
 # Changelog
 
-This project follows semantic versioning. During beta, public subpaths,
-behavior, and generated formats may change incompatibly between releases. Pin
-an exact version, follow the [support policy](SUPPORT.md), and review the
+This project follows Semantic Versioning. Stable 1.x preserves supported public
+contracts; older beta releases could change incompatibly. Pin an exact version,
+follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
+
+## [1.0.0] - 2026-09-09
+
+The first stable release fixes the v1 public contract for concepts, composition,
+application boundaries, design tooling, and the matching companion packages.
+
+### Compatibility
+
+- Stable 1.x follows Semantic Versioning across all supported public subpaths,
+  including `/advanced`. Incompatible manifest changes require a new integer
+  format version and new public type names; the version-1 schema is no longer
+  reset in place.
+- Compared with beta.16, concept specifications have a closed type namespace:
+  declare external types, enumerations, and opaque types explicitly. State-owned
+  identities and SSF primitives are also valid signature types. Undeclared types
+  fail checking. Primitive refinements in Types are no longer accepted; put the
+  primitive on the field and its constraints in the owning action branches.
+- SSF fields require explicit lowercase names. `unique` supports individual
+  fields and combinations written as `unique field and field`; these are design
+  constraints, not generated storage enforcement.
+- Computations may bind an object output pattern, with generated wire leaves
+  projected from the corresponding result fields. Former records may contain
+  portable JSON literals directly.
+- Fresh `setup` and skill bootstrap stage installation outside ancestor
+  workspaces and leave an empty destination retryable after preparation failure.
+  Existing projects require explicit review and installation instead of running
+  project-controlled code automatically. Setup refuses symbolic-link targets and
+  replaces edited manifests without modifying hard-linked external files.
+- The skill workflow adds immutable work policies, role-aware grants, compact
+  continuations, coordinator simulation, and critic/result/boundary checks at
+  handback. A repaired blocked worker must complete its own continued record.
+
+### Migration
+
+- Pin core, HTTP, analysis, catalog, and skill to `1.0.0` when used together.
+  Stable releases publish under `latest`; alpha and beta releases are unsupported.
+- Use Bun `>=1.4.0 <1.5`. Node.js `>=24 <25` and TypeScript `>=6 <7` remain the
+  supported library and typechecking ranges.
+- Name every SSF field, declare every non-primitive signature type, and replace
+  primitive refinements with action-owned constraints. Run `check-design`, then
+  the full application check; the checker names incompatible declarations.
+- After setup changes an existing project's manifest, review it and run
+  `bun install` before generation, checks, or start. Existing source and scripts
+  remain application-owned.
+- Start new skill work units for the revised workflow. Regenerate application
+  manifests and wire contracts, review their diffs, and typecheck consumers.
+
+### Generated formats
+
+- Core concept specifications and application manifests stabilize at version 1.
+  The final pre-stable changes include closed type-namespace validation,
+  computation output projections, and portable former literals. Incompatible
+  earlier beta shapes have no compatibility decoder.
+- Analysis application indexes, impact traces, source indexes, and project
+  snapshots remain at version 3. Analysis accounts for projected computations
+  and literal former nodes.
+- Generated declarations, example artifacts, and skill release metadata are
+  regenerated for `1.0.0`.
+
+### Runtime and security support
+
+- Only the newest stable 1.x release receives fixes. Earlier stable releases
+  must upgrade; fixes are not backported to older release lines.
+- This release includes the post-beta.16 HTTP and runtime boundary hardening,
+  including malformed request handling, cookie-policy validation, rejected
+  invalid deadlines, and isolation of thrown validator/observer behavior.
+  Persistence, cross-concept transactions, and cancellation of accepted work
+  remain application and host responsibilities.
+- Vite+ is updated to `0.3.1` with Vitest and Istanbul coverage `4.1.11`, fixing
+  the development-toolchain advisory GHSA-82fw-gwwq-j7x9. Dependency audit now
+  runs in ordinary required CI as well as release verification.
+- Publication accepts only canonical stable `1.MINOR.PATCH` versions, verifies
+  the exact annotated tag and main ancestry, and publishes only the verified
+  tarballs under `latest` through the existing trusted-publisher environment.
+
+[Release][1.0.0] | [Changes since 1.0.0-beta.16][1.0.0-compare]
 
 ## [1.0.0-beta.16] - 2026-08-22
 
@@ -1381,6 +1457,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0
+[1.0.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.16...v1.0.0
 [1.0.0-beta.16]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.16
 [1.0.0-beta.16-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.15...v1.0.0-beta.16
 [1.0.0-beta.15]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.15

@@ -358,9 +358,9 @@ registration API does not accept a duplicate source URL. The source path and
 filename have no effect on the contract; the authoring guide recommends a
 consistent design-first layout without making it a checker requirement.
 
-The IR format remains `sync-engine.concept-specification`, version `1`. This is
-an intentional beta redefinition: legacy concept specifications are not parsed
-or auto-detected.
+The stable IR format is `sync-engine.concept-specification`, version `1`.
+Incompatible legacy beta specifications are not parsed or auto-detected. Stable
+changes follow the [support policy](../../../SUPPORT.md#stable-compatibility).
 
 ## Author obligations
 

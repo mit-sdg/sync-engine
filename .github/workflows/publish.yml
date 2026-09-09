@@ -1,9 +1,9 @@
-name: Publish beta
+name: Publish stable
 
 on:
   push:
     tags:
-      - "v1.0.0-beta.*"
+      - "v1.*.*"
 
 permissions:
   contents: read
@@ -88,8 +88,8 @@ jobs:
           path: release
       - name: Recheck release source and verified artifacts
         run: node scripts/check-release-source.ts release
-      - run: npm publish ./release/package.tgz --provenance --tag beta --access public
-      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public
-      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public
-      - run: npm publish ./release/catalog-package.tgz --provenance --tag beta --access public
-      - run: npm publish ./release/skill-package.tgz --provenance --tag beta --access public
+      - run: npm publish ./release/package.tgz --provenance --tag latest --access public
+      - run: npm publish ./release/analysis-package.tgz --provenance --tag latest --access public
+      - run: npm publish ./release/http-package.tgz --provenance --tag latest --access public
+      - run: npm publish ./release/catalog-package.tgz --provenance --tag latest --access public
+      - run: npm publish ./release/skill-package.tgz --provenance --tag latest --access public

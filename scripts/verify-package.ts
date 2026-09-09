@@ -245,8 +245,10 @@ function verifyManifestPolicy(workspace: Workspace, manifest: PackageManifest): 
     if (manifest.private !== undefined) {
       throw new Error(`${workspace.id} published package must omit private`);
     }
-    if (manifest.publishConfig?.access !== "public" || manifest.publishConfig.tag !== "beta") {
-      throw new Error(`${workspace.id} published package must use public access and the beta tag`);
+    if (manifest.publishConfig?.access !== "public" || manifest.publishConfig.tag !== "latest") {
+      throw new Error(
+        `${workspace.id} published package must use public access and the latest tag`,
+      );
     }
   } else if (manifest.private !== true) {
     throw new Error(`${workspace.id} private package must set private to true`);
@@ -966,7 +968,11 @@ async function verifySetupAndExamples(
     overrides: {
       [core.workspace.packageName]: tarballSpecifier(setup, core.tarball),
     },
-    devDependencies: { "@types/node": "^24.0.0", typescript: "^6.0.0", "vite-plus": "0.2.6" },
+    devDependencies: {
+      "@types/node": "^24.0.0",
+      typescript: "^6.0.0",
+      "vite-plus": core.manifest.devDependencies?.["vite-plus"],
+    },
   });
   run("bun", [resolve(installed, executable), "setup"], setup);
   run("bun", [resolve(installed, executable), "setup"], setup);

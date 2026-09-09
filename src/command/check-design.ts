@@ -67,47 +67,41 @@ function conceptSpecDiagnostics(
   source: string,
   diagnostics: readonly ConceptSpecDiagnostic[],
 ): DiagnosticRecord[] {
-  return diagnostics.map(
-    ({ code, message, location }): DiagnosticRecord => ({
-      code,
-      path: source,
-      line: location.line,
-      column: location.column,
-      severity: "error",
-      message,
-    }),
-  );
+  return diagnostics.map(({ code, message, location }): DiagnosticRecord => ({
+    code,
+    path: source,
+    line: location.line,
+    column: location.column,
+    severity: "error",
+    message,
+  }));
 }
 
 function simpleStateFormDiagnostics(issues: readonly SimpleStateFormIssue[]): DiagnosticRecord[] {
-  return issues.map(
-    ({ code, message, suggestion, severity, location }): DiagnosticRecord => ({
-      code,
-      path: location.source,
-      line: location.line,
-      column: location.column,
-      severity,
-      message,
-      suggestion,
-    }),
-  );
+  return issues.map(({ code, message, suggestion, severity, location }): DiagnosticRecord => ({
+    code,
+    path: location.source,
+    line: location.line,
+    column: location.column,
+    severity,
+    message,
+    suggestion,
+  }));
 }
 
 function signatureTypeDiagnostics(
   source: string,
   issues: readonly SpecificationSignatureTypeIssue[],
 ): DiagnosticRecord[] {
-  return issues.map(
-    ({ code, message, suggestion, severity, location }): DiagnosticRecord => ({
-      code,
-      path: source,
-      line: location.line,
-      column: location.column,
-      severity,
-      message,
-      suggestion,
-    }),
-  );
+  return issues.map(({ code, message, suggestion, severity, location }): DiagnosticRecord => ({
+    code,
+    path: source,
+    line: location.line,
+    column: location.column,
+    severity,
+    message,
+    suggestion,
+  }));
 }
 
 function applicationFormDiagnostic(issue: ApplicationDesignFormIssue): DiagnosticRecord {

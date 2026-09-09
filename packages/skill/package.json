@@ -1,6 +1,6 @@
 {
   "name": "@mit-sdg/sync-engine-skill",
-  "version": "1.0.0-beta.16",
+  "version": "1.0.0",
   "description": "Agent Skill for scoped sync-engine application design, implementation, and evidence",
   "keywords": [
     "agent-skills",
@@ -30,12 +30,12 @@
   "exports": {},
   "publishConfig": {
     "access": "public",
-    "tag": "beta"
+    "tag": "latest"
   },
   "dependencies": {
-    "@mit-sdg/sync-engine": "1.0.0-beta.16",
-    "@mit-sdg/sync-engine-analysis": "1.0.0-beta.16",
-    "@mit-sdg/sync-engine-catalog": "1.0.0-beta.16"
+    "@mit-sdg/sync-engine": "1.0.0",
+    "@mit-sdg/sync-engine-analysis": "1.0.0",
+    "@mit-sdg/sync-engine-catalog": "1.0.0"
   },
   "engines": {
     "node": ">=24 <25"

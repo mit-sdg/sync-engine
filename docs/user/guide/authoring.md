@@ -4,9 +4,9 @@ This guide adds the complete version-1 design contract to a config-based
 sync-engine application: strict concept specifications, an explicit static
 instance inventory, application types and bindings, typed prose coverage,
 computations, and generated evidence. It applies to the
-breaking beta contract described in the current reference pages. Older concept
-files, manifests, generated artifacts, and `--vocabulary-module` workflows must
-be replaced rather than mixed with this format.
+stable v1 contract described in the current reference pages. Incompatible older
+beta concept files, manifests, generated artifacts, and `--vocabulary-module`
+workflows must be replaced rather than mixed with this format.
 
 Read [Designing with concepts](../design.md) before choosing concept boundaries.
 Use the [Public API](../reference/public-api.md) for TypeScript signatures and
@@ -347,9 +347,10 @@ full test and typecheck scripts.
 
 ## Migrate an older beta application
 
-This revision is a hard beta break. Before upgrading, retain the old pinned
-version if rollback is required; new manifests and artifacts cannot be consumed
-by the old format.
+Stable v1 does not decode incompatible older beta formats. Before upgrading,
+retain the old pinned version if rollback is required; new manifests and
+artifacts cannot be consumed by the old format. Applications already using the
+current grammar should verify these requirements rather than rewrite valid files.
 
 1. Rewrite every concept file into the six strict ordered sections.
 2. Replace prose Types with explicit `external` declarations.

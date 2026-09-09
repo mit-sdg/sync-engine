@@ -3,7 +3,7 @@
 `@mit-sdg/sync-engine-analysis` is a public package that exports only `/ir` and
 `/project`; root and deep imports are unsupported.
 
-Install analysis and core at the same exact beta version. The package is
+Install analysis and core at the same exact release version. The package is
 ESM-only and supports Node.js 24 (`>=24 <25`). Project analysis also installs
 TypeScript `>=6 <7` as a runtime dependency; importing `/ir` does not load it.
 
@@ -74,7 +74,7 @@ including authored instance/definition provenance, normalized external bindings,
 SSF type inventories including aliases. Core validation independently rederives those
 inventories from included specifications before analysis uses the manifest. A projected
 `compute` output retains the computation-use edge regardless of how many return fields it
-binds, while a portable literal former node introduces no dependency edge. The beta V1
+binds, while a portable literal former node introduces no dependency edge. The V1
 schema is the replaced static-instance schema. Older
 application manifests are rejected; analysis has no compatibility
 decoder. `traceApplicationImpact()` performs bounded deterministic traversal

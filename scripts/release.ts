@@ -192,9 +192,13 @@ function releaseFacts(root: JsonObject | undefined): ReleaseFacts {
   };
 }
 
-function betaOneVersion(value: string | undefined): value is string {
-  const match = /^1\.0\.0-beta\.(0|[1-9]\d*)$/.exec(value ?? "");
-  return match !== null && Number.isSafeInteger(Number(match[1]));
+function stableOneVersion(value: string | undefined): value is string {
+  const match = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value ?? "");
+  return (
+    match !== null &&
+    match[0] === value &&
+    match.slice(1).every((part) => Number.isSafeInteger(Number(part)))
+  );
 }
 
 function compatiblePeer(version: string): string {
@@ -224,7 +228,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
   if (Object.values(facts).some((value) => value === undefined)) {
     throw new Error("package.json is missing a release fact");
   }
-  if (!betaOneVersion(facts.version)) {
+  if (!stableOneVersion(facts.version)) {
     throw new Error("package.json contains an invalid release version");
   }
   const minimumBun = bunRange(facts.bun);
@@ -427,8 +431,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const root = manifest("package.json");
   const facts = releaseFacts(root);
   const version = facts.version;
-  if (!betaOneVersion(version)) {
-    failures.push("package.json: version must match 1.0.0-beta.N without leading zeroes");
+  if (!stableOneVersion(version)) {
+    failures.push("package.json: version must match stable 1.MINOR.PATCH without leading zeroes");
   }
   const nodeMajor = majorRange(facts.node);
   if (nodeMajor === undefined) {
@@ -449,7 +453,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
 
   const publishTag = object(root?.publishConfig)?.tag;
-  if (publishTag !== "beta") failures.push('package.json: publishConfig.tag must be "beta"');
+  if (publishTag !== "latest") failures.push('package.json: publishConfig.tag must be "latest"');
   if (object(root?.publishConfig)?.access !== "public") {
     failures.push('package.json: publishConfig.access must be "public"');
   }
@@ -531,8 +535,8 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       if (object(project?.publishConfig)?.access !== "public") {
         failures.push(`${workspace.packageManifest}: publishConfig.access must be "public"`);
       }
-      if (object(project?.publishConfig)?.tag !== "beta") {
-        failures.push(`${workspace.packageManifest}: publishConfig.tag must be "beta"`);
+      if (object(project?.publishConfig)?.tag !== "latest") {
+        failures.push(`${workspace.packageManifest}: publishConfig.tag must be "latest"`);
       }
     } else {
       if (project?.private !== true) {
@@ -640,7 +644,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   const releasing = sources.get("docs/project/releasing.md") ?? "";
   for (const fact of [
     "npm deprecate @mit-sdg/sync-engine@$PRERELEASE_VERSION",
-    "install @mit-sdg/sync-engine@$VERSION or use @beta",
+    "install @mit-sdg/sync-engine@$VERSION or use @latest",
     "versions deprecated --json",
     "never\n  overwrite an existing tag or tarball",
   ]) {
@@ -657,7 +661,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "sync-engine.application-project-analysis` version 3",
   ] as const;
   const supportFacts = [
-    "Only the newest beta is supported.",
+    "Only the newest stable 1.x release receives fixes.",
     "sync-engine.application-manifest` version 1",
   ];
   if (facts.node !== undefined) supportFacts.push(`Node.js \`${facts.node}\``);
@@ -704,7 +708,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "security/advisories/new",
     "acknowledgement within three business days",
     "update at least weekly",
-    "Newest `1.0.0-beta.x`",
+    "Newest stable `1.x`",
   ]) {
     if (!security.includes(fact))
       failures.push(`SECURITY.md: missing security policy fact ${fact}`);
@@ -789,6 +793,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     failures.push(".github/workflows/ci.yml: CI must not receive id-token: write");
   }
   for (const [name, facts] of [
+    ["release", ["- run: bun install --frozen-lockfile", "- run: bun audit"]],
     ["package", ["os: [ubuntu-latest]"]],
     [
       "test",
@@ -828,11 +833,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     ["verify", verify],
     ["publish", publication],
   ];
-  for (const fact of [
-    "name: Publish beta",
-    '- "v1.0.0-beta.*"',
-    "permissions:\n  contents: read",
-  ]) {
+  for (const fact of ["name: Publish stable", '- "v1.*.*"', "permissions:\n  contents: read"]) {
     if (!publish.includes(fact)) failures.push(`.github/workflows/publish.yml: missing ${fact}`);
   }
   for (const gate of publishVerificationGates) {
@@ -895,7 +896,7 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
   const publications = publishedWorkspaces.map(
     (workspace) =>
-      `npm publish ./release/${workspace.verifiedTarball} --provenance --tag beta --access public`,
+      `npm publish ./release/${workspace.verifiedTarball} --provenance --tag latest --access public`,
   );
   const publicationPositions = publications.map((command) =>
     runCommandPosition(publication, command),

@@ -72,7 +72,7 @@ function editManifest(
 }
 
 describe("release source facts", () => {
-  test("accepts the beta release sources", () => {
+  test("accepts the stable release sources", () => {
     expect(checkRelease(fixture())).toEqual([]);
   });
 
@@ -121,7 +121,7 @@ describe("release source facts", () => {
       any
     >;
     expect(projectedAnalysis).not.toHaveProperty("private");
-    expect(projectedAnalysis.publishConfig).toEqual({ access: "public", tag: "beta" });
+    expect(projectedAnalysis.publishConfig).toEqual({ access: "public", tag: "latest" });
     expect(projectedAnalysis.peerDependencies).toEqual({
       "@mit-sdg/sync-engine": currentVersion,
     });
@@ -163,6 +163,25 @@ describe("release source facts", () => {
     }
     expect(failures).not.toContainEqual(expect.stringContaining("projection failed"));
   });
+
+  test.each(["1.0.0", "1.0.1", "1.2.3", "1.9007199254740991.0"])(
+    "projects canonical stable version %s",
+    (version) => {
+      const sources = fixture();
+      editManifest(sources, "package.json", (manifest) => {
+        manifest.version = version;
+      });
+      const projected = projectReleaseManifests(sources);
+      expect(JSON.parse(projected.get(analysisManifest) ?? "")).toMatchObject({
+        version,
+        publishConfig: { access: "public", tag: "latest" },
+        peerDependencies: { "@mit-sdg/sync-engine": version },
+      });
+      expect(checkRelease(sources)).not.toContainEqual(
+        expect.stringContaining("package.json: version must match"),
+      );
+    },
+  );
 
   test.each(["invalid", "1.9007199254740992.0", "1.0.9007199254740992"])(
     "refuses to project invalid canonical version %s",
@@ -210,27 +229,38 @@ describe("release source facts", () => {
 
   test.each([
     "1.0.0-alpha.1",
+    "1.0.0-beta.16",
     "1.0.0-beta.01",
+    "1.0.0-rc.1",
+    "1.0.0+build.1",
+    "v1.0.0",
+    "1.0.0\n",
+    "1.0.0\r\n",
+    "1.0.0 ",
+    " 1.0.0",
+    "1.0",
     "1.0.01",
+    "1.01.0",
     "1.9007199254740992.0",
     "1.0.9007199254740992",
+    "0.3.0",
     "2.0.0",
-  ])("rejects invalid beta version %s", (version) => {
+  ])("rejects noncanonical or non-stable v1 version %s", (version) => {
     const sources = fixture();
     editManifest(sources, "package.json", (manifest) => {
       manifest.version = version;
     });
     expect(checkRelease(sources)).toContainEqual(
-      expect.stringContaining("1.0.0-beta.N without leading zeroes"),
+      expect.stringContaining("stable 1.MINOR.PATCH without leading zeroes"),
     );
   });
 
-  test("rejects a non-beta dist-tag", () => {
+  test.each(["beta", "next", undefined])("rejects a non-latest dist-tag %s", (tag) => {
     const sources = fixture();
     editManifest(sources, "package.json", (manifest) => {
-      manifest.publishConfig.tag = "latest";
+      manifest.publishConfig.tag = tag;
     });
-    expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "beta"');
+    expect(checkRelease(sources)).toContain('package.json: publishConfig.tag must be "latest"');
   });
 
   test("requires the root workspace override for the HTTP peer", () => {
@@ -411,7 +441,7 @@ describe("release source facts", () => {
   );
 
   test.each([
-    ["SUPPORT.md", "Only the newest beta is supported."],
+    ["SUPPORT.md", "Only the newest stable 1.x release receives fixes."],
     ["SUPPORT.md", `Node.js \`${packageManifest.engines.node}\``],
     ["SUPPORT.md", "sync-engine.application-manifest` version 1"],
     ["packages/analysis/public-surface.md", "sync-engine.application-index` version 3"],
@@ -492,6 +522,7 @@ describe("release source facts", () => {
   });
 
   test.each([
+    ["release", "- run: bun audit"],
     ["package", "os: [ubuntu-latest]"],
     ["test", "os: [ubuntu-latest, windows-latest, macos-latest]"],
     ["test", "- name: Platform application scenarios"],
@@ -516,6 +547,15 @@ describe("release source facts", () => {
       ".github/workflows/ci.yml: test job is missing run: bun run scenario",
     );
   });
+
+  test.each(["name: Publish stable", '- "v1.*.*"'])(
+    "requires the stable publication fact %s",
+    (fact) => {
+      const sources = fixture();
+      replaceSource(sources, ".github/workflows/publish.yml", fact, "omitted-stable-fact");
+      expect(checkRelease(sources)).toContain(`.github/workflows/publish.yml: missing ${fact}`);
+    },
+  );
 
   test("rejects a privileged publish verification job", () => {
     const sources = fixture();
@@ -556,16 +596,16 @@ describe("release source facts", () => {
       "publish source validation must invoke check-release-source.ts with verified artifacts",
     ],
     [
-      "npm publish ./release/package.tgz --provenance --tag beta --access public",
-      "missing npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "npm publish ./release/package.tgz --provenance --tag latest --access public",
+      "missing npm publish ./release/package.tgz --provenance --tag latest --access public",
     ],
     [
-      "npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
-      "missing npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+      "npm publish ./release/analysis-package.tgz --provenance --tag latest --access public",
+      "missing npm publish ./release/analysis-package.tgz --provenance --tag latest --access public",
     ],
     [
-      "npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-      "missing npm publish ./release/http-package.tgz --provenance --tag beta --access public",
+      "npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+      "missing npm publish ./release/http-package.tgz --provenance --tag latest --access public",
     ],
   ])("requires the publish-only fact %s", (fact, failure) => {
     const sources = fixture();
@@ -578,8 +618,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public\n      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-      "      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/analysis-package.tgz --provenance --tag latest --access public\n      - run: npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+      "      - run: npm publish ./release/http-package.tgz --provenance --tag latest --access public\n      - run: npm publish ./release/analysis-package.tgz --provenance --tag latest --access public",
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/publish.yml: publications must remain in catalog order",
@@ -591,8 +631,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public",
-      "      - run: npm publish ./release/http-package.tgz --provenance --tag beta --access public\n      - run: npm publish ./release/unreviewed.tgz --access public",
+      "      - run: npm publish ./release/http-package.tgz --provenance --tag latest --access public",
+      "      - run: npm publish ./release/http-package.tgz --provenance --tag latest --access public\n      - run: npm publish ./release/unreviewed.tgz --access public",
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/publish.yml: publish job must contain exactly one npm publish per published workspace",
@@ -617,8 +657,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
-      "      - run: bun run build\n      - run: npm publish ./release/analysis-package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/analysis-package.tgz --provenance --tag latest --access public",
+      "      - run: bun run build\n      - run: npm publish ./release/analysis-package.tgz --provenance --tag latest --access public",
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/publish.yml: publish job must not rebuild (bun run)",
@@ -643,8 +683,8 @@ describe("release source facts", () => {
     replaceSource(
       commented,
       ".github/workflows/publish.yml",
-      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
-      "      # - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/package.tgz --provenance --tag latest --access public",
+      "      # - run: npm publish ./release/package.tgz --provenance --tag latest --access public",
     );
     expect(checkRelease(commented)).toContainEqual(expect.stringContaining("missing npm publish"));
 
@@ -652,8 +692,8 @@ describe("release source facts", () => {
     replaceSource(
       conditional,
       ".github/workflows/publish.yml",
-      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
-      "      - if: ${{ false }}\n        run: npm publish ./release/package.tgz --provenance --tag beta --access public",
+      "      - run: npm publish ./release/package.tgz --provenance --tag latest --access public",
+      "      - if: ${{ false }}\n        run: npm publish ./release/package.tgz --provenance --tag latest --access public",
     );
     expect(checkRelease(conditional)).toContain(
       ".github/workflows/publish.yml: publish steps must not be conditional",
@@ -663,8 +703,8 @@ describe("release source facts", () => {
     replaceSource(
       continuing,
       ".github/workflows/publish.yml",
-      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public",
-      "      - run: npm publish ./release/package.tgz --provenance --tag beta --access public\n        continue-on-error: true",
+      "      - run: npm publish ./release/package.tgz --provenance --tag latest --access public",
+      "      - run: npm publish ./release/package.tgz --provenance --tag latest --access public\n        continue-on-error: true",
     );
     expect(checkRelease(continuing)).toContain(
       ".github/workflows/publish.yml: publish steps must not continue on error",

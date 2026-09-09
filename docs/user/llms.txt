@@ -6,13 +6,13 @@ This index is for human and software agents that use sync-engine to design,
 build, call, or operate an application. It does not describe changes to the
 sync-engine repository.
 
-The current release is beta, and only the newest beta is supported. Pin an exact package version and read the [support policy](../../SUPPORT.md) before upgrading or deploying it.
+Version 1 is stable, and only the newest stable 1.x release receives fixes. Pin an exact package version and read the [support policy](../../SUPPORT.md) before upgrading or deploying it.
 
 ## Installed-package boundary
 
 When this file is under an installed `@mit-sdg/sync-engine` package, use its
 package-local links. They describe the installed version; documentation from the
-repository's `main` branch may describe a different beta.
+repository's `main` branch may describe a different release.
 
 Treat `README.md`, `SUPPORT.md`, `docs/user/`, the shipped examples, and the
 package's declared public entrypoints as the consumer surface. Do not inspect or

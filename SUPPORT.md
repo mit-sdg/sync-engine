@@ -1,6 +1,6 @@
 # Support policy
 
-## Public beta surface
+## Public surface
 
 The core package supports these six subpaths:
 
@@ -17,17 +17,21 @@ API](docs/user/reference/public-api.md) is the exact export register.
 Each independently published package defines its own exports, compatibility,
 runtime requirements, and support boundaries in its package README.
 
-## Beta compatibility
+## Stable compatibility
 
-Beta releases use Semantic Versioning prerelease identifiers. A newer beta may
-make incompatible changes to any public core subpath or core data format. The
-[changelog](CHANGELOG.md) records compatibility and migration effects for every
-release. Pin an exact version and review the changelog before upgrading.
+Stable 1.x releases follow Semantic Versioning across every supported public
+subpath, including `/advanced`. Patch releases contain backward-compatible fixes;
+minor releases may add backward-compatible functionality. Incompatible public
+API or behavior changes require a new major version. The [changelog](CHANGELOG.md)
+records compatibility and migration effects for every release. Pin an exact
+version for reproducible coursework and review the changelog before upgrading.
 
 Published versions, tags, and tarballs are immutable. A correction receives a
 new version; maintainers do not replace an existing release.
 
-Only the newest beta is supported. Alpha releases are unsupported.
+Only the newest stable 1.x release receives fixes. Earlier stable releases must
+upgrade; fixes are not backported to older release lines. Alpha and beta releases
+are unsupported.
 
 The current `RetentionPolicy` surface contains only `"keepAll"` and
 `{ window: number }`. The earlier prerelease `"evictConsumed"` policy and manual
@@ -49,11 +53,10 @@ not contain functions, constructor arguments, resources, object identity,
 occurrences, timestamps, or other runtime state.
 
 Earlier application-manifest shapes are rejected rather than upgraded and must
-be regenerated. Before stable v1, an intentional beta reset may replace the
-version-1 schema in place and requires producers, consumers, authored fixtures,
-and generated artifacts to upgrade atomically. After stable v1, an incompatible
-structural or semantic change requires a new integer format version and new
-public type names. A package release does not change the format version when the
+be regenerated. The stable version-1 schema is no longer reset in place. An
+incompatible structural or semantic change requires a new integer format version
+and new public type names; removal or incompatible replacement of a supported
+public contract also requires a new package major version. A package release does not change the format version when the
 existing structure and meaning remain compatible. The artifact planner accepts
 1.x core generator identities and projector provenance with a nonblank package name and valid SemVer version,
 including prereleases.

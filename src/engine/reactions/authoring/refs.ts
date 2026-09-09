@@ -146,9 +146,9 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A
  * queries become typed line builders — the callable vocabulary proxy.
  */
 type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
-  readonly [K in keyof I as I[K] extends (...args: never[]) => unknown
-    ? K
-    : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
+  readonly [
+    K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never
+  ]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */

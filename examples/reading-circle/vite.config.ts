@@ -24,6 +24,9 @@ export default defineConfig({
   },
   lint: {
     ignorePatterns: ["generated/**", "node_modules/**"],
+    rules: {
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    },
   },
   test: {
     include: ["tests/**/*.test.ts"],

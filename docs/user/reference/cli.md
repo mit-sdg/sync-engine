@@ -382,9 +382,9 @@ successful partial design.
 
 ### `manifest`
 
-Prints canonical JSON for `sync-engine.application-manifest`, version `1`. This
-pre-1.0 beta reset replaces the version-1 schema in place: earlier beta shapes
-and prior versions are rejected and have no compatibility decoder.
+Prints canonical JSON for `sync-engine.application-manifest`, version `1`.
+Stable v1 fixes this schema rather than resetting it in place. Incompatible
+earlier beta shapes are rejected and have no compatibility decoder.
 
 The manifest retains normalized full concept State text, structured concept
 action/query declarations, authored definition/instance identities and bindings, each

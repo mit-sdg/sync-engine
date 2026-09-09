@@ -295,8 +295,9 @@ concept inventories, input contracts, and diagnostic read-back. Design
 processing augments those facts with authored concept definition/instance
 provenance, full State text, instance-owned external bindings, resolved application types, exact authored declaration links,
 computation signatures, normalized document provenance, and source locations.
-The manifest schema remains `sync-engine.application-manifest` version 1 during
-the beta reset; the earlier beta shape and prior versions are not decoded.
+The stable manifest schema is `sync-engine.application-manifest` version 1.
+Incompatible earlier beta shapes are not decoded. Incompatible stable schema
+changes require a new integer format version and new public type names.
 
 Artifact planning validates the complete design before rendering either output.
 Generated Markdown reports reaction lowering, views, formers, structured concept

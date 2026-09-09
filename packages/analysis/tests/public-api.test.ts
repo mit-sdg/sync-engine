@@ -151,7 +151,7 @@ describe("analysis package public API", () => {
       sideEffects: readonly string[];
     };
     expect(manifest.private).toBeUndefined();
-    expect(manifest.publishConfig).toEqual({ access: "public", tag: "beta" });
+    expect(manifest.publishConfig).toEqual({ access: "public", tag: "latest" });
     expect(manifest.repository.directory).toBe("packages/analysis");
     expect(manifest.bin).toEqual({ "sync-engine-analysis": "./dist/command.js" });
     expect(manifest.sideEffects).toEqual(["./dist/project/application-project-worker.js"]);
