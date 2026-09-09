@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import {
+  chmod,
   lstat,
   mkdir,
   mkdtemp,
@@ -270,6 +271,7 @@ async function replaceManifest(root: string, contents: string): Promise<void> {
       flag: "wx",
       mode: previous === undefined ? 0o666 : previous.mode & 0o777,
     });
+    if (previous !== undefined) await chmod(path, previous.mode & 0o777);
     await projectTarget(root, "package.json");
     await rename(path, resolve(root, "package.json"));
   } finally {

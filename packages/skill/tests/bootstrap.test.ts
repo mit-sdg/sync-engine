@@ -243,11 +243,16 @@ describe("bootstrap", () => {
       realFiles.fileKind(resolve(root, "application/package.json"), resolve(root, "application")),
     ).resolves.toBe("missing");
     await writeFile(resolve(root, "outside.json"), "original");
-    await chmod(resolve(root, "outside.json"), 0o600);
+    await chmod(resolve(root, "outside.json"), 0o640);
     await link(resolve(root, "outside.json"), resolve(root, "package.json"));
-    await realFiles.writeText(resolve(root, "package.json"), "replacement");
+    const mask = process.umask(0o077);
+    try {
+      await realFiles.writeText(resolve(root, "package.json"), "replacement");
+    } finally {
+      process.umask(mask);
+    }
     if (process.platform !== "win32")
-      expect((await lstat(resolve(root, "package.json"))).mode & 0o777).toBe(0o600);
+      expect((await lstat(resolve(root, "package.json"))).mode & 0o777).toBe(0o640);
     expect(await readFile(resolve(root, "outside.json"), "utf8")).toBe("original");
   });
 
@@ -299,6 +304,11 @@ describe("bootstrap", () => {
     expect(result.plan.applicationRoot).toBe(app);
     expect(result.commands.map((command) => command.cwd)).toEqual([app, app, app]);
     expect(stages.size).toBe(1);
+    expect(result.changedPaths).toEqual(
+      (await readdir(app)).map((name) => resolve(app, name)).sort(),
+    );
+    expect(result.changedPaths).toContain(resolve(app, "future-setup-artifact.txt"));
+    expect(result.changedPaths).toContain(resolve(app, "node_modules"));
     expect(await realFiles.readText(resolve(app, "future-setup-artifact.txt"))).toBe("retained");
     expect(await realFiles.readText(resolve(root, "bun.lock"))).toBeUndefined();
     expect(await realFiles.readText(resolve(root, "ancestor-executed"))).toBeUndefined();
@@ -450,7 +460,7 @@ describe("bootstrap", () => {
       { files, runtime },
     );
     expect(plan.state).toBe("new-app");
-    expect(plan.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx"]);
+    expect(plan.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx", "bun"]);
 
     let beforeInstall: unknown;
     const result = await bootstrapApplication(
@@ -610,7 +620,7 @@ describe("bootstrap", () => {
     expect(result.commands).toEqual([]);
     expect(result.changedPaths).toEqual([]);
     expect(result.plan.error).toBe(
-      `Review the existing application, run these commands yourself, then rerun work start: bun add --dev --exact @mit-sdg/sync-engine-analysis@${releaseVersion}; bunx --no-install sync-engine setup`,
+      `Review the existing application, run these commands yourself, then rerun work start: bun add --dev --exact @mit-sdg/sync-engine-analysis@${releaseVersion}; bunx --no-install sync-engine setup; bun install`,
     );
     expect(files.values).toEqual(before);
   });
@@ -735,9 +745,28 @@ describe("bootstrap", () => {
     expect(result.outcome).toBe("failed");
     expect(result.commands).toEqual([]);
     expect(result.plan.error).toBe(
-      "Review the existing application, run these commands yourself, then rerun work start: bunx --no-install sync-engine setup",
+      "Review the existing application, run these commands yourself, then rerun work start: bunx --no-install sync-engine setup; bun install",
     );
     expect(files.values).toEqual(before);
+
+    // Simulate explicitly running the complete reviewed sequence, then rerunning work start.
+    const options = { applicationRoot: root, releaseManifestPath: releasePath };
+    const plan = await planBootstrap(options, { files, runtime });
+    expect(plan.commands.map(({ args }) => args)).toEqual([
+      ["--no-install", "sync-engine", "setup"],
+      ["install"],
+    ]);
+    const reviewedRunner = successfulRunner(files);
+    for (const command of plan.commands) await reviewedRunner(command);
+    const ready = await bootstrapApplication(options, {
+      files,
+      runtime,
+      runCommand: async () => {
+        throw new Error("must already be ready");
+      },
+    });
+    expect(ready.outcome).toBe("ready");
+    expect(ready.commands).toEqual([]);
   });
 
   test("does not report success when the post-setup install fails or omits type packages", async () => {

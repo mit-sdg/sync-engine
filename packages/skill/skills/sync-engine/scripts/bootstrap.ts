@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import {
+  chmod,
   cp,
   lstat,
   mkdir,
@@ -11,7 +12,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { isPathInside, plainObject } from "./work.ts";
 
@@ -104,6 +105,7 @@ export interface BootstrapResult {
   readonly plan: BootstrapPlan;
   readonly commands: readonly BootstrapCommand[];
   readonly warnings: readonly string[];
+  /** Published top-level artifacts for fresh disk bootstrap; individual manifest edits otherwise. */
   readonly changedPaths: readonly string[];
 }
 
@@ -134,6 +136,7 @@ export const realFiles: BootstrapFiles = {
         flag: "wx",
         mode: previous === undefined ? 0o666 : previous.mode & 0o777,
       });
+      if (previous !== undefined) await chmod(staged, previous.mode & 0o777);
       await rename(staged, path);
     } finally {
       await rm(temporary, { recursive: true, force: true });
@@ -201,10 +204,7 @@ async function stagedBootstrap(
         commands: result.plan.commands.map(commandAtRoot),
       },
       commands: result.commands.map(commandAtRoot),
-      changedPaths:
-        result.outcome === "failed"
-          ? []
-          : result.changedPaths.map((path) => resolve(root, relative(stage, path))),
+      changedPaths: [],
     };
     if (result.outcome === "failed") return remapped;
     await realFiles.ensureDirectory(root);
@@ -231,7 +231,7 @@ async function stagedBootstrap(
     } finally {
       await rm(transfer, { recursive: true, force: true });
     }
-    return remapped;
+    return { ...remapped, changedPaths: published.map((name) => resolve(root, name)).sort() };
   } catch (error) {
     return {
       outcome: "failed",
@@ -390,6 +390,10 @@ function install(
   };
 }
 
+function dependencyInstall(root: string): BootstrapCommand {
+  return { executable: "bun", args: ["install"], cwd: root };
+}
+
 function setup(root: string): BootstrapCommand {
   return { executable: "bunx", args: ["--no-install", "sync-engine", "setup"], cwd: root };
 }
@@ -429,7 +433,11 @@ async function inspectApplication(
         state: "new-app",
         applicationRoot: root,
         release: options.release,
-        commands: [install(root, options.release.skill, packages), setup(root)],
+        commands: [
+          install(root, options.release.skill, packages),
+          setup(root),
+          dependencyInstall(root),
+        ],
         missingPackages: packages,
         missingSetupFiles: [...expectedSetupFiles],
       };
@@ -529,7 +537,7 @@ async function inspectApplication(
     const commands: BootstrapCommand[] = [];
     if (missingPackages.length > 0)
       commands.push(install(root, options.release.skill, missingPackages));
-    if (missingSetupFiles.length > 0) commands.push(setup(root));
+    if (missingSetupFiles.length > 0) commands.push(setup(root), dependencyInstall(root));
     const state = needsPackageManager || commands.length > 0 ? "missing-tooling" : "ready";
     return {
       state,
@@ -642,7 +650,9 @@ async function bootstrapInPlace(
     ...(installPackages.length === 0
       ? []
       : [install(initial.applicationRoot, version, installPackages)]),
-    ...(initial.missingSetupFiles.length === 0 ? [] : [setup(initial.applicationRoot)]),
+    ...(initial.missingSetupFiles.length === 0
+      ? []
+      : [setup(initial.applicationRoot), dependencyInstall(initial.applicationRoot)]),
   ];
   if (initial.state !== "new-app" && pending.length > 0) {
     return result(
@@ -702,11 +712,7 @@ async function bootstrapInPlace(
       }
       // Setup adds TypeScript and type packages after the initial tooling install.
       // Reconcile the final manifest before declaring the application ready.
-      const reconcile: BootstrapCommand = {
-        executable: "bun",
-        args: ["install"],
-        cwd: initial.applicationRoot,
-      };
+      const reconcile = dependencyInstall(initial.applicationRoot);
       commands.push(reconcile);
       const installed = await runner(reconcile);
       if (installed.exitCode !== 0) throw new Error(`Install exited ${installed.exitCode}`);

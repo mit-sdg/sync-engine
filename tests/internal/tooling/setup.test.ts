@@ -66,11 +66,16 @@ describe("sync-engine setup", () => {
     const external = await mkdtemp(join(tmpdir(), "sync-engine-hardlink-"));
     try {
       const before = await readFile(join(root, "package.json"), "utf8");
-      await chmod(join(root, "package.json"), 0o600);
+      await chmod(join(root, "package.json"), 0o640);
       await link(join(root, "package.json"), join(external, "package.json"));
-      await setupProject(root, { install: false });
+      const mask = process.umask(0o077);
+      try {
+        await setupProject(root, { install: false });
+      } finally {
+        process.umask(mask);
+      }
       if (process.platform !== "win32")
-        expect((await lstat(join(root, "package.json"))).mode & 0o777).toBe(0o600);
+        expect((await lstat(join(root, "package.json"))).mode & 0o777).toBe(0o640);
       expect(await readFile(join(external, "package.json"), "utf8")).toBe(before);
       expect(await readFile(join(root, "package.json"), "utf8")).not.toBe(before);
     } finally {
