@@ -151,6 +151,11 @@ export declare function filesBelow(directory: string, filter?: (name: string) =>
 === dist/command/generated-config.d.ts ===
 export declare function loadGeneratedApplication(configPath: string, root: string): Promise<import("../engine/tooling/generated-artifacts.ts").ResolvedApplication>;
 
+=== dist/command/isolated-install.d.ts ===
+/** Stage a fresh project outside its workspace, preserving trusted user configuration. */
+export declare function stageProject<T>(root: string, prepare: (stage: string) => Promise<T>): Promise<T>;
+export declare function bunInstall(root: string): Promise<void>;
+
 === dist/command/main.d.ts ===
 #!/usr/bin/env bun
 export {};

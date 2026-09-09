@@ -1,4 +1,15 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setupProject } from "@command/setup";
@@ -34,37 +45,67 @@ async function manifestAt(root: string): Promise<{
 }
 
 describe("sync-engine setup", () => {
-  test("completes the manifest, installs after the edit, creates source, and is idempotent", async () => {
+  test("accepts a selected root through a benign directory alias", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sync-engine-linked-root-"));
+    try {
+      await mkdir(join(root, "outside"));
+      await symlink(join(root, "outside"), join(root, "application"));
+      await mkdir(join(root, "outside", "nested"));
+      const result = await setupProject(join(root, "application", "nested"), { install: false });
+      expect(result.written).toHaveLength(7);
+      expect((await manifestAt(join(root, "outside", "nested"))).scripts.start).toBe(
+        "bun src/main.ts",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("replaces a hard-linked manifest without modifying the external inode", async () => {
+    const root = await project();
+    const external = await mkdtemp(join(tmpdir(), "sync-engine-hardlink-"));
+    try {
+      const before = await readFile(join(root, "package.json"), "utf8");
+      await chmod(join(root, "package.json"), 0o640);
+      await link(join(root, "package.json"), join(external, "package.json"));
+      const mask = process.umask(0o077);
+      try {
+        await setupProject(root, { install: false });
+      } finally {
+        process.umask(mask);
+      }
+      if (process.platform !== "win32")
+        expect((await lstat(join(root, "package.json"))).mode & 0o777).toBe(0o640);
+      expect(await readFile(join(external, "package.json"), "utf8")).toBe(before);
+      expect(await readFile(join(root, "package.json"), "utf8")).not.toBe(before);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(external, { recursive: true, force: true });
+    }
+  });
+
+  test("completes an existing manifest without installing, creates source, and is idempotent", async () => {
     const root = await project();
     const observed: string[] = [];
     try {
       const first = await setupProject(root, {
         install: async (installedRoot) => {
           observed.push(installedRoot);
-          const manifest = await manifestAt(root);
-          expect(manifest.dependencies["@mit-sdg/sync-engine"]).toBe(
-            (await currentPackage()).version,
-          );
-          const current = await currentPackage();
-          expect(manifest.devDependencies.typescript).toBe(current.dependencies.typescript);
-          expect(manifest.devDependencies["@types/bun"]).toBe(
-            current.devDependencies["@types/bun"],
-          );
-          expect(manifest.devDependencies["@types/node"]).toBe(
-            current.devDependencies["@types/node"],
-          );
-          expect(manifest.scripts).toMatchObject({
-            generate: "sync-engine artifacts pin",
-            check: "sync-engine check && sync-engine artifacts check && tsc --noEmit",
-            start: "bun src/main.ts",
-          });
-          await expect(readFile(join(root, "src/main.ts"), "utf8")).rejects.toThrow();
         },
       });
 
       expect(first.manifestUpdated).toBe(true);
-      expect(first.installation).toBe("completed");
-      expect(observed).toEqual([root]);
+      expect(first.installation).toBe("skipped");
+      expect(observed).toEqual([]);
+      expect(first.guidance).toContain(
+        "Review the project and updated package.json, then run `bun install` before validation.",
+      );
+      const manifest = await manifestAt(root);
+      const current = await currentPackage();
+      expect(manifest.dependencies["@mit-sdg/sync-engine"]).toBe(current.version);
+      expect(manifest.devDependencies.typescript).toBe(current.dependencies.typescript);
+      expect(manifest.devDependencies["@types/bun"]).toBe(current.devDependencies["@types/bun"]);
+      expect(manifest.devDependencies["@types/node"]).toBe(current.devDependencies["@types/node"]);
       expect(first.written).toEqual([
         ".gitignore",
         "tsconfig.json",
@@ -103,18 +144,17 @@ describe("sync-engine setup", () => {
     }
   });
 
-  test("adds the canonical Bun package manager before installation when it is absent", async () => {
+  test("adds the canonical Bun package manager without installing an existing package", async () => {
     const root = await project({ packageManager: undefined });
     try {
       const result = await setupProject(root, {
         install: async () => {
-          expect((await manifestAt(root)).packageManager).toBe(
-            (await currentPackage()).packageManager,
-          );
+          throw new Error("an existing package must not run its installer");
         },
       });
       expect(result.manifestUpdated).toBe(true);
-      expect(result.installation).toBe("completed");
+      expect(result.installation).toBe("skipped");
+      expect((await manifestAt(root)).packageManager).toBe((await currentPackage()).packageManager);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -214,28 +254,35 @@ describe("sync-engine setup", () => {
     }
   });
 
-  test("reports an installation failure after the manifest edit without writing templates", async () => {
-    const root = await project();
+  test("leaves a failed fresh setup empty and installs automatically on retry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sync-engine-setup-empty-"));
     try {
       await expect(
         setupProject(root, {
-          install: async () => {
-            expect((await manifestAt(root)).scripts.start).toBe("bun src/main.ts");
+          install: async (stage) => {
+            expect((await manifestAt(stage)).scripts.start).toBe("bun src/main.ts");
+            expect(await readdir(root)).toEqual([]);
             throw new Error("offline");
           },
         }),
-      ).rejects.toThrow(
-        "package.json was updated, but Bun installation failed (offline). No setup source or configuration files were written",
-      );
-      expect((await manifestAt(root)).scripts.start).toBe("bun src/main.ts");
-      await expect(readFile(join(root, "generated.config.ts"), "utf8")).rejects.toThrow();
+      ).rejects.toThrow("fresh setup failed (offline). Rerun setup to retry.");
+      expect(await readdir(root)).toEqual([]);
+      let installed = false;
+      const result = await setupProject(root, {
+        install: async () => {
+          installed = true;
+        },
+      });
+      expect(installed).toBe(true);
+      expect(result.installation).toBe("completed");
+      expect(result.written).toHaveLength(7);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
   test("offers an explicit no-install seam and reports the resulting obligation", async () => {
-    const root = await project();
+    const root = await mkdtemp(join(tmpdir(), "sync-engine-setup-empty-"));
     try {
       const result = await setupProject(root, { install: false });
       expect(result.installation).toBe("skipped");
@@ -338,6 +385,63 @@ describe("sync-engine setup", () => {
       ]);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("does not install when a package-less directory already contains project files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sync-engine-setup-existing-"));
+    try {
+      await writeFile(join(root, "bunfig.toml"), '[install]\nregistry = "https://example.test"\n');
+      const result = await setupProject(root, {
+        install: async () => {
+          throw new Error("a non-empty project must not run its package manager");
+        },
+      });
+
+      expect(result.installation).toBe("skipped");
+      expect(result.guidance).toContain(
+        "Review the project and updated package.json, then run `bun install` before validation.",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a symbolic-link package without changing its target", async () => {
+    const root = await project();
+    const outside = await mkdtemp(join(tmpdir(), "sync-engine-setup-outside-"));
+    const target = join(outside, "package.json");
+    const original = '{"name":"faculty-course","private":true}\n';
+    try {
+      await writeFile(target, original);
+      await rm(join(root, "package.json"));
+      await symlink(target, join(root, "package.json"));
+
+      await expect(setupProject(root, { install: false })).rejects.toThrow(
+        "refuses symbolic link: package.json",
+      );
+      expect(await readFile(target, "utf8")).toBe(original);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a symbolic-link source directory before changing the manifest", async () => {
+    const root = await project();
+    const outside = await mkdtemp(join(tmpdir(), "sync-engine-setup-outside-"));
+    const original = await readFile(join(root, "package.json"), "utf8");
+    try {
+      await symlink(outside, join(root, "src"), "dir");
+
+      await expect(setupProject(root, { install: false })).rejects.toThrow(
+        "refuses symbolic link: src",
+      );
+      expect(await readFile(join(root, "package.json"), "utf8")).toBe(original);
+      await expect(readFile(join(outside, "main.ts"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
     }
   });
 });

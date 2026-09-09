@@ -1,6 +1,19 @@
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import {
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { isPathInside, plainObject } from "./work.ts";
 
 export const requiredPackages = [
@@ -31,6 +44,7 @@ export interface BootstrapFiles {
     containmentRoot: string,
   ) => Promise<"missing" | "regular" | "unsafe">;
   readonly ensureDirectory: (path: string) => Promise<void>;
+  readonly directoryEntries: (path: string) => Promise<readonly string[]>;
 }
 
 interface RuntimeVersions {
@@ -91,6 +105,7 @@ export interface BootstrapResult {
   readonly plan: BootstrapPlan;
   readonly commands: readonly BootstrapCommand[];
   readonly warnings: readonly string[];
+  /** Published top-level artifacts for fresh disk bootstrap; individual manifest edits otherwise. */
   readonly changedPaths: readonly string[];
 }
 
@@ -109,7 +124,23 @@ export const realFiles: BootstrapFiles = {
     }
   },
   async writeText(path, contents) {
-    await writeFile(path, contents, "utf8");
+    const root = dirname(path);
+    const temporary = await mkdtemp(resolve(root, ".sync-engine-manifest-"));
+    try {
+      const staged = resolve(temporary, "value");
+      const previous = await lstat(path).catch((error: unknown) => {
+        if (missing(error)) return undefined;
+        throw error;
+      });
+      await writeFile(staged, contents, {
+        flag: "wx",
+        mode: previous === undefined ? 0o666 : previous.mode & 0o777,
+      });
+      if (previous !== undefined) await chmod(staged, previous.mode & 0o777);
+      await rename(staged, path);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   },
   async fileKind(path, containmentRoot) {
     try {
@@ -125,6 +156,14 @@ export const realFiles: BootstrapFiles = {
   async ensureDirectory(path) {
     await mkdir(path, { recursive: true });
   },
+  async directoryEntries(path) {
+    try {
+      return await readdir(path);
+    } catch (error) {
+      if (missing(error)) return [];
+      throw error;
+    }
+  },
 };
 
 const realRuntime: RuntimeVersions = {
@@ -132,9 +171,85 @@ const realRuntime: RuntimeVersions = {
   ...(process.versions.bun === undefined ? {} : { bun: process.versions.bun }),
 };
 
+/** Run the complete fresh bootstrap in one stage, and publish only a verified result. */
+async function stagedBootstrap(
+  options: BootstrapOptions,
+  dependencies: BootstrapDependencies,
+): Promise<BootstrapResult> {
+  const root = resolve(options.applicationRoot);
+  const stage = await mkdtemp(join(tmpdir(), "sync-engine-install-"));
+  try {
+    // Bun searches upward even when the immediate package declares workspaces: [].
+    for (let parent = dirname(stage); ; parent = dirname(parent)) {
+      for (const name of ["package.json", "bunfig.toml", ".npmrc"]) {
+        try {
+          await lstat(join(parent, name));
+          throw new Error(`Unsafe installation staging ancestor: ${join(parent, name)}`);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+      }
+      if (parent === dirname(parent)) break;
+    }
+    const result = await bootstrapInPlace({ ...options, applicationRoot: stage }, dependencies);
+    const commandAtRoot = (command: BootstrapCommand): BootstrapCommand => ({
+      ...command,
+      cwd: root,
+    });
+    const remapped: BootstrapResult = {
+      ...result,
+      plan: {
+        ...result.plan,
+        applicationRoot: root,
+        commands: result.plan.commands.map(commandAtRoot),
+      },
+      commands: result.commands.map(commandAtRoot),
+      changedPaths: [],
+    };
+    if (result.outcome === "failed") return remapped;
+    await realFiles.ensureDirectory(root);
+    if ((await readdir(root)).length !== 0)
+      throw new Error("Bootstrap destination is no longer empty");
+    const transfer = await mkdtemp(join(root, ".sync-engine-install-"));
+    const published: string[] = [];
+    try {
+      const artifacts = await readdir(stage);
+      for (const name of artifacts) {
+        await cp(join(stage, name), join(transfer, name), {
+          recursive: true,
+          verbatimSymlinks: true,
+        });
+      }
+      for (const name of artifacts) {
+        await rename(join(transfer, name), join(root, name));
+        published.push(name);
+      }
+    } catch (error) {
+      for (const name of published.reverse())
+        await rm(join(root, name), { recursive: true, force: true });
+      throw error;
+    } finally {
+      await rm(transfer, { recursive: true, force: true });
+    }
+    return { ...remapped, changedPaths: published.map((name) => resolve(root, name)).sort() };
+  } catch (error) {
+    return {
+      outcome: "failed",
+      plan: failed(root, error),
+      commands: [],
+      changedPaths: [],
+      warnings: [],
+    };
+  } finally {
+    await rm(stage, { recursive: true, force: true });
+  }
+}
+
 export const runCommand: CommandRunner = (command) =>
   new Promise((fulfill, reject) => {
-    const child = spawn(command.executable, [...command.args], {
+    const args =
+      command.executable === "bun" ? [...command.args, "--ignore-scripts"] : [...command.args];
+    const child = spawn(command.executable, args, {
       cwd: command.cwd,
       stdio: "inherit",
     });
@@ -275,8 +390,16 @@ function install(
   };
 }
 
+function dependencyInstall(root: string): BootstrapCommand {
+  return { executable: "bun", args: ["install"], cwd: root };
+}
+
 function setup(root: string): BootstrapCommand {
   return { executable: "bunx", args: ["--no-install", "sync-engine", "setup"], cwd: root };
+}
+
+function commandText(command: BootstrapCommand): string {
+  return [command.executable, ...command.args].join(" ");
 }
 
 function failed(root: string, error: unknown, release?: SkillRelease): BootstrapPlan {
@@ -302,12 +425,19 @@ async function inspectApplication(
     const packagePath = resolve(root, "package.json");
     const packageKind = await files.fileKind(packagePath, root);
     if (packageKind === "missing") {
+      if ((await files.directoryEntries(root)).length > 0) {
+        throw new Error("Application directory is not empty and has no package.json");
+      }
       const packages = requiredPackages.map(([name]) => name);
       return {
         state: "new-app",
         applicationRoot: root,
         release: options.release,
-        commands: [install(root, options.release.skill, packages), setup(root)],
+        commands: [
+          install(root, options.release.skill, packages),
+          setup(root),
+          dependencyInstall(root),
+        ],
         missingPackages: packages,
         missingSetupFiles: [...expectedSetupFiles],
       };
@@ -407,7 +537,7 @@ async function inspectApplication(
     const commands: BootstrapCommand[] = [];
     if (missingPackages.length > 0)
       commands.push(install(root, options.release.skill, missingPackages));
-    if (missingSetupFiles.length > 0) commands.push(setup(root));
+    if (missingSetupFiles.length > 0) commands.push(setup(root), dependencyInstall(root));
     const state = needsPackageManager || commands.length > 0 ? "missing-tooling" : "ready";
     return {
       state,
@@ -471,6 +601,17 @@ export async function bootstrapApplication(
   options: BootstrapOptions,
   dependencies: BootstrapDependencies = {},
 ): Promise<BootstrapResult> {
+  const initial = await planBootstrap(options, dependencies);
+  if (initial.state === "new-app" && (dependencies.files ?? realFiles) === realFiles) {
+    return stagedBootstrap(options, dependencies);
+  }
+  return bootstrapInPlace(options, dependencies);
+}
+
+async function bootstrapInPlace(
+  options: BootstrapOptions,
+  dependencies: BootstrapDependencies,
+): Promise<BootstrapResult> {
   const files = dependencies.files ?? realFiles;
   const runner = dependencies.runCommand ?? runCommand;
   const runtime = dependencies.runtime ?? realRuntime;
@@ -500,6 +641,32 @@ export async function bootstrapApplication(
     );
   }
 
+  const installPackages =
+    initial.state === "new-app" || (conflict && options.conflictChoice === "align-pinned-release")
+      ? requiredPackages.map(([name]) => name)
+      : initial.missingPackages;
+  const version = continuing ? initial.conflict!.selected! : initial.release!.skill;
+  const pending = [
+    ...(installPackages.length === 0
+      ? []
+      : [install(initial.applicationRoot, version, installPackages)]),
+    ...(initial.missingSetupFiles.length === 0
+      ? []
+      : [setup(initial.applicationRoot), dependencyInstall(initial.applicationRoot)]),
+  ];
+  if (initial.state !== "new-app" && pending.length > 0) {
+    return result(
+      "failed",
+      failed(
+        initial.applicationRoot,
+        `Review the existing application, run these commands yourself, then rerun work start: ${pending
+          .map(commandText)
+          .join("; ")}`,
+        initial.release,
+      ),
+    );
+  }
+
   try {
     if (initial.state === "new-app") {
       await files.ensureDirectory(initial.applicationRoot);
@@ -518,12 +685,7 @@ export async function bootstrapApplication(
       changed.add(resolve(initial.applicationRoot, "package.json"));
     }
 
-    const installPackages =
-      initial.state === "new-app" || (conflict && options.conflictChoice === "align-pinned-release")
-        ? requiredPackages.map(([name]) => name)
-        : initial.missingPackages;
     if (installPackages.length > 0) {
-      const version = continuing ? initial.conflict!.selected! : initial.release!.skill;
       const command = install(initial.applicationRoot, version, installPackages);
       commands.push(command);
       const output = await runner(command);
@@ -548,6 +710,23 @@ export async function bootstrapApplication(
       for (const file of current.missingSetupFiles) {
         changed.add(resolve(initial.applicationRoot, file));
       }
+      // Setup adds TypeScript and type packages after the initial tooling install.
+      // Reconcile the final manifest before declaring the application ready.
+      const reconcile = dependencyInstall(initial.applicationRoot);
+      commands.push(reconcile);
+      const installed = await runner(reconcile);
+      if (installed.exitCode !== 0) throw new Error(`Install exited ${installed.exitCode}`);
+      for (const name of ["typescript", "@types/bun", "@types/node"]) {
+        const path = resolve(initial.applicationRoot, "node_modules", name, "package.json");
+        if ((await files.fileKind(path, initial.applicationRoot)) !== "regular") {
+          throw new Error(`Install did not establish required setup dependency: ${name}`);
+        }
+      }
+      const lock = resolve(initial.applicationRoot, "bun.lock");
+      if ((await files.fileKind(lock, initial.applicationRoot)) !== "regular") {
+        throw new Error("Install did not establish bun.lock");
+      }
+      changed.add(lock);
       current = await inspectApplication(
         { applicationRoot: initial.applicationRoot, release: initial.release! },
         files,

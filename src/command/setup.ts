@@ -1,11 +1,22 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import semver from "semver";
 import ts from "typescript";
 import { filesBelow } from "./files-below.ts";
+import { bunInstall, stageProject } from "./isolated-install.ts";
 
 export type SetupInstaller = (root: string) => Promise<void>;
 
@@ -248,27 +259,65 @@ function updateManifest(manifest: Record<string, unknown>, required: PackageRequ
   return changed;
 }
 
-async function bunInstall(root: string): Promise<void> {
-  await new Promise<void>((resolveInstall, rejectInstall) => {
-    const child = spawn("bun", ["install"], { cwd: root, stdio: "inherit" });
-    child.once("error", rejectInstall);
-    child.once("close", (code, signal) => {
-      if (code === 0) resolveInstall();
-      else {
-        rejectInstall(
-          new Error(
-            signal === null
-              ? `bun install exited with status ${String(code)}`
-              : `bun install ended from signal ${signal}`,
-          ),
-        );
-      }
+async function replaceManifest(root: string, contents: string): Promise<void> {
+  const temporary = await mkdtemp(resolve(root, ".sync-engine-manifest-"));
+  try {
+    const path = resolve(temporary, "package.json");
+    const previous = await lstat(resolve(root, "package.json")).catch((error: unknown) => {
+      if (isMissing(error)) return undefined;
+      throw error;
     });
-  });
+    await writeFile(path, contents, {
+      flag: "wx",
+      mode: previous === undefined ? 0o666 : previous.mode & 0o777,
+    });
+    if (previous !== undefined) await chmod(path, previous.mode & 0o777);
+    await projectTarget(root, "package.json");
+    await rename(path, resolve(root, "package.json"));
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 }
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isMissing(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
+async function projectTarget(root: string, path: string): Promise<"file" | "missing"> {
+  const target = resolve(root, path);
+  const nested = relative(root, target);
+  if (nested === ".." || nested.startsWith(`..${sep}`) || isAbsolute(nested)) {
+    throw new Error(`sync-engine setup: target escapes the project: ${path}`);
+  }
+  const parts = nested.split(sep).filter(Boolean);
+  let current = root;
+  for (const [index, part] of parts.entries()) {
+    current = resolve(current, part);
+    let status;
+    try {
+      status = await lstat(current);
+    } catch (error) {
+      if (isMissing(error)) return "missing";
+      throw error;
+    }
+    if (status.isSymbolicLink()) {
+      throw new Error(`sync-engine setup: refuses symbolic link: ${relative(root, current)}`);
+    }
+    const final = index === parts.length - 1;
+    if ((!final && !status.isDirectory()) || (final && !status.isFile())) {
+      throw new Error(`sync-engine setup: expected a ${final ? "file" : "directory"}: ${path}`);
+    }
+  }
+  return "file";
 }
 
 /** Initialize a supported concept-free application without replacing application-owned files. */
@@ -280,7 +329,27 @@ export async function setupProject(
   if (!existsSync(root)) {
     throw new Error(`sync-engine setup: directory does not exist: ${directory}`);
   }
-  const packagePath = resolve(root, "package.json");
+  const canonicalRoot = await realpath(root);
+  if (options.install !== false && (await readdir(canonicalRoot)).length === 0) {
+    try {
+      const result = await stageProject(canonicalRoot, (stage) => setupInPlace(stage, options));
+      return { ...result, root };
+    } catch (error) {
+      throw new Error(
+        `sync-engine setup: fresh setup failed (${describe(error)}). Rerun setup to retry.`,
+      );
+    }
+  }
+  return setupInPlace(canonicalRoot, options);
+}
+
+async function setupInPlace(root: string, options: SetupOptions): Promise<SetupResult> {
+  const canonicalRoot = root;
+  const source = await templates();
+  const packageExisted = (await projectTarget(canonicalRoot, "package.json")) === "file";
+  const directoryWasEmpty = !packageExisted && (await readdir(canonicalRoot)).length === 0;
+  for (const path of source.keys()) await projectTarget(canonicalRoot, path);
+  const packagePath = resolve(canonicalRoot, "package.json");
   const packageManifest = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {
@@ -289,7 +358,7 @@ export async function setupProject(
     dependencies: { typescript: string };
     devDependencies: { "@types/bun": string; "@types/node": string };
   };
-  const manifest = existsSync(packagePath)
+  const manifest = packageExisted
     ? packageObject(await readFile(packagePath, "utf8"), relative(process.cwd(), packagePath))
     : { private: true, type: "module" };
   const manifestUpdated = updateManifest(manifest, {
@@ -303,30 +372,30 @@ export async function setupProject(
   const guidance: string[] = [];
   let installation: SetupResult["installation"] = "not-needed";
   if (manifestUpdated) {
-    await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
-    if (options.install === false) {
+    await projectTarget(canonicalRoot, "package.json");
+    await replaceManifest(canonicalRoot, `${JSON.stringify(manifest, null, 2)}\n`);
+    if (!directoryWasEmpty) {
+      installation = "skipped";
+      guidance.push(
+        "Review the project and updated package.json, then run `bun install` before validation.",
+      );
+    } else if (options.install === false) {
       installation = "skipped";
       guidance.push(
         "Bun installation was explicitly skipped; run `bun install` before validation.",
       );
     } else {
-      try {
-        await (options.install ?? bunInstall)(root);
-        installation = "completed";
-      } catch (error) {
-        throw new Error(
-          `sync-engine setup: package.json was updated, but Bun installation failed (${describe(error)}). ` +
-            "No setup source or configuration files were written; fix the installation and rerun setup.",
-        );
-      }
+      await (options.install ?? bunInstall)(root);
+      installation = "completed";
     }
   }
 
-  const source = await templates();
   const existing = new Map<string, string>();
   for (const path of source.keys()) {
-    const target = resolve(root, path);
-    if (existsSync(target)) existing.set(path, await readFile(target, "utf8"));
+    const target = resolve(canonicalRoot, path);
+    if ((await projectTarget(canonicalRoot, path)) === "file") {
+      existing.set(path, await readFile(target, "utf8"));
+    }
   }
 
   const verified: string[] = [];
@@ -378,8 +447,10 @@ export async function setupProject(
   try {
     for (const path of order) {
       if (!eligible.has(path)) continue;
-      const target = resolve(root, path);
+      const target = resolve(canonicalRoot, path);
+      await projectTarget(canonicalRoot, path);
       await mkdir(dirname(target), { recursive: true });
+      await projectTarget(canonicalRoot, path);
       await writeFile(target, source.get(path) ?? "", { flag: "wx" });
       written.push(path);
     }

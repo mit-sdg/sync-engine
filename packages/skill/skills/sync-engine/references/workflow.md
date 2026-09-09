@@ -25,7 +25,7 @@ In an empty application, the command reads the skill release and creates only th
 }
 ```
 
-For an existing manifest, the command preserves its fields and adds the exact `packageManager` field when absent. It installs and verifies the pinned sync-engine setup and creates `brief.md` plus immutable `policy.json`. Review is `required` by default; use `omitted` only for an explicit user decision. Execution defaults to `mixed`; select `delegated` or `simulated` when the requested condition must not change later. A framework version conflict requires an explicit choice to align, continue with a warning when usable, or stop unchanged. Stop on other bootstrap failures.
+For an existing application, the command stops before package installation or project-local setup and prints the commands to review and run explicitly. Rerun it afterward to verify the pinned sync-engine setup and create `brief.md` plus immutable `policy.json`. It may safely add only a missing exact `packageManager` field itself. Review is `required` by default; use `omitted` only for an explicit user decision. Execution defaults to `mixed`; select `delegated` or `simulated` when the requested condition must not change later. A framework version conflict requires an explicit choice to align, continue with a warning when usable, or stop unchanged. Stop on other bootstrap failures.
 
 ## 2. Shape the brief and record decisions
 

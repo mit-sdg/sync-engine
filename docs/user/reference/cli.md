@@ -16,7 +16,7 @@ files are written.
 
 | Command                                                                           | Result                                                                        | Writes files                                   |
 | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `setup [directory]`                                                               | Completes a Bun package and initializes absent concept-free application files | `package.json`, Bun install, missing templates |
+| `setup [directory]`                                                               | Completes a Bun package and initializes absent concept-free application files | Manifest and templates; installs only if empty |
 | `check-design <paths...> [--format json]`                                         | Checks the form of an explicit mixed authored-design corpus before assembly   | No                                             |
 | `verify [--config path] [--fail-on-warnings] [--show-advisories] [--format json]` | Runs configured design, application, and artifact checks and reports outcomes | No                                             |
 | `check [--config path] [--fail-on-warnings] [--show-advisories] [--format json]`  | Checks concept source, exact instances, bindings, and declaration coverage    | No                                             |
@@ -99,12 +99,21 @@ The core declaration must equal the running core version; TypeScript, `@types/bu
 even when its command differs from the standard. Invalid fields, conflicting
 declarations, and incompatible ranges fail before `package.json` is written.
 
-When the manifest changes, setup writes `package.json` and then runs `bun install`
-before writing templates. An installation failure is reported as partial failure: the
-manifest, and any Bun lockfile work, may remain changed, while setup source and
-configuration templates remain unwritten. Rerun setup after correcting installation.
-An unchanged manifest does not run installation, so an unchanged second invocation is
-idempotent.
+For an empty application directory, setup prepares the manifest, installed dependencies,
+lockfile, and templates in one private temporary directory outside the application's workspace.
+Its Bun install disables lifecycle scripts but preserves the caller's environment, user-level
+configuration, credentials, and cache. Application-ancestor workspace/configuration files are
+not used; the temporary directory's ancestors must not contain `package.json`, `bunfig.toml`,
+or `.npmrc`. Only after preparation succeeds does setup copy the completed project into the
+application. A failed preparation leaves the application empty, so rerunning setup automatically
+retries installation without additional commands. Publication errors trigger cleanup of entries
+already published; abrupt process termination or cleanup failure can still leave partial files.
+
+When setup changes an existing `package.json`, or creates one in a directory that already
+contains other files, it does not run the package manager. It writes the manifest and
+templates, then tells the user to review the project and run `bun install`. This prevents
+existing package scripts and package-manager configuration from executing during setup.
+An unchanged manifest also does not run installation.
 
 Setup targets `tsconfig.json`, `generated.config.ts`, `src/concepts.ts`,
 `src/assembly.ts`, and `src/main.ts`. The generated `tsconfig.json` loads both Bun and
@@ -116,9 +125,14 @@ Before creating a file that imports another setup target, it checks that depende
 expected exports. A failed dependency check leaves the dependent file absent and
 prints the required integration.
 
-Template writes are not one filesystem transaction. A filesystem failure reports how
-many templates were written; existing application files remain untouched, and a later
-setup can complete the missing files.
+The selected application root is canonicalized, so directory aliases (including symlinked
+home and system paths) are supported. Within that root, setup rejects symbolic links and
+unexpected file types at manifest/template targets and their intermediate components before
+making changes. Manifest updates replace the directory entry rather than modifying a hard-linked
+inode. These checks are not a sandbox against a concurrent hostile filesystem writer; run setup
+in a trusted environment. Template writes are not one filesystem transaction. A filesystem failure reports how many templates were
+written; existing application files remain untouched, and a later setup can complete the
+missing files.
 
 ## `sync-engine check-design`
 

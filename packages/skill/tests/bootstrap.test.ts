@@ -1,6 +1,17 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   bootstrapApplication,
@@ -83,6 +94,17 @@ class MemoryFiles implements BootstrapFiles {
   }
 
   async ensureDirectory(_path: string): Promise<void> {}
+
+  async directoryEntries(path: string): Promise<readonly string[]> {
+    const prefix = `${resolve(path)}${sep}`;
+    return [
+      ...new Set(
+        [...this.values.keys()]
+          .filter((candidate) => candidate.startsWith(prefix))
+          .map((candidate) => candidate.slice(prefix.length).split(sep)[0]!),
+      ),
+    ];
+  }
 }
 
 function filesWithRelease(): MemoryFiles {
@@ -164,7 +186,16 @@ function successfulRunner(
   beforeInstall?: () => void | Promise<void>,
 ): CommandRunner {
   return async (command) => {
-    if (command.executable === "bun") {
+    if (command.executable === "bun" && command.args[0] === "install") {
+      writeTypescript(files, command.cwd);
+      for (const name of ["@types/bun", "@types/node"]) {
+        files.set(
+          resolve(command.cwd, "node_modules", name, "package.json"),
+          JSON.stringify({ name, version: "24.0.0" }),
+        );
+      }
+      files.set(resolve(command.cwd, "bun.lock"), "reconciled\n");
+    } else if (command.executable === "bun") {
       await beforeInstall?.();
       const path = resolve(command.cwd, "package.json");
       const manifest = JSON.parse((await files.readText(path))!) as Record<string, unknown>;
@@ -189,13 +220,102 @@ function successfulRunner(
     } else {
       files.set(resolve(command.cwd, "tsconfig.json"), "{}\n");
       files.set(resolve(command.cwd, "generated.config.ts"), "export default {};\n");
-      writeTypescript(files, command.cwd);
+      const path = resolve(command.cwd, "package.json");
+      const manifest = JSON.parse((await files.readText(path))!);
+      Object.assign(manifest.devDependencies, {
+        typescript: ">=6 <7",
+        "@types/bun": "^1.4.0",
+        "@types/node": "^24.0.0",
+      });
+      files.set(path, JSON.stringify(manifest));
     }
     return { exitCode: 0 };
   };
 }
 
 describe("bootstrap", () => {
+  test("accepts a selected root alias and replaces hard links without following their inode", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "sync-engine-bootstrap-links-"));
+    temporary.push(root);
+    await mkdir(resolve(root, "outside"));
+    await symlink(resolve(root, "outside"), resolve(root, "application"));
+    await expect(
+      realFiles.fileKind(resolve(root, "application/package.json"), resolve(root, "application")),
+    ).resolves.toBe("missing");
+    await writeFile(resolve(root, "outside.json"), "original");
+    await chmod(resolve(root, "outside.json"), 0o640);
+    await link(resolve(root, "outside.json"), resolve(root, "package.json"));
+    const mask = process.umask(0o077);
+    try {
+      await realFiles.writeText(resolve(root, "package.json"), "replacement");
+    } finally {
+      process.umask(mask);
+    }
+    if (process.platform !== "win32")
+      expect((await lstat(resolve(root, "package.json"))).mode & 0o777).toBe(0o640);
+    expect(await readFile(resolve(root, "outside.json"), "utf8")).toBe("original");
+  });
+
+  test("retries a failed fresh bootstrap, uses one stage, and publishes once after reconciliation", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "sync-engine-bootstrap-install-"));
+    temporary.push(root);
+    const app = resolve(root, "apps/app");
+    await mkdir(app, { recursive: true });
+    const localRelease = resolve(root, "release.json");
+    await writeDisk(localRelease, release());
+    await writeDisk(
+      resolve(root, "package.json"),
+      JSON.stringify({
+        private: true,
+        workspaces: ["apps/*"],
+        scripts: { preinstall: "touch ancestor-executed" },
+      }),
+    );
+    const options = { applicationRoot: app, releaseManifestPath: localRelease };
+    const failed = await bootstrapApplication(options, {
+      runtime,
+      runCommand: async () => ({ exitCode: 7 }),
+    });
+    expect(failed.outcome).toBe("failed");
+    expect(failed.changedPaths).toEqual([]);
+    expect(await readdir(app)).toEqual([]);
+
+    const memory = new MemoryFiles();
+    const runner = successfulRunner(memory);
+    const stages = new Set<string>();
+    const result = await bootstrapApplication(options, {
+      runtime,
+      runCommand: async (command) => {
+        stages.add(command.cwd);
+        expect(command.cwd.startsWith(root)).toBe(false);
+        expect(await readdir(app)).toEqual([]);
+        memory.set(
+          resolve(command.cwd, "package.json"),
+          await readFile(resolve(command.cwd, "package.json"), "utf8"),
+        );
+        const output = await runner(command);
+        for (const [path, contents] of memory.values) await writeDisk(path, contents);
+        if (command.executable === "bunx")
+          await writeDisk(resolve(command.cwd, "future-setup-artifact.txt"), "retained");
+        return output;
+      },
+    });
+    expect(result.outcome).toBe("changed");
+    expect(result.plan.applicationRoot).toBe(app);
+    expect(result.commands.map((command) => command.cwd)).toEqual([app, app, app]);
+    expect(stages.size).toBe(1);
+    expect(result.changedPaths).toEqual(
+      (await readdir(app)).map((name) => resolve(app, name)).sort(),
+    );
+    expect(result.changedPaths).toContain(resolve(app, "future-setup-artifact.txt"));
+    expect(result.changedPaths).toContain(resolve(app, "node_modules"));
+    expect(await realFiles.readText(resolve(app, "future-setup-artifact.txt"))).toBe("retained");
+    expect(await realFiles.readText(resolve(root, "bun.lock"))).toBeUndefined();
+    expect(await realFiles.readText(resolve(root, "ancestor-executed"))).toBeUndefined();
+    for (const stage of stages)
+      expect(await realFiles.readText(resolve(stage, "package.json"))).toBeUndefined();
+  });
+
   test("uses the real filesystem and command adapters without hiding failures", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-real-"));
     const outside = await mkdtemp(resolve(tmpdir(), "sync-engine-skill-bootstrap-outside-"));
@@ -211,6 +331,7 @@ describe("bootstrap", () => {
     expect(await realFiles.fileKind(file, outside)).toBe("unsafe");
     expect(await realFiles.fileKind(nested, root)).toBe("unsafe");
     expect(await realFiles.fileKind(resolve(root, "missing.txt"), root)).toBe("missing");
+    expect(await realFiles.directoryEntries(root)).toEqual(["nested"]);
 
     await expect(readSkillRelease(resolve(root, "missing.json"), realFiles)).rejects.toThrow(
       "Release manifest does not exist",
@@ -300,6 +421,22 @@ describe("bootstrap", () => {
     ).toBe("new-app");
   });
 
+  test("does not bootstrap a package-less directory that already contains project files", async () => {
+    const files = filesWithRelease();
+    const root = resolve(fixtureRoot, "package-less-existing-app");
+    files.set(resolve(root, "bunfig.toml"), '[install]\nregistry = "https://example.test"\n');
+
+    const plan = await planBootstrap(
+      { applicationRoot: root, releaseManifestPath: releasePath },
+      { files, runtime },
+    );
+
+    expect(plan).toMatchObject({
+      state: "failed",
+      error: "Application directory is not empty and has no package.json",
+    });
+  });
+
   test("rejects an installed TypeScript outside the supported setup range", async () => {
     const files = filesWithRelease();
     const root = resolve(fixtureRoot, "typescript-app");
@@ -323,7 +460,7 @@ describe("bootstrap", () => {
       { files, runtime },
     );
     expect(plan.state).toBe("new-app");
-    expect(plan.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx"]);
+    expect(plan.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx", "bun"]);
 
     let beforeInstall: unknown;
     const result = await bootstrapApplication(
@@ -351,9 +488,12 @@ describe("bootstrap", () => {
       ...requiredPackages.map(([name]) => `${name}@${releaseVersion}`),
     ]);
     expect(result.commands[1]!.args).toEqual(["--no-install", "sync-engine", "setup"]);
+    expect(result.commands[2]!.args).toEqual(["install"]);
+    expect(await files.readText(resolve(root, "bun.lock"))).toBe("reconciled\n");
     expect(result.changedPaths).toEqual([
       resolve(root, "package.json"),
       ...expectedSetupFiles.map((file) => resolve(root, file)),
+      resolve(root, "bun.lock"),
     ]);
   });
 
@@ -449,7 +589,7 @@ describe("bootstrap", () => {
     });
   });
 
-  test("adds only missing tooling and preserves unrelated manifest fields", async () => {
+  test("lists missing tooling without running commands in an existing application", async () => {
     const files = filesWithRelease();
     const root = resolve(fixtureRoot, "existing-app");
     writeApplication(files, root, {
@@ -465,25 +605,27 @@ describe("bootstrap", () => {
     expect(plan.state).toBe("missing-tooling");
     expect(plan.missingPackages).toEqual(["@mit-sdg/sync-engine-analysis"]);
 
+    const before = new Map(files.values);
     const result = await bootstrapApplication(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files, runtime, runCommand: successfulRunner(files) },
+      {
+        files,
+        runtime,
+        runCommand: async () => {
+          throw new Error("an existing application must not run project commands");
+        },
+      },
     );
-    expect(result.outcome).toBe("changed");
-    expect(result.commands.map(({ executable }) => executable)).toEqual(["bun", "bunx"]);
-    expect(result.commands[0]!.args.slice(3)).toEqual([
-      `@mit-sdg/sync-engine-analysis@${releaseVersion}`,
-    ]);
-    const manifest = JSON.parse((await files.readText(resolve(root, "package.json")))!) as Record<
-      string,
-      unknown
-    >;
-    expect(manifest.packageManager).toBe(`bun@${bunVersion}`);
-    expect(manifest.scripts).toEqual({ test: "keep-me" });
-    expect(manifest.custom).toEqual({ untouched: true });
+    expect(result.outcome).toBe("failed");
+    expect(result.commands).toEqual([]);
+    expect(result.changedPaths).toEqual([]);
+    expect(result.plan.error).toBe(
+      `Review the existing application, run these commands yourself, then rerun work start: bun add --dev --exact @mit-sdg/sync-engine-analysis@${releaseVersion}; bunx --no-install sync-engine setup; bun install`,
+    );
+    expect(files.values).toEqual(before);
   });
 
-  test("makes conflict alignment explicit and represents continuation as a warning", async () => {
+  test("makes conflict alignment explicit and requires reviewed installs", async () => {
     const base = filesWithRelease();
     const root = resolve(fixtureRoot, "conflict-app");
     writeApplication(base, root, {
@@ -529,20 +671,11 @@ describe("bootstrap", () => {
       },
       { files: continuedFiles, runtime, runCommand: successfulRunner(continuedFiles) },
     );
-    expect(continued.outcome).toBe("continued-with-warning");
-    expect(continued.plan.state).toBe("version-conflict");
-    expect(continued.warnings).toHaveLength(1);
-    expect(continued.commands).toHaveLength(1);
-    expect(continued.commands[0]!.args.slice(3)).toEqual([
-      "@mit-sdg/sync-engine-analysis@1.1.0",
-      "@mit-sdg/sync-engine-catalog@1.1.0",
-    ]);
-    for (const name of ["@mit-sdg/sync-engine-analysis", "@mit-sdg/sync-engine-catalog"] as const) {
-      const manifest = JSON.parse(
-        (await continuedFiles.readText(resolve(root, "node_modules", name, "package.json")))!,
-      );
-      expect(manifest.version).toBe("1.1.0");
-    }
+    expect(continued.outcome).toBe("failed");
+    expect(continued.commands).toEqual([]);
+    expect(continued.plan.error).toContain(
+      "bun add --dev --exact @mit-sdg/sync-engine-analysis@1.1.0 @mit-sdg/sync-engine-catalog@1.1.0",
+    );
 
     const alignedFiles = base.clone();
     const aligned = await bootstrapApplication(
@@ -553,16 +686,108 @@ describe("bootstrap", () => {
       },
       { files: alignedFiles, runtime, runCommand: successfulRunner(alignedFiles) },
     );
-    expect(aligned.outcome).toBe("changed");
-    expect(aligned.plan.state).toBe("ready");
-    expect(aligned.commands).toHaveLength(1);
-    expect(aligned.commands[0]!.args.slice(3)).toEqual(
-      requiredPackages.map(([name]) => `${name}@${releaseVersion}`),
+    expect(aligned.outcome).toBe("failed");
+    expect(aligned.commands).toEqual([]);
+    expect(aligned.plan.error).toContain(
+      `bun add --dev --exact ${requiredPackages
+        .map(([name]) => `${name}@${releaseVersion}`)
+        .join(" ")}`,
     );
-    const alignedManifest = JSON.parse(
-      (await alignedFiles.readText(resolve(root, "package.json")))!,
+
+    const coherentFiles = base.clone();
+    const coherentManifest = JSON.parse(
+      (await coherentFiles.readText(resolve(root, "package.json")))!,
+    ) as { devDependencies: Record<string, string> };
+    for (const [name] of requiredPackages) {
+      coherentManifest.devDependencies[name] = "1.1.0";
+      writeInstalled(coherentFiles, root, name, "1.1.0");
+    }
+    coherentFiles.set(resolve(root, "package.json"), JSON.stringify(coherentManifest));
+    const coherent = await bootstrapApplication(
+      {
+        applicationRoot: root,
+        releaseManifestPath: releasePath,
+        conflictChoice: "continue-with-warning",
+      },
+      {
+        files: coherentFiles,
+        runtime,
+        runCommand: async () => {
+          throw new Error("a coherent existing application must not run commands");
+        },
+      },
     );
-    expect(alignedManifest.scripts).toEqual({ test: "keep-me" });
+    expect(coherent.outcome).toBe("continued-with-warning");
+    expect(coherent.commands).toEqual([]);
+    expect(coherent.warnings).toHaveLength(1);
+  });
+
+  test("does not run a project-local setup executable in an existing application", async () => {
+    const files = filesWithRelease();
+    const root = resolve(fixtureRoot, "existing-app-missing-setup");
+    writeApplication(files, root, { setup: false });
+    const before = new Map(files.values);
+    let ran = false;
+
+    const result = await bootstrapApplication(
+      { applicationRoot: root, releaseManifestPath: releasePath },
+      {
+        files,
+        runtime,
+        runCommand: async () => {
+          ran = true;
+          return { exitCode: 0 };
+        },
+      },
+    );
+
+    expect(ran).toBe(false);
+    expect(result.outcome).toBe("failed");
+    expect(result.commands).toEqual([]);
+    expect(result.plan.error).toBe(
+      "Review the existing application, run these commands yourself, then rerun work start: bunx --no-install sync-engine setup; bun install",
+    );
+    expect(files.values).toEqual(before);
+
+    // Simulate explicitly running the complete reviewed sequence, then rerunning work start.
+    const options = { applicationRoot: root, releaseManifestPath: releasePath };
+    const plan = await planBootstrap(options, { files, runtime });
+    expect(plan.commands.map(({ args }) => args)).toEqual([
+      ["--no-install", "sync-engine", "setup"],
+      ["install"],
+    ]);
+    const reviewedRunner = successfulRunner(files);
+    for (const command of plan.commands) await reviewedRunner(command);
+    const ready = await bootstrapApplication(options, {
+      files,
+      runtime,
+      runCommand: async () => {
+        throw new Error("must already be ready");
+      },
+    });
+    expect(ready.outcome).toBe("ready");
+    expect(ready.commands).toEqual([]);
+  });
+
+  test("does not report success when the post-setup install fails or omits type packages", async () => {
+    for (const exitCode of [0, 7]) {
+      const files = filesWithRelease();
+      const root = resolve(fixtureRoot, `failed-reconciliation-${exitCode}`);
+      const runner = successfulRunner(files);
+      const result = await bootstrapApplication(
+        { applicationRoot: root, releaseManifestPath: releasePath },
+        {
+          files,
+          runtime,
+          runCommand: async (command) =>
+            command.args[0] === "install" ? { exitCode } : runner(command),
+        },
+      );
+      expect(result.outcome).toBe("failed");
+      expect(result.plan.error).toContain(
+        exitCode === 0 ? "required setup dependency" : "Install exited 7",
+      );
+    }
   });
 
   test("stops cleanly when install fails", async () => {
