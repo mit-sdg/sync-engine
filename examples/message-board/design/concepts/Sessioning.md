@@ -31,33 +31,33 @@ a set of Sessions with
 ## Actions
 
 ```actions
-start (subject: Subject) : return (session: Session, expiresAt: DateTime)
+start (subject: Subject) : returns (session: Session, expiresAt: DateTime)
   where true
   then
     delete every expired session
     add a new opaque session for subject expiring 30 minutes from now
-    return session, expiresAt
+    returns session, expiresAt
 
-current (session: Session) : return (subject: Subject)
+current (session: Session) : returns (subject: Subject)
   where session is unknown, ended, or expired
   then
     delete the session if it is expired
-    refuse UNKNOWN_SESSION "This session is not active."
+    refuses UNKNOWN_SESSION "This session is not active."
   where session is active
   then
     bind subject to the Session's subject
-    return subject
+    returns subject
 
-end (session: Session) : return (ended: Flag)
+end (session: Session) : returns (ended: Flag)
   where session is unknown, ended, or expired
   then
     delete the session if it is expired
-    refuse UNKNOWN_SESSION "This session is not active."
+    refuses UNKNOWN_SESSION "This session is not active."
   where session is active
   then
     delete session
     set ended to true
-    return ended
+    returns ended
 ```
 
 ## Queries

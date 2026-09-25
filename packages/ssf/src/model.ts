@@ -26,6 +26,7 @@ export type SsfDiagnosticCode =
   | "SSF_ARTICLE"
   | "SSF_DUPLICATE_DECLARATION"
   | "SSF_DUPLICATE_FIELD"
+  | "SSF_DUPLICATE_SET_NAME"
   | "SSF_DUPLICATE_UNIQUE"
   | "SSF_INVALID_ALIAS_TARGET"
   | "SSF_INVALID_EXTERNAL_NAME"
@@ -42,6 +43,7 @@ export type SsfDiagnosticCode =
   | "SSF_SUBSET_CYCLE"
   | "SSF_INVALID_SUBSET_CONDITION"
   | "SSF_SUBSET_SELF_PARENT"
+  | "SSF_SUBSET_TYPE_MISMATCH"
   | "SSF_UNDECLARED_TYPE"
   | "SSF_UNKNOWN_UNIQUE_FIELD";
 
@@ -128,12 +130,31 @@ export interface SsfSubsetCondition {
   readonly span: SsfSpan;
 }
 
+/**
+ * The set a subset classifies. `declared` names a set in this State; `external` is every
+ * individual of an external type, when the concept declares no set of that type.
+ */
+export interface SsfSetReference {
+  /** The lowercase set name, as written or as the subset's type implies it. */
+  readonly text: string;
+  /** Whether the subset line leaves the parent to its type rather than naming it. */
+  readonly implicit: boolean;
+  readonly setKind: "declared" | "external" | "unresolved";
+  readonly span: SsfSpan;
+}
+
 export interface SsfDeclaration {
   readonly kind: "declaration";
+  /**
+   * The member type: the declared type of a top-level set, sequence, or element, or the
+   * type a subset line names. A set of an external type resolves as `external`.
+   */
   readonly name: SsfTypeReference;
+  /** The lowercase set name: implied by a top-level declaration's type, written for a subset. */
+  readonly setName: string;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
-  readonly parent?: SsfTypeReference;
+  readonly parent?: SsfSetReference;
   readonly condition?: SsfSubsetCondition;
   readonly fields: readonly SsfField[];
   readonly constraints: readonly SsfUniqueConstraint[];
@@ -155,6 +176,8 @@ export type SsfStatement = SsfDeclaration | SsfAlias | SsfRuleLine;
 export interface SsfTypeInventory {
   readonly ownedTypeNames: readonly string[];
   readonly external: readonly string[];
+  /** Additional spellings, such as a plural, that resolve to an external type. */
+  readonly externalSpellings: readonly string[];
   readonly primitives: readonly string[];
 }
 
@@ -218,6 +241,8 @@ export type ParsedFieldType =
 export interface ParsedField {
   readonly name: string;
   readonly nameSpan: SsfSpan;
+  /** Whether the name is implied by the value's type rather than written. */
+  readonly implicitName: boolean;
   readonly optional: boolean;
   readonly unique: boolean;
   readonly value: ParsedFieldType;
@@ -236,9 +261,13 @@ export interface ParsedSubsetCondition {
 }
 
 export interface ParsedDeclaration {
+  /** The declared type of a top-level declaration, or the type a subset line names. */
   readonly name: ParsedReference;
+  /** The lowercase set name: implied by a top-level declaration, written for a subset. */
+  readonly setName: ParsedReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
+  /** A subset's parent set name, when the line writes one. */
   readonly parent?: ParsedReference;
   readonly condition?: ParsedSubsetCondition;
   readonly fields: ParsedField[];

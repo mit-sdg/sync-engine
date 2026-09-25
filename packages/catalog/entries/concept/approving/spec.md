@@ -36,54 +36,54 @@ a set of Reviews with
   an optional decidedAt DateTime
   an optional reason String
 
-a Pending set of Reviews where status is PENDING with
+a pending set of Reviews where status is PENDING with
   unique subject
 ```
 
 ## Actions
 
 ```actions
-request (subject: Subject, requester: Person, reviewer: Person, at: DateTime) : return (review: Review)
+request (subject: Subject, requester: Person, reviewer: Person, at: DateTime) : returns (review: Review)
   where requester is reviewer
   then
-    refuse SELF_REVIEW_NOT_ALLOWED "A requester cannot review the same request."
+    refuses SELF_REVIEW_NOT_ALLOWED "A requester cannot review the same request."
   where a pending Review has subject
   then
-    refuse REVIEW_ALREADY_PENDING "This subject already has a pending review."
+    refuses REVIEW_ALREADY_PENDING "This subject already has a pending review."
   where requester differs from reviewer and no pending Review has subject
   then
     add a new pending Review with subject, requester, reviewer, and requestedAt at
-    return review
+    returns review
 
-approve (review: Review, reviewer: Person, at: DateTime) : return (review: Review)
+approve (review: Review, reviewer: Person, at: DateTime) : returns (review: Review)
   where review is unknown, is not pending, or does not have reviewer
   then
-    refuse REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
+    refuses REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
   where review is pending and has reviewer
   then
     mark the Review approved with decidedAt at
-    return review
+    returns review
 
-reject (review: Review, reviewer: Person, reason: String, at: DateTime) : return (review: Review)
+reject (review: Review, reviewer: Person, reason: String, at: DateTime) : returns (review: Review)
   where reason is blank or longer than 500 characters
   then
-    refuse INVALID_REJECTION_REASON "A rejection reason must not be blank and must be at most 500 characters."
+    refuses INVALID_REJECTION_REASON "A rejection reason must not be blank and must be at most 500 characters."
   where review is unknown, is not pending, or does not have reviewer
   then
-    refuse REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
+    refuses REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
   where review is pending and has reviewer and reason is accepted
   then
     mark the Review rejected with reason and decidedAt at
-    return review
+    returns review
 
-withdraw (review: Review, requester: Person, at: DateTime) : return (review: Review)
+withdraw (review: Review, requester: Person, at: DateTime) : returns (review: Review)
   where review is unknown, is not pending, or does not have requester
   then
-    refuse REVIEW_NOT_PENDING_FOR_REQUESTER "There is no such pending review for this requester."
+    refuses REVIEW_NOT_PENDING_FOR_REQUESTER "There is no such pending review for this requester."
   where review is pending and has requester
   then
     mark the Review withdrawn with decidedAt at
-    return review
+    returns review
 ```
 
 ## Queries

@@ -32,23 +32,23 @@ a set of Registrations with
 ## Actions
 
 ```actions
-register (subject: Subject, occurrence: Occurrence) : return (registration: Registration)
+register (subject: Subject, occurrence: Occurrence) : returns (registration: Registration)
   where a Registration already has occurrence
   then
-    refuse ALREADY_REGISTERED "That occurrence has already been registered."
+    refuses ALREADY_REGISTERED "That occurrence has already been registered."
   where no Registration has occurrence
   then
     add a Registration with subject and occurrence
-    return registration
+    returns registration
 
-deregister (occurrence: Occurrence) : return ()
+deregister (occurrence: Occurrence) : returns ()
   where no Registration has occurrence
   then
-    refuse NOT_REGISTERED "That occurrence was never registered."
+    refuses NOT_REGISTERED "That occurrence was never registered."
   where a Registration has occurrence
   then
     delete that Registration
-    return
+    returns
 ```
 
 ## Queries

@@ -1,4 +1,4 @@
-import { ENUM_VALUE, FIELD_NAME, TYPE_NAME } from "./names.ts";
+import { ENUM_VALUE, FIELD_NAME, impliedName, RESERVED_NAMES, TYPE_NAME } from "./names.ts";
 import {
   error,
   type ParsedAlias,
@@ -43,12 +43,19 @@ export interface GrammarResult {
 
 interface ParsingDeclaration extends ParsedDeclaration {
   hasMalformedField: boolean;
+  /** Token index of an uppercase subset name, the retired spelling of a subset. */
+  readonly typedSubsetNameIndex?: number;
 }
 
 function multiplicityOf(structural: string | undefined): SsfMultiplicity | undefined {
   if (structural === "seq") return "sequence";
   if (structural === "set" || structural === "element") return structural;
   return structural === undefined ? undefined : NEAR_MISS_STRUCTURAL.get(structural);
+}
+
+/** A lowercase set name the grammar does not read as a keyword. */
+function isSetName(text: string | undefined): text is string {
+  return text !== undefined && FIELD_NAME.test(text) && !RESERVED_NAMES.has(text);
 }
 
 function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
@@ -62,6 +69,7 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
   let structuralIndex: number;
   let nameIndex: number;
   let parentIndex: number | undefined;
+  let typedSubsetNameIndex: number | undefined;
 
   if (topMultiplicity !== undefined) {
     declarationKind = "collection";
@@ -69,28 +77,27 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     structuralIndex = first;
     nameIndex = first + 1 + (authored[first + 1] === "of" ? 1 : 0);
   } else if (
-    TYPE_NAME.test(authored[first] ?? "") &&
+    (isSetName(authored[first]) || TYPE_NAME.test(authored[first] ?? "")) &&
     subsetMultiplicity !== undefined &&
     subsetMultiplicity !== "sequence"
   ) {
     declarationKind = "subset";
     multiplicity = subsetMultiplicity;
     structuralIndex = first + 1;
-    nameIndex = first;
-    parentIndex = structuralIndex + 1 + (authored[structuralIndex + 1] === "of" ? 1 : 0);
+    if (!isSetName(authored[first])) typedSubsetNameIndex = first;
+    nameIndex = structuralIndex + 1 + (authored[structuralIndex + 1] === "of" ? 1 : 0);
+    if (isSetName(authored[nameIndex])) {
+      parentIndex = nameIndex;
+      nameIndex += 1;
+    }
   } else return undefined;
 
   const nameToken = line.tokens[nameIndex];
+  if (nameToken === undefined || !TYPE_NAME.test(nameToken.text)) return undefined;
+  const setNameToken = declarationKind === "subset" ? line.tokens[first]! : nameToken;
   const parentToken = parentIndex === undefined ? undefined : line.tokens[parentIndex];
-  if (
-    nameToken === undefined ||
-    !TYPE_NAME.test(nameToken.text) ||
-    (parentIndex !== undefined && (parentToken === undefined || !TYPE_NAME.test(parentToken.text)))
-  )
-    return undefined;
 
-  const consumed = parentIndex ?? nameIndex;
-  let trailing = consumed + 1;
+  let trailing = nameIndex + 1;
   let condition: ParsedSubsetCondition | undefined;
   if (declarationKind === "subset" && authored[trailing] === "where") {
     const where = line.tokens[trailing]!;
@@ -120,6 +127,13 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
 
   return {
     name: { text: nameToken.text, span: nameToken.span },
+    setName: {
+      text:
+        declarationKind === "subset" && typedSubsetNameIndex === undefined
+          ? setNameToken.text
+          : impliedName(setNameToken.text),
+      span: setNameToken.span,
+    },
     declarationKind,
     multiplicity,
     ...(parentToken === undefined
@@ -136,6 +150,7 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     authoredStructural: authored[structuralIndex]!,
     hasWith,
     hasMalformedField: false,
+    ...(typedSubsetNameIndex === undefined ? {} : { typedSubsetNameIndex }),
   };
 }
 
@@ -163,6 +178,7 @@ function namedType(token: SsfToken | undefined): ParsedNamed | undefined {
 }
 
 const FIELD_MODIFIERS = ["optional", "unique"] as const;
+const RESERVED_FIELD_NAMES: ReadonlySet<string> = new Set([...FIELD_MODIFIERS, "set", "seq"]);
 
 type FieldModifier = (typeof FIELD_MODIFIERS)[number];
 
@@ -181,42 +197,46 @@ function articleLength(authored: readonly SsfToken[]): number {
   return authored[0]?.text === "a" || authored[0]?.text === "an" ? 1 : 0;
 }
 
-/** Parse a field's tokens: an optional article, its modifiers, and a named value. */
+/**
+ * Parse a field's tokens: an optional article, its modifiers, an optional name, and a
+ * named value. A field written without a name takes the one its value's type implies.
+ */
 function parseFieldTokens(authored: readonly SsfToken[]): Omit<ParsedField, "span"> | undefined {
   const article = articleLength(authored);
   const indexes = modifierIndexes(authored, article);
   const modifiers = new Set(indexes.map((index) => fieldModifier(authored[index]!.text)!));
   if (modifiers.size !== indexes.length) return undefined;
   const tokens = authored.filter((_, index) => index >= article && !indexes.includes(index));
-  const nameToken = tokens[0];
-  if (
-    nameToken === undefined ||
-    nameToken.text === "set" ||
-    nameToken.text === "seq" ||
-    !FIELD_NAME.test(nameToken.text)
-  )
-    return undefined;
+  const first = tokens[0];
+  if (first === undefined) return undefined;
+  const implicitName = first.text === "set" || first.text === "seq" || TYPE_NAME.test(first.text);
+  if (!implicitName && !FIELD_NAME.test(first.text)) return undefined;
+  const valueTokens = implicitName ? tokens : tokens.slice(1);
 
   let value: ParsedFieldType | undefined;
-  const structural = tokens[1]?.text;
+  const structural = valueTokens[0]?.text;
   if (structural === "set" || structural === "seq") {
-    let elementStart = 2;
-    if (tokens[elementStart]?.text === "of") elementStart += 1;
-    const element = namedType(tokens[elementStart]);
-    if (element !== undefined && elementStart + 1 === tokens.length)
+    let elementStart = 1;
+    if (valueTokens[elementStart]?.text === "of") elementStart += 1;
+    const element = namedType(valueTokens[elementStart]);
+    if (element !== undefined && elementStart + 1 === valueTokens.length)
       value = {
         kind: "collection",
         multiplicity: structural === "set" ? "set" : "sequence",
         element,
-        span: span(tokens[1]!.span.start, tokens.at(-1)!.span.end),
+        span: span(valueTokens[0]!.span.start, valueTokens.at(-1)!.span.end),
       };
   } else {
-    value = tokens.length === 2 ? namedType(tokens[1]) : undefined;
+    value = valueTokens.length === 1 ? namedType(valueTokens[0]) : undefined;
   }
   if (value === undefined) return undefined;
+  const typeName = value.kind === "named" ? value.reference : value.element.reference;
+  const name = implicitName ? impliedName(typeName.text) : first.text;
+  if (RESERVED_FIELD_NAMES.has(name)) return undefined;
   return {
-    name: nameToken.text,
-    nameSpan: nameToken.span,
+    name,
+    nameSpan: implicitName ? typeName.span : first.span,
+    implicitName,
     optional: modifiers.has("optional"),
     unique: modifiers.has("unique"),
     value,
@@ -335,6 +355,8 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   const subsetMissingArticle =
     declaration.declarationKind === "subset" && declaration.structuralIndex === 1;
   if (collectionHasArticle) replacements.set(0, articleFor(declaration.multiplicity));
+  const typedNameIndex = declaration.typedSubsetNameIndex;
+  if (typedNameIndex !== undefined) replacements.set(typedNameIndex, declaration.setName.text);
   const canonicalLine = `${correctedTokens(tokens, replacements)}${hasBody && !declaration.hasWith ? " with" : ""}`;
   const subsetArticleSuggestion = `Use \`a ${canonicalLine}\` or \`an ${canonicalLine}\`.`;
   const structuralToken = tokens[declaration.structuralIndex];
@@ -352,9 +374,9 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
     diagnostics.push(
       error({
         code: "SSF_ARTICLE",
-        message: `Add \`a\` or \`an\` before subset \`${declaration.name.text}\`.`,
+        message: `Add \`a\` or \`an\` before subset \`${declaration.setName.text}\`.`,
         suggestion: subsetArticleSuggestion,
-        span: declaration.name.span,
+        span: declaration.setName.span,
       }),
     );
   } else if (declaration.authoredStructural !== canonical && structuralToken !== undefined) {
@@ -379,6 +401,16 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
         }),
       );
     }
+  }
+  if (typedNameIndex !== undefined) {
+    diagnostics.push(
+      error({
+        code: "SSF_MALFORMED_DECLARATION",
+        message: `Subset \`${tokens[typedNameIndex]!.text}\` is a named set, not a type, so its name begins with a lowercase letter.`,
+        suggestion: subsetMissingArticle ? subsetArticleSuggestion : canonicalLine,
+        span: tokens[typedNameIndex]!.span,
+      }),
+    );
   }
   if (declaration.hasWith && !hasBody && !declaration.hasMalformedField) {
     diagnostics.push(
@@ -429,36 +461,6 @@ function canonicalFieldTokens(
     })),
     ...tokens.filter((_, index) => index >= article && !indexes.includes(index)),
   ];
-}
-
-/**
- * Diagnose an indented line parseField rejected, suggesting the field name it omits. The
- * suggestion is a complete repair or none: a line that still needs correcting is worse
- * guidance than the general message, so it is only offered once it parses and passes.
- */
-function fieldFailureDiagnostic(line: SourceLine): SsfDiagnostic {
-  const tokens = line.tokens;
-  const article = articleLength(tokens);
-  let start = article;
-  while (fieldModifier(tokens[start]?.text) !== undefined) start += 1;
-  const structural = tokens[start]?.text === "set" || tokens[start]?.text === "seq";
-  const source = structural ? tokens.at(-1) : tokens[start];
-  if (source !== undefined && TYPE_NAME.test(source.text)) {
-    const name = { ...source, text: `${source.text[0]!.toLowerCase()}${source.text.slice(1)}` };
-    const named = parseFieldTokens([...tokens.slice(0, start), name, ...tokens.slice(start)]);
-    const repaired =
-      named === undefined
-        ? undefined
-        : canonicalFieldTokens([...tokens.slice(0, start), name, ...tokens.slice(start)], named);
-    if (repaired !== undefined && fieldViolation(parseFieldTokens(repaired)) === undefined)
-      return error({
-        code: "SSF_MALFORMED_FIELD",
-        message: "An SSF field needs a lowercase name before its value.",
-        suggestion: repairedLine(line, repaired),
-        span: source.span,
-      });
-  }
-  return malformedLineDiagnostic(line, "field");
 }
 
 /** The notation's own rule on a field the grammar accepts: a collection is never optional. */
@@ -533,7 +535,7 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
           diagnostics.push(orphanedLineDiagnostic(line, undefined, "uniqueness constraint"));
         else current.constraints.push(constraint);
       } else {
-        diagnostics.push(fieldFailureDiagnostic(line));
+        diagnostics.push(malformedLineDiagnostic(line, "field"));
         if (current !== undefined) current.hasMalformedField = true;
       }
       if (current !== undefined) current.span = span(current.span.start, lineSpan(line).end);

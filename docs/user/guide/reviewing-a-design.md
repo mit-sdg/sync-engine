@@ -218,8 +218,8 @@ For every concept, also verify manually that:
   multiplicity, naming, and indentation rules, with every invariant on a `Rule:` line;
   `check-design` parses the bounded structural declarations and inventories owned names,
   while the rules themselves remain a manual semantic review;
-- every action has explicit `where`/`then` branches and one terminal return or refusal
-  per branch;
+- every action has explicit `where`/`then` branches, and each branch ends in one
+  `returns` or `refuses` line;
 - action results and query rows use parenthesized named fields;
 - every query has indented prose stating what it answers, its unknown or empty case,
   and deterministic ordering for `many`;

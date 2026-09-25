@@ -24,11 +24,11 @@ Rule: no durable state
 ## Actions
 
 ```actions
-crash(operationId: Operation) : return (reached: Flag)
+crash(operationId: Operation) : returns (reached: Flag)
   where true
   then
     attempt the requested fault
-    return reached
+    returns reached
 ```
 
 ## Queries

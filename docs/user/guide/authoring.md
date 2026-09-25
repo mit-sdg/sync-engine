@@ -181,8 +181,9 @@ Each right side directly names a declared concrete type or an owned type of
 another declared, selected instance. The bounded SSF parser proves owned target
 names, including a second spelling that the concept authors elsewhere as a singular or
 plural pair, provided that pair is unambiguous; where it is not, declare
-`alias Alias for Target`. Never target another instance's external parameter or a name
-the parser could not resolve, and never chain one binding onto another. Direct qualified
+`alias Alias for Target`. Never target another instance's external parameter, a subset,
+a set of an external type, or a name the parser could not resolve, and never chain one
+binding onto another. Direct qualified
 owned-type dependencies may be cyclic because every target is checked
 independently; declaration order does not resolve or prioritize them. Do not
 leave a concrete type unused.

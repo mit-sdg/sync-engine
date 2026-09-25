@@ -263,7 +263,7 @@ export const workspaceCatalog = [
     copiesExamples: false,
     publication: "private",
     requiredPackedFiles: ["README.md", "package.json", "dist/index.js", "dist/index.d.ts"],
-    packageBudget: { files: 28, packedBytes: 30_000, unpackedBytes: 100_000 },
+    packageBudget: { files: 28, packedBytes: 30_000, unpackedBytes: 115_000 },
     assets: [],
     bins: [],
   },

@@ -29,28 +29,28 @@ a set of Selections with
   a unique scope Scope
   an item Item
 
-a Current set of Selections
+a current set of Selections
 ```
 
 ## Actions
 
 ```actions
-choose (scope: Scope, item: Item) : return (selection: Selection)
+choose (scope: Scope, item: Item) : returns (selection: Selection)
   where true
   then
     delete any Selection with scope
     add a new selection with scope and item
     add selection to current
-    return selection
+    returns selection
 
-clear (scope: Scope) : return (selection: Selection)
+clear (scope: Scope) : returns (selection: Selection)
   where some current selection has scope
   then
     delete that Selection
-    return selection
+    returns selection
   where no current selection has scope
   then
-    refuse NO_CURRENT_SELECTION "This scope has no current selection."
+    refuses NO_CURRENT_SELECTION "This scope has no current selection."
 ```
 
 ## Queries

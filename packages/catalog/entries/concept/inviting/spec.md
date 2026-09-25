@@ -35,48 +35,48 @@ a set of Invitations with
   an issuedAt DateTime
   an optional decidedAt DateTime
 
-a Pending set of Invitations where status is PENDING with
+a pending set of Invitations where status is PENDING with
   unique target and invitee
 ```
 
 ## Actions
 
 ```actions
-issue (target: Target, inviter: Person, invitee: Person, at: DateTime) : return (invitation: Invitation)
+issue (target: Target, inviter: Person, invitee: Person, at: DateTime) : returns (invitation: Invitation)
   where a pending Invitation has target and invitee
   then
-    refuse INVITATION_ALREADY_PENDING "This person already has a pending invitation for the target."
+    refuses INVITATION_ALREADY_PENDING "This person already has a pending invitation for the target."
   where no pending Invitation has target and invitee
   then
     add a new pending Invitation with target, inviter, invitee, and issuedAt at
-    return invitation
+    returns invitation
 
-accept (invitation: Invitation, invitee: Person, at: DateTime) : return (invitation: Invitation)
+accept (invitation: Invitation, invitee: Person, at: DateTime) : returns (invitation: Invitation)
   where invitation is unknown, is not pending, or does not have invitee
   then
-    refuse INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
+    refuses INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
   where invitation is pending and has invitee
   then
     mark the Invitation accepted with decidedAt at
-    return invitation
+    returns invitation
 
-decline (invitation: Invitation, invitee: Person, at: DateTime) : return (invitation: Invitation)
+decline (invitation: Invitation, invitee: Person, at: DateTime) : returns (invitation: Invitation)
   where invitation is unknown, is not pending, or does not have invitee
   then
-    refuse INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
+    refuses INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
   where invitation is pending and has invitee
   then
     mark the Invitation declined with decidedAt at
-    return invitation
+    returns invitation
 
-revoke (invitation: Invitation, inviter: Person, at: DateTime) : return (invitation: Invitation)
+revoke (invitation: Invitation, inviter: Person, at: DateTime) : returns (invitation: Invitation)
   where invitation is unknown, is not pending, or does not have inviter
   then
-    refuse INVITATION_NOT_PENDING_FOR_INVITER "There is no such pending invitation for this inviter."
+    refuses INVITATION_NOT_PENDING_FOR_INVITER "There is no such pending invitation for this inviter."
   where invitation is pending and has inviter
   then
     mark the Invitation revoked with decidedAt at
-    return invitation
+    returns invitation
 ```
 
 ## Queries

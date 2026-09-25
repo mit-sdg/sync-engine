@@ -23,11 +23,14 @@ function typeReference(
 ): SsfTypeReference | undefined {
   const aliasTarget = facts.validAliases.get(reference.text);
   const owned = facts.validStructuralNames.has(reference.text) ? reference.text : aliasTarget;
+  const externalType = external.has(reference.text)
+    ? reference.text
+    : facts.externalSpellings.get(reference.text);
   const referenceKind: SsfTypeReference["referenceKind"] | undefined = PRIMITIVE_NAMES.has(
     reference.text,
   )
     ? "primitive"
-    : external.has(reference.text)
+    : externalType !== undefined
       ? "external"
       : owned !== undefined
         ? "owned"
@@ -38,7 +41,7 @@ function typeReference(
     ? undefined
     : {
         text: reference.text,
-        normalized: owned ?? reference.text,
+        normalized: owned ?? externalType ?? reference.text,
         referenceKind,
         span: reference.span,
       };
@@ -130,38 +133,42 @@ export function resolveGrammar(
     structuralReference(reference, facts, external, local);
   const resolve = (reference: ParsedReference): SsfTypeReference =>
     resolveReference(reference, facts, external, local, diagnostics);
-  const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => ({
-    kind: "declaration",
-    name: structural(declaration.name),
-    declarationKind: declaration.declarationKind,
-    multiplicity: declaration.multiplicity,
-    ...(declaration.parent === undefined ? {} : { parent: structural(declaration.parent) }),
-    ...(declaration.condition === undefined
-      ? {}
-      : {
-          condition: {
-            field: declaration.condition.field.text,
-            values: declaration.condition.values.map(({ text }) => text),
-            span: declaration.condition.span,
-          },
-        }),
-    fields: declaration.fields.map((field) => ({
-      kind: "field",
-      name: field.name,
-      optional: field.optional,
-      unique: field.unique,
-      value: fieldType(field.value, resolve),
-      span: field.span,
-    })),
-    constraints: declaration.constraints.map((constraint) => ({
-      kind: "unique" as const,
-      fields: constraint.fields.map(({ text }) => text),
-      span: constraint.span,
-    })),
-    rules: declaration.rules,
-    span: declaration.span,
-    signatureSpan: declaration.signatureSpan,
-  }));
+  const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => {
+    const parent = facts.parents.get(declaration);
+    return {
+      kind: "declaration",
+      name: structural(declaration.name),
+      setName: declaration.setName.text,
+      declarationKind: declaration.declarationKind,
+      multiplicity: declaration.multiplicity,
+      ...(parent === undefined ? {} : { parent }),
+      ...(declaration.condition === undefined
+        ? {}
+        : {
+            condition: {
+              field: declaration.condition.field.text,
+              values: declaration.condition.values.map(({ text }) => text),
+              span: declaration.condition.span,
+            },
+          }),
+      fields: declaration.fields.map((field) => ({
+        kind: "field",
+        name: field.name,
+        optional: field.optional,
+        unique: field.unique,
+        value: fieldType(field.value, resolve),
+        span: field.span,
+      })),
+      constraints: declaration.constraints.map((constraint) => ({
+        kind: "unique" as const,
+        fields: constraint.fields.map(({ text }) => text),
+        span: constraint.span,
+      })),
+      rules: declaration.rules,
+      span: declaration.span,
+      signatureSpan: declaration.signatureSpan,
+    };
+  });
   const aliases: SsfAlias[] = grammar.aliases.map((alias) => ({
     kind: "alias",
     name: structural(alias.name),
@@ -190,6 +197,7 @@ export function resolveGrammar(
       inventory: {
         ownedTypeNames,
         external: [...external].sort(),
+        externalSpellings: [...facts.externalSpellings.keys()].sort(),
         primitives: [...PRIMITIVES],
       },
     },

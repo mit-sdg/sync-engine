@@ -30,14 +30,14 @@ a seq of Posts with
 ## Actions
 
 ```actions
-publish (author: Author, content: String) : return (post: Post)
+publish (author: Author, content: String) : returns (post: Post)
   where content is blank or longer than 500 characters
   then
-    refuse INVALID_POST_CONTENT "Post content must not be blank and must be at most 500 characters."
+    refuses INVALID_POST_CONTENT "Post content must not be blank and must be at most 500 characters."
   where content is accepted
   then
     add a new post with author and content
-    return post
+    returns post
 ```
 
 ## Queries

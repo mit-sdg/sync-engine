@@ -14,11 +14,11 @@ Defined in [Authenticating](../design/concepts/Authenticating.md), line 1.
 
 #### Actions
 
-- `register(username: String, password: String) : return (account: Account)`
+- `register(username: String, password: String) : returns (account: Account)`
   - Refuses `INVALID_USERNAME`: A username must contain 3 to 32 letters, numbers, underscores, or hyphens.
   - Refuses `WEAK_PASSWORD`: A password must contain 8 to 128 characters.
   - Refuses `USERNAME_TAKEN`: That username is already registered.
-- `authenticate(username: String, password: String) : return (account: Account)`
+- `authenticate(username: String, password: String) : returns (account: Account)`
   - Refuses `INVALID_CREDENTIALS`: The username or password is incorrect.
 
 #### Queries
@@ -35,8 +35,8 @@ Defined in [Commenting](../design/concepts/Commenting.md), line 1.
 
 #### Actions
 
-- `add(target: Target, author: Author, content: Content) : return (comment: Comment)`
-- `retract(comment: Comment, author: Author) : return (comment: Comment)`
+- `add(target: Target, author: Author, content: Content) : returns (comment: Comment)`
+- `retract(comment: Comment, author: Author) : returns (comment: Comment)`
   - Refuses `COMMENT_NOT_FOUND`: There is no such comment.
   - Refuses `COMMENT_AUTHOR_MISMATCH`: Only the comment author may retract it.
 
@@ -57,7 +57,7 @@ Defined in [Posting](../design/concepts/Posting.md), line 1.
 
 #### Actions
 
-- `publish(author: Author, content: String) : return (post: Post)`
+- `publish(author: Author, content: String) : returns (post: Post)`
   - Refuses `INVALID_POST_CONTENT`: Post content must not be blank and must be at most 500 characters.
 
 #### Queries
@@ -76,10 +76,10 @@ Defined in [Sessioning](../design/concepts/Sessioning.md), line 1.
 
 #### Actions
 
-- `start(subject: Subject) : return (session: Session, expiresAt: DateTime)`
-- `current(session: Session) : return (subject: Subject)`
+- `start(subject: Subject) : returns (session: Session, expiresAt: DateTime)`
+- `current(session: Session) : returns (subject: Subject)`
   - Refuses `UNKNOWN_SESSION`: This session is not active.
-- `end(session: Session) : return (ended: Flag)`
+- `end(session: Session) : returns (ended: Flag)`
   - Refuses `UNKNOWN_SESSION`: This session is not active.
 
 #### Queries

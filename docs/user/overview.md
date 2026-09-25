@@ -77,7 +77,7 @@ SSF. A bounded structural parser inventories the declarations, subsets, aliases,
 field-level uniqueness constraints a concept owns, and checks its subset graph and name
 uniqueness. Invariants SSF cannot express live on `Rule:` lines and stay opaque; every
 other line has to parse.
-Actions use explicit `where`/`then` branches and terminal returns or refusals;
+Actions use explicit `where`/`then` branches that end in a `returns` or `refuses` line;
 queries select `one`, `optional`, or `many`, return named rows, and explain their
 answers in an indented body. See [Concept
 specification format](reference/concept-specification.md).

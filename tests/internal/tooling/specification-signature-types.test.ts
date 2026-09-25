@@ -5,7 +5,11 @@ import { specificationTypeNameEvidence } from "@engine/tooling/specification-typ
 import { parseSimpleStateForm } from "@ssf";
 import { describe, expect, test } from "vite-plus/test";
 
-function concept(actions: string, queries = ""): string {
+const INVITATIONS = `a set of Invitations with
+  an invitee Person
+  a status Status`;
+
+function concept(actions: string, queries = "", state = INVITATIONS): string {
   return `# Inviting
 
 ## Purpose
@@ -27,9 +31,7 @@ opaque Secret
 ## State
 
 \`\`\`state
-a set of Invitations with
-  an invitee Person
-  a status Status
+${state}
 \`\`\`
 
 ## Actions
@@ -65,12 +67,12 @@ function checked(markdown: string) {
 const body = `
   where true
   then
-    return value`;
+    returns value`;
 
 describe("specification signature type validation", () => {
   test("reports every undeclared parameter, result, query input, and row type at its name", () => {
     const markdown = concept(
-      `start(flavour: Blancmange) : return (value: Custard)${body}`,
+      `start(flavour: Blancmange) : returns (value: Custard)${body}`,
       `_get(attempt: Trifle) : optional (note: Flapjack)`,
     );
     const { specification, document } = checked(markdown);
@@ -95,10 +97,10 @@ describe("specification signature type validation", () => {
 
   test("walks nested named type arguments", () => {
     const { specification, document } = checked(
-      concept(`start(value: Secret<Flapjack | null | undefined>) : return ()
+      concept(`start(value: Secret<Flapjack | null | undefined>) : returns ()
   where true
   then
-    return`),
+    returns`),
     );
     expect(validateSpecificationSignatureTypes(specification, document)).toMatchObject([
       { code: "SSF_UNDECLARED_TYPE", location: { column: 21 } },
@@ -107,21 +109,49 @@ describe("specification signature type validation", () => {
 
   test("accepts joined ownership, externals, local types, and every primitive", () => {
     const { specification, document } = checked(
-      concept(`start(invitation: Invitation, person: Person, status: Status, secret: Secret, number: Number, text: String, flag: Flag, date: Date, time: DateTime) : return (invitation: Invitation)
+      concept(`start(invitation: Invitation, person: Person, status: Status, secret: Secret, number: Number, text: String, flag: Flag, date: Date, time: DateTime) : returns (invitation: Invitation)
   where true
   then
-    return invitation`),
+    returns invitation`),
     );
     expect(validateSpecificationSignatureTypes(specification, document)).toEqual([]);
     expect(specificationOwnedTypeNames(specification)).toEqual(["Invitation", "Invitations"]);
   });
 
+  test("accepts a set of an external type's spelling but never a subset as a type", () => {
+    const markdown = concept(
+      `invite(invitee: Person, among: People) : returns (invitation: Invitation)
+  where invitee is in people
+  then
+    returns invitation
+
+decline(invitation: Declined) : returns ()
+  where invitation is not in declined
+  then
+    returns`,
+      "",
+      `${INVITATIONS}
+
+a set of People
+
+a declined set of Invitations`,
+    );
+    const { specification, document } = checked(markdown);
+    expect(document.inventory).toMatchObject({
+      ownedTypeNames: ["Invitation", "Invitations"],
+      externalSpellings: ["People"],
+    });
+    expect(validateSpecificationSignatureTypes(specification, document)).toMatchObject([
+      { code: "SSF_UNDECLARED_TYPE", message: expect.stringContaining('"Declined"') },
+    ]);
+  });
+
   test("makes manifest-owned-name resolution reject signature types", () => {
     const { specification } = checked(
-      concept(`start(value: Blancmange) : return ()
+      concept(`start(value: Blancmange) : returns ()
   where true
   then
-    return`),
+    returns`),
     );
     expect(() => specificationOwnedTypeNames(specification)).toThrow(
       /invalid action\/query signature types:.*\[SSF_UNDECLARED_TYPE\] Type "Blancmange".*suggestion:/s,

@@ -337,11 +337,11 @@ Rule: notes
 ## Actions
 
 \`\`\`actions
-touch(note: String) : return ()
+touch(note: String) : returns ()
   where true
   then
     record note
-    return
+    returns
 \`\`\`
 
 ## Queries
@@ -501,11 +501,11 @@ Rule: one current Item
 ## Actions
 
 \`\`\`actions
-choose(item: Item) : return (item: Item)
+choose(item: Item) : returns (item: Item)
   where true
   then
     make item current
-    return item
+    returns item
 \`\`\`
 
 ## Queries

@@ -49,7 +49,7 @@ function strictActions(source: string): string {
       if (next.trim() === "then") normalized.push("  where true");
       continue;
     }
-    const fields = /: return \(([^)]*)\)/.exec(line)?.[1] ?? "";
+    const fields = /: returns \(([^)]*)\)/.exec(line)?.[1] ?? "";
     const names = fields
       .split(",")
       .map((field) => field.trim().split(/[?:]/, 1)[0])
@@ -57,7 +57,7 @@ function strictActions(source: string): string {
     normalized.push(
       "  where true",
       "  then",
-      `    return${names.length > 0 ? ` ${names.join(", ")}` : ""}`,
+      `    returns${names.length > 0 ? ` ${names.join(", ")}` : ""}`,
     );
   }
   return normalized.join("\n");
@@ -84,7 +84,7 @@ async function concept(actions: string, body: string, queries = "", state = ""):
 describe("inputs the runtime cannot see", () => {
   test("a placeholder parameter still has its declared inputs checked", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end(_: { sessin: string }) {\n    return { ok: true };\n  }",
     );
     expect(conceptFailures(where)).toEqual([
@@ -94,7 +94,7 @@ describe("inputs the runtime cannot see", () => {
 
   test("a plain named parameter still has its declared inputs checked", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end(input: { session: string; extra: string }) {\n    return { ok: Boolean(input) };\n  }",
     );
     expect(conceptFailures(where)).toEqual([
@@ -104,7 +104,7 @@ describe("inputs the runtime cannot see", () => {
 
   test("a method taking no parameter contradicts a signature that names inputs", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end() {\n    return { ok: true };\n  }",
     );
     expect(conceptFailures(where)).toEqual([
@@ -114,7 +114,7 @@ describe("inputs the runtime cannot see", () => {
 
   test("an empty record parameter describes no inputs", async () => {
     const where = await concept(
-      "reset () : return (ok: Flag)\n  then\n    return ok",
+      "reset () : returns (ok: Flag)\n  then\n    returns ok",
       "  reset(_: Record<string, never>) {\n    return { ok: true };\n  }",
     );
     expect(conceptFailures(where)).toEqual([]);
@@ -123,7 +123,7 @@ describe("inputs the runtime cannot see", () => {
   test("a type alias in the same file resolves", async () => {
     const where = join(directory, "sessioning");
     await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end(_: Input) {\n    return { ok: true };\n  }",
     );
     await writeFile(
@@ -137,7 +137,7 @@ describe("inputs the runtime cannot see", () => {
   test("a parameter type the source does not settle fails closed", async () => {
     const where = join(directory, "sessioning");
     await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end(_: Imported) {\n    return { ok: true };\n  }",
     );
     await writeFile(
@@ -157,10 +157,10 @@ describe("inputs the runtime cannot see", () => {
     const where = join(directory, "sessioning");
     await concept(
       [
-        "direct (session: Session) : return (ok: Flag)",
-        "extended (session: Session, actor: Person) : return (ok: Flag)",
-        "aliased (session: Session, actor: Person) : return (ok: Flag)",
-        "qualified (session: Session, actor: Person) : return (ok: Flag)",
+        "direct (session: Session) : returns (ok: Flag)",
+        "extended (session: Session, actor: Person) : returns (ok: Flag)",
+        "aliased (session: Session, actor: Person) : returns (ok: Flag)",
+        "qualified (session: Session, actor: Person) : returns (ok: Flag)",
       ].join("\n"),
       [
         "  direct(_: Input) { return { ok: true }; }",
@@ -203,12 +203,12 @@ describe("inputs the runtime cannot see", () => {
     const where = join(directory, "sessioning");
     await concept(
       [
-        "intersected (session: Session, actor: Person) : return (ok: Flag)",
-        "utility (session: Session, actor: Person) : return (ok: Flag)",
-        "mapped (session: Session, actor: Person) : return (ok: Flag)",
-        "union (session: Session) : return (ok: Flag)",
-        "record (session: Session, actor: Person) : return (ok: Flag)",
-        "neverRecord (session: Session) : return (ok: Flag)",
+        "intersected (session: Session, actor: Person) : returns (ok: Flag)",
+        "utility (session: Session, actor: Person) : returns (ok: Flag)",
+        "mapped (session: Session, actor: Person) : returns (ok: Flag)",
+        "union (session: Session) : returns (ok: Flag)",
+        "record (session: Session, actor: Person) : returns (ok: Flag)",
+        "neverRecord (session: Session) : returns (ok: Flag)",
       ].join("\n"),
       "",
     );
@@ -241,9 +241,9 @@ describe("inputs the runtime cannot see", () => {
     const where = join(directory, "sessioning");
     await concept(
       [
-        "ambiguous (session: Session) : return (ok: Flag)",
-        "distributed (session: Session, actor: Person) : return (ok: Flag)",
-        "dynamic (session: Session) : return (ok: Flag)",
+        "ambiguous (session: Session) : returns (ok: Flag)",
+        "distributed (session: Session, actor: Person) : returns (ok: Flag)",
+        "dynamic (session: Session) : returns (ok: Flag)",
       ].join("\n"),
       "",
     );
@@ -284,7 +284,7 @@ describe("inputs the runtime cannot see", () => {
 
   test("cyclic aliases terminate with the TypeScript diagnostic", async () => {
     const where = join(directory, "sessioning");
-    await concept("end (session: Session) : return (ok: Flag)", "");
+    await concept("end (session: Session) : returns (ok: Flag)", "");
     await writeFile(join(where, "contracts.ts"), "export type A = B;\nexport type B = A;\n");
     await writeFile(
       join(where, "sessioning.ts"),
@@ -300,7 +300,7 @@ describe("inputs the runtime cannot see", () => {
   test("uses project path mappings for shared input contracts", async () => {
     const where = join(directory, "sessioning");
     await mkdir(join(directory, "contracts"), { recursive: true });
-    await concept("end (session: Session) : return (ok: Flag)", "");
+    await concept("end (session: Session) : returns (ok: Flag)", "");
     await writeFile(
       join(directory, "tsconfig.json"),
       JSON.stringify({
@@ -332,7 +332,7 @@ describe("inputs the runtime cannot see", () => {
 describe("input and result shapes", () => {
   test("treats optional properties and explicit undefined unions equivalently", async () => {
     const where = await concept(
-      "update (note?: Text, source?: Text) : return (saved?: Text)\n  then\n    return saved",
+      "update (note?: Text, source?: Text) : returns (saved?: Text)\n  then\n    returns saved",
       "  update(_: { note?: string; source: string | undefined }): { saved: number | undefined } {\n" +
         "    return { saved: undefined };\n" +
         "  }",
@@ -343,7 +343,7 @@ describe("input and result shapes", () => {
 
   test("reports input optionality independently of semantic type names", async () => {
     const where = await concept(
-      "update (note?: AuthoredText) : return (saved: AuthoredText)\n  then\n    return saved",
+      "update (note?: AuthoredText) : returns (saved: AuthoredText)\n  then\n    returns saved",
       "  update(_: { note: number }): { saved: boolean } { return { saved: true }; }",
     );
 
@@ -355,8 +355,8 @@ describe("input and result shapes", () => {
   test("checks promised action results and reports names and optionality", async () => {
     const where = await concept(
       [
-        "save (text: Text) : return (entry: Entry, warning?: Text)",
-        "rename (entry: Entry) : return (entry: Entry, previous?: Text)",
+        "save (text: Text) : returns (entry: Entry, warning?: Text)",
+        "rename (entry: Entry) : returns (entry: Entry, previous?: Text)",
       ].join("\n"),
       [
         "  async save(_: { text: string }): Promise<{ entry: number; warning: string | undefined }> {",
@@ -377,7 +377,7 @@ describe("input and result shapes", () => {
 
   test("checks direct, array, and asynchronous query row shapes", async () => {
     const where = await concept(
-      "refresh () : return ()\n  then\n    return",
+      "refresh () : returns ()\n  then\n    returns",
       [
         "  refresh() { return {}; }",
         "  _one(): { item: number } { return { item: 1 }; }",
@@ -400,7 +400,7 @@ describe("input and result shapes", () => {
 
   test("fails closed on overloaded concept members", async () => {
     const where = await concept(
-      "save () : return (entry: Entry)\n  then\n    return entry",
+      "save () : returns (entry: Entry)\n  then\n    returns entry",
       [
         "  save(): { entry: string };",
         "  save(_: { force?: boolean }): { entry: string };",
@@ -415,7 +415,7 @@ describe("input and result shapes", () => {
 
   test("fails closed when an action result or query row cannot be resolved", async () => {
     const where = await concept(
-      "save () : return (entry: Entry)\n  then\n    return entry",
+      "save () : returns (entry: Entry)\n  then\n    returns entry",
       ["  save(): Imported { return {} as Imported; }", "  _all(): unknown[] { return []; }"].join(
         "\n",
       ),
@@ -443,7 +443,7 @@ describe("input and result shapes", () => {
 describe("uninterpreted state rules", () => {
   test("marked contradictions do not participate in source checking", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
       "",
       "```state\n" +
@@ -459,7 +459,7 @@ describe("uninterpreted state rules", () => {
 describe("reader-facing query behavior", () => {
   test("query prose does not participate in source checking", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }\n" +
         "  _get({ session }: { session: string }) {\n    return [{ session }];\n  }",
       "_get (session: Session) : optional (session: Session)\n" +
@@ -473,7 +473,7 @@ describe("reader-facing query behavior", () => {
 describe("membership, checked without constructing anything", () => {
   test("an action the class lacks fails by name", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  start({ user }: { user: string }) {\n    return { user };\n  }",
     );
     expect(conceptFailures(where)).toEqual([
@@ -484,7 +484,7 @@ describe("membership, checked without constructing anything", () => {
 
   test("a query the specification lacks fails by name", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }\n" +
         "  _get({ session }: { session: string }) {\n    return [{ session }];\n  }",
     );
@@ -495,7 +495,7 @@ describe("membership, checked without constructing anything", () => {
 
   test("a private method is neither an action nor a query", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) {\n    return { ok: this.known(session) };\n  }\n" +
         "  private known(session: string) {\n    return Boolean(session);\n  }",
     );
@@ -517,7 +517,7 @@ describe("membership, checked without constructing anything", () => {
 
   test("a registry that registers no class says so", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
     );
     await writeFile(join(where, "registry.ts"), "export const sessioning = 1;\n");
@@ -530,7 +530,7 @@ describe("membership, checked without constructing anything", () => {
 describe("concept discovery", () => {
   test("finds concept directories recursively under each supplied root", async () => {
     const first = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) {\n    return { ok: Boolean(session) };\n  }",
     );
     const nested = join(directory, "nested", "expiring");
@@ -542,7 +542,7 @@ describe("concept discovery", () => {
 
   test("uses only minimal static work to locate a selected registry's class", async () => {
     const conventional = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) { return { ok: Boolean(session) }; }",
     );
     const design = join(directory, "design", "concepts");
@@ -577,7 +577,7 @@ describe("concept discovery", () => {
 
   test("runtime registration owns concept and specification discovery", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) { return { ok: Boolean(session) }; }",
     );
     const specification = await readFile(join(where, "spec.md"), "utf8");
@@ -643,7 +643,7 @@ describe("concept discovery", () => {
 
   test("follows object-spread registration maps to class imports", async () => {
     const where = await concept(
-      "end (session: Session) : return (ok: Flag)\n  then\n    return ok",
+      "end (session: Session) : returns (ok: Flag)\n  then\n    returns ok",
       "  end({ session }: { session: string }) { return { ok: Boolean(session) }; }",
     );
     await writeFile(
@@ -805,7 +805,7 @@ describe("concept discovery", () => {
         join(project, "design", "concepts", "Sessioning.md"),
         "# Sessioning\n\n## Purpose\n\nIdentify a caller.\n\n## Principle\n\nA session expires.\n\n" +
           "## Types\n\n```types\n```\n\n## State\n\n```state\na set of Sessions\n```\n\n" +
-          "## Actions\n\n```actions\nend (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\nstart (session: Session) : return (ok: Flag)\n  where true\n  then\n    return ok\n```\n\n" +
+          "## Actions\n\n```actions\nend (session: Session) : returns (ok: Flag)\n  where true\n  then\n    returns ok\nstart (session: Session) : returns (ok: Flag)\n  where true\n  then\n    returns ok\n```\n\n" +
           "## Queries\n\n```queries\n```\n",
       );
       await writeFile(join(project, "src", "unregistered-spec.md"), "not a specification");

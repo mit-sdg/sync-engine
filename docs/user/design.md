@@ -188,10 +188,14 @@ formats are implementation choices unless they alter the observable contract.
 
 The required `State` fence uses Simple State Form (SSF): set, sequence, singleton,
 and subset declarations with indented relation fields; implicit set identity rather
-than synthetic ID fields; capitalized types, lowercase field names, uppercase
-enumeration values, SSF primitives, and `unique` fields and constraint lines. A bounded structural parser
-checks these declarations and the subset graph, and inventories the type names a concept
-owns, including aliases. That inventory lets config-based checking prove qualified
+than synthetic ID fields; capitalized types, lowercase field and subset names, uppercase
+enumeration values, SSF primitives, and `unique` fields and constraint lines. A field may
+leave its name to its type (`an Author` is `author`). A set named for an external type's
+plural, such as `a set of Users` beside `external User`, records which individuals of
+that type the concept knows about; a lowercase subset such as `a banned set of Users`
+classifies members of a set and is not a type, so preconditions say `user is in banned`.
+A bounded structural parser checks these declarations and the subset graph, and
+inventories the type names a concept owns, including aliases. That inventory lets config-based checking prove qualified
 external-binding targets. See
 [`State`](reference/concept-specification.md#state).
 

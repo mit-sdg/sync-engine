@@ -18,6 +18,7 @@ export function validateSpecificationSignatureTypes(
   const declared = new Set([
     ...ownedTypeNameSpellings(document.inventory),
     ...document.inventory.external,
+    ...document.inventory.externalSpellings,
     ...document.inventory.primitives,
     ...specification.localTypes.map(({ name }) => name),
   ]);

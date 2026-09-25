@@ -14,8 +14,8 @@ Defined in [Alerting](../design/concepts/Alerting.md), line 1.
 
 #### Actions
 
-- `raise(recipient: Person, subject: Subject) : return (alert: Alert)`
-- `acknowledge(alert: Alert) : return (alert: Alert)`
+- `raise(recipient: Person, subject: Subject) : returns (alert: Alert)`
+- `acknowledge(alert: Alert) : returns (alert: Alert)`
   - Refuses `ALERT_NOT_FOUND`: There is no such open alert.
 
 #### Queries
@@ -34,11 +34,11 @@ Defined in [Discussing](../design/concepts/Discussing.md), line 1.
 
 #### Actions
 
-- `open(subject: Subject) : return (discussion: Discussion)`
+- `open(subject: Subject) : returns (discussion: Discussion)`
   - Refuses `DISCUSSION_ALREADY_OPEN`: This subject already has an open discussion.
-- `respond(discussion: Discussion, author: Person, text: String) : return (response: Response)`
+- `respond(discussion: Discussion, author: Person, text: String) : returns (response: Response)`
   - Refuses `DISCUSSION_NOT_OPEN`: This discussion is not open.
-- `close(discussion: Discussion) : return ()`
+- `close(discussion: Discussion) : returns ()`
   - Refuses `DISCUSSION_NOT_OPEN`: This discussion is not open.
 
 #### Queries
@@ -58,11 +58,11 @@ Defined in [Gathering](../design/concepts/Gathering.md), line 1.
 
 #### Actions
 
-- `create(name: String, host: Person) : return (gathering: Gathering)`
-- `join(gathering: Gathering, member: Person) : return (membership: Membership)`
+- `create(name: String, host: Person) : returns (gathering: Gathering)`
+- `join(gathering: Gathering, member: Person) : returns (membership: Membership)`
   - Refuses `GATHERING_NOT_FOUND`: There is no such gathering.
   - Refuses `ALREADY_JOINED`: This person already belongs to the gathering.
-- `leave(gathering: Gathering, member: Person) : return (membership: Membership)`
+- `leave(gathering: Gathering, member: Person) : returns (membership: Membership)`
   - Refuses `GATHERING_NOT_FOUND`: There is no such gathering.
   - Refuses `NOT_JOINED`: This person does not belong to the gathering.
 
@@ -83,8 +83,8 @@ Defined in [Selecting](../design/concepts/Selecting.md), line 1.
 
 #### Actions
 
-- `choose(scope: Scope, item: Item) : return (selection: Selection)`
-- `clear(scope: Scope) : return (selection: Selection)`
+- `choose(scope: Scope, item: Item) : returns (selection: Selection)`
+- `clear(scope: Scope) : returns (selection: Selection)`
   - Refuses `NO_CURRENT_SELECTION`: This scope has no current selection.
 
 #### Queries

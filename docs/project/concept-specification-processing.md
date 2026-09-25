@@ -57,7 +57,7 @@ Its version-1 IR retains:
 - ordered external declarations and their optional explanations;
 - normalized full State fence text;
 - structured action inputs and named result rows;
-- structured branches and terminal return/refusal outcomes;
+- structured branches and terminal `returns`/`refuses` outcomes;
 - query inputs, cardinality, named rows, and optional prose bodies; and
 - one-based source locations.
 
@@ -84,27 +84,40 @@ both repair diagnostics and checked-model owned-name extraction; do not recreate
 parser under `src/engine/tooling`.
 
 The parser handles set, sequence, element, subset, alias, and field declarations,
-including field-level uniqueness constraints, and keeps their spellings as authored.
-Named State field references and parsed action and query type expressions supply alias
-candidates. A candidate joins an owner only when
-`plur` relates the two authored spellings and neither side has a second match; the
-pluralizer's output is never inserted, no transitive closure runs, and external,
-primitive, element, already-declared, ambiguous, and explicitly aliased candidates are
-excluded. Ambiguity on either side emits non-fatal advice naming the rejected spellings
-and owners. `alias Alias for Target` takes precedence and remains the escape hatch; its
-target is a unique declaration or subset, so chains cannot form.
+including field-level uniqueness constraints, and keeps their spellings as authored. The
+grammar gives a field written without a name the name its type implies (`an Author` is
+`author`), and gives every top-level declaration a set name the same way (`a set of
+Users` is `users`); later stages see only the resulting names.
 
-Subset parents resolve after declarations and aliases are parsed, which lets forward
-references, alias parents, and valid chains work, while unresolved, external, primitive,
-invalid-alias, duplicate, ambiguous, self, and cyclic parents fail at their authored
-spans. Alias parent edges normalize to their targets before cycle validation. Type
-names, declaration-local field names, and enumeration values have separate name
-uniqueness scopes. A field's `unique` modifier records distinct values within the field's
-declaration.
+Graph validation classifies top-level sets and sequences before it joins spellings: one
+whose name is the `plur` pair of exactly one external type is a set of that type and
+owns nothing, and every other top-level declaration owns its type. Named State field
+references, subset types, and parsed action and query type expressions supply alias
+candidates, and the owners they may join are the owned non-element declarations and the
+external types. A candidate joins an owner only when `plur` relates the two authored
+spellings and neither side has a second match; the pluralizer's output is never
+inserted, no transitive closure runs, and primitive, element, already-declared,
+ambiguous, and explicitly aliased candidates are excluded. A join to an external type
+becomes an external spelling rather than an owned one. Ambiguity on either side emits
+non-fatal advice naming the rejected spellings and owners. `alias Alias for Target`
+takes precedence and remains the escape hatch; its target is a unique owned top-level
+declaration, so chains cannot form.
+
+A subset is a named set, not a type, so it never enters the owned-name inventory. Its
+parent resolves after declarations and aliases: a written lowercase parent names a
+subset or a top-level declaration's set, and an omitted parent is the set of the
+declaration its type resolves to — or, for an external type the State declares no set
+of, every individual of that type. The subset's type must resolve to the same owned
+declaration or external type as its parent's chain. Forward references and valid chains
+work; unresolved, duplicate, mismatched, self, and cyclic parents fail at their authored
+spans. Type names, set names, declaration-local field names, and enumeration values have
+separate name uniqueness scopes. A field's `unique` modifier records distinct values
+within the field's declaration.
 
 State field value names are closed: the parser classifies owned, external, concept-local,
 primitive, and unresolved references, and an unresolved name fails with
-`SSF_UNDECLARED_TYPE`. Only the plural join or an alias makes a reference owned. Every nonblank line in the
+`SSF_UNDECLARED_TYPE`. Only the plural join or an alias makes a reference owned, and a
+subset name is never a reference. Every nonblank line in the
 fence must parse or begin with `Rule:`; malformed lines produce diagnostics, and rule
 text stays opaque. The concept IR preserves the complete normalized State-fence text and
 has no separate prose field. The parser does not prove rule text, the meaning a
@@ -113,7 +126,8 @@ State/storage agreement, or implementation semantics.
 
 Config-based binding validation uses only the derived owned-name inventory. A qualified
 target must name a declaration or alias of the selected target instance's definition; an
-external, primitive, ambiguous, or unresolved name is invalid. Checked manifests persist
+external, primitive, ambiguous, or unresolved name is invalid, as is a subset or a set of
+an external type. Checked manifests persist
 the sorted inventory, and their codec rederives it independently from the included State
 and operation types, requires canonical equality, and validates every qualified target
 against the derived fact. Operation types need not occur in State, but each resolves
@@ -129,7 +143,7 @@ not duplicated in runtime registration.
 
 TypeScript resolution compares member names and the finite top-level shapes of
 inputs, action results, and query rows, including optionality. The checker also
-compares successful action terminal return names and registered refusal
+compares successful action terminal `returns` names and registered refusal
 mappings. It fails closed when a shape cannot be resolved.
 
 This comparison intentionally stops short of semantic type-name equivalence.

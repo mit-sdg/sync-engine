@@ -33,20 +33,20 @@ a set of Alerts with
 ## Actions
 
 ```actions
-raise (recipient: Person, subject: Subject) : return (alert: Alert)
+raise (recipient: Person, subject: Subject) : returns (alert: Alert)
   where true
   then
     add a new alert with recipient and subject
-    return alert
+    returns alert
 
-acknowledge (alert: Alert) : return (alert: Alert)
+acknowledge (alert: Alert) : returns (alert: Alert)
   where alert not in alerts
   then
-    refuse ALERT_NOT_FOUND "There is no such open alert."
+    refuses ALERT_NOT_FOUND "There is no such open alert."
   where alert in alerts
   then
     delete alert
-    return alert
+    returns alert
 ```
 
 ## Queries

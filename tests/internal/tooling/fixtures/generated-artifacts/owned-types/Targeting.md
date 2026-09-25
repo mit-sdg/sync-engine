@@ -26,10 +26,10 @@ alias Entry for Records
 ## Actions
 
 ```actions
-create(label: String) : return (record: Record)
+create(label: String) : returns (record: Record)
   where true
   then
-    return record
+    returns record
 ```
 
 ## Queries

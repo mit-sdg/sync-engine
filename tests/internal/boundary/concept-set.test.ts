@@ -52,7 +52,7 @@ interface SpecificationParts {
 
 /** Build a complete strict specification while varying only declarations under test. */
 function specFor({
-  actions = "remember() : return ()\n  where true\n  then\n    return",
+  actions = "remember() : returns ()\n  where true\n  then\n    returns",
   name = "Remembering",
   queries = "",
   state = "a set of Items",
@@ -99,15 +99,15 @@ const bare = specFor();
 const withoutLocations = (value: unknown): unknown =>
   JSON.parse(JSON.stringify(value, (key, item) => (key === "location" ? undefined : item)));
 
-const catalogingActions = `find() : return ()
+const catalogingActions = `find() : returns ()
   where the item is absent
   then
-    refuse ITEM_NOT_FOUND "There is no such item."
+    refuses ITEM_NOT_FOUND "There is no such item."
 
-misplaced() : return ()
+misplaced() : returns ()
   where true
   then
-    return`;
+    returns`;
 const catalogingQueries = "_find() : optional (item: Item)";
 const catalogingSpec = specFor({
   actions: catalogingActions,
@@ -335,7 +335,7 @@ describe("parsed declarations and class methods", () => {
       registerConcept({
         class: Remembering,
         spec: specFor({
-          actions: "forget() : return ()\n  where true\n  then\n    return",
+          actions: "forget() : returns ()\n  where true\n  then\n    returns",
         }),
       }),
     ).toThrow(/declares the action `forget`, which the class does not implement/);
@@ -362,8 +362,8 @@ describe("parsed declarations and class methods", () => {
         class: Cataloging,
         spec: specFor({
           actions:
-            "find() : return ()\n  where true\n  then\n    return\n\n" +
-            "misplaced() : return ()\n  where true\n  then\n    return",
+            "find() : returns ()\n  where true\n  then\n    returns\n\n" +
+            "misplaced() : returns ()\n  where true\n  then\n    returns",
         }),
       }),
     ).toThrow(/implements the query `_find`, which the specification does not declare/);
@@ -379,7 +379,8 @@ describe("parsed declarations and class methods", () => {
       registerConcept({
         class: Shelving,
         spec: specFor({
-          actions: "shelve(item: Item, aisle: Aisle) : return ()\n  where true\n  then\n    return",
+          actions:
+            "shelve(item: Item, aisle: Aisle) : returns ()\n  where true\n  then\n    returns",
         }),
       }),
     ).toThrow(/`shelve` declares the inputs `item`, `aisle` but the class takes `item`, `shelf`/);
@@ -392,9 +393,9 @@ describe("parsed declarations and class methods", () => {
         class: Cataloging,
         spec: specFor({
           actions:
-            "find() : return ()\n  where true\n  then\n" +
-            '    refuse ITEM_NOT_FOUND "There is no such item."\n\n' +
-            "misplaced(shelf: Shelf) : return ()\n  where true\n  then\n    return",
+            "find() : returns ()\n  where true\n  then\n" +
+            '    refuses ITEM_NOT_FOUND "There is no such item."\n\n' +
+            "misplaced(shelf: Shelf) : returns ()\n  where true\n  then\n    returns",
           queries: catalogingQueries,
         }),
         refusals: { ITEM_NOT_FOUND: MissingItem },
@@ -424,10 +425,10 @@ describe("parsed declarations and class methods", () => {
         class: Cataloging,
         spec: specFor({
           actions:
-            "find() : return ()\n  where true\n  then\n" +
-            '    refuse ITEM_NOT_FOUND "There is no such item."\n\n' +
-            "misplaced() : return ()\n  where true\n  then\n" +
-            '    refuse SHELVED_WRONG "The item sits on the wrong shelf."',
+            "find() : returns ()\n  where true\n  then\n" +
+            '    refuses ITEM_NOT_FOUND "There is no such item."\n\n' +
+            "misplaced() : returns ()\n  where true\n  then\n" +
+            '    refuses SHELVED_WRONG "The item sits on the wrong shelf."',
           queries: catalogingQueries,
         }),
         refusals: { ITEM_NOT_FOUND: MissingItem, SHELVED_WRONG: MissingItem },
