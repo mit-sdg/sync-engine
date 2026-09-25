@@ -26,7 +26,7 @@ everything that was assembled.
 ## Install
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0
+bun add --exact @mit-sdg/sync-engine@1.1.0
 ```
 
 To start a new project:
@@ -34,7 +34,7 @@ To start a new project:
 ```sh
 mkdir board
 cd board
-bunx --package @mit-sdg/sync-engine@1.0.0 sync-engine setup
+bunx --package @mit-sdg/sync-engine@1.1.0 sync-engine setup
 ```
 
 `setup` completes the package manifest, adds development dependencies and

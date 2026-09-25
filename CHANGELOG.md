@@ -5,6 +5,62 @@ contracts; older beta releases could change incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.1.0] - 2026-09-25
+
+This release revises concept specification syntax: SSF fields may take their
+type's name, sets may hold individuals of external types, subsets become named
+sets, and action branches end in `returns` or `refuses`.
+
+### Compatibility
+
+- This release changes the accepted specification syntax within 1.x. Existing
+  concept specifications must be migrated before they register or check.
+- Action signatures use `: returns (...)`, and each branch ends with
+  `returns ...` or `refuses CODE "Normative sentence."`. The retired `return`
+  and `refuse` keywords are rejected with a diagnostic naming the replacement.
+- An SSF field may omit its name and is then named for its type with a
+  lowercase first letter: `an Author` is `author` and `a set of Tags` is
+  `tags`. Two unnamed fields of one type fail as duplicates.
+- A top-level set or sequence named for the plural of an external type, such as
+  `a set of Users` beside `external User`, holds individuals of that type and
+  introduces no owned identity. It previously declared a separate owned type
+  with that spelling. Authored plurals of external types in fields, subsets,
+  and signatures resolve to the external type.
+- Subsets are lowercase named sets rather than types: `a banned set of Users`
+  and `a rejected set of banned Users`. An omitted parent is the set the type
+  implies, or every individual of an external type the concept declares no set
+  of. A subset is no longer an owned type name, so it cannot be a field type,
+  alias target, signature type, or binding target. Uppercase subset names are
+  rejected with their lowercase repair.
+
+### Migration
+
+- Pin core, HTTP, analysis, catalog, and skill to `1.1.0` when used together.
+- In every `actions` fence, replace `: return (` with `: returns (`, terminal
+  `return` with `returns`, and `refuse` with `refuses`.
+- Write subset names in lowercase and name a parent subset before the type, as
+  in `a leaf set of branch Roots`. Where a subset served as a field, alias,
+  signature, or binding type, use its parent type and state membership in the
+  owning precondition, such as `where user is in banned`.
+- Rename an owned set whose name is the plural of an external type; it now
+  holds that external type's individuals.
+- Run `check-design`, then the full application check, and regenerate and
+  review application manifests and wire contracts.
+
+### Generated formats
+
+- Concept specification and application manifest formats remain at version 1.
+  Rendered action signatures use `: returns`, and owned-name inventories omit
+  subsets and sets of external types.
+- Generated declarations and example artifacts are regenerated for `1.1.0`.
+
+### Runtime and security support
+
+- `1.1.0` is the newest stable release and the only one that receives fixes;
+  `1.0.0` users must upgrade.
+
+[Release][1.1.0] | [Changes since 1.0.0][1.1.0-compare]
+
 ## [1.0.0] - 2026-09-09
 
 The first stable release fixes the v1 public contract for concepts, composition,
@@ -1457,6 +1513,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.1.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.1.0
+[1.1.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0
 [1.0.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.16...v1.0.0
 [1.0.0-beta.16]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.16

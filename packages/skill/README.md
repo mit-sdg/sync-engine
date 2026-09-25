@@ -14,7 +14,7 @@ The selected application root may use directory aliases. Within that root, boots
 
 ## Install and start
 
-Install `@mit-sdg/sync-engine-skill@1.0.0` through the package or Agent Skill mechanism supported by the coordinator. Load its `skills/sync-engine/` directory and expose the `sync-engine-skill` binary. Load one copy so the `sync-engine` skill name is unambiguous.
+Install `@mit-sdg/sync-engine-skill@1.1.0` through the package or Agent Skill mechanism supported by the coordinator. Load its `skills/sync-engine/` directory and expose the `sync-engine-skill` binary. Load one copy so the `sync-engine` skill name is unambiguous.
 
 From this repository, load `packages/skill/skills/sync-engine/`.
 

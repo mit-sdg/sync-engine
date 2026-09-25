@@ -12,7 +12,7 @@ on the matching core release. Pin both packages to the same exact version and
 upgrade them together:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-http@1.0.0
+bun add --exact @mit-sdg/sync-engine@1.1.0 @mit-sdg/sync-engine-http@1.1.0
 ```
 
 Stable v1 is ESM-only and supports Node.js 24 (`>=24 <25`). The package
