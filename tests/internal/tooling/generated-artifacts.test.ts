@@ -133,29 +133,33 @@ describe("generated application artifacts", () => {
     expect(rendered).toContain("RequestBoundary.respond (");
   }, 15_000);
 
+  const ownedTargetApplication = (
+    design: "design" | "explicit-design" | "invalid-design" | "subset-design",
+  ) =>
+    resolveApplication(
+      {
+        assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
+        title: "Owned targets",
+        design: ownedTypeDesign(design),
+        conceptSet: { module: ownedTypeModule },
+      },
+      configUrl,
+    );
+
   test("proves qualified targets with the private SSF inventory for advanced vocabularies", async () => {
-    const application = (
-      design: "design" | "explicit-design" | "invalid-design" | "subset-design",
-    ) =>
-      resolveApplication(
-        {
-          assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
-          title: "Owned targets",
-          design: ownedTypeDesign(design),
-          conceptSet: { module: ownedTypeModule },
-        },
-        configUrl,
-      );
-    await expect(renderGenerated(application("design"))).resolves.toMatchObject({
+    await expect(renderGenerated(ownedTargetApplication("design"))).resolves.toMatchObject({
       specification: expect.stringContaining("`Target` is `Targeting.Record`"),
     });
-    await expect(renderGenerated(application("explicit-design"))).resolves.toMatchObject({
-      specification: expect.stringContaining("`Target` is `Targeting.Entry`"),
-    });
-    await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
+    await expect(renderGenerated(ownedTargetApplication("explicit-design"))).resolves.toMatchObject(
+      { specification: expect.stringContaining("`Target` is `Targeting.Entry`") },
+    );
+    await expect(renderGenerated(ownedTargetApplication("invalid-design"))).rejects.toThrow(
       'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
     );
-    await expect(renderGenerated(application("subset-design"))).rejects.toThrow(
+  }, 15_000);
+
+  test("rejects a subset as a qualified binding target", async () => {
+    await expect(renderGenerated(ownedTargetApplication("subset-design"))).rejects.toThrow(
       'binding target "Targeting.ArchivedRecords" is not an owned type reported for definition "Targeting"',
     );
   }, 15_000);
