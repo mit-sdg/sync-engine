@@ -118,15 +118,15 @@ describe("specification signature type validation", () => {
     expect(specificationOwnedTypeNames(specification)).toEqual(["Invitation", "Invitations"]);
   });
 
-  test("accepts a set of an external type's spelling but never a subset as a type", () => {
+  test("accepts a set of an external type's spelling but keeps subsets out of signatures", () => {
     const markdown = concept(
       `invite(invitee: Person, among: People) : returns (invitation: Invitation)
-  where invitee is in people
+  where invitee is in People
   then
     returns invitation
 
-decline(invitation: Declined) : returns ()
-  where invitation is not in declined
+decline(invitation: DeclinedInvitation) : returns ()
+  where invitation is not in Declined Invitations
   then
     returns`,
       "",
@@ -134,15 +134,77 @@ decline(invitation: Declined) : returns ()
 
 a set of People
 
-a declined set of Invitations`,
+a set of Declined Invitations
+
+a set of Reminders with
+  a Declined Invitation`,
     );
     const { specification, document } = checked(markdown);
     expect(document.inventory).toMatchObject({
-      ownedTypeNames: ["Invitation", "Invitations"],
+      ownedTypeNames: ["Invitation", "Invitations", "Reminders"],
       externalSpellings: ["People"],
+      subsets: [
+        {
+          name: "Declined Invitations",
+          identifiers: ["DeclinedInvitation", "DeclinedInvitations"],
+          rootType: "Invitation",
+        },
+      ],
     });
     expect(validateSpecificationSignatureTypes(specification, document)).toMatchObject([
-      { code: "SSF_UNDECLARED_TYPE", message: expect.stringContaining('"Declined"') },
+      {
+        code: "SSF_SUBSET_SIGNATURE_TYPE",
+        message:
+          'Type "DeclinedInvitation" is the subset "Declined Invitations", which only State fields may use.',
+        suggestion:
+          "Use the type of the set it qualifies, Invitation, and state membership in a condition, such as `where it is in Declined Invitations`.",
+      },
+    ]);
+  });
+
+  test.each([
+    ["an argument type", "Declined Invitation"],
+    ["a type argument", "Secret<Declined Invitation>"],
+    ["a grouped type", "(Declined Invitation)"],
+    ["a union member", "String | Declined Invitation"],
+    ["a tab-separated phrase", "Declined\tInvitation"],
+  ])("explains a subset phrase written as %s", (_, type) => {
+    expect(
+      parseSpec(
+        concept(`decline(invitation: ${type}) : returns ()
+  where true
+  then
+    returns`),
+      ).diagnostics,
+    ).toMatchObject([
+      {
+        code: "CONCEPT_SPEC_SIGNATURE",
+        message: expect.stringContaining(
+          '"Declined Invitation" names a subset; a signature takes the type of the set it qualifies, "Invitation"',
+        ),
+      },
+    ]);
+  });
+
+  test("recognizes a subset identifier in the number no State line spells", () => {
+    const { specification, document } = checked(
+      concept(
+        `decline(target: DeclinedInvitation) : returns ()
+  where target is in Declined Invitations
+  then
+    returns`,
+        "",
+        "a set of Invitations\n\na set of Declined Invitations",
+      ),
+    );
+    expect(document.inventory.subsets).toMatchObject([
+      { name: "Declined Invitations", identifiers: ["DeclinedInvitations"] },
+    ]);
+    expect(validateSpecificationSignatureTypes(specification, document)).toMatchObject([
+      {
+        code: "SSF_SUBSET_SIGNATURE_TYPE",
+        message: expect.stringContaining('"DeclinedInvitation"'),
+      },
     ]);
   });
 

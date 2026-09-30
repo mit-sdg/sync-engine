@@ -5510,12 +5510,16 @@ import type { ConceptSpecificationIR, SpecificationLocationIR } from "../reads/i
 import { type SsfDocument } from "./ssf-package/index.js";
 export interface SpecificationSignatureTypeIssue {
     readonly severity: "error";
-    readonly code: "SSF_UNDECLARED_TYPE";
+    readonly code: "SSF_SUBSET_SIGNATURE_TYPE" | "SSF_UNDECLARED_TYPE";
     readonly message: string;
     readonly suggestion: string;
     readonly location: SpecificationLocationIR;
 }
-/** Check signatures only after their spelling evidence has resolved State ownership. */
+/**
+ * Check signatures only after their spelling evidence has resolved State ownership. A
+ * subset is a State type only: a signature takes the type of the set it qualifies and
+ * states membership in a condition, so no argument carries a hidden precondition.
+ */
 export declare function validateSpecificationSignatureTypes(specification: ConceptSpecificationIR, document: SsfDocument): readonly SpecificationSignatureTypeIssue[];
 
 === dist/engine/tooling/specification-type-evidence.d.ts ===
@@ -5531,6 +5535,8 @@ export declare function specificationTypeNameEvidence(specification: ConceptSpec
 
 === dist/engine/tooling/ssf-package/automatic-aliases.d.ts ===
 import type { ParsedDeclaration } from "./model.ts";
+/** The word a type phrase joins through: `Verified User` joins by its head, `User`. */
+export declare function headOf(typeName: string): string;
 /** Exact State field and subset type references that can evidence an automatic alias. */
 export declare function stateFieldTypeEvidence(declarations: readonly ParsedDeclaration[]): readonly string[];
 export declare function exactPluralPair(left: string, right: string): boolean;
@@ -5559,28 +5565,52 @@ export interface GrammarResult {
 export declare function parseGrammar(lines: readonly SourceLine[]): GrammarResult;
 
 === dist/engine/tooling/ssf-package/graph-validation.d.ts ===
-import { type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic, type SsfLocalType, type SsfSetReference } from "./model.ts";
+import { type ParsedAlias, type ParsedDeclaration, type SsfDiagnostic, type SsfLocalType, type SsfReferenceKind, type SsfSpan } from "./model.ts";
+/** What a set's members are: identities this State owns, or individuals of an external type. */
+export interface SetBase {
+    readonly kind: "owned" | "external";
+    readonly name: string;
+}
+/** A subset resolved from its phrase: `Trusted Verified Users` qualifies `Verified Users`. */
+export interface SubsetFact {
+    /** The declared phrase. */
+    readonly name: string;
+    readonly qualifier: string;
+    readonly root: SetBase;
+    /** The spelling a signature would use for the root: its singular where one is authored. */
+    readonly rootType: string;
+    readonly parent: {
+        readonly text: string;
+        readonly normalized: string;
+        readonly referenceKind: Extract<SsfReferenceKind, "external" | "owned" | "subset">;
+        readonly span: SsfSpan;
+    };
+    readonly identifiers: readonly string[];
+}
 export interface ResolutionFacts {
     /** Owned top-level declarations: the types this State introduces. */
     readonly validStructuralNames: ReadonlySet<string>;
     readonly validAliases: ReadonlyMap<string, string>;
     /** Spellings other than the declared name that resolve to an external type. */
     readonly externalSpellings: ReadonlyMap<string, string>;
-    /** The set each subset classifies. */
-    readonly parents: ReadonlyMap<ParsedDeclaration, SsfSetReference>;
+    /** Each declared subset that resolves, by its declaration. */
+    readonly subsets: ReadonlyMap<ParsedDeclaration, SubsetFact>;
+    /** The subset a qualified phrase such as `Verified User` names, if one is declared. */
+    readonly subsetNamed: (phrase: string) => SubsetFact | undefined;
 }
 /**
  * Resolve the declared types, aliases, and subset graph, and report every invalid edge.
  *
  * A top-level set or sequence whose type is the plural of an external type holds
  * individuals of that type; every other top-level declaration introduces owned identities.
- * A subset is a named set: it classifies the members of its parent set and is not a type.
+ * A subset qualifies a set by name: `Verified Users` is a subset of `Users`, and
+ * `Trusted Verified Users` a subset of `Verified Users`.
  */
 export declare function validateTypeGraph(declarations: readonly ParsedDeclaration[], aliases: readonly ParsedAlias[], external: ReadonlySet<string>, evidenceTypeNames: readonly string[], localTypes: readonly SsfLocalType[], diagnostics: SsfDiagnostic[]): ResolutionFacts;
 
 === dist/engine/tooling/ssf-package/index.d.ts ===
 export { PRIMITIVES as SSF_PRIMITIVES } from "./names.ts";
-export { ownedTypeNameSpellings, parseSimpleStateForm, validateSimpleStateForm, } from "./simple-state-form.ts";
+export { ownedTypeNameSpellings, parseSimpleStateForm, subsetIdentifiedBy, validateSimpleStateForm, } from "./simple-state-form.ts";
 export type { SsfDiagnostic, SsfDocument, SsfLocalType, SsfParseOptions, SsfPosition, SsfSpan, } from "./model.ts";
 
 === dist/engine/tooling/ssf-package/model.d.ts ===
@@ -5602,7 +5632,7 @@ export interface SsfToken {
     readonly text: string;
     readonly span: SsfSpan;
 }
-export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_FIELD" | "SSF_DUPLICATE_SET_NAME" | "SSF_DUPLICATE_UNIQUE" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_MODIFIER" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_SUBSET_CYCLE" | "SSF_INVALID_SUBSET_CONDITION" | "SSF_SUBSET_SELF_PARENT" | "SSF_SUBSET_TYPE_MISMATCH" | "SSF_UNDECLARED_TYPE" | "SSF_UNKNOWN_UNIQUE_FIELD";
+export type SsfDiagnosticCode = "SSF_ALIAS_NAME_COLLISION" | "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" | "SSF_ARTICLE" | "SSF_DUPLICATE_DECLARATION" | "SSF_DUPLICATE_FIELD" | "SSF_DUPLICATE_SET_NAME" | "SSF_DUPLICATE_UNIQUE" | "SSF_INVALID_ALIAS_TARGET" | "SSF_INVALID_EXTERNAL_NAME" | "SSF_INVALID_SUBSET_PARENT" | "SSF_MALFORMED_ALIAS" | "SSF_MALFORMED_DECLARATION" | "SSF_MALFORMED_FIELD" | "SSF_MISSING_WITH" | "SSF_MISPLACED_MODIFIER" | "SSF_NAME_COLLISION" | "SSF_NEAR_MISS_KEYWORD" | "SSF_OPTIONAL_COLLECTION" | "SSF_ORPHANED_LINE" | "SSF_INVALID_SUBSET_CONDITION" | "SSF_QUALIFIER_FIELD_NAME" | "SSF_REPEATED_QUALIFIER" | "SSF_UNDECLARED_TYPE" | "SSF_UNKNOWN_UNIQUE_FIELD";
 interface SsfDiagnosticDetail {
     readonly severity: "error" | "advice";
     readonly code: SsfDiagnosticCode;
@@ -5626,10 +5656,10 @@ export interface SsfTypeName {
     readonly normalized: string;
 }
 /**
- * `unresolved` is no longer a silent category: a field value that lands there always
- * carries `SSF_UNDECLARED_TYPE`, and every other case already has its own diagnostic.
+ * An `unresolved` field value always carries `SSF_UNDECLARED_TYPE`; every other name that
+ * fails to resolve has its own diagnostic.
  */
-export type SsfReferenceKind = "external" | "local" | "owned" | "primitive" | "unresolved";
+export type SsfReferenceKind = "external" | "local" | "owned" | "primitive" | "subset" | "unresolved";
 export interface SsfTypeReference extends SsfTypeName {
     readonly referenceKind: SsfReferenceKind;
     readonly span: SsfSpan;
@@ -5671,30 +5701,19 @@ export interface SsfSubsetCondition {
     readonly values: readonly string[];
     readonly span: SsfSpan;
 }
-/**
- * The set a subset classifies. `declared` names a set in this State; `external` is every
- * individual of an external type, when the concept declares no set of that type.
- */
-export interface SsfSetReference {
-    /** The lowercase set name, as written or as the subset's type implies it. */
-    readonly text: string;
-    /** Whether the subset line leaves the parent to its type rather than naming it. */
-    readonly implicit: boolean;
-    readonly setKind: "declared" | "external" | "unresolved";
-    readonly span: SsfSpan;
-}
 export interface SsfDeclaration {
     readonly kind: "declaration";
     /**
-     * The member type: the declared type of a top-level set, sequence, or element, or the
-     * type a subset line names. A set of an external type resolves as `external`.
+     * The declared type. A top-level set of an external type resolves as `external`; a subset,
+     * named by its whole phrase such as `Verified Users`, resolves as `subset`.
      */
     readonly name: SsfTypeReference;
-    /** The lowercase set name: implied by a top-level declaration's type, written for a subset. */
-    readonly setName: string;
     readonly declarationKind: "collection" | "subset";
     readonly multiplicity: SsfMultiplicity;
-    readonly parent?: SsfSetReference;
+    /** A subset's leading qualifier: `Verified` in `Verified Users`. */
+    readonly qualifier?: string;
+    /** A subset's parent: the set its name names without the leading qualifier. */
+    readonly parent?: SsfTypeReference;
     readonly condition?: SsfSubsetCondition;
     readonly fields: readonly SsfField[];
     readonly constraints: readonly SsfUniqueConstraint[];
@@ -5715,7 +5734,17 @@ export interface SsfTypeInventory {
     readonly external: readonly string[];
     /** Additional spellings, such as a plural, that resolve to an external type. */
     readonly externalSpellings: readonly string[];
+    /** Subsets with the code identifiers their singular and plural spellings take. */
+    readonly subsets: readonly SsfSubsetIdentity[];
     readonly primitives: readonly string[];
+}
+export interface SsfSubsetIdentity {
+    /** The declared phrase, such as `Verified Users`. */
+    readonly name: string;
+    /** Identifiers such as `VerifiedUser` and `VerifiedUsers`, sorted. */
+    readonly identifiers: readonly string[];
+    /** The type of the top-level set the subset qualifies, such as `User`. */
+    readonly rootType: string;
 }
 export interface SsfDocument {
     readonly statements: readonly SsfStatement[];
@@ -5753,6 +5782,8 @@ export interface SourceLine {
 export interface ParsedReference {
     readonly text: string;
     readonly span: SsfSpan;
+    /** Each word's span, for a phrase such as `Trusted Verified Users`. */
+    readonly wordSpans?: readonly SsfSpan[];
 }
 export interface ParsedNamed {
     readonly kind: "named";
@@ -5784,14 +5815,10 @@ export interface ParsedSubsetCondition {
     readonly span: SsfSpan;
 }
 export interface ParsedDeclaration {
-    /** The declared type of a top-level declaration, or the type a subset line names. */
+    /** The declared name: one word for a top-level declaration, a qualified phrase for a subset. */
     readonly name: ParsedReference;
-    /** The lowercase set name: implied by a top-level declaration, written for a subset. */
-    readonly setName: ParsedReference;
     readonly declarationKind: "collection" | "subset";
     readonly multiplicity: SsfMultiplicity;
-    /** A subset's parent set name, when the line writes one. */
-    readonly parent?: ParsedReference;
     readonly condition?: ParsedSubsetCondition;
     readonly fields: ParsedField[];
     readonly constraints: ParsedUniqueConstraint[];
@@ -5816,10 +5843,15 @@ export declare const FIELD_NAME: RegExp;
 export declare const ENUM_VALUE: RegExp;
 export declare const PRIMITIVES: readonly ["Date", "DateTime", "Flag", "Number", "String"];
 export declare const PRIMITIVE_NAMES: ReadonlySet<string>;
-/** Words the grammar reads structurally, so no field or set may take them as its name. */
+/** Structural words, which the grammar never reads as a separately written subset name. */
 export declare const RESERVED_NAMES: ReadonlySet<string>;
-/** The name a type implies when none is written: `Author` names `author`, `Users` names `users`. */
+/**
+ * The name a type implies when none is written: its words joined, with a lowercase first
+ * letter. `Author` names `author`, and `Verified User` names `verifiedUser`.
+ */
 export declare function impliedName(typeName: string): string;
+/** A name's identifier in code: its words joined in PascalCase, as `VerifiedUsers`. */
+export declare function identifierOf(typeName: string): string;
 
 === dist/engine/tooling/ssf-package/resolution.d.ts ===
 import type { GrammarResult } from "./grammar.ts";
@@ -5830,9 +5862,11 @@ export declare function resolveGrammar(grammar: GrammarResult, options: SsfParse
 };
 
 === dist/engine/tooling/ssf-package/simple-state-form.d.ts ===
-import type { SsfParseOptions, SsfParseResult, SsfTypeInventory } from "./model.ts";
+import type { SsfParseOptions, SsfParseResult, SsfSubsetIdentity, SsfTypeInventory } from "./model.ts";
 /** Enumerate exact structural, explicit-alias, and evidenced-alias spellings. */
 export declare function ownedTypeNameSpellings(inventory: SsfTypeInventory): readonly string[];
+/** The subset whose identifier a type name spells, in either number: `VerifiedUser` or `VerifiedUsers`. */
+export declare function subsetIdentifiedBy(inventory: SsfTypeInventory, typeName: string): SsfSubsetIdentity | undefined;
 /** Parse and validate the bounded structural SSF grammar. */
 export declare function parseSimpleStateForm(source: string, options?: SsfParseOptions): SsfParseResult;
 /** Return deterministic, source-located SSF diagnostics. */

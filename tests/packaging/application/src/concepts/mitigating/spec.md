@@ -24,7 +24,7 @@ a set of Selections with
   a room Room
   a mitigation String
 
-a current set of Selections
+a set of Current Selections
 ```
 
 ## Actions
@@ -33,9 +33,9 @@ a current set of Selections
 choose(room: Room, mitigation: String) : returns (selection: Selection)
   where true
   then
-    remove any selection with room from current
+    remove any selection with room from Current Selections
     add a new selection with room and mitigation
-    add selection to current
+    add selection to Current Selections
     returns selection
 ```
 

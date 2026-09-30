@@ -94,11 +94,11 @@ write(author: Person, text: String) : returns (note: Note)
     returns note
 
 discard(note: Note) : returns (note: Note)
-  where note exists
+  where note is in Notes
   then
     remove note
     returns note
-  where note does not exist
+  where note is not in Notes
   then
     refuses NOTE_NOT_FOUND "There is no such note."
 ```
@@ -107,7 +107,7 @@ discard(note: Note) : returns (note: Note)
 
 ```queries
 _get(note: Note) : optional (author: Person, text: String)
-  Returns no row when the note does not exist.
+  Returns no row when the note is not in Notes.
 ```
 ````
 
@@ -165,14 +165,16 @@ Authors must use Simple State Form (SSF), defined by the canonical
 The parser recognizes set, sequence, element, subset, alias, and field declarations
 together with their multiplicities, identifiers, articles, uniqueness constraints, and
 subset graph. Declared names are taken as written, and a field written without a name,
-such as `an Author`, is named for its type: `author`.
+such as `an Author` or `a Verified User`, is named for its type: `author`, `verifiedUser`.
 
-A top-level set or sequence whose type is the plural of an external type, such as `a set
-of Users` beside `external User`, holds individuals of that external type instead of
-introducing identities. A subset is a lowercase named set, such as `a banned set of
-Users` or `a rejected set of banned Users`, and never a type: fields, aliases, and
-signatures name the type, and preconditions state membership, such as `where user is in
-banned`.
+A plain top-level set, such as `a set of Users with a reputation Number`, contains every
+individual of its type in the concept's state, and each of them has its fields. When its
+type is the plural of an external type, as beside `external User`, the set holds
+individuals of that external type instead of introducing identities, and means the same
+thing. A subset qualifies its parent set: `a set of Verified Users`, `a set of Trusted
+Verified Users`, or `an element Root Folder`. A subset is a type in State, so `a sponsor
+Verified User` holds only Verified Users; action and query signatures take the parent
+type and state membership in a condition, such as `where sponsor is in Verified Users`.
 
 Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
 the declaration, are joined when they form a singular and plural pair; an authored plural
@@ -182,14 +184,14 @@ be unambiguous on both sides; where it is not, the two names stay separate and t
 reports advice. `alias Alias for Target` states a synonym directly. An alias takes
 precedence over a joined pair, targets a top-level declaration the concept owns rather
 than another alias, a subset, or a set of an external type, and may appear before or
-after its target. Subset parents are likewise order-independent and name a subset or a
-top-level declaration's set. Unresolved or duplicate set names, a type that differs from
-the parent set's, self-parenting, and cycles fail with source-located diagnostics.
+after its target. Subset parents are likewise order-independent. An undeclared parent, a
+subset declared twice, a qualifier repeated among the subsets of one set, and an
+identifier another type already has fail with source-located diagnostics.
 
 Declaration and alias names are unique across the fence and share that namespace with
-external parameters, concept-local types, and SSF primitives. Set names are unique across
-the fence, field names within their declaration, and enumeration values within their
-enumeration. Prefix a field with `unique` to require
+external parameters, concept-local types, and SSF primitives, and a subset's identifier
+(its words joined, as `VerifiedUsers`) may not collide with them. Field names are unique
+within their declaration, and enumeration values within their enumeration. Prefix a field with `unique` to require
 distinct values among members of that declaration; a unique collection field compares the
 whole collection. Require a _combination_ to be distinct with a `unique` line joining
 field names with `and`, such as `unique item and voter`. The modifier is shorthand for a
@@ -203,7 +205,8 @@ indented under a declaration. The parser retains the line and makes no claim abo
 while every other nonblank line must parse as a declaration, alias, or field. An
 unrecognized field value is retained as unresolved in the IR and fails the check.
 Operation signature types need not appear in State, but each must resolve against the
-same declared, owned, local, or primitive universe. Signature names first supply plural-join evidence; tooling
+same declared, owned, local, or primitive universe; a subset identifier in a signature
+fails with `SSF_SUBSET_SIGNATURE_TYPE`. Signature names first supply plural-join evidence; tooling
 then validates them against the resolved inventory, so a singular spelling established
 only by that join is accepted. The parser does not prove rules, type meaning, action
 conditions or effects, query meaning, storage layout, State/storage agreement, or

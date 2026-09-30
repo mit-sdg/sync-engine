@@ -2,19 +2,22 @@ import { PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
 import type { ParsedDeclaration } from "./model.ts";
 import { pluralize } from "./vendor/plur.ts";
 
+/** The word a type phrase joins through: `Verified User` joins by its head, `User`. */
+export function headOf(typeName: string): string {
+  return typeName.slice(typeName.lastIndexOf(" ") + 1);
+}
+
 /** Exact State field and subset type references that can evidence an automatic alias. */
 export function stateFieldTypeEvidence(
   declarations: readonly ParsedDeclaration[],
 ): readonly string[] {
   return declarations.flatMap(({ declarationKind, name, fields }) => [
-    ...(declarationKind === "subset" ? [name.text] : []),
-    ...fields.flatMap(({ value }) => {
-      if (value.kind === "named") return [value.reference.text];
-      if (value.kind === "collection" && value.element.kind === "named") {
-        return [value.element.reference.text];
-      }
-      return [];
-    }),
+    ...(declarationKind === "subset" ? [headOf(name.text)] : []),
+    ...fields.flatMap(({ value }) =>
+      value.kind === "named"
+        ? [headOf(value.reference.text)]
+        : [headOf(value.element.reference.text)],
+    ),
   ]);
 }
 

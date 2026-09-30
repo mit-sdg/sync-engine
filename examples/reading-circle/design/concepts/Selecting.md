@@ -29,7 +29,7 @@ a set of Selections with
   a unique scope Scope
   an item Item
 
-a current set of Selections
+a set of Current Selections
 ```
 
 ## Actions
@@ -40,7 +40,7 @@ choose (scope: Scope, item: Item) : returns (selection: Selection)
   then
     delete any Selection with scope
     add a new selection with scope and item
-    add selection to current
+    add selection to Current Selections
     returns selection
 
 clear (scope: Scope) : returns (selection: Selection)

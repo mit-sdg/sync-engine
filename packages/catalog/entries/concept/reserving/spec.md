@@ -33,7 +33,7 @@ a set of Reservations with
   a reservedAt DateTime
   an optional endedAt DateTime
 
-a claimed set of Reservations where status is ACTIVE or FULFILLED with
+a set of Claimed Reservations where status is ACTIVE or FULFILLED with
   unique resource
 ```
 

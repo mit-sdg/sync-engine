@@ -21,6 +21,17 @@ function typeReference(
   external: ReadonlySet<string>,
   local: ReadonlySet<string>,
 ): SsfTypeReference | undefined {
+  if (reference.text.includes(" ")) {
+    const subset = facts.subsetNamed(reference.text);
+    return subset === undefined
+      ? undefined
+      : {
+          text: reference.text,
+          normalized: subset.name,
+          referenceKind: "subset",
+          span: reference.span,
+        };
+  }
   const aliasTarget = facts.validAliases.get(reference.text);
   const owned = facts.validStructuralNames.has(reference.text) ? reference.text : aliasTarget;
   const externalType = external.has(reference.text)
@@ -76,12 +87,20 @@ function resolveReference(
   const resolved = typeReference(reference, facts, external, local);
   if (resolved !== undefined) return resolved;
   diagnostics.push(
-    error({
-      code: "SSF_UNDECLARED_TYPE",
-      message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
-      suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
-      span: reference.span,
-    }),
+    reference.text.includes(" ")
+      ? error({
+          code: "SSF_UNDECLARED_TYPE",
+          message: `Type ${JSON.stringify(reference.text)} is not a subset this State declares.`,
+          suggestion:
+            "Declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.",
+          span: reference.span,
+        })
+      : error({
+          code: "SSF_UNDECLARED_TYPE",
+          message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
+          suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
+          span: reference.span,
+        }),
   );
   return unresolved(reference);
 }
@@ -134,14 +153,26 @@ export function resolveGrammar(
   const resolve = (reference: ParsedReference): SsfTypeReference =>
     resolveReference(reference, facts, external, local, diagnostics);
   const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => {
-    const parent = facts.parents.get(declaration);
+    const subset = facts.subsets.get(declaration);
     return {
       kind: "declaration",
-      name: structural(declaration.name),
-      setName: declaration.setName.text,
+      name:
+        subset === undefined
+          ? structural(declaration.name)
+          : {
+              text: declaration.name.text,
+              normalized: subset.name,
+              referenceKind: "subset",
+              span: declaration.name.span,
+            },
       declarationKind: declaration.declarationKind,
       multiplicity: declaration.multiplicity,
-      ...(parent === undefined ? {} : { parent }),
+      ...(subset === undefined
+        ? {}
+        : {
+            qualifier: subset.qualifier,
+            parent: subset.parent,
+          }),
       ...(declaration.condition === undefined
         ? {}
         : {
@@ -198,6 +229,9 @@ export function resolveGrammar(
         ownedTypeNames,
         external: [...external].sort(),
         externalSpellings: [...facts.externalSpellings.keys()].sort(),
+        subsets: [...facts.subsets.values()]
+          .map(({ name, identifiers, rootType }) => ({ name, identifiers, rootType }))
+          .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
         primitives: [...PRIMITIVES],
       },
     },

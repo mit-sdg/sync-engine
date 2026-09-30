@@ -36,7 +36,7 @@ a set of Reviews with
   an optional decidedAt DateTime
   an optional reason String
 
-a pending set of Reviews where status is PENDING with
+a set of Pending Reviews where status is PENDING with
   unique subject
 ```
 

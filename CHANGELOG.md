@@ -5,11 +5,12 @@ contracts; older beta releases could change incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## [1.1.0] - 2026-09-25
+## [1.1.0] - 2026-09-29
 
 This release revises concept specification syntax: SSF fields may take their
-type's name, sets may hold individuals of external types, subsets become named
-sets, and action branches end in `returns` or `refuses`.
+type's name, a plain set means the same thing for owned and external types,
+subsets are named by qualifying their parent set, and action branches end in
+`returns` or `refuses`.
 
 ### Compatibility
 
@@ -18,32 +19,40 @@ sets, and action branches end in `returns` or `refuses`.
 - Action signatures use `: returns (...)`, and each branch ends with
   `returns ...` or `refuses CODE "Normative sentence."`. The retired `return`
   and `refuse` keywords are rejected with a diagnostic naming the replacement.
-- An SSF field may omit its name and is then named for its type with a
-  lowercase first letter: `an Author` is `author` and `a set of Tags` is
-  `tags`. Two unnamed fields of one type fail as duplicates.
-- A top-level set or sequence named for the plural of an external type, such as
-  `a set of Users` beside `external User`, holds individuals of that type and
-  introduces no owned identity. It previously declared a separate owned type
-  with that spelling. Authored plurals of external types in fields, subsets,
-  and signatures resolve to the external type.
-- Subsets are lowercase named sets rather than types: `a banned set of Users`
-  and `a rejected set of banned Users`. An omitted parent is the set the type
-  implies, or every individual of an external type the concept declares no set
-  of. A subset is no longer an owned type name, so it cannot be a field type,
-  alias target, signature type, or binding target. Uppercase subset names are
-  rejected with their lowercase repair.
+- An SSF field may omit its name and is then named for its type's words joined
+  with a lowercase first letter: `an Author` is `author`, `a set of Tags` is
+  `tags`, and `a Verified User` is `verifiedUser`. Two unnamed fields of one
+  type fail as duplicates.
+- A plain top-level set contains every individual of its type in the concept's
+  state, with every field it declares. A set named for the plural of an
+  external type, such as `a set of Users` beside `external User`, now holds
+  individuals of that type under the same rule; it previously declared a
+  separate owned type with that spelling. Authored plurals of external types in
+  fields, subsets, and signatures resolve to the external type.
+- Subsets are named by qualifying their parent set: `a set of Verified Users`,
+  `a set of Trusted Verified Users`, and `an element Root Folder`. The name is
+  the whole phrase, a qualifier appears once among one set's subsets, and a
+  subset's joined identifier (`VerifiedUsers`) may not collide with another
+  type. `a Verified set of Users` is rejected with its repair.
+- A subset may type a State field, as in `a sponsor Verified User`, but not an
+  action or query argument or result: signatures take the parent type and
+  state membership in a condition. Subsets and sets of external types cannot be
+  binding targets.
+- A field named like a qualifier, such as `a verified User` beside `Verified
+Users`, draws advice.
 
 ### Migration
 
 - Pin core, HTTP, analysis, catalog, and skill to `1.1.0` when used together.
 - In every `actions` fence, replace `: return (` with `: returns (`, terminal
   `return` with `returns`, and `refuse` with `refuses`.
-- Write subset names in lowercase and name a parent subset before the type, as
-  in `a leaf set of branch Roots`. Where a subset served as a field, alias,
-  signature, or binding type, use its parent type and state membership in the
-  owning precondition, such as `where user is in banned`.
+- Rewrite each subset as a qualified set, `a Pending set of Invitations` as `a
+set of Pending Invitations`, and name it by its phrase in prose, as in `where
+invitation is in Pending Invitations`. Replace a subset used in a signature
+  with its parent type and a membership condition.
 - Rename an owned set whose name is the plural of an external type; it now
-  holds that external type's individuals.
+  holds that external type's individuals. Where only some individuals of a type
+  should carry fields, move the fields to a qualified subset.
 - Run `check-design`, then the full application check, and regenerate and
   review application manifests and wire contracts.
 

@@ -35,7 +35,7 @@ a set of Invitations with
   an issuedAt DateTime
   an optional decidedAt DateTime
 
-a pending set of Invitations where status is PENDING with
+a set of Pending Invitations where status is PENDING with
   unique target and invitee
 ```
 

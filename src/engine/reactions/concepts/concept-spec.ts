@@ -509,6 +509,18 @@ class SignatureParser {
       name += `.${part.name}`;
     }
     if (name === "null" || name === "undefined") return { kind: name, location };
+    // Capitalized words after a type name and a space only ever continue a subset phrase.
+    this.#skipSpace();
+    const qualified = /^[A-Z][A-Za-z0-9_]*(?:[ \t]+[A-Z][A-Za-z0-9_]*)*/.exec(
+      this.#line.text.slice(this.#index),
+    );
+    if (qualified !== null && /[ \t]/.test(this.#line.text[this.#index - 1] ?? "")) {
+      const words = qualified[0].split(/[ \t]+/);
+      this.#report(
+        `"${[name, ...words].join(" ")}" names a subset; a signature takes the type of the set it qualifies, "${words.at(-1)!}", and a condition states membership`,
+      );
+      return undefined;
+    }
     const arguments_: SpecType[] = [];
     if (this.#consume("<")) {
       if (this.#consume(">")) {
@@ -726,13 +738,18 @@ function branchesOf(
       branchProblem(`${action}'s then-block lines must be indented`, shallow);
     }
     const terminal = branch[branch.length - 1]!;
-    for (const line of branch.slice(0, -1)) {
-      if (/^(?:returns|refuses)(?:\s|$)/.test(line.text.trim())) {
+    for (const line of branch) {
+      const singular = /^(return|refuse)(?:\s|$)/.exec(line.text.trim())?.[1];
+      if (singular !== undefined)
+        branchProblem(
+          `${action}'s then block has a \`${singular}\` line; write \`${singular}s\``,
+          line,
+        );
+      else if (line !== terminal && /^(?:returns|refuses)(?:\s|$)/.test(line.text.trim()))
         branchProblem(
           `${action}'s \`returns\` or \`refuses\` line must terminate its then block`,
           line,
         );
-      }
     }
 
     const returned = RETURN.exec(terminal.text.trim());
@@ -765,12 +782,9 @@ function branchesOf(
         codes.add(refusal.refusal.code);
         refusals.push(refusal.refusal);
       }
-    } else {
-      const retired = /^(return|refuse)(?:\s|$)/.exec(terminal.text.trim())?.[1];
+    } else if (!/^(?:return|refuse)(?:\s|$)/.test(terminal.text.trim())) {
       branchProblem(
-        retired === undefined
-          ? `${action}'s then block must end with \`returns ...\` or \`refuses CODE "Normative sentence."\``
-          : `${action}'s then block ends with \`${retired}\`; write \`${retired}s\``,
+        `${action}'s then block must end with \`returns ...\` or \`refuses CODE "Normative sentence."\``,
         terminal,
       );
     }

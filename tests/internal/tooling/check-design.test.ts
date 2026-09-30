@@ -372,21 +372,21 @@ external User
 a set of Users with
   a set of Posts
 
-a read set of Posts
+a set of Read Posts
 
-a starred set of read Posts
+a set of Starred Read Posts
 \`\`\`
 
 ## Actions
 
 \`\`\`actions
 markRead (user: User, post: Post) : returns ()
-  where post is in read
+  where post is in Read Posts
   then
     refuses ALREADY_READ "This post is already read."
-  where post is not in read
+  where post is not in Read Posts
   then
-    add post to read
+    add post to Read Posts
     returns
 \`\`\`
 
@@ -394,7 +394,7 @@ markRead (user: User, post: Post) : returns ()
 
 \`\`\`queries
 _isRead (post: Post) : one (read: Flag)
-  answers whether the post is in read
+  answers whether the post is in Read Posts
 \`\`\`
 `;
     const root = await fixture({ "ReadTracking.md": readTracking });

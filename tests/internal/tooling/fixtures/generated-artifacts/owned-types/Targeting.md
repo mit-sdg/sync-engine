@@ -20,6 +20,8 @@ Creating a label establishes one record with that label.
 a set of Records with
   a label String
 
+a set of Archived Records
+
 alias Entry for Records
 ```
 

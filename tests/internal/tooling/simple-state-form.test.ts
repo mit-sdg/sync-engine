@@ -64,20 +64,16 @@ describe("limited Simple State Form validation", () => {
       "SSF_ARTICLE",
       "an element Settings with",
     );
-    issue(
-      "a set of Items\n\ncompleted set of Items",
-      "SSF_ARTICLE",
-      "Use `a completed set of Items` or `an completed set of Items`.",
-    );
-    issue(
-      "a set of Items\n\nopen set of Items",
-      "SSF_ARTICLE",
-      "Use `a open set of Items` or `an open set of Items`.",
-    );
+    issue("a set of Items\n\nset of Open Items", "SSF_ARTICLE", "a set of Open Items");
     issue(
       "a set of Items\n\nan Open set of Items",
       "SSF_MALFORMED_DECLARATION",
-      "an open set of Items",
+      "a set of Open Items",
+    );
+    issue(
+      "a set of Items\n\nan open set of Items",
+      "SSF_MALFORMED_DECLARATION",
+      "a set of Open Items",
     );
   });
 
@@ -159,7 +155,7 @@ a set of Sessions with
 
   test("adapts structured ownership and package-local spans without coupling the package to Markdown", () => {
     const scanned = scanDesignMarkdown(
-      "# Example\n\n```state\na set of Entries with\n  an owner Person\n\nan open set of Entries\n\na set of People\n```\n",
+      "# Example\n\n```state\na set of Entries with\n  an owner Person\n\na set of Open Entries\n\na set of People\n```\n",
       "design/example.md",
     );
     const parsed = parseSimpleStateForm(scanned.fences[0]!, {
@@ -173,11 +169,13 @@ a set of Sessions with
     expect(parsed.document.declarations).toMatchObject([
       {
         name: { referenceKind: "owned" },
-        setName: "entries",
         fields: [{ value: { reference: { referenceKind: "external" } } }],
       },
-      { setName: "open", parent: { text: "entries", setKind: "declared" } },
-      { setName: "people", name: { referenceKind: "external", normalized: "Person" } },
+      {
+        name: { text: "Open Entries", referenceKind: "subset" },
+        parent: { text: "Entries", referenceKind: "owned" },
+      },
+      { name: { text: "People", referenceKind: "external", normalized: "Person" } },
     ]);
   });
 
@@ -185,15 +183,19 @@ a set of Sessions with
     ["canonical declarations", "a set of Items with\n  an optional dueAt DateTime"],
     ["canonical article-less optional", "a set of Items with\n  optional dueAt DateTime"],
     ["canonical sequence", "a seq of Items with\n  a members set of Person"],
-    ["canonical subset", "a set of Items\n\nan open set of Items"],
-    ["either subset article", "a set of Items\n\na hour set of Items\nan honest set of Items"],
-    ["a subset of a subset", "a set of Items\n\nan open set of Items\na stale set of open Items"],
+    ["canonical subset", "a set of Items\n\na set of Open Items"],
+    ["a singleton subset", "a set of Items\n\nan element Current Item"],
+    ["a subset of a subset", "a set of Items\n\na set of Open Items\na set of Stale Open Items"],
+    [
+      "a subset as a field type",
+      "a set of Items\n\na set of Open Items\n\na set of Groups with\n  an Open Item",
+    ],
     [
       "implicit field names",
       "a set of Items with\n  a Profile\n  an optional Person\n  a set of Groups",
     ],
     ["a set of an external type", "a set of People with\n  a Profile"],
-    ["a subset of an external type", "a banned set of People\na muted set of banned People"],
+    ["a subset of an external type", "a set of Banned People\na set of Muted Banned People"],
     [
       "marked invariant prose",
       "a set of Items with\n  a title String\n\nRule: at most one Item has each title",

@@ -460,7 +460,7 @@ describe("Actions", () => {
     );
   });
 
-  test("names the retired return and refuse keywords with their replacements", () => {
+  test("points return and refuse to returns and refuses", () => {
     expect(
       diagnosticsFor(
         specification({
@@ -473,20 +473,22 @@ describe("Actions", () => {
         expect.objectContaining({ message: expect.stringContaining("`: returns (…)`") }),
       ]),
     );
-    for (const [terminal, retired] of [
+    for (const [lines, keyword] of [
       ["return invitation", "return"],
       ['refuse NOT_OPEN "The invitation is not open."', "refuse"],
+      ["return\n    returns invitation", "return"],
+      ['refuse NOT_OPEN "The invitation is not open."\n    returns invitation', "refuse"],
     ]) {
       expect(
         diagnosticsFor(
           specification({
-            actions: `invite() : returns (invitation: Invitation)\n  where true\n  then\n    ${terminal}`,
+            actions: `invite() : returns (invitation: Invitation)\n  where true\n  then\n    ${lines}`,
           }),
         ),
       ).toEqual([
         expect.objectContaining({
           code: "CONCEPT_SPEC_ACTION_BRANCH",
-          message: `invite's then block ends with \`${retired}\`; write \`${retired}s\`.`,
+          message: `invite's then block has a \`${keyword}\` line; write \`${keyword}s\`.`,
         }),
       ]);
     }

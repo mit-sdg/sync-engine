@@ -40,10 +40,9 @@ export type SsfDiagnosticCode =
   | "SSF_NEAR_MISS_KEYWORD"
   | "SSF_OPTIONAL_COLLECTION"
   | "SSF_ORPHANED_LINE"
-  | "SSF_SUBSET_CYCLE"
   | "SSF_INVALID_SUBSET_CONDITION"
-  | "SSF_SUBSET_SELF_PARENT"
-  | "SSF_SUBSET_TYPE_MISMATCH"
+  | "SSF_QUALIFIER_FIELD_NAME"
+  | "SSF_REPEATED_QUALIFIER"
   | "SSF_UNDECLARED_TYPE"
   | "SSF_UNKNOWN_UNIQUE_FIELD";
 
@@ -75,10 +74,16 @@ export interface SsfTypeName {
 }
 
 /**
- * `unresolved` is no longer a silent category: a field value that lands there always
- * carries `SSF_UNDECLARED_TYPE`, and every other case already has its own diagnostic.
+ * An `unresolved` field value always carries `SSF_UNDECLARED_TYPE`; every other name that
+ * fails to resolve has its own diagnostic.
  */
-export type SsfReferenceKind = "external" | "local" | "owned" | "primitive" | "unresolved";
+export type SsfReferenceKind =
+  | "external"
+  | "local"
+  | "owned"
+  | "primitive"
+  | "subset"
+  | "unresolved";
 
 export interface SsfTypeReference extends SsfTypeName {
   readonly referenceKind: SsfReferenceKind;
@@ -130,31 +135,19 @@ export interface SsfSubsetCondition {
   readonly span: SsfSpan;
 }
 
-/**
- * The set a subset classifies. `declared` names a set in this State; `external` is every
- * individual of an external type, when the concept declares no set of that type.
- */
-export interface SsfSetReference {
-  /** The lowercase set name, as written or as the subset's type implies it. */
-  readonly text: string;
-  /** Whether the subset line leaves the parent to its type rather than naming it. */
-  readonly implicit: boolean;
-  readonly setKind: "declared" | "external" | "unresolved";
-  readonly span: SsfSpan;
-}
-
 export interface SsfDeclaration {
   readonly kind: "declaration";
   /**
-   * The member type: the declared type of a top-level set, sequence, or element, or the
-   * type a subset line names. A set of an external type resolves as `external`.
+   * The declared type. A top-level set of an external type resolves as `external`; a subset,
+   * named by its whole phrase such as `Verified Users`, resolves as `subset`.
    */
   readonly name: SsfTypeReference;
-  /** The lowercase set name: implied by a top-level declaration's type, written for a subset. */
-  readonly setName: string;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
-  readonly parent?: SsfSetReference;
+  /** A subset's leading qualifier: `Verified` in `Verified Users`. */
+  readonly qualifier?: string;
+  /** A subset's parent: the set its name names without the leading qualifier. */
+  readonly parent?: SsfTypeReference;
   readonly condition?: SsfSubsetCondition;
   readonly fields: readonly SsfField[];
   readonly constraints: readonly SsfUniqueConstraint[];
@@ -178,7 +171,18 @@ export interface SsfTypeInventory {
   readonly external: readonly string[];
   /** Additional spellings, such as a plural, that resolve to an external type. */
   readonly externalSpellings: readonly string[];
+  /** Subsets with the code identifiers their singular and plural spellings take. */
+  readonly subsets: readonly SsfSubsetIdentity[];
   readonly primitives: readonly string[];
+}
+
+export interface SsfSubsetIdentity {
+  /** The declared phrase, such as `Verified Users`. */
+  readonly name: string;
+  /** Identifiers such as `VerifiedUser` and `VerifiedUsers`, sorted. */
+  readonly identifiers: readonly string[];
+  /** The type of the top-level set the subset qualifies, such as `User`. */
+  readonly rootType: string;
 }
 
 export interface SsfDocument {
@@ -222,6 +226,8 @@ export interface SourceLine {
 export interface ParsedReference {
   readonly text: string;
   readonly span: SsfSpan;
+  /** Each word's span, for a phrase such as `Trusted Verified Users`. */
+  readonly wordSpans?: readonly SsfSpan[];
 }
 
 export interface ParsedNamed {
@@ -261,14 +267,10 @@ export interface ParsedSubsetCondition {
 }
 
 export interface ParsedDeclaration {
-  /** The declared type of a top-level declaration, or the type a subset line names. */
+  /** The declared name: one word for a top-level declaration, a qualified phrase for a subset. */
   readonly name: ParsedReference;
-  /** The lowercase set name: implied by a top-level declaration, written for a subset. */
-  readonly setName: ParsedReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
-  /** A subset's parent set name, when the line writes one. */
-  readonly parent?: ParsedReference;
   readonly condition?: ParsedSubsetCondition;
   readonly fields: ParsedField[];
   readonly constraints: ParsedUniqueConstraint[];

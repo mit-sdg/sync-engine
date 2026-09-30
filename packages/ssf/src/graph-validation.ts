@@ -1,5 +1,5 @@
 import { automaticAliasCandidates, exactPluralPair } from "./automatic-aliases.ts";
-import { impliedName, PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
+import { identifierOf, impliedName, PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
 import {
   error,
   type ParsedAlias,
@@ -7,9 +7,34 @@ import {
   type ParsedField,
   type SsfDiagnostic,
   type SsfLocalType,
-  type SsfSetReference,
+  type SsfReferenceKind,
+  type SsfSpan,
 } from "./model.ts";
+import { span } from "./source.ts";
 import { pluralize } from "./vendor/plur.ts";
+
+/** What a set's members are: identities this State owns, or individuals of an external type. */
+export interface SetBase {
+  readonly kind: "owned" | "external";
+  readonly name: string;
+}
+
+/** A subset resolved from its phrase: `Trusted Verified Users` qualifies `Verified Users`. */
+export interface SubsetFact {
+  /** The declared phrase. */
+  readonly name: string;
+  readonly qualifier: string;
+  readonly root: SetBase;
+  /** The spelling a signature would use for the root: its singular where one is authored. */
+  readonly rootType: string;
+  readonly parent: {
+    readonly text: string;
+    readonly normalized: string;
+    readonly referenceKind: Extract<SsfReferenceKind, "external" | "owned" | "subset">;
+    readonly span: SsfSpan;
+  };
+  readonly identifiers: readonly string[];
+}
 
 export interface ResolutionFacts {
   /** Owned top-level declarations: the types this State introduces. */
@@ -17,12 +42,11 @@ export interface ResolutionFacts {
   readonly validAliases: ReadonlyMap<string, string>;
   /** Spellings other than the declared name that resolve to an external type. */
   readonly externalSpellings: ReadonlyMap<string, string>;
-  /** The set each subset classifies. */
-  readonly parents: ReadonlyMap<ParsedDeclaration, SsfSetReference>;
+  /** Each declared subset that resolves, by its declaration. */
+  readonly subsets: ReadonlyMap<ParsedDeclaration, SubsetFact>;
+  /** The subset a qualified phrase such as `Verified User` names, if one is declared. */
+  readonly subsetNamed: (phrase: string) => SubsetFact | undefined;
 }
-
-/** What a set's members are: identities this State owns, or individuals of an external type. */
-type SetBase = { readonly kind: "owned" | "external"; readonly name: string };
 
 function groupsOf<T>(items: readonly T[], nameOf: (item: T) => string): Map<string, T[]> {
   const groups = new Map<string, T[]>();
@@ -35,47 +59,24 @@ function groupsOf<T>(items: readonly T[], nameOf: (item: T) => string): Map<stri
   return groups;
 }
 
-/** A declaration as diagnostics name it: a subset by its set name, any other by its type. */
-function labelOf(declaration: ParsedDeclaration): string {
-  return declaration.declarationKind === "subset"
-    ? declaration.setName.text
-    : declaration.name.text;
-}
-
-function cycleMembers(parentBySubset: ReadonlyMap<string, string>): ReadonlySet<string> {
-  const cyclic = new Set<string>();
-  for (const start of parentBySubset.keys()) {
-    const path: string[] = [];
-    const pathIndex = new Map<string, number>();
-    let cursor: string | undefined = start;
-    while (cursor !== undefined && parentBySubset.has(cursor)) {
-      const cycleStart = pathIndex.get(cursor);
-      if (cycleStart !== undefined) {
-        for (const name of path.slice(cycleStart)) cyclic.add(name);
-        break;
-      }
-      pathIndex.set(cursor, path.length);
-      path.push(cursor);
-      cursor = parentBySubset.get(cursor);
-    }
-  }
-  return cyclic;
+function typeOf(field: ParsedField): string {
+  return field.value.kind === "named"
+    ? field.value.reference.text
+    : field.value.element.reference.text;
 }
 
 /** Fields a declaration may name: its own, then every ancestor's up the subset chain. */
 function constrainableFields(
   declaration: ParsedDeclaration,
-  bySetName: ReadonlyMap<string, ParsedDeclaration>,
-  parentBySubset: ReadonlyMap<string, string>,
+  parentOf: ReadonlyMap<ParsedDeclaration, ParsedDeclaration>,
 ): ReadonlyMap<string, ParsedField> {
   const fields = new Map<string, ParsedField>();
-  const visited = new Set<string>();
+  const visited = new Set<ParsedDeclaration>();
   let cursor: ParsedDeclaration | undefined = declaration;
-  while (cursor !== undefined && !visited.has(cursor.setName.text)) {
-    visited.add(cursor.setName.text);
+  while (cursor !== undefined && !visited.has(cursor)) {
+    visited.add(cursor);
     for (const field of cursor.fields) if (!fields.has(field.name)) fields.set(field.name, field);
-    const parent = parentBySubset.get(cursor.setName.text);
-    cursor = parent === undefined ? undefined : bySetName.get(parent);
+    cursor = parentOf.get(cursor);
   }
   return fields;
 }
@@ -83,12 +84,11 @@ function constrainableFields(
 /** Report uniqueness constraints that name an unavailable field or repeat a combination. */
 function validateUniqueConstraints(
   declarations: readonly ParsedDeclaration[],
-  bySetName: ReadonlyMap<string, ParsedDeclaration>,
-  parentBySubset: ReadonlyMap<string, string>,
+  parentOf: ReadonlyMap<ParsedDeclaration, ParsedDeclaration>,
   diagnostics: SsfDiagnostic[],
 ): void {
   for (const declaration of declarations) {
-    const available = constrainableFields(declaration, bySetName, parentBySubset);
+    const available = constrainableFields(declaration, parentOf);
     // The modifier is the one-field line, so it occupies that combination already.
     const combinations = new Set(
       declaration.fields.filter(({ unique }) => unique).map(({ name }) => name),
@@ -100,7 +100,7 @@ function validateUniqueConstraints(
           diagnostics.push(
             error({
               code: "SSF_UNKNOWN_UNIQUE_FIELD",
-              message: `Uniqueness constraint names ${JSON.stringify(field.text)}, which is not a field of declaration ${JSON.stringify(labelOf(declaration))}.`,
+              message: `Uniqueness constraint names ${JSON.stringify(field.text)}, which is not a field of declaration ${JSON.stringify(declaration.name.text)}.`,
               suggestion:
                 "Name only fields of this declaration or of a declaration it is a subset of.",
               span: field.span,
@@ -125,7 +125,7 @@ function validateUniqueConstraints(
         diagnostics.push(
           error({
             code: "SSF_DUPLICATE_UNIQUE",
-            message: `Declaration ${JSON.stringify(labelOf(declaration))} constrains the combination ${JSON.stringify(combination)} more than once.`,
+            message: `Declaration ${JSON.stringify(declaration.name.text)} constrains the combination ${JSON.stringify(combination)} more than once.`,
             suggestion: "State each unique combination once; field order does not distinguish it.",
             span: constraint.span,
           }),
@@ -138,8 +138,7 @@ function validateUniqueConstraints(
 /** Report subset conditions whose field is unavailable or whose value the field cannot hold. */
 function validateSubsetConditions(
   declarations: readonly ParsedDeclaration[],
-  bySetName: ReadonlyMap<string, ParsedDeclaration>,
-  parentBySubset: ReadonlyMap<string, string>,
+  parentOf: ReadonlyMap<ParsedDeclaration, ParsedDeclaration>,
   localTypes: readonly SsfLocalType[],
   diagnostics: SsfDiagnostic[],
 ): void {
@@ -151,14 +150,12 @@ function validateSubsetConditions(
   for (const declaration of declarations) {
     const { condition } = declaration;
     if (condition === undefined) continue;
-    const field = constrainableFields(declaration, bySetName, parentBySubset).get(
-      condition.field.text,
-    );
+    const field = constrainableFields(declaration, parentOf).get(condition.field.text);
     if (field === undefined) {
       diagnostics.push(
         error({
           code: "SSF_INVALID_SUBSET_CONDITION",
-          message: `Subset condition names ${JSON.stringify(condition.field.text)}, which is not a field of ${JSON.stringify(labelOf(declaration))} or of a set it is a subset of.`,
+          message: `Subset condition names ${JSON.stringify(condition.field.text)}, which is not a field of ${JSON.stringify(declaration.name.text)} or of a set it is a subset of.`,
           suggestion: "Condition a subset on a field its members carry.",
           span: condition.field.span,
         }),
@@ -224,7 +221,8 @@ function collisionOf(
  *
  * A top-level set or sequence whose type is the plural of an external type holds
  * individuals of that type; every other top-level declaration introduces owned identities.
- * A subset is a named set: it classifies the members of its parent set and is not a type.
+ * A subset qualifies a set by name: `Verified Users` is a subset of `Users`, and
+ * `Trusted Verified Users` a subset of `Verified Users`.
  */
 export function validateTypeGraph(
   declarations: readonly ParsedDeclaration[],
@@ -239,7 +237,6 @@ export function validateTypeGraph(
   );
   const subsets = declarations.filter(({ declarationKind }) => declarationKind === "subset");
   const declarationGroups = groupsOf(collections, ({ name }) => name.text);
-  const setGroups = groupsOf(declarations, ({ setName }) => setName.text);
   const aliasGroups = groupsOf(aliases, ({ name }) => name.text);
   const local = new Set(localTypes.map(({ name }) => name));
   const occupied = new Set([...declarationGroups.keys(), ...external, ...local, ...PRIMITIVES]);
@@ -262,26 +259,15 @@ export function validateTypeGraph(
             code: "SSF_NAME_COLLISION",
             message: `Structural declaration ${JSON.stringify(name)} collides with ${collision}.`,
             suggestion:
-              external.has(name) && declaration.multiplicity !== "element"
-                ? `Write the plural, \`${pluralize(name)}\`, to declare a set of the external type; owned, external, concept-local, and primitive names are one exact namespace.`
-                : "Rename the structural declaration; owned, external, concept-local, and primitive names are one exact namespace.",
+              !external.has(name) || declaration.multiplicity === "element"
+                ? "Rename the structural declaration; owned, external, concept-local, and primitive names are one exact namespace."
+                : pluralize(name) === name
+                  ? `\`${name}\` is spelled the same in the plural, so rename the external type (for example \`${name}Item\`, declared as \`a set of ${name}Items\`), or declare a qualified subset such as \`a set of Tracked ${name}\`.`
+                  : `Write the plural, \`${pluralize(name)}\`, to declare a set of the external type; owned, external, concept-local, and primitive names are one exact namespace.`,
             span: declaration.name.span,
           }),
         );
     }
-  }
-  for (const [name, group] of setGroups) {
-    if (group.every(({ declarationKind }) => declarationKind === "collection")) continue;
-    for (const declaration of group.slice(1))
-      diagnostics.push(
-        error({
-          code: "SSF_DUPLICATE_SET_NAME",
-          message: `Set name ${JSON.stringify(name)} is used by more than one declaration.`,
-          suggestion:
-            "Give every subset a name no other set uses; a top-level declaration's set is named by its type, so `a set of Users` is `users`.",
-          span: declaration.setName.span,
-        }),
-      );
   }
   for (const declaration of declarations) {
     const seenFields = new Set<string>();
@@ -290,7 +276,7 @@ export function validateTypeGraph(
         diagnostics.push(
           error({
             code: "SSF_DUPLICATE_FIELD",
-            message: `Field ${JSON.stringify(field.name)} occurs more than once in declaration ${JSON.stringify(labelOf(declaration))}.`,
+            message: `Field ${JSON.stringify(field.name)} occurs more than once in declaration ${JSON.stringify(declaration.name.text)}.`,
             suggestion: field.implicitName
               ? `Write a distinct name before each field of type \`${field.value.kind === "named" ? field.value.reference.text : field.value.element.reference.text}\`; a field written without a name is named \`${field.name}\`.`
               : "Use a unique field name within this declaration.",
@@ -326,7 +312,7 @@ export function validateTypeGraph(
   const ambiguousExternalSets = new Set<string>();
   for (const [name, declaration] of uniqueDeclarations) {
     if (declaration.multiplicity === "element" || aliasGroups.has(name)) continue;
-    const matches = [...external].filter((type) => exactPluralPair(type, name)).sort();
+    const matches = [...external].filter((type) => pluralize(type) === name).sort();
     if (matches.length === 1) externalSets.set(name, matches[0]!);
     else if (matches.length > 1) {
       ambiguousExternalSets.add(name);
@@ -371,8 +357,9 @@ export function validateTypeGraph(
       severity: "advice" as const,
       code: "SSF_AMBIGUOUS_AUTOMATIC_ALIAS" as const,
       message: `Automatic alias inference rejected candidate spellings ${candidates.map((name) => JSON.stringify(name)).join(", ")} for owners ${owners.map((name) => JSON.stringify(name)).join(", ")} because the authored relation is not one-to-one.`,
-      suggestion:
-        "Declare each intended relation explicitly with `alias Candidate for Owner`, or use unambiguous exact spellings.",
+      suggestion: owners.some((name) => external.has(name))
+        ? "Write the exact external type name, or rename a type so each spelling pairs with only one."
+        : "Declare each intended relation explicitly with `alias Candidate for Owner`, or use unambiguous exact spellings.",
     };
     const declaration = uniqueDeclarations.get(owner);
     diagnostics.push(
@@ -423,190 +410,234 @@ export function validateTypeGraph(
     return externalType === undefined ? undefined : { kind: "external", name: externalType };
   };
   const setOfExternal = new Map([...externalSets].map(([name, type]) => [type, name] as const));
-  const bySetName = new Map(
-    [...setGroups].flatMap(([name, group]) =>
-      group.length === 1 &&
-      (group[0]!.declarationKind === "subset" || uniqueDeclarations.has(group[0]!.name.text))
-        ? [[name, group[0]!] as const]
-        : [],
+  const rootDeclarationOf = (base: SetBase): ParsedDeclaration | undefined =>
+    base.kind === "owned"
+      ? eligible.get(base.name)
+      : uniqueDeclarations.get(setOfExternal.get(base.name) ?? "");
+  const keyOf = (base: SetBase, qualifiers: readonly string[]): string =>
+    `${base.kind}:${base.name}|${qualifiers.join(" ")}`;
+
+  // A subset's phrase is its qualifiers and the head that names its top-level set.
+  const resolved: {
+    readonly declaration: ParsedDeclaration;
+    readonly qualifiers: readonly string[];
+    readonly head: string;
+    readonly base: SetBase;
+    readonly key: string;
+  }[] = [];
+  for (const subset of subsets) {
+    const words = subset.name.text.split(" ");
+    const head = words.at(-1)!;
+    const base = baseOfType(head);
+    if (base !== undefined) {
+      const qualifiers = words.slice(0, -1);
+      resolved.push({ declaration: subset, qualifiers, head, base, key: keyOf(base, qualifiers) });
+      continue;
+    }
+    const category = local.has(head)
+      ? "a concept-local type"
+      : PRIMITIVE_NAMES.has(head)
+        ? "an SSF primitive"
+        : declarationGroups.has(head)
+          ? "an invalid or ambiguous structural declaration"
+          : undefined;
+    diagnostics.push(
+      category === undefined
+        ? error({
+            code: "SSF_UNDECLARED_TYPE",
+            message: `Subset ${JSON.stringify(subset.name.text)} qualifies ${JSON.stringify(head)}, which is not owned or external.`,
+            suggestion: `Declare the set it qualifies, such as \`a set of ${head}\`, or \`external ${head}\` in the Types fence.`,
+            span: subset.name.span,
+          })
+        : error({
+            code: "SSF_INVALID_SUBSET_PARENT",
+            message: `Subset ${JSON.stringify(subset.name.text)} qualifies ${JSON.stringify(head)}, which is ${category}; a subset qualifies an owned or external set.`,
+            suggestion: "Qualify a top-level set of the concept or an external type.",
+            span: subset.name.span,
+          }),
+    );
+  }
+
+  const byKey = groupsOf(resolved, ({ key }) => key);
+  for (const group of byKey.values())
+    for (const { declaration } of group.slice(1))
+      diagnostics.push(
+        error({
+          code: "SSF_DUPLICATE_SET_NAME",
+          message: `Subset ${JSON.stringify(declaration.name.text)} is declared more than once.`,
+          suggestion: "Declare each subset once, and put all of its fields on that declaration.",
+          span: declaration.name.span,
+        }),
+      );
+  const unique = resolved.filter(({ key }) => byKey.get(key)?.length === 1);
+
+  // Each qualifier appears once among the subsets of one top-level set.
+  const byRootQualifier = groupsOf(
+    unique,
+    ({ base, qualifiers }) => `${keyOf(base, [])}${qualifiers[0]}`,
+  );
+  for (const group of byRootQualifier.values()) {
+    const [first, ...repeats] = group;
+    for (const { declaration, qualifiers } of repeats)
+      diagnostics.push(
+        error({
+          code: "SSF_REPEATED_QUALIFIER",
+          message: `Qualifier ${JSON.stringify(qualifiers[0])} already qualifies ${JSON.stringify(first!.declaration.name.text)}; a qualifier appears once among the subsets of one set.`,
+          suggestion:
+            "Use a different qualifier, or make this set a subset of the one the qualifier already names.",
+          span: declaration.name.span,
+        }),
+      );
+  }
+
+  // Identifiers in code join the words, and must not collide in either number.
+  // An owned set is declared in the plural and an external type in the singular; each
+  // other number is known only where it is authored, as a joined spelling.
+  const spellingsOf = (base: SetBase): readonly string[] => [
+    base.name,
+    ...(base.kind === "external" ? [pluralize(base.name)] : []),
+    ...[...validAliases].flatMap(([spelling, target]) =>
+      base.kind === "owned" && target === base.name ? [spelling] : [],
+    ),
+    ...[...externalSpellings].flatMap(([spelling, target]) =>
+      base.kind === "external" && target === base.name ? [spelling] : [],
+    ),
+  ];
+  const typeNamespace = new Set([
+    ...occupied,
+    ...aliasGroups.keys(),
+    ...validAliases.keys(),
+    ...externalSpellings.keys(),
+  ]);
+  // Identifiers match in either number: `VerifiedUser` and `VerifiedUsers` are one name.
+  const sameIdentifier = (left: string, right: string): boolean =>
+    left === right || exactPluralPair(left, right);
+  const identifierOwners: (readonly [identifier: string, key: string])[] = [];
+  const subsetFacts = new Map<ParsedDeclaration, SubsetFact>();
+  const factByKey = new Map<string, SubsetFact>();
+  const parentOf = new Map<ParsedDeclaration, ParsedDeclaration>();
+  const declarationByKey = new Map(unique.map(({ key, declaration }) => [key, declaration]));
+  for (const { declaration, qualifiers, head, base, key } of unique) {
+    const qualifierText = qualifiers.join("");
+    const identifiers = [
+      ...new Set(
+        [head, ...spellingsOf(base)].map((spelling) => identifierOf(`${qualifierText}${spelling}`)),
+      ),
+    ].sort();
+    const collision = identifiers.find(
+      (identifier) =>
+        [...typeNamespace].some((name) => sameIdentifier(name, identifier)) ||
+        identifierOwners.some(
+          ([owned, owner]) => owner !== key && sameIdentifier(owned, identifier),
+        ),
+    );
+    if (collision !== undefined)
+      diagnostics.push(
+        error({
+          code: "SSF_NAME_COLLISION",
+          message: `Subset ${JSON.stringify(declaration.name.text)} takes the identifier ${JSON.stringify(collision)}, which another type in this concept already has in one number or the other.`,
+          suggestion: "Choose a qualifier whose joined name no other type or subset uses.",
+          span: declaration.name.span,
+        }),
+      );
+    else for (const identifier of identifiers) identifierOwners.push([identifier, key]);
+
+    const parentQualifiers = qualifiers.slice(1);
+    const words = declaration.name.wordSpans;
+    const parentSpan =
+      words === undefined || words.length < 2
+        ? declaration.name.span
+        : span(words[1]!.start, words.at(-1)!.end);
+    let parent: SubsetFact["parent"];
+    if (parentQualifiers.length === 0) {
+      parent = { text: head, normalized: base.name, referenceKind: base.kind, span: parentSpan };
+      const root = rootDeclarationOf(base);
+      if (root !== undefined) parentOf.set(declaration, root);
+    } else {
+      const parentText = [...parentQualifiers, head].join(" ");
+      const parentDeclaration = declarationByKey.get(keyOf(base, parentQualifiers));
+      if (parentDeclaration === undefined)
+        diagnostics.push(
+          error({
+            code: "SSF_INVALID_SUBSET_PARENT",
+            message: `Subset ${JSON.stringify(declaration.name.text)} qualifies ${JSON.stringify(parentText)}, which this State does not declare.`,
+            suggestion: `Declare \`a set of ${parentText}\`, or qualify a set that exists.`,
+            span: declaration.name.span,
+          }),
+        );
+      else parentOf.set(declaration, parentDeclaration);
+      parent = {
+        text: parentText,
+        normalized: parentDeclaration?.name.text ?? parentText,
+        referenceKind: "subset",
+        span: parentSpan,
+      };
+    }
+    const parentDeclaration = parentOf.get(declaration);
+    if (parentDeclaration?.multiplicity === "element")
+      diagnostics.push(
+        error({
+          code: "SSF_INVALID_SUBSET_PARENT",
+          message: `Subset ${JSON.stringify(declaration.name.text)} qualifies ${JSON.stringify(parent.text)}, which has one member; a subset qualifies a set or a sequence.`,
+          suggestion: `Declare ${JSON.stringify(parentDeclaration.name.text)} as a set, or qualify a set.`,
+          span: parentSpan,
+        }),
+      );
+    const singular = spellingsOf(base).find((spelling) => pluralize(spelling) === base.name);
+    const fact: SubsetFact = {
+      name: declaration.name.text,
+      qualifier: qualifiers[0]!,
+      root: base,
+      rootType: base.kind === "owned" ? (singular ?? base.name) : base.name,
+      parent,
+      identifiers,
+    };
+    subsetFacts.set(declaration, fact);
+    factByKey.set(key, fact);
+  }
+
+  function subsetNamed(phrase: string): SubsetFact | undefined {
+    const words = phrase.split(" ");
+    const base = words.length < 2 ? undefined : baseOfType(words.at(-1)!);
+    return base === undefined ? undefined : factByKey.get(keyOf(base, words.slice(0, -1)));
+  }
+
+  validateUniqueConstraints(declarations, parentOf, diagnostics);
+  validateSubsetConditions(declarations, parentOf, localTypes, diagnostics);
+
+  // A field named like a qualifier is easily misread as a member of that subset.
+  const qualifierNames = new Map(
+    unique.flatMap(({ qualifiers }) =>
+      qualifiers.map((qualifier) => [impliedName(qualifier), qualifier] as const),
     ),
   );
-
-  // Resolve each subset's parent set: written, or implied by the type the line names.
-  const parents = new Map<ParsedDeclaration, SsfSetReference>();
-  const parentBySubset = new Map<string, string>();
-  const externalRooted = new Map<string, string>();
-  const typeBases = new Map<ParsedDeclaration, SetBase>();
-  for (const subset of subsets) {
-    const typeName = subset.name.text;
-    const base = baseOfType(typeName);
-    const written = subset.parent;
-    const reference = (text: string, setKind: SsfSetReference["setKind"]): SsfSetReference => ({
-      text,
-      implicit: written === undefined,
-      setKind,
-      span: written?.span ?? subset.name.span,
-    });
-    if (base === undefined) {
-      const category = local.has(typeName)
-        ? "a concept-local type"
-        : PRIMITIVE_NAMES.has(typeName)
-          ? "an SSF primitive"
-          : declarationGroups.has(typeName)
-            ? "an invalid or ambiguous structural declaration"
-            : undefined;
-      const namedSet = bySetName.get(impliedName(typeName));
-      diagnostics.push(
-        category === undefined
-          ? error({
-              code: namedSet === undefined ? "SSF_UNDECLARED_TYPE" : "SSF_INVALID_SUBSET_PARENT",
-              message:
-                namedSet === undefined
-                  ? `Type ${JSON.stringify(typeName)} is not owned, external, concept-local, or an SSF primitive.`
-                  : `Subset ${JSON.stringify(subset.setName.text)} names ${JSON.stringify(typeName)} as a type, but ${JSON.stringify(namedSet.setName.text)} is a set, not a type.`,
-              suggestion:
-                namedSet === undefined
-                  ? `Declare it in the Types fence as \`external ${typeName}\`, or declare \`a set of ${typeName}\`.`
-                  : `Name the parent set before the type: \`${namedSet.setName.text} ${namedSet.name.text}\`.`,
-              span: subset.name.span,
-            })
-          : error({
-              code: "SSF_INVALID_SUBSET_PARENT",
-              message: `Subset ${JSON.stringify(subset.setName.text)} classifies ${JSON.stringify(typeName)}, which is ${category}; a subset classifies an owned or external type.`,
-              suggestion:
-                "Name a top-level set of the concept, or an external type, as the subset's type.",
-              span: subset.name.span,
-            }),
-      );
-      if (written !== undefined) parents.set(subset, reference(written.text, "unresolved"));
-      else parents.set(subset, reference(impliedName(typeName), "unresolved"));
-      continue;
+  for (const declaration of declarations)
+    for (const field of declaration.fields) {
+      const qualifier = qualifierNames.get(field.name);
+      if (field.implicitName || qualifier === undefined) continue;
+      const qualified = `${qualifier} ${typeOf(field)}`;
+      const subset = subsetNamed(qualified);
+      const written =
+        field.value.kind === "named"
+          ? `a ${qualified}`
+          : `a ${field.value.multiplicity === "set" ? "set" : "seq"} of ${qualified}`;
+      diagnostics.push({
+        severity: "advice",
+        code: "SSF_QUALIFIER_FIELD_NAME",
+        message: `Field ${JSON.stringify(field.name)} of ${JSON.stringify(declaration.name.text)} is named like the qualifier ${JSON.stringify(qualifier)} but holds ${JSON.stringify(typeOf(field))}.`,
+        suggestion:
+          subset === undefined
+            ? "Give the field a role name that is not a qualifier."
+            : `If it holds members of ${JSON.stringify(subset.name)}, write \`${written}\`; otherwise give it a role name that is not a qualifier.`,
+        span: field.nameSpan,
+      });
     }
-    typeBases.set(subset, base);
-    if (written !== undefined && written.text === subset.setName.text) {
-      diagnostics.push(
-        error({
-          code: "SSF_SUBSET_SELF_PARENT",
-          message: `Subset ${JSON.stringify(subset.setName.text)} cannot be its own parent.`,
-          suggestion: "Name a different set as the subset's parent, or leave it to the type.",
-          span: written.span,
-        }),
-      );
-      parents.set(subset, reference(written.text, "unresolved"));
-      continue;
-    }
-    const declaredRoot =
-      base.kind === "owned"
-        ? eligible.get(base.name)
-        : uniqueDeclarations.get(setOfExternal.get(base.name) ?? "");
-    const parentName = written?.text ?? declaredRoot?.setName.text;
-    if (parentName === undefined) {
-      // No set of the external type is declared, so the subset holds its individuals directly.
-      parents.set(subset, reference(impliedName(typeName), "external"));
-      externalRooted.set(subset.setName.text, base.name);
-      continue;
-    }
-    const parent = bySetName.get(parentName);
-    if (parent === undefined) {
-      if (
-        written !== undefined &&
-        base.kind === "external" &&
-        declaredRoot === undefined &&
-        written.text === impliedName(typeName)
-      ) {
-        parents.set(subset, reference(written.text, "external"));
-        externalRooted.set(subset.setName.text, base.name);
-        continue;
-      }
-      diagnostics.push(
-        error({
-          code: "SSF_INVALID_SUBSET_PARENT",
-          message: setGroups.has(parentName)
-            ? `Subset parent ${JSON.stringify(parentName)} is an ambiguous duplicate set.`
-            : `Subset parent ${JSON.stringify(parentName)} is not a set this State declares.`,
-          suggestion:
-            "Name a subset or a top-level set's name, such as `users` for `a set of Users`, or leave the parent to the type.",
-          span: written?.span ?? subset.name.span,
-        }),
-      );
-      parents.set(subset, reference(parentName, "unresolved"));
-      continue;
-    }
-    parents.set(subset, reference(parentName, "declared"));
-    if (bySetName.get(subset.setName.text) === subset)
-      parentBySubset.set(subset.setName.text, parentName);
-  }
-
-  validateUniqueConstraints(declarations, bySetName, parentBySubset, diagnostics);
-  validateSubsetConditions(declarations, bySetName, parentBySubset, localTypes, diagnostics);
-
-  const cyclicNames = cycleMembers(parentBySubset);
-  for (const subset of subsets) {
-    if (cyclicNames.has(subset.setName.text) && subset.parent !== undefined)
-      diagnostics.push(
-        error({
-          code: "SSF_SUBSET_CYCLE",
-          message: `Subset parent edge ${JSON.stringify(`${subset.setName.text} -> ${subset.parent.text}`)} participates in a cycle.`,
-          suggestion: "Make every subset chain terminate at a top-level set or an external type.",
-          span: subset.parent.span,
-        }),
-      );
-  }
-
-  // A set's base is what its members are; a subset inherits its parent's.
-  const setBases = new Map<string, SetBase>();
-  for (const [name, declaration] of bySetName) {
-    if (declaration.declarationKind !== "collection") continue;
-    const externalType = externalSets.get(declaration.name.text);
-    if (externalType !== undefined) setBases.set(name, { kind: "external", name: externalType });
-    else if (eligible.has(declaration.name.text))
-      setBases.set(name, { kind: "owned", name: declaration.name.text });
-  }
-  for (const [name, type] of externalRooted) setBases.set(name, { kind: "external", name: type });
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [name, parent] of parentBySubset) {
-      const base = setBases.get(parent);
-      if (!cyclicNames.has(name) && base !== undefined && !setBases.has(name)) {
-        setBases.set(name, base);
-        changed = true;
-      }
-    }
-  }
-
-  for (const subset of subsets) {
-    const parentName = parentBySubset.get(subset.setName.text);
-    const typeBase = typeBases.get(subset);
-    if (parentName === undefined || cyclicNames.has(subset.setName.text) || typeBase === undefined)
-      continue;
-    const parentBase = setBases.get(parentName);
-    if (parentBase === undefined) {
-      diagnostics.push(
-        error({
-          code: "SSF_INVALID_SUBSET_PARENT",
-          message: `Subset parent ${JSON.stringify(parentName)} does not resolve to a valid set because its parent chain is invalid.`,
-          suggestion:
-            "Repair the parent chain so it terminates at a unique top-level set or an external type.",
-          span: subset.parent?.span ?? subset.name.span,
-        }),
-      );
-    } else if (parentBase.kind !== typeBase.kind || parentBase.name !== typeBase.name) {
-      diagnostics.push(
-        error({
-          code: "SSF_SUBSET_TYPE_MISMATCH",
-          message: `Subset ${JSON.stringify(subset.setName.text)} names type ${JSON.stringify(subset.name.text)}, but its parent set ${JSON.stringify(parentName)} holds ${JSON.stringify(parentBase.name)}.`,
-          suggestion: `Name the type the parent set holds: \`${parentName} ${bySetName.get(parentName)?.name.text ?? parentBase.name}\`.`,
-          span: subset.name.span,
-        }),
-      );
-    }
-  }
 
   return {
     validStructuralNames: new Set(eligible.keys()),
     validAliases,
     externalSpellings,
-    parents,
+    subsets: subsetFacts,
+    subsetNamed,
   };
 }

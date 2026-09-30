@@ -18,13 +18,17 @@ a set of Votes with
   a Voter
   unique item and voter
 
-a completed set of Items where status is DONE with
+a set of Completed Items where status is DONE with
   a completedAt DateTime
+
+a set of Reviews with
+  a Completed Item
+  a reviewer Person
 
 a set of People with
   a displayName String
 
-a muted set of People
+a set of Muted People
 
 an element Settings with
   a retentionDays Number
@@ -37,14 +41,14 @@ alias WorkItem for Items
 ```text
 document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
 setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
-subsetDecl := (a|an) setName (element|set) [of] [parentName] Type [condition] [with] declarationBody?
+subsetDecl := (a|an) (element|set) [of] Qualifier+ Type [condition] [with] declarationBody?
 condition := where fieldName is VALUE (or VALUE)*
 declarationBody := (INDENT (field | uniqueLine | ruleLine))+
 aliasDecl := alias Alias for Type
 field := [a|an] modifier* [fieldName] (named|collection)
 modifier := optional | unique
 uniqueLine := unique fieldName (and fieldName)*
-named := Type | Parameter | Local | primitive
+named := Qualifier* Type | Parameter | Local | primitive
 collection := (set|seq) [of] named
 primitive := Number | String | Flag | Date | DateTime
 ruleLine := Rule: TEXT
@@ -60,9 +64,13 @@ Settings`. The `of` after a structural keyword is optional. A declaration with f
 ends its first line with `with` and needs at least one field or uniqueness constraint.
 A `Rule:` line attaches to a declaration without `with` and satisfies neither.
 
-Every top-level declaration also names a set: its type with a lowercase first letter.
-`a set of Items` is the set `items`, and `a set of ReadPosts` is `readPosts`. Subsets and
-prose refer to it by that name.
+One capitalized word after the structural keyword declares a top-level set; two or more
+declare a subset. A set is named by its type, `Items`, and prose uses that name, as in
+`where item is in Items`. There is no lowercase name for a set.
+
+A plain top-level set contains every individual of its type that appears anywhere in the
+concept's state, and its fields hold for each of them. With `a set of Items with a title
+String`, every Item that another declaration refers to is in `Items` and has a title.
 
 ## Sets of external types
 
@@ -76,17 +84,23 @@ external Post
 
 ```state
 a set of Users with
-  an Account
+  a reputation Number
 
-a set of Posts
+a set of Vouches with
+  a sponsor User
+  a candidate User
 ```
 
-`a set of Users` says which Users the concept knows about, and relates each of them to one
-Account; `a set of Posts` is a set of Posts and nothing more, such as the posts a person
-has read. `Users` joins `User` with the vendored `plur` implementation, exactly as an
-owned plural does, and the declaration's type resolves to the external `User`. Such a
-declaration owns no type, so an application cannot bind another concept's parameter to
-it.
+`Users` joins `User` with the vendored `plur` implementation, exactly as an owned plural
+does, and the declaration's type resolves to the external `User`. The rule above applies
+unchanged: every User in the state, including every sponsor and candidate, is in `Users`
+and has a reputation. So the meaning of the state does not change when a type moves
+between internal and external. Such a declaration owns no type, so an application cannot
+bind another concept's parameter to it.
+
+A concept that declares no plain set of an external type still has one implicitly:
+`Users` is every User in its state, with no further claim. Declare a qualified subset
+instead of a plain set when only some Users should carry fields, as below.
 
 Write the plural. `a set of User`, named exactly for the external type, collides with it
 and fails with a suggestion to write `a set of Users`. An `element` never joins, so `an
@@ -94,40 +108,49 @@ element Users` stays an owned element even beside `external User`.
 
 ## Subsets
 
-A subset is a named set: it classifies members of a parent set and is not a type.
+A subset is named by qualifying its parent set, as you might in English:
 
 ```state
 a set of Users with
-  an Account
+  a reputation Number
 
-a banned set of Users
+a set of Verified Users with
+  a verifiedOn Date
 
-a rejected set of banned Users
+a set of Trusted Verified Users
+
+a set of Vouches with
+  a sponsor Verified User
+  a candidate User
 ```
 
-`banned` holds some of the members of `users`, and `rejected` some of the members of
-`banned`. The line names the subset in lowercase, then the parent set, then the type the
-members have. Leaving the parent out means the set the type implies: `a banned set of
-Users` is short for `a banned set of users Users`. When the concept declares no set of an
-external type, that set is every individual of the type, so beside `external Post`,
+`a set of Q P` declares a subset of `P` with the qualifier `Q`, where `P` is a top-level
+set or another subset. `Verified Users` holds some of `Users`, and `Trusted Verified
+Users` some of `Verified Users`; each member also carries its ancestors' fields, so every
+Verified User has a reputation and a verifiedOn date. `an element Root Folder` declares a
+subset of `Folders` with exactly one member. A subset may use `set` or `element`, but not
+`seq`, qualifies a set or sequence rather than an element, may appear before or after its
+parent, and may state which members it classifies
+with a condition, as below. Subsets are not disjoint, so a User may be both Verified and
+Banned.
 
-```state
-a read set of Posts
-```
+The name is the whole phrase, never the qualifier alone: `Verified Users` in the plural
+and `Verified User` in the singular. A subset is a type, so a field may hold members of
+it: `a sponsor Verified User` says every sponsor is a Verified User. Action and query
+signatures take the type of the set a subset qualifies and state membership in a
+condition, such as `vouch (sponsor: User, candidate: User)` with `where sponsor is in
+Verified Users`; tooling rejects a subset as a signature type so no argument carries a
+hidden precondition.
 
-holds Posts drawn from all of them. A written parent is either a subset or the set of a
-top-level declaration, and the type has to be the one its members have; `a hidden set of
-banned Posts` fails when `banned` holds Users. A subset may use `set` or `element`, but
-not `seq`, and may appear before or after its parent.
-
-Subsets are not disjoint, so a User may be both banned and muted. Because a subset is not
-a type, a field, an alias, and an action or query signature name the type — `User`, not
-`banned` — and a precondition states membership in prose, such as `where user is in
-banned`. A subset's name is unique among the State's set names, including the ones
-top-level declarations imply; an unresolved parent, self-parenting, a parent cycle, and a
-type that differs from the parent's all fail with source-located diagnostics. An
-uppercase subset name such as `a Completed set of Items` is the retired spelling and is
-reported with its lowercase repair.
+A qualifier may qualify different sets, such as `Pending Invitations` and `Pending Users`,
+but appears only once among the subsets of one set: beside `Trusted Users` and `Verified
+Users`, `Trusted Verified Users` fails, because it would look related to `Trusted Users`
+without being its subset. A subset's parent must be declared, except the implicit set of
+an external type, so `a set of Read Posts` beside `external Post` needs no `a set of
+Posts`. Its identifier — the words joined, `VerifiedUsers` or `VerifiedUser` — must not
+be another type's name.
+`a Verified set of Users` and `a verified set of Users` are not SSF; the checker reports
+each with its qualified spelling, `a set of Verified Users`.
 
 ## Fields
 
@@ -143,8 +166,8 @@ a set of Items with
   a flags set of Visibility
 ```
 
-A field may leave its name out, and then it is named for its type with a lowercase first
-letter:
+A field may leave its name out, and then it is named for its type: the type's words
+joined, with a lowercase first letter.
 
 ```state
 a set of Comments with
@@ -152,14 +175,20 @@ a set of Comments with
   a Target
   a content String
   a set of Tags
+  a Verified User
 ```
 
-The fields are `author`, `target`, `content`, and `tags`, exactly as if each name were
-written. Two fields of one type need written names, such as `an author User` and `a
-reviewer User`; leaving both out names both `user`, which fails as a duplicate. Case
-tells the two forms apart: a name begins with a lowercase letter and a type with an
-uppercase one, so `unique Email` is a unique field named `email`, while `unique email` is
-a uniqueness line for a field already named `email`.
+The fields are `author`, `target`, `content`, `tags`, and `verifiedUser`, exactly as if
+each name were written. Two fields of one type need written names, such as `an author
+User` and `a reviewer User`; leaving both out names both `user`, which fails as a
+duplicate. Give a field a role name when the role matters, as in `a sponsor Verified
+User`, since otherwise changing its type from `User` to `Verified User` also renames it.
+
+Case tells names and types apart: a name begins with a lowercase letter and a type with
+an uppercase one. So `unique Email` is a unique field named `email`, while `unique email`
+is a uniqueness line for a field already named `email`; and `a verified User` is a field
+named `verified` holding a User, while `a Verified User` is a field named `verifiedUser`
+holding a Verified User. A field named like a qualifier draws advice for that reason.
 
 An indented field may omit its article, and `a` and `an` both read. The modifiers
 `optional` and `unique` go between the article and the field name, each at most once and
@@ -210,9 +239,9 @@ a set of Conversations with
 
 ## Declared types
 
-Every name a field value uses resolves to one of four things: an identity this State
-owns, an external parameter, an SSF primitive, or a concept-local type — and a name that
-resolves to none of them draws `SSF_UNDECLARED_TYPE`. Concept-local types are declared
+Every name a field value uses resolves to one of five things: an identity this State
+owns, an external parameter, a subset, an SSF primitive, or a concept-local type — and a
+name that resolves to none of them draws `SSF_UNDECLARED_TYPE`. Concept-local types are declared
 beside the external parameters in the concept's `types` fence:
 
 ```types
@@ -248,7 +277,7 @@ a set of Invitations with
   an invitee Person
   a status InvitationStatus
 
-a pending set of Invitations where status is PENDING with
+a set of Pending Invitations where status is PENDING with
   unique target and invitee
 ```
 
@@ -275,7 +304,8 @@ candidate that pairs with an external type spells that type, so beside `external
 the field `a set of Tags` holds Tags. The join needs one candidate and one owner — a
 non-element top-level declaration or an external type — on either side; where several
 match, SSF leaves them unjoined and reports the skipped names as advice. Element
-declarations, subsets, and primitives never join.
+declarations and primitives never join. A subset's phrase joins through its last word,
+so `Verified User` and `Verified Users` name the same subset.
 
 Where the plural relation cannot express the intended synonym, declare it:
 
@@ -292,49 +322,53 @@ join of the same name.
 
 ## Names
 
-Type, parameter, and alias names begin with an uppercase ASCII letter, and field and set
-names — subsets and their parents — with a lowercase one. The rest of a name may use
-ASCII letters, digits, or `_`. Enumeration values begin with an uppercase letter and
-otherwise use uppercase letters, digits, and `_`. A set name cannot be a structural
-word: `element`, `of`, `optional`, `seq`, `set`, `unique`, `where`, or `with`.
+Type, parameter, qualifier, and alias names begin with an uppercase ASCII letter, and
+field names with a lowercase one. The rest of a name may use ASCII letters, digits, or
+`_`. Enumeration values begin with an uppercase letter and otherwise use uppercase
+letters, digits, and `_`.
 
 Declaration and alias names are unique across a concept's State and share that namespace
 with the concept's external parameters, its concept-local types, and the SSF primitives.
-Set names are unique across the State in a namespace of their own. Field names are local
-to their declaration, and enumeration values to their enumeration.
+A subset's identifier in code joins its words, `VerifiedUsers` or `VerifiedUser`, and
+must not collide with that namespace or with another subset's identifier in either
+number. Field names are local to their declaration, and enumeration values to their
+enumeration.
 
 ## What a field value may name
 
 A field value may name an identity the concept owns, an external parameter or a joined
-spelling of one, a concept-local enumeration or opaque type, or an SSF primitive. It never
-names a subset. An unrecognized State name is retained as
-unresolved and fails with `SSF_UNDECLARED_TYPE`. Action and query signature types resolve
-against that same closed universe and fail the same way, including when the name is
-nested inside a type argument or union.
+spelling of one, a subset, a concept-local enumeration or opaque type, or an SSF
+primitive. An unrecognized State name is retained as unresolved and fails with
+`SSF_UNDECLARED_TYPE`. Action and query signature types resolve against the same
+closed universe, less subsets, and fail the same way, including when the name is nested
+inside a type argument or union.
 
 Ownership matters where something is proved against it. Subset parents and alias targets
 resolve within the same State, and an application's qualified binding target names an
-owned spelling of the instance it targets — never a subset or a set of an external type. Signature validation runs only after plural
-joins consume signature evidence, so a singular spelling established by that join is
-owned before it is checked.
+owned spelling of the instance it targets — never a subset or a set of an external type.
+Signature validation runs only after plural joins consume signature evidence, so a
+singular spelling established by that join is owned before it is checked.
 
 ## What the declarations mean
 
-A top-level set or sequence introduces identities, and an element declaration has one
-member. Fields declare relations on those identities, so there is no need for ID fields.
-A scalar field relates a member to a value or another identity; a collection field
-relates it to a set or sequence of values. A set of an external type introduces no
-identities: it records which individuals of that type the concept knows about, and its
-fields relate each of them as a set of owned identities would.
+A top-level set or sequence of an owned type introduces identities, and an element
+declaration has one member. Fields declare relations on those identities, so there is no
+need for ID fields. A scalar field relates a member to a value or another identity; a
+collection field relates it to a set or sequence of values. A set of an external type
+introduces no identities, but otherwise means the same: every individual of that type in
+the state is a member, with every field it declares.
 
 A subset introduces no identities of its own. Subsets may overlap, and their fields add
 relations for the members they classify. Which side of a relation declares it implies
 nothing about storage, navigation, or ownership.
 
-Say which set a member belongs to by naming the set. `note exists` is clear for an owned
-Note, because a Note exists only inside the concept that introduces it. An individual of
-an external type exists whether or not the concept records it, so write `user is in
-users`, `user is in banned`, or `user is not in banned`.
+State membership by naming the set: `where user is in Users`, `where sponsor is in
+Verified Users`, or `where user is not in Banned Users`. The rule that a plain set holds
+every individual of its type is an obligation on the actions, which tooling cannot
+check: an action that stores a User must also make it a member of `Users` with its
+fields, and removing a User from `Users` must remove or refuse every reference to it.
+When only some individuals should carry fields, declare a qualified subset rather than a
+plain set.
 
 ## Rules
 
@@ -352,8 +386,8 @@ reported as near misses.
 
 ## Canonical form
 
-Top-level declarations read `a set`, `a seq`, or `an element`, and a subset puts its
-article before its lowercase name: `a completed set`. Fields need `with` on the declaration
+Top-level declarations and subsets read `a set of`, `a seq of`, or `an element`, followed
+by their name: `a set of Completed Items`, `an element Root Folder`. Fields need `with` on the declaration
 line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
 `sequence`, and `sequences` are reported as near misses for `seq`, and `singleton` for
 `element`.

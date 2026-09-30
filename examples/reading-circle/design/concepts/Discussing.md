@@ -27,7 +27,7 @@ external Person
 a set of Discussions with
   a subject Subject
 
-an open set of Discussions
+a set of Open Discussions
 
 a seq of Responses with
   a discussion Discussion
@@ -42,27 +42,27 @@ open (subject: Subject) : returns (discussion: Discussion)
   where no open discussion has subject
   then
     add a new discussion with subject
-    add discussion to open
+    add discussion to Open Discussions
     returns discussion
   where some open discussion has subject
   then
     refuses DISCUSSION_ALREADY_OPEN "This subject already has an open discussion."
 
 respond (discussion: Discussion, author: Person, text: String) : returns (response: Response)
-  where discussion in open
+  where discussion in Open Discussions
   then
     add a new response with discussion, author, and text
     returns response
-  where discussion not in open
+  where discussion not in Open Discussions
   then
     refuses DISCUSSION_NOT_OPEN "This discussion is not open."
 
 close (discussion: Discussion) : returns ()
-  where discussion in open
+  where discussion in Open Discussions
   then
-    remove discussion from open
+    remove discussion from Open Discussions
     returns
-  where discussion not in open
+  where discussion not in Open Discussions
   then
     refuses DISCUSSION_NOT_OPEN "This discussion is not open."
 ```

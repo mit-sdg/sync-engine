@@ -308,7 +308,7 @@ describe("structural parsing and explicit aliases", () => {
   a watchers set of Person
   a status Status
 
-an open set of Items where status is OPEN
+a set of Open Items where status is OPEN
 
 an element Settings with
   a retentionDays Number
@@ -338,9 +338,9 @@ Rule: at most one Item has each title`;
       ],
     });
     expect(parsed.document.declarations[1]).toMatchObject({
-      name: { text: "Items", referenceKind: "owned" },
-      setName: "open",
-      parent: { text: "items", implicit: true, setKind: "declared" },
+      name: { text: "Open Items", normalized: "Open Items", referenceKind: "subset" },
+      qualifier: "Open",
+      parent: { text: "Items", normalized: "Items", referenceKind: "owned" },
       condition: { field: "status", values: ["OPEN"] },
     });
     expect(parsed.document.rules).toMatchObject([
@@ -457,6 +457,27 @@ Rule: at most one Item has each title`;
           "Write a distinct name before each field of type `User`; a field written without a name is named `user`.",
       },
     ]);
+  });
+
+  test.each([
+    ["Set", "a Set", "  a setValue Set"],
+    ["Unique", "an optional Unique", "  an optional uniqueValue Unique"],
+    ["Optional", "a unique Optional", "  a unique optionalValue Optional"],
+  ])("repairs an unnamed %s field, whose implied name is reserved", (type, field, suggestion) => {
+    const parsed = parseSimpleStateForm(`a set of Things with\n  ${field}`, {
+      externalTypes: [type],
+    });
+    expect(parsed.diagnostics).toMatchObject([
+      {
+        code: "SSF_MALFORMED_FIELD",
+        message: expect.stringContaining("which the grammar reserves"),
+        suggestion,
+      },
+    ]);
+    expect(
+      parseSimpleStateForm(`a set of Things with\n${suggestion}`, { externalTypes: [type] })
+        .diagnostics,
+    ).toEqual([]);
   });
 
   test("tells a unique field from a uniqueness line by the case of its word", () => {
@@ -589,7 +610,7 @@ describe("unique combinations", () => {
   a subject Subject
   a status Status
 
-a pending set of Reviews where status is PENDING with
+a set of Pending Reviews where status is PENDING with
   unique subject`,
       { externalTypes: ["Subject"], localTypes: [{ name: "Status", values: ["PENDING", "DONE"] }] },
     );
@@ -665,7 +686,7 @@ a pending set of Reviews where status is PENDING with
   a target Target
   an invitee Person
 
-a pending set of Invitations with
+a set of Pending Invitations with
   a note String
   unique target and invitee
   unique target and note`,
@@ -742,7 +763,7 @@ describe("collection fields", () => {
   });
 
   test.each([
-    ["an inline enumeration, which now belongs in the Types fence", "a status of OPEN or DONE", 27],
+    ["an inline enumeration", "a status of OPEN or DONE", 27],
     ["an inline collection enumeration", "a flags set of RED or BLUE", 29],
     ["a doubled collection `of`", "a flags set of of Person", 27],
   ])("rejects %s", (_, field, column) => {
@@ -976,212 +997,338 @@ alias TaskItem for Items`);
   });
 });
 
-describe("subset graph integrity", () => {
-  const parentOf = (parsed: ReturnType<typeof parseSimpleStateForm>, setName: string) =>
-    parsed.document.declarations.find((declaration) => declaration.setName === setName)?.parent;
+describe("qualified subsets", () => {
+  const declared = (parsed: ReturnType<typeof parseSimpleStateForm>, name: string) =>
+    parsed.document.declarations.find((declaration) => declaration.name.text === name);
 
   test.each([
-    `a leaf set of branch Roots
+    `a set of Leaf Branch Roots
 
-a branch set of Roots
+a set of Branch Roots
 
 a set of Roots`,
     `a set of Roots
 
-a leaf set of branch Roots
+a set of Leaf Branch Roots
 
-a branch set of Roots`,
-    `a branch set of Roots
-
-a set of Roots
-
-a leaf set of branch Roots`,
-  ])("accepts forward references and valid chains independent of declaration order", (source) => {
+a set of Branch Roots`,
+  ])("chains qualifiers into subsets independent of declaration order", (source) => {
     const parsed = parseSimpleStateForm(source);
     expect(parsed.diagnostics).toEqual([]);
     expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Roots"]);
-    expect(parentOf(parsed, "leaf")).toMatchObject({
-      text: "branch",
-      implicit: false,
-      setKind: "declared",
+    expect(declared(parsed, "Leaf Branch Roots")).toMatchObject({
+      declarationKind: "subset",
+      qualifier: "Leaf",
+      name: { referenceKind: "subset", normalized: "Leaf Branch Roots" },
+      parent: { text: "Branch Roots", normalized: "Branch Roots", referenceKind: "subset" },
     });
-    expect(parentOf(parsed, "branch")).toMatchObject({
-      text: "roots",
-      implicit: true,
-      setKind: "declared",
-    });
-  });
-
-  test("reads a written top-level parent as the one the type implies", () => {
-    const parsed = parseSimpleStateForm("a set of Roots\n\na branch set of roots Roots");
-    expect(parsed.diagnostics).toEqual([]);
-    expect(parentOf(parsed, "branch")).toMatchObject({
-      text: "roots",
-      implicit: false,
-      setKind: "declared",
+    expect(declared(parsed, "Branch Roots")).toMatchObject({
+      qualifier: "Branch",
+      parent: { text: "Roots", normalized: "Roots", referenceKind: "owned" },
     });
   });
 
-  test("makes a subset a set rather than a type", () => {
+  test("uses a subset as a field type in either number", () => {
     const parsed = parseSimpleStateForm(
-      `a set of Items with
-  a status Status
+      `a set of Users with
+  a reputation Number
 
-an open set of Items where status is OPEN
+a set of Verified Users with
+  a verifiedOn Date
 
-a set of Reviews with
-  an item Open`,
-      { localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }] },
+a set of Vouches with
+  a sponsor Verified User
+  a candidate User
+  a Verified User
+  a set of Verified Users`,
+      { externalTypes: ["User"] },
     );
-    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual(["Items", "Reviews"]);
-    expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_UNDECLARED_TYPE", span: { start: { line: 7, column: 11 } } },
+    expect(parsed.diagnostics).toEqual([]);
+    expect(declared(parsed, "Vouches")?.fields).toMatchObject([
+      {
+        name: "sponsor",
+        value: { reference: { normalized: "Verified Users", referenceKind: "subset" } },
+      },
+      {
+        name: "candidate",
+        value: { reference: { normalized: "User", referenceKind: "external" } },
+      },
+      { name: "verifiedUser", value: { reference: { referenceKind: "subset" } } },
+      { name: "verifiedUsers", value: { element: { reference: { referenceKind: "subset" } } } },
     ]);
-    expect(
-      validateSimpleStateForm("a set of Items\n\nan open set of Items\n\nalias Now for open"),
-    ).toMatchObject([{ code: "SSF_MALFORMED_ALIAS" }]);
+    expect(parsed.document.inventory.subsets).toEqual([
+      { name: "Verified Users", identifiers: ["VerifiedUser", "VerifiedUsers"], rootType: "User" },
+    ]);
   });
 
-  test("repairs a retired uppercase subset name to its lowercase set name", () => {
+  test("declares a singleton subset with an element", () => {
+    const parsed = parseSimpleStateForm(
+      "a set of Folders with\n  a name String\n\nan element Root Folder",
+    );
+    expect(parsed.diagnostics).toEqual([]);
+    expect(declared(parsed, "Root Folder")).toMatchObject({
+      multiplicity: "element",
+      qualifier: "Root",
+      parent: { text: "Folder", normalized: "Folders", referenceKind: "owned" },
+    });
+  });
+
+  test("reuses a qualifier across different sets", () => {
+    const parsed = parseSimpleStateForm(
+      "a set of Invitations\n\na set of Pending Invitations\n\na set of Pending Users",
+      { externalTypes: ["User"] },
+    );
+    expect(parsed.diagnostics).toEqual([]);
+  });
+
+  test("rejects a qualifier repeated among the subsets of one set", () => {
     expect(
-      parseSimpleStateForm("a set of Items\n\nan Open set of Items").diagnostics,
+      parseSimpleStateForm(
+        "a set of Users\n\na set of Trusted Users\n\na set of Verified Users\n\na set of Trusted Verified Users",
+        { externalTypes: ["User"] },
+      ).diagnostics,
     ).toMatchObject([
       {
-        code: "SSF_MALFORMED_DECLARATION",
+        code: "SSF_REPEATED_QUALIFIER",
         message:
-          "Subset `Open` is a named set, not a type, so its name begins with a lowercase letter.",
-        suggestion: "an open set of Items",
-        span: { start: { line: 3, column: 4 } },
+          'Qualifier "Trusted" already qualifies "Trusted Users"; a qualifier appears once among the subsets of one set.',
+        span: { start: { line: 7, column: 10 } },
       },
     ]);
   });
 
-  test("points a subset that names another subset as its type at the parent set", () => {
+  test("rejects a subset whose parent subset is not declared", () => {
     expect(
-      parseSimpleStateForm("a set of Roots\n\na branch set of Roots\n\na leaf set of Branch")
-        .diagnostics,
+      parseSimpleStateForm("a set of Items\n\na set of Late Open Items").diagnostics,
     ).toMatchObject([
       {
         code: "SSF_INVALID_SUBSET_PARENT",
-        suggestion: "Name the parent set before the type: `branch Roots`.",
-        span: { start: { line: 5, column: 15 } },
+        message:
+          'Subset "Late Open Items" qualifies "Open Items", which this State does not declare.',
+        suggestion: "Declare `a set of Open Items`, or qualify a set that exists.",
       },
     ]);
   });
 
   test.each([
-    ["a child set of Missing", {}, "SSF_UNDECLARED_TYPE"],
-    ["a child set of String", {}, "SSF_INVALID_SUBSET_PARENT"],
-    ["a child set of Status", { localTypes: [{ name: "Status" }] }, "SSF_INVALID_SUBSET_PARENT"],
+    ["a set of Open Missing", {}, "SSF_UNDECLARED_TYPE"],
+    ["a set of Open String", {}, "SSF_INVALID_SUBSET_PARENT"],
+    ["a set of Open Status", { localTypes: [{ name: "Status" }] }, "SSF_INVALID_SUBSET_PARENT"],
   ])("rejects %s", (source, options, code) => {
     const parsed = parseSimpleStateForm(source, options);
     expect(parsed.diagnostics).toMatchObject([{ code }]);
-    expect(parsed.document.declarations.at(-1)?.parent?.setKind).toBe("unresolved");
+    expect(parsed.document.declarations[0]?.name.referenceKind).toBe("unresolved");
   });
 
-  test("rejects a parent set the State does not declare", () => {
+  test("rejects a reference to a subset the State does not declare", () => {
     expect(
-      parseSimpleStateForm("a set of Items\n\na done set of finished Items").diagnostics,
+      parseSimpleStateForm("a set of Items\n\na set of Reviews with\n  an item Open Item")
+        .diagnostics,
     ).toMatchObject([
       {
-        code: "SSF_INVALID_SUBSET_PARENT",
-        message: 'Subset parent "finished" is not a set this State declares.',
-        span: { start: { line: 3, column: 15 } },
+        code: "SSF_UNDECLARED_TYPE",
+        message: 'Type "Open Item" is not a subset this State declares.',
+        span: { start: { line: 4, column: 11 } },
       },
     ]);
   });
 
-  test("rejects a subset whose type differs from its parent set's", () => {
-    expect(
-      parseSimpleStateForm(
-        "a set of Items\n\na set of Tasks\n\nan open set of Items\n\na late set of open Tasks",
-      ).diagnostics,
-    ).toMatchObject([
-      {
-        code: "SSF_SUBSET_TYPE_MISMATCH",
-        message: 'Subset "late" names type "Tasks", but its parent set "open" holds "Items".',
-        suggestion: "Name the type the parent set holds: `open Items`.",
-        span: { start: { line: 7, column: 20 } },
-      },
-    ]);
-  });
-
-  test("resolves a subset's type through an explicit alias independent of order", () => {
-    for (const source of [
-      "a set of Roots\n\nalias Root for Roots\n\na child set of Root",
-      "a child set of Root\n\nalias Root for Roots\n\na set of Roots",
-    ]) {
-      const parsed = parseSimpleStateForm(source);
-      expect(parsed.diagnostics).toEqual([]);
-      const child = parsed.document.declarations.find(({ setName }) => setName === "child");
-      expect(child).toMatchObject({
-        name: { text: "Root", normalized: "Roots", referenceKind: "owned" },
-        parent: { text: "roots", implicit: true, setKind: "declared" },
-      });
-    }
-  });
-
-  test("takes a subset's own type as automatic alias evidence", () => {
-    const parsed = parseSimpleStateForm("a child set of Item\n\na set of Items");
-    expect(parsed.diagnostics).toEqual([]);
-    expect(parsed.document.declarations[0]).toMatchObject({
-      name: { text: "Item", normalized: "Items", referenceKind: "owned" },
-      parent: { text: "items", setKind: "declared" },
-    });
-  });
-
-  test("rejects a set name used by more than one declaration", () => {
+  test("rejects a subset declared twice and an identifier another type has", () => {
     const codesAndLines = (source: string) =>
       parseSimpleStateForm(source).diagnostics.map(({ code, span }) => [code, span?.start.line]);
-    expect(codesAndLines("a set of Items\n\na done set of Items\n\na done set of Items")).toEqual([
+    expect(codesAndLines("a set of Items\n\na set of Done Items\n\na set of Done Items")).toEqual([
       ["SSF_DUPLICATE_SET_NAME", 5],
     ]);
-    // A subset cannot take the name a top-level declaration's type implies.
-    expect(codesAndLines("a set of Items\n\nan items set of Items")).toEqual([
-      ["SSF_DUPLICATE_SET_NAME", 3],
-      ["SSF_INVALID_SUBSET_PARENT", 3],
+    expect(codesAndLines("a set of Items\n\na set of DoneItems\n\na set of Done Items")).toEqual([
+      ["SSF_NAME_COLLISION", 5],
+    ]);
+  });
+
+  test("resolves a subset's head through an explicit alias or an authored singular", () => {
+    const aliased = parseSimpleStateForm(
+      "a set of Roots\n\nalias Root for Roots\n\na set of Leaf Root",
+    );
+    expect(aliased.diagnostics).toEqual([]);
+    expect(declared(aliased, "Leaf Root")?.parent).toMatchObject({ normalized: "Roots" });
+
+    const joined = parseSimpleStateForm("a set of Items\n\nan element Current Item");
+    expect(joined.diagnostics).toEqual([]);
+    expect(joined.document.inventory.ownedTypeNames).toEqual(["Item", "Items"]);
+    expect(joined.document.inventory.subsets).toMatchObject([
+      { name: "Current Item", identifiers: ["CurrentItem", "CurrentItems"] },
     ]);
   });
 
   test("rejects a subset of a type with duplicate structural declarations", () => {
     const parsed = parseSimpleStateForm(
-      "a child set of Roots\n\na set of Roots\n\nan element Roots",
+      "a set of Child Roots\n\na set of Roots\n\nan element Roots",
     );
     expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 1, column: 16 } } },
+      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 1, column: 10 } } },
       { code: "SSF_DUPLICATE_DECLARATION", span: { start: { line: 5, column: 12 } } },
     ]);
   });
 
-  test("rejects a subset whose parent has an invalid chain", () => {
-    const parsed = parseSimpleStateForm(
-      "a child set of parent Items\n\na parent set of missing Items\n\na set of Items",
+  test("requires `set` or `element` for a subset", () => {
+    expect(parseSimpleStateForm("a set of Items\n\na seq of Late Items").diagnostics).toMatchObject(
+      [{ code: "SSF_MALFORMED_DECLARATION", suggestion: "a set of Late Items" }],
     );
-    expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 1, column: 16 } } },
-      { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 3, column: 17 } } },
+  });
+
+  test.each([
+    ["an Open set of Items", "a set of Open Items"],
+    ["an open set of Items where status is OPEN", "a set of Open Items where status is OPEN"],
+    ["a late set of open Items", "a set of Late Open Items"],
+    ["a Current element of Items", "an element Current Items"],
+  ])("repairs the separately named subset %s", (line, suggestion) => {
+    const parsed = parseSimpleStateForm(
+      `a set of Items with\n  a status Status\n\na set of Open Items where status is OPEN\n\n${line}`,
+      { localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }] },
+    );
+    expect(
+      parsed.diagnostics.find(({ code }) => code === "SSF_MALFORMED_DECLARATION"),
+    ).toMatchObject({
+      message:
+        "Name a subset by qualifying its parent set, as in `a set of Verified Users`, rather than with a separate subset name.",
+      suggestion,
+    });
+  });
+
+  test("advises when a field is named like a qualifier", () => {
+    expect(
+      parseSimpleStateForm(
+        "a set of Users\n\na set of Verified Users\n\na set of Vouches with\n  a verified User",
+        { externalTypes: ["User"] },
+      ).diagnostics,
+    ).toMatchObject([
+      {
+        severity: "advice",
+        code: "SSF_QUALIFIER_FIELD_NAME",
+        suggestion:
+          'If it holds members of "Verified Users", write `a Verified User`; otherwise give it a role name that is not a qualifier.',
+        span: { start: { line: 6, column: 5 } },
+      },
     ]);
   });
 
-  test("rejects self-parenting at the parent span", () => {
-    const parsed = parseSimpleStateForm("a set of Loops\n\na loop set of loop Loops");
-    expect(parsed.diagnostics).toMatchObject([
-      { code: "SSF_SUBSET_SELF_PARENT", span: { start: { line: 3, column: 15 } } },
+  test("matches a subset's identifier in either number", () => {
+    expect(
+      parseSimpleStateForm("a set of Users\n\na set of VerifiedUser\n\na set of Verified Users")
+        .diagnostics,
+    ).toMatchObject([
+      {
+        code: "SSF_NAME_COLLISION",
+        message: expect.stringContaining('takes the identifier "VerifiedUsers"'),
+        span: { start: { line: 5 } },
+      },
     ]);
   });
 
-  test("rejects every edge in multi-node cycles deterministically", () => {
-    const source =
-      "a set of Items\n\na x set of z Items\n\na y set of x Items\n\na z set of y Items";
-    const first = parseSimpleStateForm(source).diagnostics;
-    const second = parseSimpleStateForm(source).diagnostics;
-    expect(first).toEqual(second);
-    expect(first.map(({ code }) => code)).toEqual([
-      "SSF_SUBSET_CYCLE",
-      "SSF_SUBSET_CYCLE",
-      "SSF_SUBSET_CYCLE",
+  test.each([
+    ["an element", "an element Settings\n\na set of Active Settings"],
+    [
+      "an alias for an element",
+      "an element Settings\n\nalias Config for Settings\n\na set of Active Config",
+    ],
+    [
+      "an element subset",
+      "a set of Folders\n\nan element Root Folder\n\na set of Open Root Folder",
+    ],
+  ])("rejects a subset of %s", (_, source) => {
+    expect(parseSimpleStateForm(source).diagnostics).toMatchObject([
+      {
+        code: "SSF_INVALID_SUBSET_PARENT",
+        message: expect.stringContaining(
+          "which has one member; a subset qualifies a set or a sequence",
+        ),
+      },
     ]);
-    expect(first.map(({ span }) => span!.start.line)).toEqual([3, 5, 7]);
+  });
+
+  test("spans a subset's parent over the parent's own words", () => {
+    const source = "a set of Users\r\na set of Trusted Users\r\nan element Active Trusted User";
+    const parents = parseSimpleStateForm(source).document.declarations.flatMap(({ parent }) =>
+      parent === undefined
+        ? []
+        : [[parent.text, source.slice(parent.span.start.offset, parent.span.end.offset)]],
+    );
+    expect(parents).toEqual([
+      ["Users", "Users"],
+      ["Trusted User", "Trusted User"],
+    ]);
+  });
+
+  test.each([
+    [
+      "a nested subset",
+      "  a trusted Verified User",
+      'If it holds members of "Trusted Verified Users", write `a Trusted Verified User`; otherwise give it a role name that is not a qualifier.',
+    ],
+    [
+      "a collection",
+      "  a verified set of User",
+      'If it holds members of "Verified Users", write `a set of Verified User`; otherwise give it a role name that is not a qualifier.',
+    ],
+    [
+      "a type no subset qualifies",
+      "  a verified Number",
+      "Give the field a role name that is not a qualifier.",
+    ],
+  ])("advises a valid repair for a field named like a qualifier on %s", (_, field, suggestion) => {
+    expect(
+      parseSimpleStateForm(
+        `a set of Users\n\na set of Verified Users\n\na set of Trusted Verified Users\n\na set of Teams with\n${field}`,
+      ).diagnostics,
+    ).toMatchObject([{ severity: "advice", code: "SSF_QUALIFIER_FIELD_NAME", suggestion }]);
+  });
+
+  describe("subset conditions", () => {
+    const localTypes = [
+      { name: "Status", values: ["OPEN", "DONE"] },
+      { name: "Level", values: ["LOW", "HIGH"] },
+    ];
+    const tickets = "a set of Tickets with\n  a status Status\n  a title String\n\n";
+
+    test("resolve a condition against the fields of every ancestor, in any order", () => {
+      const source = [
+        "a set of Critical Urgent Open Tickets where level is HIGH",
+        "a set of Urgent Open Tickets with\r\n  a level Level",
+        "a set of Open Tickets where status is OPEN",
+        "a set of Tickets with\r\n  a status Status",
+      ].join("\r\n\r\n");
+      expect(parseSimpleStateForm(source, { localTypes }).diagnostics).toEqual([]);
+    });
+
+    test.each([
+      [
+        "a missing field",
+        "a set of Open Tickets where state is OPEN",
+        'Subset condition names "state", which is not a field of "Open Tickets" or of a set it is a subset of.',
+        29,
+      ],
+      [
+        "a field that is not an enumeration",
+        "a set of Titled Tickets where title is OPEN",
+        'Subset condition tests field "title", whose type "String" is not a declared enumeration.',
+        31,
+      ],
+      [
+        "an unknown value",
+        "a set of Open Tickets where status is CLOSED",
+        'Subset condition tests for "CLOSED", which is not a value of "Status".',
+        39,
+      ],
+      [
+        "a repeated value",
+        "a set of Open Tickets where status is OPEN or OPEN",
+        'Subset condition tests for "OPEN" more than once.',
+        47,
+      ],
+    ])("reject %s", (_, line, message, column) => {
+      expect(parseSimpleStateForm(`${tickets}${line}`, { localTypes }).diagnostics).toMatchObject([
+        { code: "SSF_INVALID_SUBSET_CONDITION", message, span: { start: { line: 5, column } } },
+      ]);
+    });
   });
 });
 
@@ -1191,9 +1338,9 @@ describe("sets of external types", () => {
       `a set of Users with
   an Account
 
-a banned set of Users
+a set of Banned Users
 
-a rejected set of banned Users`,
+a set of Rejected Banned Users`,
       { externalTypes: ["User", "Account"] },
     );
     expect(parsed.diagnostics).toEqual([]);
@@ -1205,32 +1352,26 @@ a rejected set of banned Users`,
     expect(parsed.document.declarations).toMatchObject([
       {
         declarationKind: "collection",
-        setName: "users",
         name: { text: "Users", normalized: "User", referenceKind: "external" },
         fields: [{ name: "account", value: { reference: { referenceKind: "external" } } }],
       },
-      { setName: "banned", parent: { text: "users", implicit: true, setKind: "declared" } },
-      { setName: "rejected", parent: { text: "banned", implicit: false, setKind: "declared" } },
+      { parent: { text: "Users", normalized: "User", referenceKind: "external" } },
+      { parent: { text: "Banned Users", normalized: "Banned Users", referenceKind: "subset" } },
     ]);
   });
 
-  test("keeps a subset of an external type the concept declares no set of", () => {
-    const parsed = parseSimpleStateForm(
-      "a read set of Posts\n\na starred set of read Posts\n\na seen set of posts Posts",
-      { externalTypes: ["Post"] },
-    );
-    expect(parsed.diagnostics).toEqual([]);
-    expect(
-      parsed.document.declarations.map(({ setName, parent }) => [setName, parent]),
-    ).toMatchObject([
-      ["read", { text: "posts", implicit: true, setKind: "external" }],
-      ["starred", { text: "read", implicit: false, setKind: "declared" }],
-      ["seen", { text: "posts", implicit: false, setKind: "external" }],
-    ]);
-    expect(parsed.document.declarations[0]?.name).toMatchObject({
-      normalized: "Post",
-      referenceKind: "external",
+  test("qualifies an external type the concept declares no set of", () => {
+    const parsed = parseSimpleStateForm("a set of Read Posts\n\na set of Starred Read Posts", {
+      externalTypes: ["Post"],
     });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations).toMatchObject([
+      {
+        qualifier: "Read",
+        parent: { text: "Posts", normalized: "Post", referenceKind: "external" },
+      },
+      { qualifier: "Starred", parent: { text: "Read Posts", referenceKind: "subset" } },
+    ]);
   });
 
   test("rejects a set named exactly for an external type", () => {
@@ -1260,6 +1401,54 @@ a rejected set of banned Users`,
     ]);
     expect(parsed.document.inventory.externalSpellings).toEqual(["People", "Tags"]);
     expect(parsed.document.inventory.ownedTypeNames).toEqual(["Items"]);
+  });
+
+  test("recognizes a set of an external type only by that type's plural", () => {
+    const backwards = parseSimpleStateForm("a set of User", { externalTypes: ["Users"] });
+    expect(backwards.diagnostics).toEqual([]);
+    expect(backwards.document.inventory).toMatchObject({
+      ownedTypeNames: ["User"],
+      externalSpellings: [],
+    });
+
+    const roots = ["a set of Ax with\n  a status Status", "a set of Axis with\n  a radius Number"];
+    const outcomes = [roots, roots.toReversed()].map((order) => {
+      const parsed = parseSimpleStateForm(
+        `${order.join("\n\n")}\n\na set of Open Axes where status is OPEN`,
+        { externalTypes: ["Axes"], localTypes: [{ name: "Status", values: ["OPEN", "DONE"] }] },
+      );
+      return [parsed.document.inventory.ownedTypeNames, parsed.diagnostics.map(({ code }) => code)];
+    });
+    expect(outcomes[0]).toEqual([["Ax", "Axis"], ["SSF_INVALID_SUBSET_CONDITION"]]);
+    expect(outcomes[1]).toEqual(outcomes[0]);
+  });
+
+  test("suggests a rename for an external type spelled the same in the plural", () => {
+    expect(
+      parseSimpleStateForm("a set of Series", { externalTypes: ["Series"] }).diagnostics,
+    ).toMatchObject([
+      {
+        code: "SSF_NAME_COLLISION",
+        suggestion:
+          "`Series` is spelled the same in the plural, so rename the external type (for example `SeriesItem`, declared as `a set of SeriesItems`), or declare a qualified subset such as `a set of Tracked Series`.",
+      },
+    ]);
+    expect(
+      parseSimpleStateForm("a set of Tracked Series", { externalTypes: ["Series"] }).diagnostics,
+    ).toEqual([]);
+  });
+
+  test("advises exact external names, not aliases, when an external spelling is ambiguous", () => {
+    expect(
+      parseSimpleStateForm("a set of Items with\n  an axis Axes", {
+        externalTypes: ["Ax", "Axis"],
+      }).diagnostics.find(({ code }) => code === "SSF_AMBIGUOUS_AUTOMATIC_ALIAS"),
+    ).toMatchObject({
+      severity: "advice",
+      externalType: "Ax",
+      suggestion:
+        "Write the exact external type name, or rename a type so each spelling pairs with only one.",
+    });
   });
 
   test("keeps an element named like an external plural as an owned element", () => {
@@ -1449,7 +1638,7 @@ alias Human for People`).document.inventory;
   });
 
   test.each([
-    ["a pending set of Status", "SSF_INVALID_SUBSET_PARENT", '"Status", which is'],
+    ["a set of Pending Status", "SSF_INVALID_SUBSET_PARENT", 'qualifies "Status", which is'],
     ["alias State for Status", "SSF_INVALID_ALIAS_TARGET", 'Alias target "Status" is'],
   ])("identifies a concept-local structural target: %s", (source, code, subject) => {
     expect(
@@ -1577,18 +1766,27 @@ describe("repository SSF corpus", () => {
         constraints: [{ kind: "unique", fields: ["item", "voter"] }],
       },
       {
-        name: { text: "Items", referenceKind: "owned" },
-        setName: "completed",
+        name: { text: "Completed Items", referenceKind: "subset" },
         declarationKind: "subset",
-        parent: { text: "items", implicit: true, setKind: "declared" },
+        qualifier: "Completed",
+        parent: { text: "Items", referenceKind: "owned" },
         condition: { field: "status", values: ["DONE"] },
         fields: [{ name: "completedAt" }],
       },
       {
-        name: { text: "People", normalized: "Person", referenceKind: "external" },
-        setName: "muted",
-        declarationKind: "subset",
-        parent: { text: "people", implicit: true, setKind: "external" },
+        name: { text: "Reviews", referenceKind: "owned" },
+        fields: [
+          {
+            name: "completedItem",
+            value: { reference: { normalized: "Completed Items", referenceKind: "subset" } },
+          },
+          { name: "reviewer", value: { reference: { referenceKind: "external" } } },
+        ],
+      },
+      {
+        name: { text: "Muted People", referenceKind: "subset" },
+        qualifier: "Muted",
+        parent: { text: "People", normalized: "Person", referenceKind: "external" },
       },
       {
         name: { text: "Settings", referenceKind: "owned" },
@@ -1606,6 +1804,7 @@ describe("repository SSF corpus", () => {
     expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
       "Item",
       "Items",
+      "Reviews",
       "Settings",
       "Votes",
       "WorkItem",

@@ -21,28 +21,29 @@ function multiplicity(word: string): Multiplicity | undefined {
   return word === "seq" ? "sequence" : undefined;
 }
 
-/** A top-level declaration introduces a type; a subset names a set and introduces none. */
-function structuralDeclaration(line: string): readonly [string, Multiplicity] | undefined {
+/** The capitalized words after a declaration's structural keyword, and its multiplicity. */
+function declarationPhrase(line: string): readonly [readonly string[], Multiplicity] | undefined {
   if (/^[ \t]/.test(line)) return undefined;
   const words = line.trim().split(/\s+/);
   if (words[0] !== "a" && words[0] !== "an") return undefined;
   const declaredMultiplicity = multiplicity(words[1] ?? "");
   if (declaredMultiplicity === undefined) return undefined;
-  const name = words[words[2] === "of" ? 3 : 2];
-  return name !== undefined && TYPE_NAME.test(name) ? [name, declaredMultiplicity] : undefined;
+  const start = words[2] === "of" ? 3 : 2;
+  let end = start;
+  while (TYPE_NAME.test(words[end] ?? "")) end += 1;
+  return end > start ? [words.slice(start, end), declaredMultiplicity] : undefined;
 }
 
-/** The type a subset line classifies, which is evidence for a plural join like a field's. */
+/** One word declares a type; a qualified phrase declares a subset, which owns no new type. */
+function structuralDeclaration(line: string): readonly [string, Multiplicity] | undefined {
+  const phrase = declarationPhrase(line);
+  return phrase?.[0].length === 1 ? [phrase[0][0]!, phrase[1]] : undefined;
+}
+
+/** A subset's head word, which is evidence for a plural join like a field's. */
 function subsetType(line: string): string | undefined {
-  if (/^[ \t]/.test(line)) return undefined;
-  const words = line.trim().split(/\s+/);
-  if (words[0] !== "a" && words[0] !== "an") return undefined;
-  if (!FIELD_NAME.test(words[1] ?? "") || multiplicity(words[2] ?? "") === undefined)
-    return undefined;
-  let index = words[3] === "of" ? 4 : 3;
-  if (FIELD_NAME.test(words[index] ?? "")) index += 1;
-  const name = words[index];
-  return name !== undefined && TYPE_NAME.test(name) ? name : undefined;
+  const phrase = declarationPhrase(line);
+  return phrase !== undefined && phrase[0].length > 1 ? phrase[0].at(-1) : undefined;
 }
 
 function stateFieldType(line: string): string | undefined {
@@ -61,9 +62,9 @@ function stateFieldType(line: string): string | undefined {
     value += 1;
     if (words[value] === "of") value += 1;
   }
-  const candidate = words[value];
-  return candidate !== undefined && TYPE_NAME.test(candidate) && value + 1 === words.length
-    ? candidate
+  const phrase = words.slice(value);
+  return phrase.length > 0 && phrase.every((word) => TYPE_NAME.test(word))
+    ? phrase.at(-1)
     : undefined;
 }
 
@@ -216,11 +217,14 @@ describe("independent owned-type inventory oracle", () => {
 
 alias Rodent for Mice
 
-a selected set of Mice
+a set of Selected Mice
 
 a set of People
 
-a muted set of People
+a set of Muted People
+
+a set of Reviews with
+  a Selected Mouse
 
 an element Settings`,
       { externalTypes: ["Person"] },

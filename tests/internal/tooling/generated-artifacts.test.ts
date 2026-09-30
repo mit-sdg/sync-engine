@@ -54,7 +54,9 @@ const ownedTypeModule = new URL(
   "./fixtures/generated-artifacts/owned-types/vocabulary.ts",
   import.meta.url,
 );
-const ownedTypeDesign = (name: "design" | "explicit-design" | "invalid-design") => ({
+const ownedTypeDesign = (
+  name: "design" | "explicit-design" | "invalid-design" | "subset-design",
+) => ({
   version: 1 as const,
   documents: [new URL(`./fixtures/generated-artifacts/owned-types/${name}.md`, import.meta.url)],
 });
@@ -132,7 +134,9 @@ describe("generated application artifacts", () => {
   }, 15_000);
 
   test("proves qualified targets with the private SSF inventory for advanced vocabularies", async () => {
-    const application = (design: "design" | "explicit-design" | "invalid-design") =>
+    const application = (
+      design: "design" | "explicit-design" | "invalid-design" | "subset-design",
+    ) =>
       resolveApplication(
         {
           assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
@@ -150,6 +154,9 @@ describe("generated application artifacts", () => {
     });
     await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
       'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
+    );
+    await expect(renderGenerated(application("subset-design"))).rejects.toThrow(
+      'binding target "Targeting.ArchivedRecords" is not an owned type reported for definition "Targeting"',
     );
   }, 15_000);
 

@@ -86,8 +86,9 @@ parser under `src/engine/tooling`.
 The parser handles set, sequence, element, subset, alias, and field declarations,
 including field-level uniqueness constraints, and keeps their spellings as authored. The
 grammar gives a field written without a name the name its type implies (`an Author` is
-`author`), and gives every top-level declaration a set name the same way (`a set of
-Users` is `users`); later stages see only the resulting names.
+`author`, `a Verified User` is `verifiedUser`); later stages see only the resulting
+names. One capitalized word after the structural keyword declares a top-level type, and
+more declare a subset.
 
 Graph validation classifies top-level sets and sequences before it joins spellings: one
 whose name is the `plur` pair of exactly one external type is a set of that type and
@@ -103,21 +104,21 @@ non-fatal advice naming the rejected spellings and owners. `alias Alias for Targ
 takes precedence and remains the escape hatch; its target is a unique owned top-level
 declaration, so chains cannot form.
 
-A subset is a named set, not a type, so it never enters the owned-name inventory. Its
-parent resolves after declarations and aliases: a written lowercase parent names a
-subset or a top-level declaration's set, and an omitted parent is the set of the
-declaration its type resolves to — or, for an external type the State declares no set
-of, every individual of that type. The subset's type must resolve to the same owned
-declaration or external type as its parent's chain. Forward references and valid chains
-work; unresolved, duplicate, mismatched, self, and cyclic parents fail at their authored
-spans. Type names, set names, declaration-local field names, and enumeration values have
-separate name uniqueness scopes. A field's `unique` modifier records distinct values
-within the field's declaration.
+A subset is a qualified phrase, `Trusted Verified Users`: its leading word is its
+qualifier and the rest names its parent, so parents are acyclic by construction. The
+phrase's last word resolves through the same joins as any type name, which fixes the
+subset's root; a subset is keyed by its root and qualifiers, so `Verified User` and
+`Verified Users` name one subset. Forward references work; an undeclared parent, a
+duplicate subset, a qualifier repeated under one root, and an identifier (the words
+joined) that collides with the type namespace fail at their authored spans. Subsets
+resolve as `subset` references in State fields, stay out of the owned-name inventory,
+and are listed with their identifiers so signature validation can reject them with
+`SSF_SUBSET_SIGNATURE_TYPE`. A field's `unique` modifier records distinct values within
+the field's declaration.
 
-State field value names are closed: the parser classifies owned, external, concept-local,
-primitive, and unresolved references, and an unresolved name fails with
-`SSF_UNDECLARED_TYPE`. Only the plural join or an alias makes a reference owned, and a
-subset name is never a reference. Every nonblank line in the
+State field value names are closed: the parser classifies owned, external, subset,
+concept-local, primitive, and unresolved references, and an unresolved name fails with
+`SSF_UNDECLARED_TYPE`. Only the plural join or an alias makes a reference owned. Every nonblank line in the
 fence must parse or begin with `Rule:`; malformed lines produce diagnostics, and rule
 text stays opaque. The concept IR preserves the complete normalized State-fence text and
 has no separate prose field. The parser does not prove rule text, the meaning a
