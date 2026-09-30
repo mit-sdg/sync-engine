@@ -168,6 +168,7 @@ a set of Reminders with
     ["a grouped type", "(Declined Invitation)"],
     ["a union member", "String | Declined Invitation"],
     ["a tab-separated phrase", "Declined\tInvitation"],
+    ["a phrase with a non-breaking space", "Declined\u00a0Invitation"],
   ])("explains a subset phrase written as %s", (_, type) => {
     expect(
       parseSpec(

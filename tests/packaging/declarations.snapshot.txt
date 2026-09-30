@@ -5541,9 +5541,10 @@ export declare function headOf(typeName: string): string;
 export declare function stateFieldTypeEvidence(declarations: readonly ParsedDeclaration[]): readonly string[];
 export declare function exactPluralPair(left: string, right: string): boolean;
 /**
- * Whether a subset identifier and another name are one name in either number. The joined
- * qualifiers must match exactly and the head may be any singular/plural pair, so
- * `ActivePerson` names the subset whose identifier is `ActivePeople`.
+ * Whether a subset identifier and another name are one name in code, in either number. The
+ * joined qualifiers must match exactly and only the head inflects, so `ActivePerson` names
+ * the subset whose identifier is `ActivePeople`, and `Open Ax` and `Open Axis` share
+ * `OpenAxes`.
  */
 export declare function sameQualifiedName(prefix: string, identifier: string, name: string): boolean;
 /**
@@ -5603,6 +5604,8 @@ export interface ResolutionFacts {
     readonly subsets: ReadonlyMap<ParsedDeclaration, SubsetFact>;
     /** The subset a qualified phrase such as `Verified User` names, if one is declared. */
     readonly subsetNamed: (phrase: string) => SubsetFact | undefined;
+    /** The phrase for a subset written as its identifier: `Active Person` for `ActivePerson`. */
+    readonly subsetPhraseFor: (identifier: string) => string | undefined;
 }
 /**
  * Resolve the declared types, aliases, and subset graph, and report every invalid edge.

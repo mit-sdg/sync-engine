@@ -50,6 +50,8 @@ export interface ResolutionFacts {
   readonly subsets: ReadonlyMap<ParsedDeclaration, SubsetFact>;
   /** The subset a qualified phrase such as `Verified User` names, if one is declared. */
   readonly subsetNamed: (phrase: string) => SubsetFact | undefined;
+  /** The phrase for a subset written as its identifier: `Active Person` for `ActivePerson`. */
+  readonly subsetPhraseFor: (identifier: string) => string | undefined;
 }
 
 function groupsOf<T>(items: readonly T[], nameOf: (item: T) => string): Map<string, T[]> {
@@ -262,12 +264,7 @@ export function validateTypeGraph(
           error({
             code: "SSF_NAME_COLLISION",
             message: `Structural declaration ${JSON.stringify(name)} collides with ${collision}.`,
-            suggestion:
-              !external.has(name) || declaration.multiplicity === "element"
-                ? "Rename the structural declaration; owned, external, concept-local, and primitive names are one exact namespace."
-                : pluralize(name) === name
-                  ? `\`${name}\` is spelled the same in the plural, so rename the external type (for example \`${name}Item\`, declared as \`a set of ${name}Items\`), or declare a qualified subset such as \`a set of Tracked ${name}\`.`
-                  : `Write the plural, \`${pluralize(name)}\`, to declare a set of the external type; owned, external, concept-local, and primitive names are one exact namespace.`,
+            suggestion: externalSetRepair(name, declaration),
             span: declaration.name.span,
           }),
         );
@@ -301,6 +298,19 @@ export function validateTypeGraph(
           span: alias.name.span,
         }),
       );
+  }
+
+  function externalSetRepair(name: string, declaration: ParsedDeclaration): string {
+    const plural = pluralize(name);
+    if (!external.has(name) || declaration.multiplicity === "element")
+      return "Rename the structural declaration; owned, external, concept-local, and primitive names are one exact namespace.";
+    if (plural === name)
+      return `\`${name}\` is spelled the same in the plural, so rename the external type (for example \`${name}Item\`, declared as \`a set of ${name}Items\`), or declare a qualified subset such as \`a set of Tracked ${name}\`.`;
+    if (declarationGroups.has(plural))
+      return `Move these fields to the existing \`a set of ${plural}\`, which is already the set of the external type, and remove this declaration.`;
+    if (occupied.has(plural) || aliasGroups.has(plural))
+      return `Rename the structural declaration; \`${plural}\`, the set of the external type, is already another name in this concept.`;
+    return `Write the plural, \`${plural}\`, to declare a set of the external type; owned, external, concept-local, and primitive names are one exact namespace.`;
   }
 
   const uniqueDeclarations = new Map(
@@ -514,44 +524,44 @@ export function validateTypeGraph(
     ...externalSpellings.keys(),
   ]);
   // Identifiers match in either number: `VerifiedUser` and `VerifiedUsers` are one name.
-  const identifierOwners: {
-    readonly identifier: string;
-    readonly key: string;
-    readonly prefix: string;
-  }[] = [];
+  const identities = unique.map(({ qualifiers, head, base, key }) => {
+    const prefix = qualifiers.join("");
+    const identifiers = [
+      ...new Set(
+        [head, ...spellingsOf(base)].map((spelling) => identifierOf(`${prefix}${spelling}`)),
+      ),
+    ].sort();
+    return { key, prefix, identifiers };
+  });
+  const identityByKey = new Map(identities.map((identity) => [identity.key, identity]));
   const subsetFacts = new Map<ParsedDeclaration, SubsetFact>();
   const factByKey = new Map<string, SubsetFact>();
   const parentOf = new Map<ParsedDeclaration, ParsedDeclaration>();
   const declarationByKey = new Map(unique.map(({ key, declaration }) => [key, declaration]));
   for (const { declaration, qualifiers, head, base, key } of unique) {
-    const qualifierText = qualifiers.join("");
-    const identifiers = [
-      ...new Set(
-        [head, ...spellingsOf(base)].map((spelling) => identifierOf(`${qualifierText}${spelling}`)),
-      ),
-    ].sort();
+    const { prefix: qualifierText, identifiers } = identityByKey.get(key)!;
     const collision = identifiers.find(
       (identifier) =>
         [...typeNamespace].some((name) => sameQualifiedName(qualifierText, identifier, name)) ||
-        identifierOwners.some(
-          (owned) =>
-            owned.key !== key &&
-            (sameQualifiedName(qualifierText, identifier, owned.identifier) ||
-              sameQualifiedName(owned.prefix, owned.identifier, identifier)),
+        identities.some(
+          (other) =>
+            other.key !== key &&
+            other.identifiers.some(
+              (otherIdentifier) =>
+                sameQualifiedName(qualifierText, identifier, otherIdentifier) ||
+                sameQualifiedName(other.prefix, otherIdentifier, identifier),
+            ),
         ),
     );
     if (collision !== undefined)
       diagnostics.push(
         error({
           code: "SSF_NAME_COLLISION",
-          message: `Subset ${JSON.stringify(declaration.name.text)} takes the identifier ${JSON.stringify(collision)}, which another type in this concept already has in one number or the other.`,
+          message: `Subset ${JSON.stringify(declaration.name.text)} takes the identifier ${JSON.stringify(collision)}, which another type or subset in this concept also takes in one number or the other.`,
           suggestion: "Choose a qualifier whose joined name no other type or subset uses.",
           span: declaration.name.span,
         }),
       );
-    else
-      for (const identifier of identifiers)
-        identifierOwners.push({ identifier, key, prefix: qualifierText });
 
     const parentQualifiers = qualifiers.slice(1);
     const words = declaration.name.wordSpans;
@@ -625,12 +635,24 @@ export function validateTypeGraph(
       qualifiers.map((qualifier) => [impliedName(qualifier), qualifier] as const),
     ),
   );
+  // Renaming a field is safe only where no uniqueness line or condition names it.
+  const namedFields = new Set(
+    declarations.flatMap(({ constraints, condition }) => [
+      ...constraints.flatMap(({ fields }) => fields.map(({ text }) => text)),
+      ...(condition === undefined ? [] : [condition.field.text]),
+    ]),
+  );
   for (const declaration of declarations)
     for (const field of declaration.fields) {
       const qualifier = qualifierNames.get(field.name);
       if (field.implicitName || qualifier === undefined) continue;
       const qualified = `${qualifier} ${typeOf(field)}`;
-      const subset = subsetNamed(qualified);
+      const renameIsSafe =
+        !namedFields.has(field.name) &&
+        !declaration.fields.some(
+          (other) => other !== field && other.name === impliedName(qualified),
+        );
+      const subset = renameIsSafe ? subsetNamed(qualified) : undefined;
       const words = [
         ...(field.optional ? ["optional"] : []),
         ...(field.unique ? ["unique"] : []),
@@ -658,5 +680,14 @@ export function validateTypeGraph(
     externalSpellings,
     subsets: subsetFacts,
     subsetNamed,
+    subsetPhraseFor: (identifier) => {
+      for (const fact of subsetFacts.values()) {
+        if (
+          fact.identifiers.some((own) => sameQualifiedName(fact.qualifierPrefix, own, identifier))
+        )
+          return `${fact.name.slice(0, fact.name.lastIndexOf(" "))} ${identifier.slice(fact.qualifierPrefix.length)}`;
+      }
+      return undefined;
+    },
   };
 }

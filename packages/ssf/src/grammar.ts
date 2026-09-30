@@ -43,6 +43,8 @@ export interface GrammarResult {
 
 interface ParsingDeclaration extends ParsedDeclaration {
   hasMalformedField: boolean;
+  /** Whether the body holds a field whose only fault has a repair, such as `a Set`. */
+  hasRepairableField: boolean;
   /** The qualified spelling of a subset written with a separate name, as `a Done set of Items`. */
   readonly qualifiedRepair?: string;
 }
@@ -196,6 +198,7 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     authoredStructural: authored[structuralIndex]!,
     hasWith,
     hasMalformedField: false,
+    hasRepairableField: false,
     ...(qualifiedRepair === undefined ? {} : { qualifiedRepair }),
   };
 }
@@ -431,7 +434,7 @@ function canonicalStructural(structural: SsfMultiplicity): "element" | "seq" | "
 
 function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[] {
   const diagnostics: SsfDiagnostic[] = [];
-  const hasFields = declaration.fields.length > 0;
+  const hasFields = declaration.fields.length > 0 || declaration.hasRepairableField;
   const hasBody = hasFields || declaration.constraints.length > 0;
   const tokens = declaration.signature.tokens;
   const authored = words(declaration.signature);
@@ -661,11 +664,14 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
   }
 
   // A reserved-name repair picks a name only once its declaration's fields are all known.
-  for (const { line, declaration } of unparsedFields)
-    diagnostics.push(
-      reservedNameDiagnostic(line, new Set(declaration.fields.map(({ name }) => name))) ??
-        malformedLineDiagnostic(line, "field"),
+  for (const { line, declaration } of unparsedFields) {
+    const reserved = reservedNameDiagnostic(
+      line,
+      new Set(declaration.fields.map(({ name }) => name)),
     );
+    if (reserved !== undefined) declaration.hasRepairableField = true;
+    diagnostics.push(reserved ?? malformedLineDiagnostic(line, "field"));
+  }
   for (const declaration of declarations) diagnostics.push(...declarationDiagnostics(declaration));
   return { declarations, aliases, rules, diagnostics };
 }

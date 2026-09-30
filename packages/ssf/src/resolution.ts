@@ -86,21 +86,29 @@ function resolveReference(
 ): SsfTypeReference {
   const resolved = typeReference(reference, facts, external, local);
   if (resolved !== undefined) return resolved;
+  const phrase = reference.text.includes(" ") ? undefined : facts.subsetPhraseFor(reference.text);
   diagnostics.push(
-    reference.text.includes(" ")
+    phrase !== undefined
       ? error({
           code: "SSF_UNDECLARED_TYPE",
-          message: `Type ${JSON.stringify(reference.text)} is not a subset this State declares.`,
-          suggestion:
-            "Declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.",
+          message: `Type ${JSON.stringify(reference.text)} is a subset's identifier; State names a subset by its phrase.`,
+          suggestion: `Write \`${phrase}\`.`,
           span: reference.span,
         })
-      : error({
-          code: "SSF_UNDECLARED_TYPE",
-          message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
-          suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
-          span: reference.span,
-        }),
+      : reference.text.includes(" ")
+        ? error({
+            code: "SSF_UNDECLARED_TYPE",
+            message: `Type ${JSON.stringify(reference.text)} is not a subset this State declares.`,
+            suggestion:
+              "Declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.",
+            span: reference.span,
+          })
+        : error({
+            code: "SSF_UNDECLARED_TYPE",
+            message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
+            suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
+            span: reference.span,
+          }),
   );
   return unresolved(reference);
 }

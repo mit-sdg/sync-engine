@@ -391,7 +391,7 @@ Rule: at most one Item has each title`;
     ]);
   });
 
-  test("suggests a repair that is itself valid, or none at all", () => {
+  test("suggests only repairs that are themselves valid", () => {
     const [misordered] = parseSimpleStateForm(`a set of Items with\n  a String unique`).diagnostics;
     expect(misordered).toMatchObject({
       code: "SSF_MISPLACED_MODIFIER",
@@ -400,7 +400,7 @@ Rule: at most one Item has each title`;
     expect(
       parseSimpleStateForm(`a set of Items with\n${misordered!.suggestion}`).diagnostics,
     ).toEqual([]);
-    // No repair exists for an optional collection, so none is offered.
+    // An optional collection is repaired by removing `optional`.
     expect(
       parseSimpleStateForm(`a set of Items with\n  a optional set of Person`, {
         externalTypes: ["Person"],
@@ -480,6 +480,15 @@ Rule: at most one Item has each title`;
       parseSimpleStateForm(`a set of Things with\n${suggestion}`, { externalTypes: [type] })
         .diagnostics,
     ).toEqual([]);
+  });
+
+  test("reports a missing `with` beside a reserved implied name", () => {
+    expect(
+      parseSimpleStateForm("a set of Things\n  a Set", { externalTypes: ["Set"] }).diagnostics,
+    ).toMatchObject([
+      { code: "SSF_MISSING_WITH", suggestion: "a set of Things with" },
+      { code: "SSF_MALFORMED_FIELD", suggestion: "  a setValue Set" },
+    ]);
   });
 
   test("repairs a reserved implied name with a name no other field takes", () => {
@@ -1361,6 +1370,75 @@ a set of Vouches with
       ]);
     });
   });
+
+  test.each([
+    [
+      "two heads that share a plural",
+      "a set of Ax\n\na set of Axis\n\na set of Open Ax\n\na set of Open Axis",
+      [5, 7],
+    ],
+    [
+      "subsets declared in either order",
+      "a set of Ax\n\na set of Axis\n\na set of Axes\n\na set of Open Axis\n\na set of Open Axes\n\na set of Open Ax",
+      [7, 9, 11],
+    ],
+    [
+      "the same subsets reordered",
+      "a set of Ax\n\na set of Axis\n\na set of Axes\n\na set of Open Axes\n\na set of Open Axis\n\na set of Open Ax",
+      [7, 9, 11],
+    ],
+  ])("reports every subset whose identifier collides, for %s", (_, source, lines) => {
+    expect(
+      parseSimpleStateForm(source)
+        .diagnostics.filter(({ code }) => code === "SSF_NAME_COLLISION")
+        .map(({ span }) => span?.start.line),
+    ).toEqual(lines);
+  });
+
+  test("inflects only a subset identifier's head", () => {
+    expect(
+      parseSimpleStateForm("a set of Men\n\na set of Businessmen\n\na set of Business Man")
+        .diagnostics,
+    ).toEqual([]);
+  });
+
+  test("repairs a subset's identifier in a field to its phrase", () => {
+    const source = "a set of People\n\na set of Active People\n\na set of Teams with\n  a actor ";
+    expect(parseSimpleStateForm(`${source}ActivePerson`).diagnostics).toMatchObject([
+      { code: "SSF_UNDECLARED_TYPE", suggestion: "Write `Active Person`." },
+    ]);
+    expect(parseSimpleStateForm(`${source}Active Person`).diagnostics).toEqual([]);
+  });
+
+  test.each([
+    ["an implied name another field takes", "  a verified User\n  a Verified User"],
+    ["a name a uniqueness line uses", "  a verified User\n  unique verified"],
+  ])("advises only a role name when a qualified rename would break %s", (_, fields) => {
+    expect(
+      parseSimpleStateForm(
+        `a set of Users\n\na set of Verified Users\n\na set of Teams with\n${fields}`,
+        { externalTypes: ["User"] },
+      ).diagnostics,
+    ).toMatchObject([
+      {
+        code: "SSF_QUALIFIER_FIELD_NAME",
+        suggestion: "Give the field a role name that is not a qualifier.",
+      },
+    ]);
+  });
+
+  test.each([
+    ["  a trusted Verified User", "  a Trusted Verified User"],
+    ["  a verified set of User", "  a set of Verified User"],
+    ["  an optional unique verified User", "  an optional unique Verified User"],
+  ])("offers a qualifier repair for %s that parses cleanly once applied", (field, repaired) => {
+    const document = (line: string) =>
+      `a set of Users\n\na set of Verified Users\n\na set of Trusted Verified Users\n\na set of Teams with\n${line}`;
+    expect(parseSimpleStateForm(document(field)).diagnostics[0]?.suggestion).toContain(
+      `\`${repaired.trim()}\``,
+    );
+    expect(parseSimpleStateForm(document(repaired)).diagnostics).toEqual([]);
+  });
 });
 
 describe("sets of external types", () => {
@@ -1480,6 +1558,25 @@ a set of Rejected Banned Users`,
       suggestion:
         "Write the exact external type name, or rename a type so each spelling pairs with only one.",
     });
+  });
+
+  test.each([
+    [
+      "a declaration",
+      "a set of User\n\na set of Users",
+      "Move these fields to the existing `a set of Users`, which is already the set of the external type, and remove this declaration.",
+    ],
+    [
+      "an alias",
+      "a set of Items\n\na set of User\n\nalias Users for Items",
+      "Rename the structural declaration; `Users`, the set of the external type, is already another name in this concept.",
+    ],
+  ])("does not suggest a plural that %s already takes", (_, source, suggestion) => {
+    expect(
+      parseSimpleStateForm(source, { externalTypes: ["User"] }).diagnostics.find(
+        ({ code }) => code === "SSF_NAME_COLLISION",
+      ),
+    ).toMatchObject({ suggestion });
   });
 
   test("keeps an element named like an external plural as an owned element", () => {

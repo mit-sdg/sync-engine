@@ -25,18 +25,23 @@ export function exactPluralPair(left: string, right: string): boolean {
   return pluralize(left) === right || pluralize(right) === left;
 }
 
+/** Whether two words are one in either number, or share a plural as `Ax` and `Axis` do. */
+function sameWordInEitherNumber(left: string, right: string): boolean {
+  return left === right || exactPluralPair(left, right) || pluralize(left) === pluralize(right);
+}
+
 /**
- * Whether a subset identifier and another name are one name in either number. The joined
- * qualifiers must match exactly and the head may be any singular/plural pair, so
- * `ActivePerson` names the subset whose identifier is `ActivePeople`.
+ * Whether a subset identifier and another name are one name in code, in either number. The
+ * joined qualifiers must match exactly and only the head inflects, so `ActivePerson` names
+ * the subset whose identifier is `ActivePeople`, and `Open Ax` and `Open Axis` share
+ * `OpenAxes`.
  */
 export function sameQualifiedName(prefix: string, identifier: string, name: string): boolean {
   return (
     identifier === name ||
-    exactPluralPair(identifier, name) ||
     (name.length > prefix.length &&
       name.startsWith(prefix) &&
-      exactPluralPair(identifier.slice(prefix.length), name.slice(prefix.length)))
+      sameWordInEitherNumber(identifier.slice(prefix.length), name.slice(prefix.length)))
   );
 }
 
