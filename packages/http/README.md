@@ -358,8 +358,9 @@ There are no aliases or compatibility adapters.
 
 ## Support and security
 
-Stable 1.x follows Semantic Versioning; only the newest stable 1.x release
-receives fixes. Pin exact matching core and HTTP versions, and review the
+In stable 1.x, patch releases are backward compatible and minor releases may
+change contracts, with migration steps in the changelog; only the newest stable
+1.x release receives fixes. Pin exact matching core and HTTP versions, and review the
 repository changelog before upgrading. Report suspected
 vulnerabilities through the repository's [private reporting
 process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).

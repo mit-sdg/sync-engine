@@ -1,7 +1,8 @@
 # Changelog
 
-This project follows Semantic Versioning. Stable 1.x preserves supported public
-contracts; older beta releases could change incompatibly. Pin an exact version,
+Stable 1.x patch releases preserve supported public contracts; minor releases may
+change them and list the migration steps. Older beta releases could change
+incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
@@ -16,6 +17,9 @@ subsets are named by qualifying their parent set, and action branches end in
 
 - This release changes the accepted specification syntax within 1.x. Existing
   concept specifications must be migrated before they register or check.
+- The support policy promises backward compatibility for patch releases only.
+  Minor releases may change public APIs, behavior, or accepted specification
+  syntax, and the changelog lists each change with its migration steps.
 - Action signatures use `: returns (...)`, and each branch ends with
   `returns ...` or `refuses CODE "Normative sentence."`. The retired `return`
   and `refuse` keywords are rejected with a diagnostic naming the replacement.

@@ -188,7 +188,8 @@ what the host is responsible for.
 
 ## Versions
 
-Version 1 is stable. Public APIs follow Semantic Versioning, and only the newest
+Version 1 is stable. Patch releases are backward compatible; minor releases may
+change public APIs and list migration steps in the changelog. Only the newest
 stable 1.x release receives fixes. Read the [changelog](CHANGELOG.md), regenerate
 pinned artifacts, and typecheck consumers before moving a pin.
 

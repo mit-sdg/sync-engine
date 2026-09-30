@@ -49,7 +49,8 @@ The overview includes the work brief, active decisions, concise activity, runs, 
 
 ## Support
 
-Stable 1.x follows Semantic Versioning for the documented CLI and workflow contracts.
+In stable 1.x, patch releases keep the documented CLI and workflow contracts
+compatible, and minor releases may change them, with migration steps in the changelog.
 Only the newest stable 1.x release receives fixes. Keep the skill and its required
 packages at the matching exact versions in `skills/sync-engine/release.json`.
 See the [support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)

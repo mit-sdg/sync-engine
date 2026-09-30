@@ -31,8 +31,9 @@ processing.
 
 ## Stable compatibility
 
-Stable 1.x follows Semantic Versioning across every public subpath, including
-`/advanced`. Pin an exact version, review the changelog, regenerate artifacts,
+In stable 1.x, patch releases are backward compatible across every public subpath,
+including `/advanced`, and minor releases may change them, with migration steps in
+the changelog. Pin an exact version, review the changelog, regenerate artifacts,
 and typecheck each consuming application and generated client before upgrading. The [support
 policy](../../../SUPPORT.md) defines the support window and generated-format rules.
 

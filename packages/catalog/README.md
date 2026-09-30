@@ -47,8 +47,8 @@ packaged catalog typecheck covers many independent entries, while an application
 
 ## Support
 
-Stable 1.x follows Semantic Versioning for the documented command and manifest
-contracts. Only the newest stable 1.x release receives fixes. Catalog entries are
+In stable 1.x, patch releases keep the documented command and manifest contracts
+compatible, and minor releases may change them, with migration steps in the changelog. Only the newest stable 1.x release receives fixes. Catalog entries are
 adaptable examples, not additional framework API contracts; pin the package when
 coursework depends on exact entry contents. See the [support
 policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md) and [private
