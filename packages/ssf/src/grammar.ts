@@ -292,9 +292,12 @@ function parseFieldTokens(authored: readonly SsfToken[]): Omit<ParsedField, "spa
 
 /**
  * Diagnose a field left unnamed whose type implies a reserved name, as `a Set` implies
- * `set`, and repair it with a written name.
+ * `set`, and repair it with a written name no other field of its declaration takes.
  */
-function reservedNameDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
+function reservedNameDiagnostic(
+  line: SourceLine,
+  takenNames: ReadonlySet<string>,
+): SsfDiagnostic | undefined {
   const tokens = line.tokens;
   let start = articleLength(tokens);
   while (fieldModifier(tokens[start]?.text) !== undefined) start += 1;
@@ -311,8 +314,15 @@ function reservedNameDiagnostic(line: SourceLine): SsfDiagnostic | undefined {
     probe.value.kind === "named" ? probe.value.reference.text : probe.value.element.reference.text,
   );
   if (!RESERVED_FIELD_NAMES.has(implied)) return undefined;
-  const repaired = named(`${implied}Value`);
-  const field = parseFieldTokens(repaired);
+  let name = `${implied}Value`;
+  for (let suffix = 2; takenNames.has(name); suffix += 1) name = `${implied}Value${suffix}`;
+  let repaired = named(name);
+  let field = parseFieldTokens(repaired);
+  // A collection is never optional, so the repair drops `optional` from one.
+  if (fieldViolation(field) === "optional-collection") {
+    repaired = repaired.filter(({ text }) => text !== "optional");
+    field = parseFieldTokens(repaired);
+  }
   if (field === undefined) return undefined;
   return error({
     code: "SSF_MALFORMED_FIELD",
@@ -425,7 +435,10 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   const hasBody = hasFields || declaration.constraints.length > 0;
   const tokens = declaration.signature.tokens;
   const authored = words(declaration.signature);
-  const canonical = canonicalStructural(declaration.multiplicity);
+  // A subset uses `set` or `element`, so a sequence keyword on one is repaired to `set`.
+  const subsetSequence =
+    declaration.declarationKind === "subset" && declaration.multiplicity === "sequence";
+  const canonical = subsetSequence ? "set" : canonicalStructural(declaration.multiplicity);
   const replacements = new Map<number, string>();
   if (declaration.authoredStructural !== canonical)
     replacements.set(declaration.structuralIndex, canonical);
@@ -457,7 +470,11 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
         span: structuralToken?.span ?? declaration.signatureSpan,
       }),
     );
-  } else if (declaration.authoredStructural !== canonical && structuralToken !== undefined) {
+  } else if (
+    declaration.authoredStructural !== canonical &&
+    !subsetSequence &&
+    structuralToken !== undefined
+  ) {
     diagnostics.push(
       error({
         code: "SSF_NEAR_MISS_KEYWORD",
@@ -480,16 +497,12 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
       );
     }
   }
-  if (
-    declaration.declarationKind === "subset" &&
-    declaration.multiplicity === "sequence" &&
-    structuralToken !== undefined
-  ) {
+  if (subsetSequence && structuralToken !== undefined) {
     diagnostics.push(
       error({
         code: "SSF_MALFORMED_DECLARATION",
         message: "A subset uses `set` or `element`; its parent set already fixes any order.",
-        suggestion: canonicalLine.replace(/\bseq\b/u, "set"),
+        suggestion: hasArticle ? canonicalLine : `a ${canonicalLine}`,
         span: structuralToken.span,
       }),
     );
@@ -581,6 +594,8 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
   const aliases: ParsedAlias[] = [];
   const rules: SsfRuleLine[] = [];
   const diagnostics: SsfDiagnostic[] = [];
+  const unparsedFields: { readonly line: SourceLine; readonly declaration: ParsingDeclaration }[] =
+    [];
   let current: ParsingDeclaration | undefined;
 
   for (const line of lines) {
@@ -617,7 +632,11 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
           diagnostics.push(orphanedLineDiagnostic(line, undefined, "uniqueness constraint"));
         else current.constraints.push(constraint);
       } else {
-        diagnostics.push(reservedNameDiagnostic(line) ?? malformedLineDiagnostic(line, "field"));
+        if (current === undefined)
+          diagnostics.push(
+            reservedNameDiagnostic(line, new Set()) ?? malformedLineDiagnostic(line, "field"),
+          );
+        else unparsedFields.push({ line, declaration: current });
         if (current !== undefined) current.hasMalformedField = true;
       }
       if (current !== undefined) current.span = span(current.span.start, lineSpan(line).end);
@@ -641,6 +660,12 @@ export function parseGrammar(lines: readonly SourceLine[]): GrammarResult {
     current = declaration;
   }
 
+  // A reserved-name repair picks a name only once its declaration's fields are all known.
+  for (const { line, declaration } of unparsedFields)
+    diagnostics.push(
+      reservedNameDiagnostic(line, new Set(declaration.fields.map(({ name }) => name))) ??
+        malformedLineDiagnostic(line, "field"),
+    );
   for (const declaration of declarations) diagnostics.push(...declarationDiagnostics(declaration));
   return { declarations, aliases, rules, diagnostics };
 }

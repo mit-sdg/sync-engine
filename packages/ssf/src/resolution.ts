@@ -230,7 +230,12 @@ export function resolveGrammar(
         external: [...external].sort(),
         externalSpellings: [...facts.externalSpellings.keys()].sort(),
         subsets: [...facts.subsets.values()]
-          .map(({ name, identifiers, rootType }) => ({ name, identifiers, rootType }))
+          .map(({ name, identifiers, qualifierPrefix, rootType }) => ({
+            name,
+            identifiers,
+            qualifierPrefix,
+            rootType,
+          }))
           .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
         primitives: [...PRIMITIVES],
       },

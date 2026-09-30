@@ -26,6 +26,21 @@ export function exactPluralPair(left: string, right: string): boolean {
 }
 
 /**
+ * Whether a subset identifier and another name are one name in either number. The joined
+ * qualifiers must match exactly and the head may be any singular/plural pair, so
+ * `ActivePerson` names the subset whose identifier is `ActivePeople`.
+ */
+export function sameQualifiedName(prefix: string, identifier: string, name: string): boolean {
+  return (
+    identifier === name ||
+    exactPluralPair(identifier, name) ||
+    (name.length > prefix.length &&
+      name.startsWith(prefix) &&
+      exactPluralPair(identifier.slice(prefix.length), name.slice(prefix.length)))
+  );
+}
+
+/**
  * Relate only exact authored evidence to one owner: a non-element owned set or sequence, or
  * an external type. The pluralizer's output is compared, never inserted into the inventory.
  * A name the Types fence already claims is not a candidate: joining it would make one

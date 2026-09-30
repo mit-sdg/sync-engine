@@ -83,7 +83,7 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
       .filter(([name]) => !external.has(name) && !local.has(name) && !PRIMITIVES.has(name))
       .filter(
         ([name, declared]) =>
-          declared === "element" || [...external].every((type) => !pairs(type, name)),
+          declared === "element" || [...external].every((type) => pluralize(type) !== name),
       ),
   );
   const explicitAliases = lines.flatMap((line): Array<readonly [string, string]> => {
@@ -230,6 +230,9 @@ an element Settings`,
       { externalTypes: ["Person"] },
     );
     expect(oracleOwnedTypeNames("a set of People", { externalTypes: ["Person"] })).toEqual([]);
+    // Only the external type's plural is its set; the reverse spelling declares an owned type.
+    expectAgreement("reverse external spelling", "a set of User", { externalTypes: ["Users"] });
+    expect(oracleOwnedTypeNames("a set of User", { externalTypes: ["Users"] })).toEqual(["User"]);
     expect(
       ownedTypeNameSpellings(parseSimpleStateForm("a set of Mice").document.inventory),
     ).toEqual(["Mice"]);

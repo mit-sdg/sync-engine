@@ -1,4 +1,8 @@
-import { automaticAliasCandidates, exactPluralPair } from "./automatic-aliases.ts";
+import {
+  automaticAliasCandidates,
+  exactPluralPair,
+  sameQualifiedName,
+} from "./automatic-aliases.ts";
 import { identifierOf, impliedName, PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
 import {
   error,
@@ -24,7 +28,6 @@ export interface SubsetFact {
   /** The declared phrase. */
   readonly name: string;
   readonly qualifier: string;
-  readonly root: SetBase;
   /** The spelling a signature would use for the root: its singular where one is authored. */
   readonly rootType: string;
   readonly parent: {
@@ -34,6 +37,7 @@ export interface SubsetFact {
     readonly span: SsfSpan;
   };
   readonly identifiers: readonly string[];
+  readonly qualifierPrefix: string;
 }
 
 export interface ResolutionFacts {
@@ -510,9 +514,11 @@ export function validateTypeGraph(
     ...externalSpellings.keys(),
   ]);
   // Identifiers match in either number: `VerifiedUser` and `VerifiedUsers` are one name.
-  const sameIdentifier = (left: string, right: string): boolean =>
-    left === right || exactPluralPair(left, right);
-  const identifierOwners: (readonly [identifier: string, key: string])[] = [];
+  const identifierOwners: {
+    readonly identifier: string;
+    readonly key: string;
+    readonly prefix: string;
+  }[] = [];
   const subsetFacts = new Map<ParsedDeclaration, SubsetFact>();
   const factByKey = new Map<string, SubsetFact>();
   const parentOf = new Map<ParsedDeclaration, ParsedDeclaration>();
@@ -526,9 +532,12 @@ export function validateTypeGraph(
     ].sort();
     const collision = identifiers.find(
       (identifier) =>
-        [...typeNamespace].some((name) => sameIdentifier(name, identifier)) ||
+        [...typeNamespace].some((name) => sameQualifiedName(qualifierText, identifier, name)) ||
         identifierOwners.some(
-          ([owned, owner]) => owner !== key && sameIdentifier(owned, identifier),
+          (owned) =>
+            owned.key !== key &&
+            (sameQualifiedName(qualifierText, identifier, owned.identifier) ||
+              sameQualifiedName(owned.prefix, owned.identifier, identifier)),
         ),
     );
     if (collision !== undefined)
@@ -540,7 +549,9 @@ export function validateTypeGraph(
           span: declaration.name.span,
         }),
       );
-    else for (const identifier of identifiers) identifierOwners.push([identifier, key]);
+    else
+      for (const identifier of identifiers)
+        identifierOwners.push({ identifier, key, prefix: qualifierText });
 
     const parentQualifiers = qualifiers.slice(1);
     const words = declaration.name.wordSpans;
@@ -583,14 +594,17 @@ export function validateTypeGraph(
           span: parentSpan,
         }),
       );
-    const singular = spellingsOf(base).find((spelling) => pluralize(spelling) === base.name);
+    // A signature names an owned root by its one authored singular, else by its declaration.
+    const singulars = [
+      ...new Set(spellingsOf(base).filter((spelling) => pluralize(spelling) === base.name)),
+    ];
     const fact: SubsetFact = {
       name: declaration.name.text,
       qualifier: qualifiers[0]!,
-      root: base,
-      rootType: base.kind === "owned" ? (singular ?? base.name) : base.name,
+      rootType: base.kind === "owned" && singulars.length === 1 ? singulars[0]! : base.name,
       parent,
       identifiers,
+      qualifierPrefix: qualifierText,
     };
     subsetFacts.set(declaration, fact);
     factByKey.set(key, fact);
@@ -617,10 +631,15 @@ export function validateTypeGraph(
       if (field.implicitName || qualifier === undefined) continue;
       const qualified = `${qualifier} ${typeOf(field)}`;
       const subset = subsetNamed(qualified);
-      const written =
-        field.value.kind === "named"
-          ? `a ${qualified}`
-          : `a ${field.value.multiplicity === "set" ? "set" : "seq"} of ${qualified}`;
+      const words = [
+        ...(field.optional ? ["optional"] : []),
+        ...(field.unique ? ["unique"] : []),
+        ...(field.value.kind === "named"
+          ? []
+          : [field.value.multiplicity === "set" ? "set" : "seq", "of"]),
+        qualified,
+      ];
+      const written = `${/^[AEIOU]/iu.test(words[0]!) ? "an" : "a"} ${words.join(" ")}`;
       diagnostics.push({
         severity: "advice",
         code: "SSF_QUALIFIER_FIELD_NAME",

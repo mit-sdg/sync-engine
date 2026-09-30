@@ -5541,6 +5541,12 @@ export declare function headOf(typeName: string): string;
 export declare function stateFieldTypeEvidence(declarations: readonly ParsedDeclaration[]): readonly string[];
 export declare function exactPluralPair(left: string, right: string): boolean;
 /**
+ * Whether a subset identifier and another name are one name in either number. The joined
+ * qualifiers must match exactly and the head may be any singular/plural pair, so
+ * `ActivePerson` names the subset whose identifier is `ActivePeople`.
+ */
+export declare function sameQualifiedName(prefix: string, identifier: string, name: string): boolean;
+/**
  * Relate only exact authored evidence to one owner: a non-element owned set or sequence, or
  * an external type. The pluralizer's output is compared, never inserted into the inventory.
  * A name the Types fence already claims is not a candidate: joining it would make one
@@ -5576,7 +5582,6 @@ export interface SubsetFact {
     /** The declared phrase. */
     readonly name: string;
     readonly qualifier: string;
-    readonly root: SetBase;
     /** The spelling a signature would use for the root: its singular where one is authored. */
     readonly rootType: string;
     readonly parent: {
@@ -5586,6 +5591,7 @@ export interface SubsetFact {
         readonly span: SsfSpan;
     };
     readonly identifiers: readonly string[];
+    readonly qualifierPrefix: string;
 }
 export interface ResolutionFacts {
     /** Owned top-level declarations: the types this State introduces. */
@@ -5743,6 +5749,8 @@ export interface SsfSubsetIdentity {
     readonly name: string;
     /** Identifiers such as `VerifiedUser` and `VerifiedUsers`, sorted. */
     readonly identifiers: readonly string[];
+    /** The joined qualifiers that begin every identifier: `Verified` in `VerifiedUsers`. */
+    readonly qualifierPrefix: string;
     /** The type of the top-level set the subset qualifies, such as `User`. */
     readonly rootType: string;
 }

@@ -463,7 +463,9 @@ Rule: at most one Item has each title`;
     ["Set", "a Set", "  a setValue Set"],
     ["Unique", "an optional Unique", "  an optional uniqueValue Unique"],
     ["Optional", "a unique Optional", "  a unique optionalValue Optional"],
-  ])("repairs an unnamed %s field, whose implied name is reserved", (type, field, suggestion) => {
+    ["Set collection", "a optional set of Set", "  a setValue set of Set"],
+  ])("repairs an unnamed %s field, whose implied name is reserved", (label, field, suggestion) => {
+    const type = label.split(" ")[0]!;
     const parsed = parseSimpleStateForm(`a set of Things with\n  ${field}`, {
       externalTypes: [type],
     });
@@ -478,6 +480,14 @@ Rule: at most one Item has each title`;
       parseSimpleStateForm(`a set of Things with\n${suggestion}`, { externalTypes: [type] })
         .diagnostics,
     ).toEqual([]);
+  });
+
+  test("repairs a reserved implied name with a name no other field takes", () => {
+    expect(
+      parseSimpleStateForm("a set of Things with\n  a Set\n  a setValue String", {
+        externalTypes: ["Set"],
+      }).diagnostics,
+    ).toMatchObject([{ code: "SSF_MALFORMED_FIELD", suggestion: "  a setValue2 Set" }]);
   });
 
   test("tells a unique field from a uniqueness line by the case of its word", () => {
@@ -1057,7 +1067,12 @@ a set of Vouches with
       { name: "verifiedUsers", value: { element: { reference: { referenceKind: "subset" } } } },
     ]);
     expect(parsed.document.inventory.subsets).toEqual([
-      { name: "Verified Users", identifiers: ["VerifiedUser", "VerifiedUsers"], rootType: "User" },
+      {
+        name: "Verified Users",
+        identifiers: ["VerifiedUser", "VerifiedUsers"],
+        qualifierPrefix: "Verified",
+        rootType: "User",
+      },
     ]);
   });
 
@@ -1169,10 +1184,14 @@ a set of Vouches with
     ]);
   });
 
-  test("requires `set` or `element` for a subset", () => {
-    expect(parseSimpleStateForm("a set of Items\n\na seq of Late Items").diagnostics).toMatchObject(
-      [{ code: "SSF_MALFORMED_DECLARATION", suggestion: "a set of Late Items" }],
-    );
+  test.each([
+    ["a seq of Late Items", ["SSF_MALFORMED_DECLARATION"]],
+    ["a sequence of Late Items", ["SSF_MALFORMED_DECLARATION"]],
+    ["seq of Late Items", ["SSF_ARTICLE", "SSF_MALFORMED_DECLARATION"]],
+  ])("repairs the subset %s to one `set` declaration", (line, codes) => {
+    const diagnostics = parseSimpleStateForm(`a set of Items\n\n${line}`).diagnostics;
+    expect(diagnostics.map(({ code }) => code)).toEqual(codes);
+    for (const { suggestion } of diagnostics) expect(suggestion).toBe("a set of Late Items");
   });
 
   test.each([
@@ -1211,17 +1230,24 @@ a set of Vouches with
     ]);
   });
 
-  test("matches a subset's identifier in either number", () => {
-    expect(
-      parseSimpleStateForm("a set of Users\n\na set of VerifiedUser\n\na set of Verified Users")
-        .diagnostics,
-    ).toMatchObject([
-      {
-        code: "SSF_NAME_COLLISION",
-        message: expect.stringContaining('takes the identifier "VerifiedUsers"'),
-        span: { start: { line: 5 } },
-      },
+  test.each([
+    ["a regular plural", "a set of Users\n\na set of VerifiedUser\n\na set of Verified Users"],
+    ["an irregular plural", "a set of People\n\na set of ActivePerson\n\na set of Active People"],
+    ["another irregular plural", "a set of Mice\n\na set of LabMouse\n\na set of Lab Mice"],
+  ])("matches a subset's identifier in either number with %s", (_, source) => {
+    expect(parseSimpleStateForm(source).diagnostics).toMatchObject([
+      { code: "SSF_NAME_COLLISION", span: { start: { line: 5 } } },
     ]);
+  });
+
+  test("names an owned root by its declaration when several singulars are authored", () => {
+    const aliases = ["alias Ax for Axes", "alias Axis for Axes"];
+    const rootTypes = [aliases, aliases.toReversed()].map(
+      (order) =>
+        parseSimpleStateForm(`a set of Axes\n\n${order.join("\n\n")}\n\na set of Open Axes`)
+          .document.inventory.subsets[0]?.rootType,
+    );
+    expect(rootTypes).toEqual(["Axes", "Axes"]);
   });
 
   test.each([
@@ -1268,6 +1294,11 @@ a set of Vouches with
       "a collection",
       "  a verified set of User",
       'If it holds members of "Verified Users", write `a set of Verified User`; otherwise give it a role name that is not a qualifier.',
+    ],
+    [
+      "a field with modifiers",
+      "  an optional unique verified User",
+      'If it holds members of "Verified Users", write `an optional unique Verified User`; otherwise give it a role name that is not a qualifier.',
     ],
     [
       "a type no subset qualifies",

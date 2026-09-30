@@ -64,8 +64,10 @@ Verified Users`. Name the set for membership in any condition: `user is in Users
 SSF accepts automatic singular/plural aliases for owned sets and sequences, and for
 external types, when an authored State field, subset line, or action/query signature
 supplies one unambiguous matching name; a subset phrase joins through its last word.
-Declare an explicit `alias` for a synonym or an ambiguous singular/plural relationship;
-the explicit declaration takes precedence.
+Declare an explicit `alias` for a synonym or an ambiguous singular/plural relationship of
+an owned set; the explicit declaration takes precedence. An external type cannot be an
+alias target, so when a spelling pairs with several external types, write the exact
+external name or rename one of them.
 
 An alias targets one unique owned top-level declaration: a set, sequence, or element. It
 cannot target another alias, a subset, an external or a set of one, an opaque or enum type,

@@ -186,6 +186,22 @@ a set of Reminders with
     ]);
   });
 
+  test("recognizes a subset identifier through an irregular plural", () => {
+    const { specification, document } = checked(
+      concept(
+        `release(subject: LabMouse) : returns ()
+  where subject is in Lab Mice
+  then
+    returns`,
+        "",
+        "a set of Mice\n\na set of Lab Mice",
+      ),
+    );
+    expect(validateSpecificationSignatureTypes(specification, document)).toMatchObject([
+      { code: "SSF_SUBSET_SIGNATURE_TYPE", message: expect.stringContaining('"Lab Mice"') },
+    ]);
+  });
+
   test("recognizes a subset identifier in the number no State line spells", () => {
     const { specification, document } = checked(
       concept(

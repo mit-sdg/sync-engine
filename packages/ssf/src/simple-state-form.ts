@@ -1,4 +1,4 @@
-import { exactPluralPair } from "./automatic-aliases.ts";
+import { sameQualifiedName } from "./automatic-aliases.ts";
 import { parseGrammar } from "./grammar.ts";
 import type {
   SsfParseOptions,
@@ -19,10 +19,8 @@ export function subsetIdentifiedBy(
   inventory: SsfTypeInventory,
   typeName: string,
 ): SsfSubsetIdentity | undefined {
-  return inventory.subsets.find(({ identifiers }) =>
-    identifiers.some(
-      (identifier) => identifier === typeName || exactPluralPair(identifier, typeName),
-    ),
+  return inventory.subsets.find(({ identifiers, qualifierPrefix }) =>
+    identifiers.some((identifier) => sameQualifiedName(qualifierPrefix, identifier, typeName)),
   );
 }
 

@@ -181,6 +181,8 @@ export interface SsfSubsetIdentity {
   readonly name: string;
   /** Identifiers such as `VerifiedUser` and `VerifiedUsers`, sorted. */
   readonly identifiers: readonly string[];
+  /** The joined qualifiers that begin every identifier: `Verified` in `VerifiedUsers`. */
+  readonly qualifierPrefix: string;
   /** The type of the top-level set the subset qualifies, such as `User`. */
   readonly rootType: string;
 }

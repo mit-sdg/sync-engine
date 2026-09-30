@@ -91,8 +91,9 @@ names. One capitalized word after the structural keyword declares a top-level ty
 more declare a subset.
 
 Graph validation classifies top-level sets and sequences before it joins spellings: one
-whose name is the `plur` pair of exactly one external type is a set of that type and
-owns nothing, and every other top-level declaration owns its type. Named State field
+whose name is `plur`'s plural of exactly one external type's name is a set of that type
+and owns nothing, and every other top-level declaration owns its type. The comparison is
+directional, so `a set of User` beside `external Users` declares an owned `User`. Named State field
 references, subset types, and parsed action and query type expressions supply alias
 candidates, and the owners they may join are the owned non-element declarations and the
 external types. A candidate joins an owner only when `plur` relates the two authored
