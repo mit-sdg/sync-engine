@@ -1,8 +1,4 @@
-import {
-  automaticAliasCandidates,
-  exactPluralPair,
-  sameQualifiedName,
-} from "./automatic-aliases.ts";
+import { automaticAliasCandidates, sameQualifiedName } from "./automatic-aliases.ts";
 import { identifierOf, impliedName, PRIMITIVES, PRIMITIVE_NAMES } from "./names.ts";
 import {
   error,
@@ -15,6 +11,7 @@ import {
   type SsfSpan,
 } from "./model.ts";
 import { span } from "./source.ts";
+import { IRREGULAR_PLURAL_PAIRS } from "./vendor/irregular-plurals.ts";
 import { pluralize } from "./vendor/plur.ts";
 
 /** What a set's members are: identities this State owns, or individuals of an external type. */
@@ -205,6 +202,36 @@ function validateSubsetConditions(
       seen.add(tested.text);
     }
   }
+}
+
+/** Every spelling the pluralizer turns into `plural`, other than `plural` itself. */
+function singularsOf(plural: string): readonly string[] {
+  const irregular = IRREGULAR_PLURAL_PAIRS.flatMap(([singular, irregularPlural]) =>
+    irregularPlural === plural.toLowerCase() ? [`${plural[0]}${singular.slice(1)}`] : [],
+  );
+  const regular = [
+    plural.replace(/ies$/, "y"),
+    plural.replace(/es$/, ""),
+    plural.replace(/s$/, ""),
+  ];
+  return [...new Set([...irregular, ...regular])].filter(
+    (singular) => singular !== plural && pluralize(singular) === plural,
+  );
+}
+
+/**
+ * Suggest the declarations that would give an undeclared subset head its set: `Items`
+ * becomes `a set of Items` or `external Item`, as does a singular head `Item`. A plural
+ * with several possible singulars, such as `Boxes`, leaves the external spelling to the author.
+ */
+function undeclaredHeadRepair(head: string): string {
+  const singulars = singularsOf(head);
+  const set = `\`a set of ${singulars.length > 0 ? head : pluralize(head)}\``;
+  const externalType =
+    singulars.length === 0 ? head : singulars.length === 1 ? singulars[0] : undefined;
+  return externalType === undefined
+    ? `Declare the set it qualifies, ${set}, or declare the singular of ${JSON.stringify(head)} as \`external\` in the Types fence.`
+    : `Declare the set it qualifies, ${set}, or \`external ${externalType}\` in the Types fence.`;
 }
 
 /** Report exact collisions between a top-level declaration and a Types or primitive name. */
@@ -460,7 +487,7 @@ export function validateTypeGraph(
         ? error({
             code: "SSF_UNDECLARED_TYPE",
             message: `Subset ${JSON.stringify(subset.name.text)} qualifies ${JSON.stringify(head)}, which is not owned or external.`,
-            suggestion: `Declare the set it qualifies, such as \`a set of ${head}\`, or \`external ${head}\` in the Types fence.`,
+            suggestion: undeclaredHeadRepair(head),
             span: subset.name.span,
           })
         : error({
@@ -497,8 +524,7 @@ export function validateTypeGraph(
         error({
           code: "SSF_REPEATED_QUALIFIER",
           message: `Qualifier ${JSON.stringify(qualifiers[0])} already qualifies ${JSON.stringify(first!.declaration.name.text)}; a qualifier appears once among the subsets of one set.`,
-          suggestion:
-            "Use a different qualifier, or make this set a subset of the one the qualifier already names.",
+          suggestion: `Rename one of them to begin with a qualifier that no other subset of ${JSON.stringify(first!.declaration.name.text.split(" ").at(-1))} begins with.`,
           span: declaration.name.span,
         }),
       );
@@ -661,7 +687,7 @@ export function validateTypeGraph(
           : [field.value.multiplicity === "set" ? "set" : "seq", "of"]),
         qualified,
       ];
-      const written = `${/^[AEIOU]/iu.test(words[0]!) ? "an" : "a"} ${words.join(" ")}`;
+      const written = `${words[0] !== "unique" && /^[AEIOU]/iu.test(words[0]!) ? "an" : "a"} ${words.join(" ")}`;
       diagnostics.push({
         severity: "advice",
         code: "SSF_QUALIFIER_FIELD_NAME",

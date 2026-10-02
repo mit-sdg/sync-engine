@@ -1116,8 +1116,37 @@ a set of Vouches with
         code: "SSF_REPEATED_QUALIFIER",
         message:
           'Qualifier "Trusted" already qualifies "Trusted Users"; a qualifier appears once among the subsets of one set.',
+        suggestion:
+          'Rename one of them to begin with a qualifier that no other subset of "Users" begins with.',
         span: { start: { line: 7, column: 10 } },
       },
+    ]);
+  });
+
+  test.each([
+    [
+      "Line Items",
+      "Declare the set it qualifies, `a set of Items`, or `external Item` in the Types fence.",
+    ],
+    [
+      "Active Item",
+      "Declare the set it qualifies, `a set of Items`, or `external Item` in the Types fence.",
+    ],
+    [
+      "Tall People",
+      "Declare the set it qualifies, `a set of People`, or `external Person` in the Types fence.",
+    ],
+    [
+      "Lost Sheep",
+      "Declare the set it qualifies, `a set of Sheep`, or `external Sheep` in the Types fence.",
+    ],
+    [
+      "Big Boxes",
+      'Declare the set it qualifies, `a set of Boxes`, or declare the singular of "Boxes" as `external` in the Types fence.',
+    ],
+  ])("suggests the set a subset %s qualifies", (subset, suggestion) => {
+    expect(parseSimpleStateForm(`a set of ${subset}`).diagnostics).toMatchObject([
+      { code: "SSF_UNDECLARED_TYPE", suggestion },
     ]);
   });
 
@@ -1154,6 +1183,20 @@ a set of Vouches with
         message: 'Type "Open Item" is not a subset this State declares.',
         span: { start: { line: 4, column: 11 } },
       },
+    ]);
+  });
+
+  test("reads a capitalized first word of an unnamed field as a possible field name", () => {
+    const suggestionFor = (field: string) =>
+      parseSimpleStateForm(
+        `a set of Users\n\na set of Verified Users\n\na set of Vouches with\n  ${field}`,
+        { externalTypes: ["User"] },
+      ).diagnostics.map(({ suggestion }) => suggestion);
+    expect(suggestionFor("a Sponsor Verified User")).toEqual([
+      "If `Sponsor` is the field's name, write it in lowercase: `sponsor Verified User`. Otherwise, declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.",
+    ]);
+    expect(suggestionFor("a sponsor Trusted Verified User")).toEqual([
+      "Declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.",
     ]);
   });
 
@@ -1308,6 +1351,11 @@ a set of Vouches with
       "a field with modifiers",
       "  an optional unique verified User",
       'If it holds members of "Verified Users", write `an optional unique Verified User`; otherwise give it a role name that is not a qualifier.',
+    ],
+    [
+      "a unique field",
+      "  a unique verified User",
+      'If it holds members of "Verified Users", write `a unique Verified User`; otherwise give it a role name that is not a qualifier.',
     ],
     [
       "a type no subset qualifies",

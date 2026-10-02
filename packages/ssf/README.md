@@ -370,6 +370,11 @@ fields, and removing a User from `Users` must remove or refuse every reference t
 When only some individuals should carry fields, declare a qualified subset rather than a
 plain set.
 
+A field typed by a subset carries the same obligation. With `a set of Reminders with a
+Pending Invitation`, an action that takes an invitation out of `Pending Invitations`
+must also remove or refuse every Reminder that holds it. A field that should keep its
+value after membership ends takes the parent type instead: `an Invitation`.
+
 ## Rules
 
 Prose the notation cannot express goes on a `Rule:` line, either at the top level or

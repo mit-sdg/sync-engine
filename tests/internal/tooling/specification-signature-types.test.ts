@@ -163,13 +163,14 @@ a set of Reminders with
   });
 
   test.each([
-    ["an argument type", "Declined Invitation"],
-    ["a type argument", "Secret<Declined Invitation>"],
-    ["a grouped type", "(Declined Invitation)"],
-    ["a union member", "String | Declined Invitation"],
-    ["a tab-separated phrase", "Declined\tInvitation"],
-    ["a phrase with a non-breaking space", "Declined\u00a0Invitation"],
-  ])("explains a subset phrase written as %s", (_, type) => {
+    ["an argument type", "Declined Invitation", "Declined Invitation"],
+    ["a type argument", "Secret<Declined Invitation>", "Declined Invitation"],
+    ["a grouped type", "(Declined Invitation)", "Declined Invitation"],
+    ["a union member", "String | Declined Invitation", "Declined Invitation"],
+    ["a tab-separated phrase", "Declined\tInvitation", "Declined Invitation"],
+    ["a phrase with a non-breaking space", "Declined\u00a0Invitation", "Declined Invitation"],
+    ["words that name no subset", "Date Time", "Date Time"],
+  ])("explains a multiword type written as %s", (_, type, phrase) => {
     expect(
       parseSpec(
         concept(`decline(invitation: ${type}) : returns ()
@@ -181,7 +182,7 @@ a set of Reminders with
       {
         code: "CONCEPT_SPEC_SIGNATURE",
         message: expect.stringContaining(
-          '"Declined Invitation" names a subset; a signature takes the type of the set it qualifies, "Invitation"',
+          `"${phrase}" is more than one word, and a signature type is one word; if it names a subset, take the type of the set it qualifies and state membership in a \`where\` condition`,
         ),
       },
     ]);

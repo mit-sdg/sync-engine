@@ -46,7 +46,9 @@ refers to is in `Users` and has a reputation. That holds whether the concept own
 takes it as `external User`; a set named for an external type's plural holds its
 individuals and introduces no identity. Write the plural—`a set of User` collides with
 the external name. The actions carry the obligation: storing a User makes it a member
-with its fields, and removing a member removes or refuses every reference to it.
+with its fields, and removing a member removes or refuses every reference to it. Taking a
+member out of a subset likewise removes or refuses every field of that subset's type that
+holds it; type the field by the parent when it should outlive membership.
 
 Declare a subset by qualifying its parent: `a set of Verified Users`, `a set of Trusted
 Verified Users`, `an element Root Folder`. One capitalized word after the keyword is a

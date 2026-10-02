@@ -509,7 +509,7 @@ class SignatureParser {
       name += `.${part.name}`;
     }
     if (name === "null" || name === "undefined") return { kind: name, location };
-    // Capitalized words after a type name and a space only ever continue a subset phrase.
+    // A signature type is one word, so capitalized words after it and a space are an error.
     this.#skipSpace();
     const qualified = /^[A-Z][A-Za-z0-9_]*(?:\s+[A-Z][A-Za-z0-9_]*)*/.exec(
       this.#line.text.slice(this.#index),
@@ -517,7 +517,7 @@ class SignatureParser {
     if (qualified !== null && /\s/.test(this.#line.text[this.#index - 1] ?? "")) {
       const words = qualified[0].split(/\s+/);
       this.#report(
-        `"${[name, ...words].join(" ")}" names a subset; a signature takes the type of the set it qualifies, "${words.at(-1)!}", and a condition states membership`,
+        `"${[name, ...words].join(" ")}" is more than one word, and a signature type is one word; if it names a subset, take the type of the set it qualifies and state membership in a \`where\` condition`,
       );
       return undefined;
     }

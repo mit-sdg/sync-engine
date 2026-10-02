@@ -1,6 +1,6 @@
 import type { GrammarResult } from "./grammar.ts";
 import { validateTypeGraph, type ResolutionFacts } from "./graph-validation.ts";
-import { PRIMITIVES, PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
+import { impliedName, PRIMITIVES, PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
 import {
   error,
   type ParsedFieldType,
@@ -77,12 +77,38 @@ function structuralReference(
   return typeReference(reference, facts, external, local) ?? unresolved(reference);
 }
 
+/**
+ * The reading of `a Sponsor Verified User` as the field `sponsor` holding a `Verified
+ * User`, when the words after the first resolve as a type.
+ */
+function lowercaseNameReading(
+  reference: ParsedReference,
+  facts: ResolutionFacts,
+  external: ReadonlySet<string>,
+  local: ReadonlySet<string>,
+): string | undefined {
+  const [first, ...rest] = reference.text.split(" ");
+  const type = rest.join(" ");
+  return typeReference({ ...reference, text: type }, facts, external, local) === undefined
+    ? undefined
+    : `If \`${first}\` is the field's name, write it in lowercase: \`${impliedName(first!)} ${type}\`.`;
+}
+
+function subsetSuggestion(lowercaseName: string | undefined): string {
+  const declare =
+    "declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.";
+  return lowercaseName === undefined
+    ? `${declare[0]!.toUpperCase()}${declare.slice(1)}`
+    : `${lowercaseName} Otherwise, ${declare}`;
+}
+
 function resolveReference(
   reference: ParsedReference,
   facts: ResolutionFacts,
   external: ReadonlySet<string>,
   local: ReadonlySet<string>,
   diagnostics: SsfDiagnostic[],
+  unnamedScalar = false,
 ): SsfTypeReference {
   const resolved = typeReference(reference, facts, external, local);
   if (resolved !== undefined) return resolved;
@@ -99,8 +125,9 @@ function resolveReference(
         ? error({
             code: "SSF_UNDECLARED_TYPE",
             message: `Type ${JSON.stringify(reference.text)} is not a subset this State declares.`,
-            suggestion:
-              "Declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.",
+            suggestion: subsetSuggestion(
+              unnamedScalar ? lowercaseNameReading(reference, facts, external, local) : undefined,
+            ),
             span: reference.span,
           })
         : error({
@@ -158,8 +185,8 @@ export function resolveGrammar(
   );
   const structural = (reference: ParsedReference): SsfTypeReference =>
     structuralReference(reference, facts, external, local);
-  const resolve = (reference: ParsedReference): SsfTypeReference =>
-    resolveReference(reference, facts, external, local, diagnostics);
+  const resolve = (reference: ParsedReference, unnamedScalar = false): SsfTypeReference =>
+    resolveReference(reference, facts, external, local, diagnostics, unnamedScalar);
   const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => {
     const subset = facts.subsets.get(declaration);
     return {
@@ -195,7 +222,9 @@ export function resolveGrammar(
         name: field.name,
         optional: field.optional,
         unique: field.unique,
-        value: fieldType(field.value, resolve),
+        value: fieldType(field.value, (reference) =>
+          resolve(reference, field.implicitName && field.value.kind === "named"),
+        ),
         span: field.span,
       })),
       constraints: declaration.constraints.map((constraint) => ({

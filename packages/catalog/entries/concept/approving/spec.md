@@ -47,19 +47,19 @@ request (subject: Subject, requester: Person, reviewer: Person, at: DateTime) : 
   where requester is reviewer
   then
     refuses SELF_REVIEW_NOT_ALLOWED "A requester cannot review the same request."
-  where a pending Review has subject
+  where a Pending Review has subject
   then
     refuses REVIEW_ALREADY_PENDING "This subject already has a pending review."
   where requester differs from reviewer and no pending Review has subject
   then
-    add a new pending Review with subject, requester, reviewer, and requestedAt at
+    add a new Pending Review with subject, requester, reviewer, and requestedAt at
     returns review
 
 approve (review: Review, reviewer: Person, at: DateTime) : returns (review: Review)
-  where review is unknown, is not pending, or does not have reviewer
+  where review is not in Reviews, is not in Pending Reviews, or does not have reviewer
   then
     refuses REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
-  where review is pending and has reviewer
+  where review is in Pending Reviews and has reviewer
   then
     mark the Review approved with decidedAt at
     returns review
@@ -68,19 +68,19 @@ reject (review: Review, reviewer: Person, reason: String, at: DateTime) : return
   where reason is blank or longer than 500 characters
   then
     refuses INVALID_REJECTION_REASON "A rejection reason must not be blank and must be at most 500 characters."
-  where review is unknown, is not pending, or does not have reviewer
+  where review is not in Reviews, is not in Pending Reviews, or does not have reviewer
   then
     refuses REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
-  where review is pending and has reviewer and reason is accepted
+  where review is in Pending Reviews and has reviewer and reason is accepted
   then
     mark the Review rejected with reason and decidedAt at
     returns review
 
 withdraw (review: Review, requester: Person, at: DateTime) : returns (review: Review)
-  where review is unknown, is not pending, or does not have requester
+  where review is not in Reviews, is not in Pending Reviews, or does not have requester
   then
     refuses REVIEW_NOT_PENDING_FOR_REQUESTER "There is no such pending review for this requester."
-  where review is pending and has requester
+  where review is in Pending Reviews and has requester
   then
     mark the Review withdrawn with decidedAt at
     returns review
@@ -93,8 +93,8 @@ _get (review: Review) : optional (subject: Subject, requester: Person, reviewer:
   answers the Review's subject, requester, reviewer, status, request and decision times, and rejection reason
   answers no row for an unknown Review
 _pendingFor (reviewer: Person) : many (review: Review, subject: Subject, requester: Person, requestedAt: DateTime)
-  answers the Reviewer's pending Reviews with their subjects, requesters, and request times
-  answers no rows when the Reviewer has no pending Reviews
+  answers the Reviewer's Pending Reviews with their subjects, requesters, and request times
+  answers no rows when the Reviewer has no Pending Reviews
   orders rows by requestedAt and then Review identity
 _history (subject: Subject) : many (review: Review, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt?: DateTime)
   answers the Subject's Reviews with their requesters, reviewers, statuses, and request and decision times
