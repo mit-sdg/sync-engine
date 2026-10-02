@@ -35,48 +35,48 @@ a set of Invitations with
   an issuedAt DateTime
   an optional decidedAt DateTime
 
-a Pending set of Invitations where status is PENDING with
+a set of Pending Invitations where status is PENDING with
   unique target and invitee
 ```
 
 ## Actions
 
 ```actions
-issue (target: Target, inviter: Person, invitee: Person, at: DateTime) : return (invitation: Invitation)
-  where a pending Invitation has target and invitee
+issue (target: Target, inviter: Person, invitee: Person, at: DateTime) : returns (invitation: Invitation)
+  where a Pending Invitation has target and invitee
   then
-    refuse INVITATION_ALREADY_PENDING "This person already has a pending invitation for the target."
-  where no pending Invitation has target and invitee
+    refuses INVITATION_ALREADY_PENDING "This person already has a pending invitation for the target."
+  where no Pending Invitation has target and invitee
   then
-    add a new pending Invitation with target, inviter, invitee, and issuedAt at
-    return invitation
+    add a new Pending Invitation with target, inviter, invitee, and issuedAt at
+    returns invitation
 
-accept (invitation: Invitation, invitee: Person, at: DateTime) : return (invitation: Invitation)
-  where invitation is unknown, is not pending, or does not have invitee
+accept (invitation: Invitation, invitee: Person, at: DateTime) : returns (invitation: Invitation)
+  where invitation is not in Invitations, is not in Pending Invitations, or does not have invitee
   then
-    refuse INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
-  where invitation is pending and has invitee
+    refuses INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
+  where invitation is in Pending Invitations and has invitee
   then
     mark the Invitation accepted with decidedAt at
-    return invitation
+    returns invitation
 
-decline (invitation: Invitation, invitee: Person, at: DateTime) : return (invitation: Invitation)
-  where invitation is unknown, is not pending, or does not have invitee
+decline (invitation: Invitation, invitee: Person, at: DateTime) : returns (invitation: Invitation)
+  where invitation is not in Invitations, is not in Pending Invitations, or does not have invitee
   then
-    refuse INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
-  where invitation is pending and has invitee
+    refuses INVITATION_NOT_PENDING_FOR_INVITEE "There is no such pending invitation for this invitee."
+  where invitation is in Pending Invitations and has invitee
   then
     mark the Invitation declined with decidedAt at
-    return invitation
+    returns invitation
 
-revoke (invitation: Invitation, inviter: Person, at: DateTime) : return (invitation: Invitation)
-  where invitation is unknown, is not pending, or does not have inviter
+revoke (invitation: Invitation, inviter: Person, at: DateTime) : returns (invitation: Invitation)
+  where invitation is not in Invitations, is not in Pending Invitations, or does not have inviter
   then
-    refuse INVITATION_NOT_PENDING_FOR_INVITER "There is no such pending invitation for this inviter."
-  where invitation is pending and has inviter
+    refuses INVITATION_NOT_PENDING_FOR_INVITER "There is no such pending invitation for this inviter."
+  where invitation is in Pending Invitations and has inviter
   then
     mark the Invitation revoked with decidedAt at
-    return invitation
+    returns invitation
 ```
 
 ## Queries
@@ -86,7 +86,7 @@ _get (invitation: Invitation) : optional (target: Target, inviter: Person, invit
   answers the Invitation's target, inviter, invitee, status, and issue and decision times
   answers no row for an unknown Invitation
 _pendingFor (invitee: Person) : many (invitation: Invitation, target: Target, inviter: Person, issuedAt: DateTime)
-  answers the Invitee's pending Invitations with their targets, inviters, and issue times
-  answers no rows when the Invitee has no pending Invitations
+  answers the Invitee's Pending Invitations with their targets, inviters, and issue times
+  answers no rows when the Invitee has no Pending Invitations
   orders rows by issuedAt and then Invitation identity
 ```

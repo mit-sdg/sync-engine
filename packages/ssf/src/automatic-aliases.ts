@@ -2,36 +2,60 @@ import { PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
 import type { ParsedDeclaration } from "./model.ts";
 import { pluralize } from "./vendor/plur.ts";
 
-/** Exact named State field references that can evidence an automatic alias. */
+/** The word a type phrase joins through: `Verified User` joins by its head, `User`. */
+export function headOf(typeName: string): string {
+  return typeName.slice(typeName.lastIndexOf(" ") + 1);
+}
+
+/** Exact State field and subset type references that can evidence an automatic alias. */
 export function stateFieldTypeEvidence(
   declarations: readonly ParsedDeclaration[],
 ): readonly string[] {
-  return declarations.flatMap(({ fields }) =>
-    fields.flatMap(({ value }) => {
-      if (value.kind === "named") return [value.reference.text];
-      if (value.kind === "collection" && value.element.kind === "named") {
-        return [value.element.reference.text];
-      }
-      return [];
-    }),
-  );
+  return declarations.flatMap(({ declarationKind, name, fields }) => [
+    ...(declarationKind === "subset" ? [headOf(name.text)] : []),
+    ...fields.flatMap(({ value }) =>
+      value.kind === "named"
+        ? [headOf(value.reference.text)]
+        : [headOf(value.element.reference.text)],
+    ),
+  ]);
 }
 
-function exactPluralPair(left: string, right: string): boolean {
+export function exactPluralPair(left: string, right: string): boolean {
   return pluralize(left) === right || pluralize(right) === left;
 }
 
+/** Whether two words are one in either number, or share a plural as `Ax` and `Axis` do. */
+function sameWordInEitherNumber(left: string, right: string): boolean {
+  return left === right || exactPluralPair(left, right) || pluralize(left) === pluralize(right);
+}
+
 /**
- * Relate only exact authored evidence to one non-element structure or subset owner.
- * The pluralizer's output is compared, never inserted into the inventory. A name the
- * Types fence already claims is not a candidate: joining it would make one spelling both
- * owned and declared, which the single type namespace forbids.
+ * Whether a subset identifier and another name are one name in code, in either number. The
+ * joined qualifiers must match exactly and only the head inflects, so `ActivePerson` names
+ * the subset whose identifier is `ActivePeople`, and `Open Ax` and `Open Axis` share
+ * `OpenAxes`.
+ */
+export function sameQualifiedName(prefix: string, identifier: string, name: string): boolean {
+  return (
+    identifier === name ||
+    (name.length > prefix.length &&
+      name.startsWith(prefix) &&
+      sameWordInEitherNumber(identifier.slice(prefix.length), name.slice(prefix.length)))
+  );
+}
+
+/**
+ * Relate only exact authored evidence to one owner: a non-element owned set or sequence, or
+ * an external type. The pluralizer's output is compared, never inserted into the inventory.
+ * A name the Types fence already claims is not a candidate: joining it would make one
+ * spelling both joined and declared, which the single type namespace forbids.
  */
 export function automaticAliasCandidates(
   declarations: readonly ParsedDeclaration[],
   eligibleStructuralNames: ReadonlySet<string>,
   evidenceTypeNames: readonly string[],
-  explicitAliasNames: ReadonlySet<string>,
+  claimedNames: ReadonlySet<string>,
   external: ReadonlySet<string>,
   local: ReadonlySet<string>,
 ): {
@@ -42,11 +66,18 @@ export function automaticAliasCandidates(
   }[];
 } {
   const declarationsByName = new Map(
-    declarations.map((declaration) => [declaration.name.text, declaration] as const),
+    declarations.flatMap((declaration) =>
+      declaration.declarationKind === "collection"
+        ? [[declaration.name.text, declaration] as const]
+        : [],
+    ),
   );
-  const owners = [...eligibleStructuralNames]
-    .filter((name) => declarationsByName.get(name)?.multiplicity !== "element")
-    .sort();
+  const owners = [
+    ...[...eligibleStructuralNames].filter(
+      (name) => declarationsByName.get(name)?.multiplicity !== "element",
+    ),
+    ...external,
+  ].sort();
   const candidates = [
     ...new Set([...stateFieldTypeEvidence(declarations), ...evidenceTypeNames]),
   ].sort();
@@ -56,7 +87,7 @@ export function automaticAliasCandidates(
     if (
       !TYPE_NAME.test(candidate) ||
       eligibleStructuralNames.has(candidate) ||
-      explicitAliasNames.has(candidate) ||
+      claimedNames.has(candidate) ||
       external.has(candidate) ||
       local.has(candidate) ||
       PRIMITIVE_NAMES.has(candidate)

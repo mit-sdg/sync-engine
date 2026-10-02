@@ -26,11 +26,11 @@ a seq of Observations with
 ## Actions
 
 ```actions
-record(operationId: Operation, entryId: String) : return (recorded: Flag)
+record(operationId: Operation, entryId: String) : returns (recorded: Flag)
   where true
   then
     append an observation
-    return recorded
+    returns recorded
 ```
 
 ## Queries

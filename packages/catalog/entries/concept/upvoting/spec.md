@@ -38,40 +38,40 @@ Rule: a score is a whole number, positive or negative
 ## Actions
 
 ```actions
-upvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
+upvote (item: Item, voter: Voter) : returns (item: Item, voter: Voter)
   where the current Vote for item and voter is up
   then
-    refuse ALREADY_UPVOTED "This voter has already upvoted the item."
+    refuses ALREADY_UPVOTED "This voter has already upvoted the item."
   where the current Vote for item and voter is down
   then
     change that Vote to up
-    return item, voter
+    returns item, voter
   where there is no Vote for item and voter
   then
     add an up Vote for item and voter
-    return item, voter
+    returns item, voter
 
-downvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
+downvote (item: Item, voter: Voter) : returns (item: Item, voter: Voter)
   where the current Vote for item and voter is down
   then
-    refuse ALREADY_DOWNVOTED "This voter has already downvoted the item."
+    refuses ALREADY_DOWNVOTED "This voter has already downvoted the item."
   where the current Vote for item and voter is up
   then
     change that Vote to down
-    return item, voter
+    returns item, voter
   where there is no Vote for item and voter
   then
     add a down Vote for item and voter
-    return item, voter
+    returns item, voter
 
-unvote (item: Item, voter: Voter) : return (item: Item, voter: Voter)
+unvote (item: Item, voter: Voter) : returns (item: Item, voter: Voter)
   where there is no Vote for item and voter
   then
-    refuse VOTE_NOT_FOUND "This voter has no vote for the item."
+    refuses VOTE_NOT_FOUND "This voter has no vote for the item."
   where there is a Vote for item and voter
   then
     delete that Vote
-    return item, voter
+    returns item, voter
 ```
 
 ## Queries

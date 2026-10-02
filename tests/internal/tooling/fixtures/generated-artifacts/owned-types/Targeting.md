@@ -20,16 +20,18 @@ Creating a label establishes one record with that label.
 a set of Records with
   a label String
 
+a set of Archived Records
+
 alias Entry for Records
 ```
 
 ## Actions
 
 ```actions
-create(label: String) : return (record: Record)
+create(label: String) : returns (record: Record)
   where true
   then
-    return record
+    returns record
 ```
 
 ## Queries

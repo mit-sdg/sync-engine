@@ -50,21 +50,21 @@ a set of Links with
 ## Actions
 
 \`\`\`actions
-resolve(code: String) : return (target: String)
+resolve(code: String) : returns (target: String)
   where code not in links
   then
-    refuse UNKNOWN_CODE "No link has this code."
+    refuses UNKNOWN_CODE "No link has this code."
   where code is known
   then
-    return target
+    returns target
 
-report(code: String) : return (visits: Number)
+report(code: String) : returns (visits: Number)
   where code not in links
   then
-    refuse UNKNOWN_CODE "No link has this code."
+    refuses UNKNOWN_CODE "No link has this code."
   where code is known
   then
-    return visits
+    returns visits
 \`\`\`
 
 ## Queries

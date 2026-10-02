@@ -34,26 +34,26 @@ a seq of Comments with
 ## Actions
 
 ```actions
-add (target: Target, author: Author, text: String, at: DateTime) : return (comment: Comment)
+add (target: Target, author: Author, text: String, at: DateTime) : returns (comment: Comment)
   where text is blank or longer than 1000 characters
   then
-    refuse INVALID_COMMENT_TEXT "A comment must not be blank and must be at most 1000 characters."
+    refuses INVALID_COMMENT_TEXT "A comment must not be blank and must be at most 1000 characters."
   where text is accepted
   then
     add a new Comment with target, author, text, and addedAt at
-    return comment
+    returns comment
 
-retract (comment: Comment, author: Author) : return (comment: Comment)
+retract (comment: Comment, author: Author) : returns (comment: Comment)
   where comment is unknown
   then
-    refuse COMMENT_NOT_FOUND "There is no such comment."
+    refuses COMMENT_NOT_FOUND "There is no such comment."
   where comment is known and does not have author
   then
-    refuse COMMENT_AUTHOR_MISMATCH "Only the comment author may retract it."
+    refuses COMMENT_AUTHOR_MISMATCH "Only the comment author may retract it."
   where comment is known and has author
   then
     delete the Comment
-    return comment
+    returns comment
 ```
 
 ## Queries

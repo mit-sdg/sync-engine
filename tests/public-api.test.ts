@@ -81,11 +81,11 @@ a set of Titles
 ## Actions
 
 \`\`\`actions
-add(title: String) : return (title: String)
+add(title: String) : returns (title: String)
   where true
   then
     add title
-    return title
+    returns title
 \`\`\`
 
 ## Queries

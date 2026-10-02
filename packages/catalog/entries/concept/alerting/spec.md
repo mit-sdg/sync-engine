@@ -39,27 +39,27 @@ a set of Alerts with
 ## Actions
 
 ```actions
-raise (recipient: Recipient, subject: Subject, cause: Cause, at: DateTime) : return (alert: Alert)
+raise (recipient: Recipient, subject: Subject, cause: Cause, at: DateTime) : returns (alert: Alert)
   where an Alert has recipient and cause and the same subject
   then
     bind alert to that Alert
-    return alert
+    returns alert
   where an Alert has recipient and cause but a different subject
   then
-    refuse ALERT_CAUSE_CONFLICT "This alert cause is already associated with another subject for the recipient."
+    refuses ALERT_CAUSE_CONFLICT "This alert cause is already associated with another subject for the recipient."
   where no Alert has recipient and cause
   then
     add a new open Alert with recipient, subject, cause, and raisedAt at
-    return alert
+    returns alert
 
-acknowledge (alert: Alert, recipient: Recipient) : return (alert: Alert)
+acknowledge (alert: Alert, recipient: Recipient) : returns (alert: Alert)
   where alert is unknown, is not open, or does not have recipient
   then
-    refuse ALERT_NOT_OPEN_FOR_RECIPIENT "There is no such open alert for this recipient."
+    refuses ALERT_NOT_OPEN_FOR_RECIPIENT "There is no such open alert for this recipient."
   where alert is open and has recipient
   then
     mark the Alert closed
-    return alert
+    returns alert
 ```
 
 ## Queries

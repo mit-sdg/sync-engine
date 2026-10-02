@@ -183,10 +183,10 @@ Rule: catalogs: set Catalog
 
 ## Actions
 \`\`\`actions
-configure(source?: Source) : return ()
+configure(source?: Source) : returns ()
   where true
   then
-    return
+    returns
 \`\`\`
 
 ## Queries

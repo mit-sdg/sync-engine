@@ -36,23 +36,23 @@ a seq of Comments with
 ## Actions
 
 ```actions
-add (target: Target, author: Author, content: Content) : return (comment: Comment)
+add (target: Target, author: Author, content: Content) : returns (comment: Comment)
   where true
   then
     add a new comment with target, author, and content
-    return comment
+    returns comment
 
-retract (comment: Comment, author: Author) : return (comment: Comment)
+retract (comment: Comment, author: Author) : returns (comment: Comment)
   where comment is unknown
   then
-    refuse COMMENT_NOT_FOUND "There is no such comment."
+    refuses COMMENT_NOT_FOUND "There is no such comment."
   where comment is known and author does not match its author
   then
-    refuse COMMENT_AUTHOR_MISMATCH "Only the comment author may retract it."
+    refuses COMMENT_AUTHOR_MISMATCH "Only the comment author may retract it."
   where comment is known and author matches its author
   then
     delete comment
-    return comment
+    returns comment
 ```
 
 ## Queries

@@ -1334,10 +1334,10 @@ Rule: opaque
 ## Actions
 
 \`\`\`actions
-perform(value: String) : return (result: String)
+perform(value: String) : returns (result: String)
   where true
   then
-    return result
+    returns result
 \`\`\`
 
 ## Queries

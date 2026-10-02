@@ -21,21 +21,29 @@ function multiplicity(word: string): Multiplicity | undefined {
   return word === "seq" ? "sequence" : undefined;
 }
 
-function structuralDeclaration(line: string): readonly [string, Multiplicity] | undefined {
+/** The capitalized words after a declaration's structural keyword, and its multiplicity. */
+function declarationPhrase(line: string): readonly [readonly string[], Multiplicity] | undefined {
   if (/^[ \t]/.test(line)) return undefined;
   const words = line.trim().split(/\s+/);
   if (words[0] !== "a" && words[0] !== "an") return undefined;
-  let index = 1;
-  let declaredMultiplicity = multiplicity(words[index] ?? "");
-  if (declaredMultiplicity !== undefined) {
-    index += 1;
-    if (words[index] === "of") index += 1;
-  } else {
-    declaredMultiplicity = multiplicity(words[index + 1] ?? "");
-    if (declaredMultiplicity === undefined) return undefined;
-  }
-  const name = words[index];
-  return name !== undefined && TYPE_NAME.test(name) ? [name, declaredMultiplicity] : undefined;
+  const declaredMultiplicity = multiplicity(words[1] ?? "");
+  if (declaredMultiplicity === undefined) return undefined;
+  const start = words[2] === "of" ? 3 : 2;
+  let end = start;
+  while (TYPE_NAME.test(words[end] ?? "")) end += 1;
+  return end > start ? [words.slice(start, end), declaredMultiplicity] : undefined;
+}
+
+/** One word declares a type; a qualified phrase declares a subset, which owns no new type. */
+function structuralDeclaration(line: string): readonly [string, Multiplicity] | undefined {
+  const phrase = declarationPhrase(line);
+  return phrase?.[0].length === 1 ? [phrase[0][0]!, phrase[1]] : undefined;
+}
+
+/** A subset's head word, which is evidence for a plural join like a field's. */
+function subsetType(line: string): string | undefined {
+  const phrase = declarationPhrase(line);
+  return phrase !== undefined && phrase[0].length > 1 ? phrase[0].at(-1) : undefined;
 }
 
 function stateFieldType(line: string): string | undefined {
@@ -54,9 +62,9 @@ function stateFieldType(line: string): string | undefined {
     value += 1;
     if (words[value] === "of") value += 1;
   }
-  const candidate = words[value];
-  return candidate !== undefined && TYPE_NAME.test(candidate) && value + 1 === words.length
-    ? candidate
+  const phrase = words.slice(value);
+  return phrase.length > 0 && phrase.every((word) => TYPE_NAME.test(word))
+    ? phrase.at(-1)
     : undefined;
 }
 
@@ -65,11 +73,18 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
   const external = new Set(options.externalTypes ?? []);
   const local = new Set((options.localTypes ?? []).map(({ name }) => name));
   const lines = source.split(/\r?\n/);
+  // A set or sequence named for an external type's plural holds that type; it owns nothing.
+  const pairs = (left: string, right: string): boolean =>
+    pluralize(left) === right || pluralize(right) === left;
   const declarations = new Map(
     lines
       .map(structuralDeclaration)
       .filter((item): item is readonly [string, Multiplicity] => item !== undefined)
-      .filter(([name]) => !external.has(name) && !local.has(name) && !PRIMITIVES.has(name)),
+      .filter(([name]) => !external.has(name) && !local.has(name) && !PRIMITIVES.has(name))
+      .filter(
+        ([name, declared]) =>
+          declared === "element" || [...external].every((type) => pluralize(type) !== name),
+      ),
   );
   const explicitAliases = lines.flatMap((line): Array<readonly [string, string]> => {
     const words = line.trim().split(/\s+/);
@@ -98,13 +113,17 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
 
   const evidence = new Set([
     ...lines.map(stateFieldType).filter((name): name is string => name !== undefined),
+    ...lines.map(subsetType).filter((name): name is string => name !== undefined),
     ...(options.evidenceTypeNames ?? []),
   ]);
+  const claimed = new Set(
+    lines.map(structuralDeclaration).flatMap((item) => (item ? [item[0]] : [])),
+  );
   const relation = [...evidence]
     .sort()
     .filter(
       (candidate) =>
-        !declarations.has(candidate) &&
+        !claimed.has(candidate) &&
         !explicitNames.has(candidate) &&
         !external.has(candidate) &&
         !local.has(candidate) &&
@@ -112,17 +131,20 @@ function oracleOwnedTypeNames(source: string, options: OracleOptions = {}): read
         TYPE_NAME.test(candidate),
     )
     .flatMap((candidate) =>
-      [...declarations]
-        .filter(
-          ([owner, ownerMultiplicity]) =>
-            ownerMultiplicity !== "element" &&
-            (pluralize(owner) === candidate || pluralize(candidate) === owner),
-        )
-        .map(([owner]) => [candidate, owner] as const),
+      [
+        ...[...declarations]
+          .filter(([, ownerMultiplicity]) => ownerMultiplicity !== "element")
+          .map(([owner]) => owner),
+        ...external,
+      ]
+        .filter((owner) => pairs(owner, candidate))
+        .map((owner) => [candidate, owner] as const),
     );
-  // The documented one-to-one rule keeps only isolated edges in the complete relation.
+  // The documented one-to-one rule keeps only isolated edges in the complete relation; an
+  // edge to an external type spells that type rather than an owned one.
   for (const [candidate, owner] of relation) {
     if (
+      !external.has(owner) &&
       relation.every(
         ([otherCandidate, otherOwner]) =>
           (otherCandidate === candidate && otherOwner === owner) ||
@@ -195,11 +217,22 @@ describe("independent owned-type inventory oracle", () => {
 
 alias Rodent for Mice
 
-a Selected set of Mice
+a set of Selected Mice
+
+a set of People
+
+a set of Muted People
+
+a set of Reviews with
+  a Selected Mouse
 
 an element Settings`,
       { externalTypes: ["Person"] },
     );
+    expect(oracleOwnedTypeNames("a set of People", { externalTypes: ["Person"] })).toEqual([]);
+    // Only the external type's plural is its set; the reverse spelling declares an owned type.
+    expectAgreement("reverse external spelling", "a set of User", { externalTypes: ["Users"] });
+    expect(oracleOwnedTypeNames("a set of User", { externalTypes: ["Users"] })).toEqual(["User"]);
     expect(
       ownedTypeNameSpellings(parseSimpleStateForm("a set of Mice").document.inventory),
     ).toEqual(["Mice"]);

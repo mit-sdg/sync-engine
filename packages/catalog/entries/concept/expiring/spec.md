@@ -30,38 +30,38 @@ a set of Deadlines with
 ## Actions
 
 ```actions
-schedule (subject: Subject, expiresAt: DateTime, now: DateTime) : return (subject: Subject)
+schedule (subject: Subject, expiresAt: DateTime, now: DateTime) : returns (subject: Subject)
   where a Deadline already has subject
   then
-    refuse ALREADY_SCHEDULED "That subject already has a deadline."
+    refuses ALREADY_SCHEDULED "That subject already has a deadline."
   where no Deadline has subject and expiresAt is not after now
   then
-    refuse DEADLINE_IN_PAST "A deadline must fall after the current instant."
+    refuses DEADLINE_IN_PAST "A deadline must fall after the current instant."
   where no Deadline has subject and expiresAt is after now
   then
     add a Deadline with subject and expiresAt
-    return subject
+    returns subject
 
-reschedule (subject: Subject, expiresAt: DateTime, now: DateTime) : return (subject: Subject)
+reschedule (subject: Subject, expiresAt: DateTime, now: DateTime) : returns (subject: Subject)
   where no Deadline has subject
   then
-    refuse NO_DEADLINE "That subject has no deadline."
+    refuses NO_DEADLINE "That subject has no deadline."
   where a Deadline has subject and expiresAt is not after now
   then
-    refuse DEADLINE_IN_PAST "A deadline must fall after the current instant."
+    refuses DEADLINE_IN_PAST "A deadline must fall after the current instant."
   where a Deadline has subject and expiresAt is after now
   then
     change that Deadline to expiresAt
-    return subject
+    returns subject
 
-cancel (subject: Subject) : return (subject: Subject)
+cancel (subject: Subject) : returns (subject: Subject)
   where no Deadline has subject
   then
-    refuse NO_DEADLINE "That subject has no deadline."
+    refuses NO_DEADLINE "That subject has no deadline."
   where a Deadline has subject
   then
     delete that Deadline
-    return subject
+    returns subject
 ```
 
 ## Queries

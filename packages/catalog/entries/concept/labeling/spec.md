@@ -39,53 +39,53 @@ a set of Applications with
 ## Actions
 
 ```actions
-create (scope: Scope, name: String) : return (label: Label)
+create (scope: Scope, name: String) : returns (label: Label)
   where name is blank or longer than 64 characters
   then
-    refuse INVALID_LABEL_NAME "A label name must not be blank and must be at most 64 characters."
+    refuses INVALID_LABEL_NAME "A label name must not be blank and must be at most 64 characters."
   where a Label in scope already has name
   then
-    refuse LABEL_NAME_TAKEN "This scope already has a label with that name."
+    refuses LABEL_NAME_TAKEN "This scope already has a label with that name."
   where name is accepted and unused in scope
   then
     add a new Label with scope and name
-    return label
+    returns label
 
-rename (label: Label, name: String) : return (label: Label)
+rename (label: Label, name: String) : returns (label: Label)
   where label is unknown
   then
-    refuse LABEL_NOT_FOUND "There is no such label."
+    refuses LABEL_NOT_FOUND "There is no such label."
   where name is blank or longer than 64 characters
   then
-    refuse INVALID_LABEL_NAME "A label name must not be blank and must be at most 64 characters."
+    refuses INVALID_LABEL_NAME "A label name must not be blank and must be at most 64 characters."
   where another Label in the same Scope has name
   then
-    refuse LABEL_NAME_TAKEN "This scope already has a label with that name."
+    refuses LABEL_NAME_TAKEN "This scope already has a label with that name."
   where label is known and name is accepted and unused
   then
     change the Label name to name
-    return label
+    returns label
 
-apply (label: Label, item: Item) : return (label: Label, item: Item)
+apply (label: Label, item: Item) : returns (label: Label, item: Item)
   where label is unknown
   then
-    refuse LABEL_NOT_FOUND "There is no such label."
+    refuses LABEL_NOT_FOUND "There is no such label."
   where an Application has label and item
   then
-    refuse LABEL_ALREADY_APPLIED "This label is already applied to the item."
+    refuses LABEL_ALREADY_APPLIED "This label is already applied to the item."
   where label is known and no Application has label and item
   then
     add a new Application with label and item
-    return label, item
+    returns label, item
 
-remove (label: Label, item: Item) : return (label: Label, item: Item)
+remove (label: Label, item: Item) : returns (label: Label, item: Item)
   where no Application has label and item
   then
-    refuse LABEL_NOT_APPLIED "This label is not applied to the item."
+    refuses LABEL_NOT_APPLIED "This label is not applied to the item."
   where an Application has label and item
   then
     delete that Application
-    return label, item
+    returns label, item
 ```
 
 ## Queries

@@ -24,10 +24,10 @@ a set of Links with
 ## Actions
 
 ```actions
-link(target: Target) : return ()
+link(target: Target) : returns ()
   where true
   then
-    return
+    returns
 ```
 
 ## Queries

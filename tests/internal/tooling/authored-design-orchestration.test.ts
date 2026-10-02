@@ -39,10 +39,10 @@ Rule: comments: set Comment
 
 ## Actions
 \`\`\`actions
-add(user: User) : return ()
+add(user: User) : returns ()
   where true
   then
-    return
+    returns
 \`\`\`
 
 ## Queries

@@ -25,14 +25,14 @@ a set of Sessions with
 ## Actions
 
 ```actions
-start(user: String) : return (session: Session, expiresAt: Date)
+start(user: String) : returns (session: Session, expiresAt: Date)
   where true
   then
-    return session, expiresAt
-current(session: Session) : return (user: String)
+    returns session, expiresAt
+current(session: Session) : returns (user: String)
   where true
   then
-    return user
+    returns user
 ```
 
 ## Queries

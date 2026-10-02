@@ -434,7 +434,7 @@ function renderSpecificationResult(result: SpecificationResultIR): string {
 }
 
 function renderActionSignature(action: SpecificationActionIR): string {
-  return `${action.name}(${renderSpecificationFields(action.parameters)}) : return ${renderSpecificationResult(action.result)}`;
+  return `${action.name}(${renderSpecificationFields(action.parameters)}) : returns ${renderSpecificationResult(action.result)}`;
 }
 
 function renderQuerySignature(query: SpecificationQueryIR): string {

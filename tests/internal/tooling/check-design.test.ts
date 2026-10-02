@@ -36,11 +36,11 @@ a set of Notes with
 ## Actions
 
 \`\`\`actions
-write (author: Person, text: String) : return (note: Note)
+write (author: Person, text: String) : returns (note: Note)
   where true
   then
     add a Note
-    return note
+    returns note
 \`\`\`
 
 ## Queries
@@ -341,6 +341,68 @@ Comments.User is Person
       await expect(checkDesignFiles(["broken.md"], root)).rejects.toThrow(
         /broken\.md:.*\[SSF_NEAR_MISS_KEYWORD\].*suggestion: a seq of Notes with.*\[SSF_MISSING_WITH\].*suggestion: a seq of Notes with.*\[SSF_MISPLACED_MODIFIER\].*suggestion:   a optional discardedAt DateTime/s,
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts sets and subsets of external types with implicitly named fields", async () => {
+    const readTracking = `# ReadTracking
+
+## Purpose
+
+Remember which posts a reader has read.
+
+## Principle
+
+After a reader marks a post read, the post is in read; marking it read again is refused.
+
+## Types
+
+\`\`\`types
+external Post
+  A post some other concept publishes.
+external User
+  A reader.
+\`\`\`
+
+## State
+
+\`\`\`state
+a set of Users with
+  a set of Posts
+
+a set of Read Posts
+
+a set of Starred Read Posts
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+markRead (user: User, post: Post) : returns ()
+  where post is in Read Posts
+  then
+    refuses ALREADY_READ "This post is already read."
+  where post is not in Read Posts
+  then
+    add post to Read Posts
+    returns
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_isRead (post: Post) : one (read: Flag)
+  answers whether the post is in Read Posts
+\`\`\`
+`;
+    const root = await fixture({ "ReadTracking.md": readTracking });
+    try {
+      await expect(checkDesignFiles(["ReadTracking.md"], root)).resolves.toEqual([
+        { path: "ReadTracking.md", kind: "concept" },
+      ]);
+      expect(specificationOwnedTypeNames(parseSpec(readTracking).specification!)).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
