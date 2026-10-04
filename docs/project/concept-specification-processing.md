@@ -126,13 +126,15 @@ has no separate prose field. The parser does not prove rule text, the meaning a
 concept-local type carries, conditions, effects, query meaning, storage layout,
 State/storage agreement, or implementation semantics.
 
-Config-based binding validation uses only the derived owned-name inventory. A qualified
-target must name a declaration or alias of the selected target instance's definition; an
-external, primitive, ambiguous, or unresolved name is invalid, as is a subset or a set of
-an external type. Checked manifests persist
-the sorted inventory, and their codec rederives it independently from the included State
-and operation types, requires canonical equality, and validates every qualified target
-against the derived fact. Operation types need not occur in State, but each resolves
+Config-based binding validation combines the parser's owned-name inventory with its
+joined subset identifiers. A qualified target must name an owned declaration, owned alias,
+or subset of the selected target instance's definition. Subsets of external types are
+valid targets, but external parameters, primitives, ambiguous or unresolved names, and
+top-level sets of external types remain invalid. Subset bindings record authored membership
+requirements without enforcing runtime membership or TypeScript specialization. Checked
+manifests persist the sorted owned-name inventory in `ownedTypes`. Their codec rederives
+it independently from the included State and operation types, requires canonical equality,
+and validates every qualified target against those names and the derived subset identifiers. Operation types need not occur in State, but each resolves
 against the same closed universe once evidence has joined singular and plural spellings,
 and only a unique plural pair affects ownership.
 
@@ -193,14 +195,14 @@ Validation combines the complete configured corpus and enforces:
 - every selected external parameter is bound exactly once, and no unknown external is
   bound;
 - each instance supplies all bindings inline or all detached, never a mixture;
-- every right side directly names a declared concrete type or an SSF-owned type of a
-  declared and selected target instance;
+- every right side directly names a declared concrete type or an SSF-owned type or subset
+  of a declared and selected target instance;
 - no target is an external parameter and no binding chain is resolved;
 - duplicates are invalid even when targets are textually identical; and
 - every concrete type is used.
 
 Declaration order has no semantics. Direct qualified targets resolve independently,
-so cyclic instance dependencies are valid when every edge ends at an owned type.
+so cyclic instance dependencies are valid when every edge ends at an owned type or subset.
 External-to-external edges remain invalid, including cycles, because they would be
 aliases with no direct concrete or owned target. For a definition with external
 parameters, one mixed-placement diagnostic suppresses duplicate, unknown, missing, and

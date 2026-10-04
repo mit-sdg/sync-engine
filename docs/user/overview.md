@@ -109,8 +109,8 @@ instantiate Commenting as PostComments with
 
 Application `types` fences contain only concrete declarations. An inline `with`
 block binds each external parameter of that instance directly to either a
-concrete type or an owned type of another declared instance. Inline bindings are
-the recommended placement because the complete instance is readable in one
+concrete type, an owned type, or a joined subset identifier of another declared instance.
+Inline bindings are the recommended placement because the complete instance is readable in one
 place.
 
 Applications that deliberately centralize bindings may detach them:

@@ -25,7 +25,7 @@ import {
   type RegisteredConceptSource,
 } from "./concept-source-discovery.ts";
 import { typeScriptSourceContext, type TypeScriptSourceContext } from "./typescript-shapes.ts";
-import { specificationOwnedTypeNames as authoritativeOwnedTypeNames } from "./application-manifest-format.ts";
+import { specificationBindingTypeNames as authoritativeBindingTypeNames } from "./application-manifest-format.ts";
 import type { PlannedWireProjection, WireProjection } from "./wire-projection.ts";
 
 type InspectableAssembly = Assembly<Record<string, new (...args: never[]) => object>>;
@@ -263,7 +263,7 @@ async function prepareConfiguredDesign(
       url: pathToFileURL(specPath),
       content: specText,
     })),
-    resolveOwnedTypeNames: ({ specification }) => authoritativeOwnedTypeNames(specification),
+    resolveOwnedTypeNames: ({ specification }) => authoritativeBindingTypeNames(specification),
     resolveComputationInputs: ({ computations }) => {
       const names = computations.map(({ name }) => name);
       const key = names.join("\0");

@@ -40,10 +40,8 @@ const DIAGNOSTIC_CODES = [
   "ORDER_SENSITIVE_FORMER",
 ] as const;
 
-/** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
-export function specificationOwnedTypeNames(
-  specification: ConceptSpecificationIR,
-): readonly string[] {
+/** Validate State and signature types before deriving authoritative binding facts. */
+function specificationTypeInventory(specification: ConceptSpecificationIR) {
   const parsed = parseSimpleStateForm(specification.state.body, {
     externalTypes: specification.externalTypes.map(({ name }) => name),
     localTypes: specification.localTypes.map((type) => ({
@@ -83,7 +81,27 @@ export function specificationOwnedTypeNames(
         .join("\n")}`,
     );
   }
-  return [...ownedTypeNameSpellings(parsed.document.inventory)].sort(ordinal);
+  return parsed.document.inventory;
+}
+
+/** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
+export function specificationOwnedTypeNames(
+  specification: ConceptSpecificationIR,
+): readonly string[] {
+  return [...ownedTypeNameSpellings(specificationTypeInventory(specification))].sort(ordinal);
+}
+
+/** Derive binding targets without classifying subsets as independently owned types. */
+export function specificationBindingTypeNames(
+  specification: ConceptSpecificationIR,
+): readonly string[] {
+  const inventory = specificationTypeInventory(specification);
+  return [
+    ...new Set([
+      ...ownedTypeNameSpellings(inventory),
+      ...inventory.subsets.flatMap(({ identifiers }) => identifiers),
+    ]),
+  ].sort(ordinal);
 }
 
 function fail(path: string, message: string): never {
@@ -1499,7 +1517,7 @@ function assertManifestCrossFields(data: DataRecord): void {
     const designInstances = new Set<string>();
     const designInstanceRecords = new Map<
       string,
-      { item: DataRecord; path: string; externalTypes: Set<string>; ownedTypes: Set<string> }
+      { item: DataRecord; path: string; externalTypes: Set<string>; bindingTypes: Set<string> }
     >();
     const definitions = new Set<string>();
     for (const [index, concept] of array(design.concepts, "$.design.concepts").entries()) {
@@ -1521,6 +1539,9 @@ function assertManifestCrossFields(data: DataRecord): void {
           "does not equal the inventory independently derived from specification State and operation type evidence",
         );
       }
+      const bindingTypes = new Set(
+        specificationBindingTypeNames(item.specification as ConceptSpecificationIR),
+      );
       for (const [instanceIndex, instance] of array(
         item.instances,
         `$.design.concepts[${index}].instances`,
@@ -1561,7 +1582,7 @@ function assertManifestCrossFields(data: DataRecord): void {
           item: instanceItem,
           path: `$.design.concepts[${index}].instances[${instanceIndex}]`,
           externalTypes,
-          ownedTypes: new Set(authoritativeOwnedTypes),
+          bindingTypes,
         });
         const inventoryIndex = conceptIndexes.get(name)!;
         const inventory = record(
@@ -1634,10 +1655,10 @@ function assertManifestCrossFields(data: DataRecord): void {
             `${instance.path}.bindings[${bindingIndex}].target.type`,
             "names an external parameter; bindings must terminate directly",
           );
-        if (!selectedTarget.ownedTypes.has(target.type as string))
+        if (!selectedTarget.bindingTypes.has(target.type as string))
           fail(
             `${instance.path}.bindings[${bindingIndex}].target.type`,
-            "does not name an SSF-owned type of the selected definition",
+            "does not name an SSF-owned type or subset of the selected definition",
           );
       }
     }

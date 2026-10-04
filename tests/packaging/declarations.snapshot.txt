@@ -4824,6 +4824,8 @@ import type { ConceptSpecificationIR } from "../reads/ir.ts";
 import type { ApplicationManifestV1 } from "./manifest.ts";
 /** Derive exact structural, evidenced-alias, and explicit-alias SSF names. */
 export declare function specificationOwnedTypeNames(specification: ConceptSpecificationIR): readonly string[];
+/** Derive binding targets without classifying subsets as independently owned types. */
+export declare function specificationBindingTypeNames(specification: ConceptSpecificationIR): readonly string[];
 /** Recompute the canonical digest over every manifest field except `digest`. */
 export declare function applicationManifestDigest(manifest: ApplicationManifestV1): string;
 /** Validate untrusted data as one complete canonical version-1 application manifest. */

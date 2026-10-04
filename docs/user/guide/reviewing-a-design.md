@@ -147,8 +147,8 @@ instance with no external parameters has no placement mode.
 A right side must directly name either:
 
 - an application `concrete` type with a nonempty prose definition; or
-- a type the bounded SSF parser proves is owned by another declared, selected
-  instance's definition.
+- an owned type or joined subset identifier the bounded SSF parser resolves in another
+  declared, selected instance's definition.
 
 Reject external-to-external targets, alias chains, unresolved names, and unused
 concrete declarations. Do not reject a cycle merely because instance A targets an

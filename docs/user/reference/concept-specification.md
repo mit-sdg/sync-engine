@@ -212,13 +212,17 @@ only by that join is accepted. The parser does not prove rules, type meaning, ac
 conditions or effects, query meaning, storage layout, State/storage agreement, or
 implementation behavior.
 
-Config-based checking uses the owned-name inventory for one proof: a
-qualified external-binding target must name a declaration or alias owned by the selected
-target instance's definition. Checked manifests persist that inventory, and validation
-rederives it independently from State and operation signatures. External, primitive, and
-unresolved names cannot be binding targets, and neither can a subset or a set of an
-external type, because neither is a type the concept owns. State changes continue to
-affect canonical design digests.
+Config-based checking accepts a qualified external-binding target that names an owned
+declaration, an owned alias, or a joined subset identifier of the selected target instance's
+definition. For example, a declared `Selected Humans` subset can be targeted as
+`Directory.SelectedHumans`, or `Directory.SelectedHuman` when that singular spelling
+resolves in SSF. Subsets of external types are also valid targets. A subset binding
+records an authored membership requirement; it does not enforce implementation behavior
+or membership at runtime. Action/query signature types still cannot name subsets.
+Checked manifests persist the owned-name inventory in `ownedTypes`; validation rederives
+that inventory and subset identifiers independently from State and operation signatures.
+External parameters, primitives, unresolved names, and top-level sets of external types
+cannot be binding targets. State changes continue to affect canonical design digests.
 
 ## `Actions`
 

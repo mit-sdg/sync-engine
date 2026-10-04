@@ -110,7 +110,7 @@ describe("generic design guidance", () => {
     const normalizedDesign = design.replace(/\s+/g, " ");
     for (const phrase of [
       "complete static instance",
-      "Direct dependencies on qualified owned types",
+      "Direct dependencies on qualified types and subsets",
       "storage configuration",
       "bounded structural parser",
     ]) {
@@ -126,6 +126,8 @@ describe("generic design guidance", () => {
       "Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or indented under a declaration",
     );
     expect(reference).toContain("qualified external-binding target");
+    expect(reference).toContain("Directory.SelectedHuman");
+    expect(normalizedReference).toContain("Subsets of external types are also valid targets.");
   });
 
   test("keeps generic guidance free of application-agent orchestration", async () => {

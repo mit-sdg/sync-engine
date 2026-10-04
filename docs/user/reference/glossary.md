@@ -262,7 +262,7 @@ the declarations.
 ## External type binding
 
 One direct assignment of a selected concept instance's external parameter to a
-concrete application type or another selected instance's SSF-owned type. Every
+concrete application type or another selected instance's SSF-owned type or subset. Every
 instance places all its bindings inline or all detached. A binding establishes
 semantic identity, not TypeScript equivalence, behavior, adapter configuration,
 or persistent storage ownership.

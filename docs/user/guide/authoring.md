@@ -177,14 +177,14 @@ parameters uses the bare or `as` declaration and has no binding placement.
 Detached declarations may merge across configured documents; names and bindings
 remain globally unique.
 
-Each right side directly names a declared concrete type or an owned type of
-another declared, selected instance. The bounded SSF parser proves owned target
-names, including a second spelling that the concept authors elsewhere as a singular or
+Each right side directly names a declared concrete type, an owned type, or a joined
+subset identifier of another declared, selected instance. The bounded SSF parser proves
+owned target names, including a second spelling that the concept authors elsewhere as a singular or
 plural pair, provided that pair is unambiguous; where it is not, declare
-`alias Alias for Target`. Never target another instance's external parameter, a subset,
-a set of an external type, or a name the parser could not resolve, and never chain one
-binding onto another. Direct qualified
-owned-type dependencies may be cyclic because every target is checked
+`alias Alias for Target`. A subset target records a membership requirement without
+runtime enforcement. Never target another instance's external parameter, a top-level set of an external type, or a
+name the parser could not resolve, and never chain one
+binding onto another. Direct qualified type and subset dependencies may be cyclic because every target is checked
 independently; declaration order does not resolve or prioritize them. Do not
 leave a concrete type unused.
 

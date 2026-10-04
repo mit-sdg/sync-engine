@@ -17,6 +17,7 @@ import { foldFormerNode } from "@engine/reads/schema";
 import { canonicalDigest, canonicalJson, canonicalValue } from "@engine/utils/canonical-json";
 import { ordinal } from "@engine/utils/ordinal";
 import { GENERATOR_IDENTITY, type GeneratorIdentity } from "@engine/utils/package-version";
+import { specificationOwnedTypeNames } from "./application-manifest-format.ts";
 import { normalizeAuthoredConceptInstances } from "./authored-application-design.ts";
 import type {
   CheckedAuthoredDesignModel,
@@ -367,7 +368,7 @@ function checkedDesign(
       definition: shared.definition,
       ...(source === undefined ? {} : { source: sourceIds.get(source.path) }),
       specification: first.specification,
-      ownedTypes: [...first.ownedTypes],
+      ownedTypes: [...specificationOwnedTypeNames(first.specification)],
       instances: selected.map(({ instance }) => {
         const authored = instancesByName.get(instance);
         if (authored === undefined) {

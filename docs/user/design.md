@@ -114,11 +114,11 @@ above, or supplies all of them in detached `bindings` fences. Splitting one inst
 between the two placements, repeating a binding, omitting an external parameter, or
 binding an unknown parameter is invalid.
 
-A right side names either a concrete type or an SSF-owned type of another declared,
-selected instance. Bindings do not transfer ownership, establish TypeScript
+A right side names either a concrete type or an SSF-owned type or joined subset identifier of another
+declared, selected instance. Bindings do not transfer ownership, establish TypeScript
 assignability, configure adapters or storage, or provide runtime validation.
 External-to-external targets and binding chains are invalid. Direct dependencies on
-qualified owned types are resolved independently, so cycles among those instance
+qualified types and subsets are resolved independently, so cycles among those instance
 dependencies are valid. Unused concrete declarations are invalid. When the concept
 implementation is a generic TypeScript class, specialize it separately at
 `registerConcept` with a TypeScript instantiation expression; the

@@ -345,7 +345,9 @@ inside a type argument or union.
 
 Ownership matters where something is proved against it. Subset parents and alias targets
 resolve within the same State, and an application's qualified binding target names an
-owned spelling of the instance it targets — never a subset or a set of an external type.
+owned spelling or joined subset identifier of the instance it targets — never an external
+parameter or a top-level set of an external type. A subset target records an authored
+membership requirement; binding validation does not enforce membership at runtime.
 Signature validation runs only after plural joins consume signature evidence, so a
 singular spelling established by that join is owned before it is checked.
 

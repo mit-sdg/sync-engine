@@ -5,7 +5,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkDesignCommand, checkDesignFiles } from "@command/check-design";
 import { parseSpec } from "@engine/reactions/concepts/concept-spec";
-import { specificationOwnedTypeNames } from "@engine/tooling/application-manifest-format";
+import {
+  specificationBindingTypeNames,
+  specificationOwnedTypeNames,
+} from "@engine/tooling/application-manifest-format";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 const concept = `# Noting
@@ -403,6 +406,12 @@ _isRead (post: Post) : one (read: Flag)
         { path: "ReadTracking.md", kind: "concept" },
       ]);
       expect(specificationOwnedTypeNames(parseSpec(readTracking).specification!)).toEqual([]);
+      expect(specificationBindingTypeNames(parseSpec(readTracking).specification!)).toEqual([
+        "ReadPost",
+        "ReadPosts",
+        "StarredReadPost",
+        "StarredReadPosts",
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -505,6 +514,25 @@ _isRead (post: Post) : one (read: Flag)
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  test("includes subset identifiers rooted in an explicit alias as binding targets", () => {
+    const resolved = concept
+      .replace("external Person\n  The note author.", "")
+      .replace(
+        "a set of Notes with\n  an author Person\n  a text String",
+        "a set of People\n\nalias Human for People\n\na set of Selected Human",
+      )
+      .replaceAll(": Note", ": Human")
+      .replaceAll(": Person", ": Human");
+    const specification = parseSpec(resolved).specification!;
+    expect(specificationOwnedTypeNames(specification)).toEqual(["Human", "People"]);
+    expect(specificationBindingTypeNames(specification)).toEqual([
+      "Human",
+      "People",
+      "SelectedHuman",
+      "SelectedPeople",
+    ]);
   });
 
   test("attributes missing, non-regular, and unreadable operands", async () => {

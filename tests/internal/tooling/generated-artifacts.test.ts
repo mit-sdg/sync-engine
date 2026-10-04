@@ -154,13 +154,45 @@ describe("generated application artifacts", () => {
       { specification: expect.stringContaining("`Target` is `Targeting.Entry`") },
     );
     await expect(renderGenerated(ownedTargetApplication("invalid-design"))).rejects.toThrow(
-      'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
+      'binding target "Targeting.Recrod" is not an owned type or subset reported for definition "Targeting"',
     );
   }, 15_000);
 
-  test("rejects a subset as a qualified binding target", async () => {
-    await expect(renderGenerated(ownedTargetApplication("subset-design"))).rejects.toThrow(
-      'binding target "Targeting.ArchivedRecords" is not an owned type reported for definition "Targeting"',
+  test("accepts subset binding targets and independently validates their State declarations", async () => {
+    const application = ownedTargetApplication("subset-design");
+    await expect(renderGenerated(application)).resolves.toMatchObject({
+      specification: expect.stringContaining("`Target` is `Targeting.ArchivedRecords`"),
+    });
+    const manifest = await inspectGenerated(application, (assembly) =>
+      applicationManifest(assembly),
+    );
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    const targeting = manifest.design.concepts.find(
+      ({ definition }) => definition === "Targeting",
+    )!;
+    expect(targeting.ownedTypes).toEqual(["Entry", "Record", "Records"]);
+    const linking = manifest.design.concepts.find(({ definition }) => definition === "Linking")!;
+    const target = linking.instances[0]!.bindings[0]!.target;
+    if (target.kind !== "qualified") throw new Error("fixture binding is not qualified");
+    target.type = "ArchivedRecord";
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    target.type = "ArchivedRecrod";
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /does not name an SSF-owned type or subset/,
+    );
+    target.type = "ArchivedRecord";
+    targeting.specification.state.body = targeting.specification.state.body.replace(
+      "a set of Archived Records",
+      "",
+    );
+    manifest.concepts.find(({ name }) => name === "Targeting")!.specification = structuredClone(
+      targeting.specification,
+    );
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /does not name an SSF-owned type or subset/,
     );
   }, 15_000);
 
