@@ -17,18 +17,19 @@ interface OracleOptions {
 }
 
 function multiplicity(word: string): Multiplicity | undefined {
-  if (word === "element" || word === "set") return word;
+  if (word === "set") return word;
   return word === "seq" ? "sequence" : undefined;
 }
 
-/** The capitalized words after a declaration's structural keyword, and its multiplicity. */
+/** A declaration's capitalized type words and its multiplicity. */
 function declarationPhrase(line: string): readonly [readonly string[], Multiplicity] | undefined {
   if (/^[ \t]/.test(line)) return undefined;
   const words = line.trim().split(/\s+/);
   if (words[0] !== "a" && words[0] !== "an") return undefined;
-  const declaredMultiplicity = multiplicity(words[1] ?? "");
+  const singleton = TYPE_NAME.test(words[1] ?? "");
+  const declaredMultiplicity = singleton ? "element" : multiplicity(words[1] ?? "");
   if (declaredMultiplicity === undefined) return undefined;
-  const start = words[2] === "of" ? 3 : 2;
+  const start = singleton ? 1 : words[2] === "of" ? 3 : 2;
   let end = start;
   while (TYPE_NAME.test(words[end] ?? "")) end += 1;
   return end > start ? [words.slice(start, end), declaredMultiplicity] : undefined;
@@ -226,7 +227,7 @@ a set of Muted People
 a set of Reviews with
   a Selected Mouse
 
-an element Settings`,
+a Settings`,
       { externalTypes: ["Person"] },
     );
     expect(oracleOwnedTypeNames("a set of People", { externalTypes: ["Person"] })).toEqual([]);

@@ -162,7 +162,7 @@ concept-specification IR.
 
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
-The parser recognizes set, sequence, element, subset, alias, and field declarations
+The parser recognizes set, sequence, singleton, subset, alias, and field declarations
 together with their multiplicities, identifiers, articles, uniqueness constraints, and
 subset graph. Declared names are taken as written, and a field written without a name,
 such as `an Author` or `a Verified User`, is named for its type: `author`, `verifiedUser`.
@@ -172,7 +172,10 @@ individual of its type in the concept's state, and each of them has its fields. 
 type is the plural of an external type, as beside `external User`, the set holds
 individuals of that external type instead of introducing identities, and means the same
 thing. A subset qualifies its parent set: `a set of Verified Users`, `a set of Trusted
-Verified Users`, or `an element Root Folder`. A subset is a type in State, so `a sponsor
+Verified Users`, or `a Root Folder`. A singleton uses just `a Type` or `an Type`, with
+exactly one member; both articles are accepted. The old `element` keyword is rejected
+with a repair that removes it. A top-level line declares the singleton; an indented
+line with the same spelling declares a field. A subset is a type in State, so `a sponsor
 Verified User` holds only Verified Users; action and query signatures take the parent
 type and state membership in a condition, such as `where sponsor is in Verified Users`.
 

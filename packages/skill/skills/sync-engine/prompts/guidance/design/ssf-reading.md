@@ -13,7 +13,7 @@ Items` members of `Completed Items`. A subset declares no second collection and 
 - `an Author` is the field `author`; the type names a field written without a name.
 - `an optional owner Person` may be absent. Collections never carry `optional`; empty
   means absent, so a set that must reject duplicates cannot also promise to detect them.
-- `an element Settings` has exactly one member.
+- `a Settings` has exactly one member.
 - `alias WorkItem for Items` renames one declaration; it adds nothing.
 - A `Rule:` line is prose the checker keeps verbatim and proves nothing.
 

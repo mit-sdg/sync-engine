@@ -30,7 +30,7 @@ a set of People with
 
 a set of Muted People
 
-an element Settings with
+a Settings with
   a retentionDays Number
 
 alias WorkItem for Items
@@ -40,8 +40,8 @@ alias WorkItem for Items
 
 ```text
 document := (setDecl | subsetDecl | aliasDecl | ruleLine)*
-setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
-subsetDecl := (a|an) (element|set) [of] Qualifier+ Type [condition] [with] declarationBody?
+setDecl := (a|an) [(set|seq) [of]] Type [with] declarationBody?
+subsetDecl := (a|an) [set [of]] Qualifier+ Type [condition] [with] declarationBody?
 condition := where fieldName is VALUE (or VALUE)*
 declarationBody := (INDENT (field | uniqueLine | ruleLine))+
 aliasDecl := alias Alias for Type
@@ -59,12 +59,14 @@ gets a diagnostic that names its source location.
 
 ## Declarations
 
-A top-level declaration uses `a set of Items`, `a seq of Items`, or `an element
-Settings`. The `of` after a structural keyword is optional. A declaration with fields
-ends its first line with `with` and needs at least one field or uniqueness constraint.
+A top-level declaration uses `a set of Items`, `a seq of Items`, or `a Settings`.
+A type written directly after `a` or `an` declares exactly one member; either article is
+accepted. Indentation distinguishes declarations from fields: top-level `a Settings`
+declares a singleton, while indented `a Settings` is an implicitly named field. The `of`
+after a structural keyword is optional. A declaration with fields ends its first line with `with` and needs at least one field or uniqueness constraint.
 A `Rule:` line attaches to a declaration without `with` and satisfies neither.
 
-One capitalized word after the structural keyword declares a top-level set; two or more
+One capitalized type word declares a top-level set, sequence, or singleton; two or more
 declare a subset. A set is named by its type, `Items`, and prose uses that name, as in
 `where item is in Items`. There is no lowercase name for a set.
 
@@ -103,8 +105,8 @@ A concept that declares no plain set of an external type still has one implicitl
 instead of a plain set when only some Users should carry fields, as below.
 
 Write the plural. `a set of User`, named exactly for the external type, collides with it
-and fails with a suggestion to write `a set of Users`. An `element` never joins, so `an
-element Users` stays an owned element even beside `external User`.
+and fails with a suggestion to write `a set of Users`. A singleton never joins, so
+`a Users` stays an owned singleton even beside `external User`.
 
 ## Subsets
 
@@ -127,11 +129,10 @@ a set of Vouches with
 `a set of Q P` declares a subset of `P` with the qualifier `Q`, where `P` is a top-level
 set or another subset. `Verified Users` holds some of `Users`, and `Trusted Verified
 Users` some of `Verified Users`; each member also carries its ancestors' fields, so every
-Verified User has a reputation and a verifiedOn date. `an element Root Folder` declares a
-subset of `Folders` with exactly one member. A subset may use `set` or `element`, but not
-`seq`, qualifies a set or sequence rather than an element, may appear before or after its
-parent, and may state which members it classifies
-with a condition, as below. Subsets are not disjoint, so a User may be both Verified and
+Verified User has a reputation and a verifiedOn date. `a Root Folder` declares a
+subset of `Folders` with exactly one member. A subset may be a set or a singleton, but
+not a sequence. It qualifies a set or sequence rather than a singleton, may appear before
+or after its parent, and may state which members it classifies with a condition, as below. Subsets are not disjoint, so a User may be both Verified and
 Banned.
 
 The name is the whole phrase, never the qualifier alone: `Verified Users` in the plural
@@ -302,8 +303,8 @@ using the vendored `plur` implementation, and never introduces a spelling of its
 Irregular pairs such as `Mouse`/`Mice` and `Person`/`People` join the same way. A
 candidate that pairs with an external type spells that type, so beside `external Tag`
 the field `a set of Tags` holds Tags. The join needs one candidate and one owner — a
-non-element top-level declaration or an external type — on either side; where several
-match, SSF leaves them unjoined and reports the skipped names as advice. Element
+non-singleton top-level declaration or an external type — on either side; where several
+match, SSF leaves them unjoined and reports the skipped names as advice. Singleton
 declarations and primitives never join. A subset's phrase joins through its last word,
 so `Verified User` and `Verified Users` name the same subset.
 
@@ -353,7 +354,7 @@ singular spelling established by that join is owned before it is checked.
 
 ## What the declarations mean
 
-A top-level set or sequence of an owned type introduces identities, and an element
+A top-level set or sequence of an owned type introduces identities, and a singleton
 declaration has one member. Fields declare relations on those identities, so there is no
 need for ID fields. A scalar field relates a member to a value or another identity; a
 collection field relates it to a set or sequence of values. A set of an external type
@@ -393,11 +394,12 @@ reported as near misses.
 
 ## Canonical form
 
-Top-level declarations and subsets read `a set of`, `a seq of`, or `an element`, followed
-by their name: `a set of Completed Items`, `an element Root Folder`. Fields need `with` on the declaration
-line. The structural keywords are `set`, `seq`, and `element`; `array`, `list`,
-`sequence`, and `sequences` are reported as near misses for `seq`, and `singleton` for
-`element`.
+Top-level declarations and subsets read `a set of`, `a seq of`, or just `a`/`an`, followed
+by their name: `a set of Completed Items`, `a Root Folder`. Fields need `with` on the
+declaration line. The structural keywords are `set` and `seq`; `array`, `list`,
+`sequence`, and `sequences` are reported as near misses for `seq`. The retired
+`element` keyword and `singleton` are diagnosed with a repair that removes the keyword
+(and its optional `of`), such as `an element Settings` → `an Settings`.
 
 SSF proves the structural declarations, their graph, the uniqueness constraints and the
 fields they name, the owned type names they establish, and the external spellings they

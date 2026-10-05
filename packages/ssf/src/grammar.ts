@@ -42,6 +42,9 @@ export interface GrammarResult {
 }
 
 interface ParsingDeclaration extends ParsedDeclaration {
+  /** A singleton written directly as `a Type` or `an Type`. */
+  readonly implicitElement: boolean;
+  readonly nameEnd: number;
   hasMalformedField: boolean;
   /** Whether the body holds a field whose only fault has a repair, such as `a Set`. */
   hasRepairableField: boolean;
@@ -113,7 +116,7 @@ function capitalized(word: string): string {
 }
 
 /**
- * Parse `(a|an) (set|seq|element) [of] Name… [where …] [with]`. One capitalized word names a
+ * Parse `(a|an) [(set|seq) [of]] Name… [where …] [with]`. One capitalized word names a
  * top-level declaration; more name a subset of the set the words after the first one name.
  * A subset written with a separate name, `a Done set of Items` or `a done set of Items`,
  * parses as the qualified subset it describes and carries that spelling as its repair.
@@ -129,8 +132,15 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
   let name: ParsedReference;
   let nameEnd: number;
   let qualifiedWords: readonly string[] | undefined;
+  const implicitElement =
+    TYPE_NAME.test(authored[first] ?? "") && multiplicityOf(authored[first + 1]) === undefined;
 
-  if (topMultiplicity !== undefined) {
+  if (implicitElement) {
+    multiplicity = "element";
+    structuralIndex = first;
+    nameEnd = phraseEnd(tokens, first);
+    name = phraseReference(tokens, first, nameEnd);
+  } else if (topMultiplicity !== undefined) {
     multiplicity = topMultiplicity;
     structuralIndex = first;
     const nameStart = first + 1 + (authored[first + 1] === "of" ? 1 : 0);
@@ -178,7 +188,7 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     qualifiedWords === undefined
       ? undefined
       : [
-          multiplicity === "element" ? "an element" : "a set of",
+          multiplicity === "element" ? (authored[0] === "an" ? "an" : "a") : "a set of",
           ...qualifiedWords,
           ...authored.slice(nameEnd, trailing),
           ...(hasWith ? ["with"] : []),
@@ -196,6 +206,8 @@ function parseDeclaration(line: SourceLine): ParsingDeclaration | undefined {
     signature: line,
     structuralIndex,
     authoredStructural: authored[structuralIndex]!,
+    implicitElement,
+    nameEnd,
     hasWith,
     hasMalformedField: false,
     hasRepairableField: false,
@@ -438,20 +450,27 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
   const hasBody = hasFields || declaration.constraints.length > 0;
   const tokens = declaration.signature.tokens;
   const authored = words(declaration.signature);
-  // A subset uses `set` or `element`, so a sequence keyword on one is repaired to `set`.
+  // A subset is a set or a singleton, so a sequence keyword on one is repaired to `set`.
   const subsetSequence =
     declaration.declarationKind === "subset" && declaration.multiplicity === "sequence";
   const canonical = subsetSequence ? "set" : canonicalStructural(declaration.multiplicity);
+  const singleton = declaration.multiplicity === "element";
   const replacements = new Map<number, string>();
-  if (declaration.authoredStructural !== canonical)
+  if (!singleton && declaration.authoredStructural !== canonical)
     replacements.set(declaration.structuralIndex, canonical);
-  const hasArticle = declaration.structuralIndex === 1;
-  if (hasArticle) replacements.set(0, articleFor(declaration.multiplicity));
+  const hasArticle = authored[0] === "a" || authored[0] === "an";
+  if (hasArticle && !singleton) replacements.set(0, articleFor(declaration.multiplicity));
   const withSuffix = hasBody && !declaration.hasWith ? " with" : "";
   const canonicalLine =
-    declaration.qualifiedRepair === undefined
-      ? `${correctedTokens(tokens, replacements)}${withSuffix}`
-      : `${declaration.qualifiedRepair}${withSuffix}`;
+    declaration.qualifiedRepair !== undefined
+      ? `${declaration.qualifiedRepair}${withSuffix}`
+      : singleton
+        ? [
+            hasArticle ? authored[0] : "a",
+            declaration.name.text,
+            ...authored.slice(declaration.nameEnd),
+          ].join(" ") + withSuffix
+        : `${correctedTokens(tokens, replacements)}${withSuffix}`;
   const structuralToken = tokens[declaration.structuralIndex];
 
   if (declaration.qualifiedRepair !== undefined) {
@@ -464,16 +483,30 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
         span: declaration.name.span,
       }),
     );
-  } else if (declaration.structuralIndex === 0) {
+  } else if (!hasArticle) {
     diagnostics.push(
       error({
         code: "SSF_ARTICLE",
-        message: `Use \`${articleFor(declaration.multiplicity)}\` before \`${canonical}\`.`,
-        suggestion: `${articleFor(declaration.multiplicity)} ${canonicalLine}`,
+        message: singleton
+          ? "Use `a` or `an` before a singleton type."
+          : `Use \`${articleFor(declaration.multiplicity)}\` before \`${canonical}\`.`,
+        suggestion: singleton
+          ? canonicalLine
+          : `${articleFor(declaration.multiplicity)} ${canonicalLine}`,
+        span: structuralToken?.span ?? declaration.signatureSpan,
+      }),
+    );
+  } else if (singleton && !declaration.implicitElement) {
+    diagnostics.push(
+      error({
+        code: "SSF_NEAR_MISS_KEYWORD",
+        message: `Write a singleton as \`a Type\` or \`an Type\` without \`${declaration.authoredStructural}\`.`,
+        suggestion: canonicalLine,
         span: structuralToken?.span ?? declaration.signatureSpan,
       }),
     );
   } else if (
+    !singleton &&
     declaration.authoredStructural !== canonical &&
     !subsetSequence &&
     structuralToken !== undefined
@@ -486,7 +519,7 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
         span: structuralToken.span,
       }),
     );
-  } else {
+  } else if (!singleton) {
     const expected = articleFor(declaration.multiplicity);
     const article = authored[0];
     if ((article === "a" || article === "an") && article !== expected && tokens[0] !== undefined) {
@@ -504,7 +537,7 @@ function declarationDiagnostics(declaration: ParsingDeclaration): SsfDiagnostic[
     diagnostics.push(
       error({
         code: "SSF_MALFORMED_DECLARATION",
-        message: "A subset uses `set` or `element`; its parent set already fixes any order.",
+        message: "A subset uses `set` or a singleton form; its parent set already fixes any order.",
         suggestion: hasArticle ? canonicalLine : `a ${canonicalLine}`,
         span: structuralToken.span,
       }),

@@ -521,7 +521,7 @@ _isRead (post: Post) : one (read: Flag)
       .replace("external Person\n  The note author.", "")
       .replace(
         "a set of Notes with\n  an author Person\n  a text String",
-        "a set of People\n\nalias Human for People\n\na set of Selected Human",
+        "a set of People\n\nalias Human for People\n\na Selected Human",
       )
       .replaceAll(": Note", ": Human")
       .replaceAll(": Person", ": Human");

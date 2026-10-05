@@ -83,12 +83,13 @@ blank fence lines do not shift them. Keep this parser as the one implementation 
 both repair diagnostics and checked-model owned-name extraction; do not recreate a
 parser under `src/engine/tooling`.
 
-The parser handles set, sequence, element, subset, alias, and field declarations,
-including field-level uniqueness constraints, and keeps their spellings as authored. The
-grammar gives a field written without a name the name its type implies (`an Author` is
+The parser handles set, sequence, singleton, subset, alias, and field declarations.
+Singletons use `a Type` or `an Type` while retaining `element` multiplicity in the IR;
+the retired `element` keyword is parsed only to diagnose and repair it. Indentation
+selects declaration versus field parsing. The parser includes field-level uniqueness
+constraints and keeps spellings as authored. The grammar gives a field written without a name the name its type implies (`an Author` is
 `author`, `a Verified User` is `verifiedUser`); later stages see only the resulting
-names. One capitalized word after the structural keyword declares a top-level type, and
-more declare a subset.
+names. One capitalized type word declares a top-level type, and more declare a subset.
 
 Graph validation classifies top-level sets and sequences before it joins spellings: one
 whose name is `plur`'s plural of exactly one external type's name is a set of that type

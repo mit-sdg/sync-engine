@@ -2,8 +2,8 @@
 
 ```text
 document := (setDecl|subsetDecl|aliasDecl|ruleLine)*
-setDecl := (a|an) (element|set|seq) [of] Type [with] declarationBody?
-subsetDecl := (a|an) (element|set) [of] Qualifier+ Type [condition] [with] declarationBody?
+setDecl := (a|an) [(set|seq) [of]] Type [with] declarationBody?
+subsetDecl := (a|an) [set [of]] Qualifier+ Type [condition] [with] declarationBody?
 condition := where fieldName is VALUE (or VALUE)*
 declarationBody := (INDENT (field|uniqueLine|ruleLine))+
 aliasDecl := alias Alias for Type
@@ -51,9 +51,8 @@ member out of a subset likewise removes or refuses every field of that subset's 
 holds it; type the field by the parent when it should outlive membership.
 
 Declare a subset by qualifying its parent: `a set of Verified Users`, `a set of Trusted
-Verified Users`, `an element Root Folder`. One capitalized word after the keyword is a
-top-level set; more are a subset of the set the remaining words name, which must be
-declared unless it is an external type's plural (`a set of Read Posts` beside `external
+Verified Users`, `a Root Folder`. One capitalized type word is a top-level set, sequence,
+or singleton; more are a subset of the set the remaining words name, which must be declared unless it is an external type's plural (`a set of Read Posts` beside `external
 Post` needs no `a set of Posts`). The name is the whole phrase, `Verified Users` or `Verified User`, never the
 qualifier alone. Use a qualified subset instead of a plain set, or instead of `optional`
 fields, when only some individuals carry fields. A qualifier may qualify different sets
@@ -71,10 +70,10 @@ an owned set; the explicit declaration takes precedence. An external type cannot
 alias target, so when a spelling pairs with several external types, write the exact
 external name or rename one of them.
 
-An alias targets one unique owned top-level declaration: a set, sequence, or element. It
+An alias targets one unique owned top-level declaration: a set, sequence, or singleton. It
 cannot target another alias, a subset, an external or a set of one, an opaque or enum type,
 a primitive, a duplicate, or an unresolved name. Automatic singular/plural joins never
-reach elements; only an explicit alias names one. Alias collisions and chains, ambiguous automatic
+reach singletons; only an explicit alias names one. Alias collisions and chains, ambiguous automatic
 relationships, duplicate subsets, repeated qualifiers, and undeclared parents are
 rejected.
 
@@ -97,7 +96,9 @@ read. Case separates the forms: `unique Email` is a unique field named `email`, 
 verified User` is a field named `verified` holding any User. Collections are never `optional` (empty means absent)
 or nested; named-type unions are invalid. Owned sets and sequences introduce
 identities—never add ID fields. Subsets add no identity; they classify parent members,
-may overlap, and add relations. `element` has one member. Which side declares a relation implies no storage, navigation, or ownership.
+may overlap, and add relations. `a Type` or `an Type` has one member. Either article is
+accepted; indentation distinguishes a declaration from an implicitly named field.
+Which side declares a relation implies no storage, navigation, or ownership.
 
 ```state
 a set of Items with
@@ -122,7 +123,7 @@ a set of Reviews with
 
 a set of Muted People
 
-an element Settings with
+a Settings with
   a retentionDays Number
 
 alias WorkItem for Items

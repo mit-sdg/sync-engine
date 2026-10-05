@@ -310,7 +310,7 @@ describe("structural parsing and explicit aliases", () => {
 
 a set of Open Items where status is OPEN
 
-an element Settings with
+a Settings with
   a retentionDays Number
 
 alias Item for Items
@@ -891,7 +891,7 @@ describe("safe automatic aliases", () => {
   });
 
   test("excludes elements, externals, and primitives from automatic aliases", () => {
-    const element = parseSimpleStateForm("an element People", {
+    const element = parseSimpleStateForm("a People", {
       evidenceTypeNames: ["Person"],
     });
     expect(ownedTypeNameSpellings(element.document.inventory)).toEqual(["People"]);
@@ -1086,9 +1086,7 @@ a set of Vouches with
   });
 
   test("declares a singleton subset with an element", () => {
-    const parsed = parseSimpleStateForm(
-      "a set of Folders with\n  a name String\n\nan element Root Folder",
-    );
+    const parsed = parseSimpleStateForm("a set of Folders with\n  a name String\n\na Root Folder");
     expect(parsed.diagnostics).toEqual([]);
     expect(declared(parsed, "Root Folder")).toMatchObject({
       multiplicity: "element",
@@ -1218,7 +1216,7 @@ a set of Vouches with
     expect(aliased.diagnostics).toEqual([]);
     expect(declared(aliased, "Leaf Root")?.parent).toMatchObject({ normalized: "Roots" });
 
-    const joined = parseSimpleStateForm("a set of Items\n\nan element Current Item");
+    const joined = parseSimpleStateForm("a set of Items\n\na Current Item");
     expect(joined.diagnostics).toEqual([]);
     expect(joined.document.inventory.ownedTypeNames).toEqual(["Item", "Items"]);
     expect(joined.document.inventory.subsets).toMatchObject([
@@ -1227,12 +1225,10 @@ a set of Vouches with
   });
 
   test("rejects a subset of a type with duplicate structural declarations", () => {
-    const parsed = parseSimpleStateForm(
-      "a set of Child Roots\n\na set of Roots\n\nan element Roots",
-    );
+    const parsed = parseSimpleStateForm("a set of Child Roots\n\na set of Roots\n\na Roots");
     expect(parsed.diagnostics).toMatchObject([
       { code: "SSF_INVALID_SUBSET_PARENT", span: { start: { line: 1, column: 10 } } },
-      { code: "SSF_DUPLICATE_DECLARATION", span: { start: { line: 5, column: 12 } } },
+      { code: "SSF_DUPLICATE_DECLARATION", span: { start: { line: 5, column: 3 } } },
     ]);
   });
 
@@ -1250,7 +1246,7 @@ a set of Vouches with
     ["an Open set of Items", "a set of Open Items"],
     ["an open set of Items where status is OPEN", "a set of Open Items where status is OPEN"],
     ["a late set of open Items", "a set of Late Open Items"],
-    ["a Current element of Items", "an element Current Items"],
+    ["a Current element of Items", "a Current Items"],
   ])("repairs the separately named subset %s", (line, suggestion) => {
     const parsed = parseSimpleStateForm(
       `a set of Items with\n  a status Status\n\na set of Open Items where status is OPEN\n\n${line}`,
@@ -1303,15 +1299,12 @@ a set of Vouches with
   });
 
   test.each([
-    ["an element", "an element Settings\n\na set of Active Settings"],
+    ["an element", "a Settings\n\na set of Active Settings"],
     [
       "an alias for an element",
-      "an element Settings\n\nalias Config for Settings\n\na set of Active Config",
+      "a Settings\n\nalias Config for Settings\n\na set of Active Config",
     ],
-    [
-      "an element subset",
-      "a set of Folders\n\nan element Root Folder\n\na set of Open Root Folder",
-    ],
+    ["a subset", "a set of Folders\n\na Root Folder\n\na set of Open Root Folder"],
   ])("rejects a subset of %s", (_, source) => {
     expect(parseSimpleStateForm(source).diagnostics).toMatchObject([
       {
@@ -1324,7 +1317,7 @@ a set of Vouches with
   });
 
   test("spans a subset's parent over the parent's own words", () => {
-    const source = "a set of Users\r\na set of Trusted Users\r\nan element Active Trusted User";
+    const source = "a set of Users\r\na set of Trusted Users\r\na Active Trusted User";
     const parents = parseSimpleStateForm(source).document.declarations.flatMap(({ parent }) =>
       parent === undefined
         ? []
@@ -1627,8 +1620,8 @@ a set of Rejected Banned Users`,
     ).toMatchObject({ suggestion });
   });
 
-  test("keeps an element named like an external plural as an owned element", () => {
-    const parsed = parseSimpleStateForm("an element Users with\n  a count Number", {
+  test("keeps a named like an external plural as an owned element", () => {
+    const parsed = parseSimpleStateForm("a Users with\n  a count Number", {
       externalTypes: ["User"],
     });
     expect(parsed.diagnostics).toEqual([]);
@@ -1638,12 +1631,12 @@ a set of Rejected Banned Users`,
 
 describe("exact namespace and local uniqueness", () => {
   test("rejects duplicate structural declarations", () => {
-    expect(codes("a set of Items\n\nan element Items")).toContain("SSF_DUPLICATE_DECLARATION");
+    expect(codes("a set of Items\n\na Items")).toContain("SSF_DUPLICATE_DECLARATION");
   });
 
   test.each([
     ["a set of Person", ["Person"]],
-    ["an element String", []],
+    ["a String", []],
   ])("rejects declaration collisions with external and primitive names", (source, external) => {
     expect(codes(source, external)).toContain("SSF_NAME_COLLISION");
   });
@@ -1693,7 +1686,7 @@ describe("exact namespace and local uniqueness", () => {
     const parsed = parseSimpleStateForm(
       `a set of Person
 
-an element Person
+a Person
 
 a seq of Person
 
@@ -1719,8 +1712,8 @@ alias Spare for Person`,
         .map(({ code, span }) => [code, span!.start.line, span!.start.column]),
     ).toEqual([
       ["SSF_NAME_COLLISION", 1, 10],
-      ["SSF_DUPLICATE_DECLARATION", 3, 12],
-      ["SSF_NAME_COLLISION", 3, 12],
+      ["SSF_DUPLICATE_DECLARATION", 3, 3],
+      ["SSF_NAME_COLLISION", 3, 3],
       ["SSF_DUPLICATE_DECLARATION", 5, 10],
       ["SSF_NAME_COLLISION", 5, 10],
       ["SSF_ALIAS_NAME_COLLISION", 7, 7],
@@ -1871,7 +1864,7 @@ a element Settings with
       { code: "SSF_MISSING_WITH", suggestion: "a seq of Sessions with" },
       { code: "SSF_MISPLACED_MODIFIER", suggestion: "  a optional revokedAt DateTime" },
       { code: "SSF_OPTIONAL_COLLECTION" },
-      { code: "SSF_ARTICLE", suggestion: "an element Settings with" },
+      { code: "SSF_NEAR_MISS_KEYWORD", suggestion: "a Settings with" },
     ]);
   });
 
@@ -2023,5 +2016,71 @@ describe("repository SSF corpus", () => {
       count += 1;
     }
     expect(count).toBeGreaterThan(20);
+  });
+});
+
+describe("singleton shorthand", () => {
+  test.each(["a Settings", "an Settings", "a User", "an User"])(
+    "declares one owned member with %s",
+    (line) => {
+      const parsed = parseSimpleStateForm(`${line} with\n  a label String`);
+      expect(parsed.diagnostics).toEqual([]);
+      expect(parsed.document.declarations).toMatchObject([
+        { multiplicity: "element", name: { referenceKind: "owned" }, fields: [{ name: "label" }] },
+      ]);
+    },
+  );
+
+  test("distinguishes a singleton subset from an indented field of the same spelling", () => {
+    const parsed = parseSimpleStateForm(
+      "a set of Directories\n\na Root Directory\n\na set of Links with\n  a Root Directory",
+    );
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[1]).toMatchObject({
+      multiplicity: "element",
+      name: { text: "Root Directory", referenceKind: "subset" },
+      parent: { normalized: "Directories" },
+    });
+    expect(parsed.document.declarations[2]!.fields).toMatchObject([
+      { name: "rootDirectory", value: { reference: { referenceKind: "subset" } } },
+    ]);
+    expect(ownedTypeNameSpellings(parsed.document.inventory)).toEqual([
+      "Directories",
+      "Directory",
+      "Links",
+    ]);
+  });
+
+  test("retains conditions, inherited fields, and uniqueness on a singleton subset", () => {
+    const parsed = parseSimpleStateForm(
+      "a Root Directory where status is ROOT with\n  unique name\n\na set of Directories with\n  a name String\n  a status Status",
+      { localTypes: [{ name: "Status", values: ["ROOT", "ORDINARY"] }] },
+    );
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document.declarations[0]).toMatchObject({
+      multiplicity: "element",
+      condition: { values: ["ROOT"] },
+      constraints: [{ fields: ["name"] }],
+    });
+  });
+
+  test.each([
+    ["an element Settings", "an Settings"],
+    ["a element of Settings", "a Settings"],
+    ["a singleton Settings", "a Settings"],
+  ])("repairs the retired singleton spelling %s", (line, suggestion) => {
+    const parsed = parseSimpleStateForm(`${line} with\n  a label String`);
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "SSF_NEAR_MISS_KEYWORD", suggestion: `${suggestion} with` },
+    ]);
+    expect(parseSimpleStateForm(`${suggestion} with\n  a label String`).diagnostics).toEqual([]);
+  });
+
+  test("requires an article and preserves the body in singleton repairs", () => {
+    expect(validateSimpleStateForm("Settings\n  a label String")).toMatchObject([
+      { code: "SSF_ARTICLE", suggestion: "a Settings with" },
+      { code: "SSF_MISSING_WITH", suggestion: "a Settings with" },
+    ]);
+    expect(codes("a root Directory")).toContain("SSF_MALFORMED_DECLARATION");
   });
 });

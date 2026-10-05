@@ -61,8 +61,8 @@ describe("limited Simple State Form validation", () => {
     );
     issue(
       "a element Settings with\n  a retentionDays Number",
-      "SSF_ARTICLE",
-      "an element Settings with",
+      "SSF_NEAR_MISS_KEYWORD",
+      "a Settings with",
     );
     issue("a set of Items\n\nset of Open Items", "SSF_ARTICLE", "a set of Open Items");
     issue(
@@ -184,7 +184,7 @@ a set of Sessions with
     ["canonical article-less optional", "a set of Items with\n  optional dueAt DateTime"],
     ["canonical sequence", "a seq of Items with\n  a members set of Person"],
     ["canonical subset", "a set of Items\n\na set of Open Items"],
-    ["a singleton subset", "a set of Items\n\nan element Current Item"],
+    ["a singleton subset", "a set of Items\n\na Current Item"],
     ["a subset of a subset", "a set of Items\n\na set of Open Items\na set of Stale Open Items"],
     [
       "a subset as a field type",

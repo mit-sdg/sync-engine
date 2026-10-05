@@ -34,7 +34,7 @@ subsets are named by qualifying their parent set, and action branches end in
   separate owned type with that spelling. Authored plurals of external types in
   fields, subsets, and signatures resolve to the external type.
 - Subsets are named by qualifying their parent set: `a set of Verified Users`,
-  `a set of Trusted Verified Users`, and `an element Root Folder`. The name is
+  `a set of Trusted Verified Users`, and `a Root Folder`. The name is
   the whole phrase, a qualifier appears once among one set's subsets, and a
   subset's joined identifier (`VerifiedUsers`) may not collide with another
   type. `a Verified set of Users` is rejected with its repair.
@@ -49,10 +49,15 @@ subsets are named by qualifying their parent set, and action branches end in
 - Bun support expands to `>=1.3.4 <2`, including Bun 1.4 and later 1.x versions.
   Setup defaults to `bun@1.3.4`; skill bootstrap accepts and preserves supported
   exact Bun pins. CI continues to validate on Bun 1.4.
+- Singleton declarations use `a Type` or `an Type`, such as `a Settings` or
+  `a Root Directory`. The retired `element` keyword is rejected with a repair;
+  singleton ownership, subset membership, and the IR multiplicity are unchanged.
 
 ### Migration
 
 - Pin core, HTTP, analysis, catalog, and skill to `1.1.0` when used together.
+- Replace `an element Type` with `a Type` or `an Type`, and remove any `of` after
+  `element`. Preserve indentation: an indented short form is a field.
 - In every `actions` fence, replace `: return (` with `: returns (`, terminal
   `return` with `returns`, and `refuse` with `refuses`.
 - Rewrite each subset as a qualified set, `a Pending set of Invitations` as
