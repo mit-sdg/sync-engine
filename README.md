@@ -194,7 +194,7 @@ stable 1.x release receives fixes. Read the [changelog](CHANGELOG.md), regenerat
 pinned artifacts, and typecheck consumers before moving a pin.
 
 The library is ESM-only and runs on Node.js 24. The CLI, `setup`, and the
-examples need Bun 1.4, and typechecking needs TypeScript 6. The [support
+examples need Bun 1.3.4 or newer within 1.x, and typechecking needs TypeScript 6. The [support
 policy](SUPPORT.md) has the exact ranges.
 
 ## Working on sync-engine itself

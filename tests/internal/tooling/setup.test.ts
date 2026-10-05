@@ -372,7 +372,7 @@ describe("sync-engine setup", () => {
       expect(manifest).toMatchObject({
         private: true,
         type: "module",
-        packageManager: "bun@1.4.0",
+        packageManager: (await currentPackage()).packageManager,
       });
       expect(result.written).toEqual([
         ".gitignore",

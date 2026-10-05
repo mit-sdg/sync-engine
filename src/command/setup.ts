@@ -80,7 +80,7 @@ function packageObject(source: string, path: string): Record<string, unknown> {
   const manager = (parsed as Record<string, unknown>).packageManager;
   if (manager !== undefined && (typeof manager !== "string" || !manager.startsWith("bun@"))) {
     throw new Error(
-      `sync-engine setup: ${path} packageManager must name Bun when present (for example, "bun@1.4.0").`,
+      `sync-engine setup: ${path} packageManager must name Bun when present (for example, "bun@1.3.4").`,
     );
   }
   return parsed as Record<string, unknown>;

@@ -40,10 +40,16 @@ subsets are named by qualifying their parent set, and action branches end in
   type. `a Verified set of Users` is rejected with its repair.
 - A subset may type a State field, as in `a sponsor Verified User`, but not an
   action or query argument or result: signatures take the parent type and
-  state membership in a condition. Subsets and sets of external types cannot be
-  binding targets.
+  state membership in a condition. Instantiation bindings may target joined subset
+  identifiers, such as `Directory.SelectedHuman`; membership remains an authored
+  requirement without runtime enforcement. Top-level sets of external types cannot
+  be binding targets.
 - A field named like a qualifier, such as `a verified User` beside `Verified
 Users`, draws advice.
+
+- Bun support expands to `>=1.3.4 <2`, including Bun 1.4 and later 1.x versions.
+  Setup defaults to `bun@1.3.4`; skill bootstrap accepts and preserves supported
+  exact Bun pins. CI continues to validate on Bun 1.4.
 
 ### Migration
 

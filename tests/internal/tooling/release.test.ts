@@ -136,7 +136,8 @@ describe("release source facts", () => {
     ).toEqual({
       skill: currentVersion,
       toolchain: {
-        bun: "1.4.0",
+        bun: "1.3.4",
+        bunRange: ">=1.3.4 <2",
         node: ">=24 <25",
         typescript: ">=6 <7",
       },
@@ -391,7 +392,7 @@ describe("release source facts", () => {
       (manifest: Record<string, any>): void => {
         manifest.engines.bun = ">=1.4.0";
       },
-      "engines.bun must support exactly one minor",
+      "engines.bun must support one major from a minimum version",
     ],
     [
       "TypeScript range",
@@ -493,17 +494,16 @@ describe("release source facts", () => {
     expect(checkRelease(sources)).toContainEqual(expect.stringContaining("reviewed SHA"));
   });
 
-  test("rejects an unpinned CI Bun version", () => {
+  test.each(["1.3.3", "2.0.0", "latest"])("rejects unsupported CI Bun version %s", (version) => {
     const sources = fixture();
-    const bunVersion = packageManifest.packageManager.slice("bun@".length);
     replaceSource(
       sources,
       ".github/workflows/ci.yml",
-      `bun-version: "${bunVersion}"`,
-      'bun-version: "0.0.0"',
+      'bun-version: "1.4.0"',
+      `bun-version: "${version}"`,
     );
     expect(checkRelease(sources)).toContainEqual(
-      expect.stringContaining(`bun-version ${bunVersion}`),
+      expect.stringContaining("must pin a supported Bun version"),
     );
   });
 

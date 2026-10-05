@@ -32,7 +32,7 @@ type ConflictChoice = (typeof conflictChoices)[number];
 
 interface SkillRelease {
   readonly skill: string;
-  readonly toolchain: Readonly<{ bun: string; node: string; typescript: string }>;
+  readonly toolchain: Readonly<{ bun: string; bunRange: string; node: string; typescript: string }>;
   readonly packages: Readonly<Record<RequiredPackage, string>>;
 }
 
@@ -285,9 +285,12 @@ export async function readSkillRelease(
     value.skill.trim() === "" ||
     !plainObject(value.toolchain) ||
     !plainObject(value.packages) ||
-    ![value.toolchain.bun, value.toolchain.node, value.toolchain.typescript].every(
-      (item) => typeof item === "string" && item.trim() !== "",
-    )
+    ![
+      value.toolchain.bun,
+      value.toolchain.bunRange,
+      value.toolchain.node,
+      value.toolchain.typescript,
+    ].every((item) => typeof item === "string" && item.trim() !== "")
   ) {
     throw new Error(`Invalid release manifest: ${path}`);
   }
@@ -311,10 +314,32 @@ function satisfiesMajorRange(version: string, range: string): boolean {
   return Number(major[1]) >= Number(bounds[1]) && Number(major[1]) < Number(bounds[2]);
 }
 
+function satisfiesBunRange(version: string, range: string): boolean {
+  const bounds = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)$/.exec(range);
+  const current = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (bounds === null || current === null) return false;
+  const [major, minor, patch] = current.slice(1).map(Number);
+  const [minimumMajor, minimumMinor, minimumPatch, upperMajor] = bounds.slice(1).map(Number);
+  return (
+    [major, minor, patch].every(Number.isSafeInteger) &&
+    major === minimumMajor &&
+    major! < upperMajor! &&
+    (minor! > minimumMinor! || (minor === minimumMinor && patch! >= minimumPatch!))
+  );
+}
+
+function supportedPackageManager(value: unknown, release: SkillRelease): boolean {
+  return (
+    typeof value === "string" &&
+    value.startsWith("bun@") &&
+    satisfiesBunRange(value.slice(4), release.toolchain.bunRange)
+  );
+}
+
 function verifyRuntime(release: SkillRelease, runtime: RuntimeVersions): void {
   if (runtime.bun !== undefined) {
-    if (runtime.bun !== release.toolchain.bun) {
-      throw new Error(`Running Bun ${runtime.bun} does not match ${release.toolchain.bun}`);
+    if (!satisfiesBunRange(runtime.bun, release.toolchain.bunRange)) {
+      throw new Error(`Running Bun ${runtime.bun} does not satisfy ${release.toolchain.bunRange}`);
     }
     return;
   }
@@ -448,10 +473,12 @@ async function inspectApplication(
       throw new Error(`Application manifest disappeared: ${packagePath}`);
 
     const manifest = objectFrom(packageText, packagePath);
-    const expectedManager = `bun@${options.release.toolchain.bun}`;
-    if (manifest.packageManager !== undefined && manifest.packageManager !== expectedManager) {
+    if (
+      manifest.packageManager !== undefined &&
+      !supportedPackageManager(manifest.packageManager, options.release)
+    ) {
       throw new Error(
-        `packageManager must be exact ${expectedManager}; alternate package managers are not supported`,
+        `packageManager must pin a Bun version satisfying ${options.release.toolchain.bunRange}; alternate package managers are not supported`,
       );
     }
     const needsPackageManager = manifest.packageManager === undefined;
@@ -580,7 +607,7 @@ async function pinPackageManager(plan: BootstrapPlan, files: BootstrapFiles): Pr
   if (text === undefined) throw new Error(`Application manifest disappeared: ${path}`);
   const manifest = objectFrom(text, path);
   if (manifest.packageManager !== undefined) {
-    if (manifest.packageManager === `bun@${plan.release.toolchain.bun}`) return false;
+    if (supportedPackageManager(manifest.packageManager, plan.release)) return false;
     throw new Error("Application packageManager changed during bootstrap");
   }
   await files.writeText(

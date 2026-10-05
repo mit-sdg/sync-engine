@@ -32,7 +32,8 @@ import { rejectedValue } from "./test-support.ts";
 const fixtureRoot = resolve("packages/skill/tests/fixtures/bootstrap");
 const releasePath = resolve(fixtureRoot, "release.json");
 const releaseVersion = "1.2.3-beta.4";
-const bunVersion = "1.4.0";
+const bunVersion = "1.3.4";
+const bunRange = ">=1.3.4 <2";
 const temporary: string[] = [];
 
 const runtime = { bun: bunVersion, node: "24.0.0" } as const;
@@ -51,7 +52,7 @@ function release(
 ) {
   return `${JSON.stringify({
     skill: releaseVersion,
-    toolchain: { bun: bunVersion, node: ">=24 <25", typescript: ">=6 <7" },
+    toolchain: { bun: bunVersion, bunRange, node: ">=24 <25", typescript: ">=6 <7" },
     packages,
   })}\n`;
 }
@@ -390,11 +391,11 @@ describe("bootstrap", () => {
     const root = resolve(fixtureRoot, "runtime-app");
     const bunMismatch = await planBootstrap(
       { applicationRoot: root, releaseManifestPath: releasePath },
-      { files, runtime: { bun: "1.3.14", node: "24.0.0" } },
+      { files, runtime: { bun: "1.3.3", node: "24.0.0" } },
     );
     expect(bunMismatch).toMatchObject({
       state: "failed",
-      error: "Running Bun 1.3.14 does not match 1.4.0",
+      error: "Running Bun 1.3.3 does not satisfy >=1.3.4 <2",
     });
 
     const bunCompatibilityNode = await planBootstrap(
@@ -451,6 +452,37 @@ describe("bootstrap", () => {
       error: "Installed TypeScript 5.9.3 does not satisfy >=6 <7",
     });
   });
+
+  test.each(["1.3.3", "2.0.0", "1.4.0-beta.1"])(
+    "rejects unsupported Bun runtime %s",
+    async (version) => {
+      const files = filesWithRelease();
+      const root = resolve(fixtureRoot, "unsupported-runtime-app");
+      const plan = await planBootstrap(
+        { applicationRoot: root, releaseManifestPath: releasePath },
+        { files, runtime: { bun: version, node: "24.0.0" } },
+      );
+      expect(plan).toMatchObject({
+        state: "failed",
+        error: `Running Bun ${version} does not satisfy ${bunRange}`,
+      });
+    },
+  );
+
+  test.each(["1.3.4", "1.3.14", "1.4.0", "1.4.2"])(
+    "accepts supported Bun runtime and packageManager %s",
+    async (version) => {
+      const files = filesWithRelease();
+      const root = resolve(fixtureRoot, "supported-runtime-app");
+      writeApplication(files, root, { packageManager: `bun@${version}` });
+      const plan = await planBootstrap(
+        { applicationRoot: root, releaseManifestPath: releasePath },
+        { files, runtime: { bun: version, node: "24.0.0" } },
+      );
+      expect(plan.state).not.toBe("failed");
+      expect(files.values.get(resolve(root, "package.json"))).toContain(`bun@${version}`);
+    },
+  );
 
   test("creates only a minimal manifest before exact Bun install and setup", async () => {
     const files = filesWithRelease();
@@ -840,7 +872,7 @@ describe("bootstrap", () => {
     );
     expect(result.outcome).toBe("failed");
     expect(result.plan.error).toBe(
-      `packageManager must be exact bun@${bunVersion}; alternate package managers are not supported`,
+      `packageManager must pin a Bun version satisfying ${bunRange}; alternate package managers are not supported`,
     );
     expect(files.values).toEqual(before);
   });
