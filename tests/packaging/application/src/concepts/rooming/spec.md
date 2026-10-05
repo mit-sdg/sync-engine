@@ -26,23 +26,23 @@ a set of Rooms with
 ## Actions
 
 ```actions
-open(name: String) : return (room: Room)
+open(name: String) : returns (room: Room)
   where no room has name
   then
     add a new room with name
-    return room
+    returns room
   where some room has name
   then
-    refuse ROOM_ALREADY_OPEN "A room with this name is already open."
+    refuses ROOM_ALREADY_OPEN "A room with this name is already open."
 
-close(room: Room) : return ()
+close(room: Room) : returns ()
   where room in rooms
   then
     delete room
-    return
+    returns
   where room not in rooms
   then
-    refuse ROOM_NOT_OPEN "This room is not open."
+    refuses ROOM_NOT_OPEN "This room is not open."
 ```
 
 ## Queries

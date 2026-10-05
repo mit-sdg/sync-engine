@@ -1,6 +1,6 @@
 import type { GrammarResult } from "./grammar.ts";
 import { validateTypeGraph, type ResolutionFacts } from "./graph-validation.ts";
-import { PRIMITIVES, PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
+import { impliedName, PRIMITIVES, PRIMITIVE_NAMES, TYPE_NAME } from "./names.ts";
 import {
   error,
   type ParsedFieldType,
@@ -21,13 +21,27 @@ function typeReference(
   external: ReadonlySet<string>,
   local: ReadonlySet<string>,
 ): SsfTypeReference | undefined {
+  if (reference.text.includes(" ")) {
+    const subset = facts.subsetNamed(reference.text);
+    return subset === undefined
+      ? undefined
+      : {
+          text: reference.text,
+          normalized: subset.name,
+          referenceKind: "subset",
+          span: reference.span,
+        };
+  }
   const aliasTarget = facts.validAliases.get(reference.text);
   const owned = facts.validStructuralNames.has(reference.text) ? reference.text : aliasTarget;
+  const externalType = external.has(reference.text)
+    ? reference.text
+    : facts.externalSpellings.get(reference.text);
   const referenceKind: SsfTypeReference["referenceKind"] | undefined = PRIMITIVE_NAMES.has(
     reference.text,
   )
     ? "primitive"
-    : external.has(reference.text)
+    : externalType !== undefined
       ? "external"
       : owned !== undefined
         ? "owned"
@@ -38,7 +52,7 @@ function typeReference(
     ? undefined
     : {
         text: reference.text,
-        normalized: owned ?? reference.text,
+        normalized: owned ?? externalType ?? reference.text,
         referenceKind,
         span: reference.span,
       };
@@ -63,22 +77,65 @@ function structuralReference(
   return typeReference(reference, facts, external, local) ?? unresolved(reference);
 }
 
+/**
+ * The reading of `a Sponsor Verified User` as the field `sponsor` holding a `Verified
+ * User`, when the words after the first resolve as a type.
+ */
+function lowercaseNameReading(
+  reference: ParsedReference,
+  facts: ResolutionFacts,
+  external: ReadonlySet<string>,
+  local: ReadonlySet<string>,
+): string | undefined {
+  const [first, ...rest] = reference.text.split(" ");
+  const type = rest.join(" ");
+  return typeReference({ ...reference, text: type }, facts, external, local) === undefined
+    ? undefined
+    : `If \`${first}\` is the field's name, write it in lowercase: \`${impliedName(first!)} ${type}\`.`;
+}
+
+function subsetSuggestion(lowercaseName: string | undefined): string {
+  const declare =
+    "declare the subset at the top level, as `a set of Verified Users` declares `Verified User`, or name a declared type.";
+  return lowercaseName === undefined
+    ? `${declare[0]!.toUpperCase()}${declare.slice(1)}`
+    : `${lowercaseName} Otherwise, ${declare}`;
+}
+
 function resolveReference(
   reference: ParsedReference,
   facts: ResolutionFacts,
   external: ReadonlySet<string>,
   local: ReadonlySet<string>,
   diagnostics: SsfDiagnostic[],
+  unnamedScalar = false,
 ): SsfTypeReference {
   const resolved = typeReference(reference, facts, external, local);
   if (resolved !== undefined) return resolved;
+  const phrase = reference.text.includes(" ") ? undefined : facts.subsetPhraseFor(reference.text);
   diagnostics.push(
-    error({
-      code: "SSF_UNDECLARED_TYPE",
-      message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
-      suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
-      span: reference.span,
-    }),
+    phrase !== undefined
+      ? error({
+          code: "SSF_UNDECLARED_TYPE",
+          message: `Type ${JSON.stringify(reference.text)} is a subset's identifier; State names a subset by its phrase.`,
+          suggestion: `Write \`${phrase}\`.`,
+          span: reference.span,
+        })
+      : reference.text.includes(" ")
+        ? error({
+            code: "SSF_UNDECLARED_TYPE",
+            message: `Type ${JSON.stringify(reference.text)} is not a subset this State declares.`,
+            suggestion: subsetSuggestion(
+              unnamedScalar ? lowercaseNameReading(reference, facts, external, local) : undefined,
+            ),
+            span: reference.span,
+          })
+        : error({
+            code: "SSF_UNDECLARED_TYPE",
+            message: `Type ${JSON.stringify(reference.text)} is not owned, external, concept-local, or an SSF primitive.`,
+            suggestion: `Declare it in the Types fence as \`external ${reference.text}\`, \`${reference.text} is VALUE_A or VALUE_B\`, or \`opaque ${reference.text}\`.`,
+            span: reference.span,
+          }),
   );
   return unresolved(reference);
 }
@@ -128,40 +185,58 @@ export function resolveGrammar(
   );
   const structural = (reference: ParsedReference): SsfTypeReference =>
     structuralReference(reference, facts, external, local);
-  const resolve = (reference: ParsedReference): SsfTypeReference =>
-    resolveReference(reference, facts, external, local, diagnostics);
-  const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => ({
-    kind: "declaration",
-    name: structural(declaration.name),
-    declarationKind: declaration.declarationKind,
-    multiplicity: declaration.multiplicity,
-    ...(declaration.parent === undefined ? {} : { parent: structural(declaration.parent) }),
-    ...(declaration.condition === undefined
-      ? {}
-      : {
-          condition: {
-            field: declaration.condition.field.text,
-            values: declaration.condition.values.map(({ text }) => text),
-            span: declaration.condition.span,
-          },
-        }),
-    fields: declaration.fields.map((field) => ({
-      kind: "field",
-      name: field.name,
-      optional: field.optional,
-      unique: field.unique,
-      value: fieldType(field.value, resolve),
-      span: field.span,
-    })),
-    constraints: declaration.constraints.map((constraint) => ({
-      kind: "unique" as const,
-      fields: constraint.fields.map(({ text }) => text),
-      span: constraint.span,
-    })),
-    rules: declaration.rules,
-    span: declaration.span,
-    signatureSpan: declaration.signatureSpan,
-  }));
+  const resolve = (reference: ParsedReference, unnamedScalar = false): SsfTypeReference =>
+    resolveReference(reference, facts, external, local, diagnostics, unnamedScalar);
+  const declarations: SsfDeclaration[] = grammar.declarations.map((declaration) => {
+    const subset = facts.subsets.get(declaration);
+    return {
+      kind: "declaration",
+      name:
+        subset === undefined
+          ? structural(declaration.name)
+          : {
+              text: declaration.name.text,
+              normalized: subset.name,
+              referenceKind: "subset",
+              span: declaration.name.span,
+            },
+      declarationKind: declaration.declarationKind,
+      multiplicity: declaration.multiplicity,
+      ...(subset === undefined
+        ? {}
+        : {
+            qualifier: subset.qualifier,
+            parent: subset.parent,
+          }),
+      ...(declaration.condition === undefined
+        ? {}
+        : {
+            condition: {
+              field: declaration.condition.field.text,
+              values: declaration.condition.values.map(({ text }) => text),
+              span: declaration.condition.span,
+            },
+          }),
+      fields: declaration.fields.map((field) => ({
+        kind: "field",
+        name: field.name,
+        optional: field.optional,
+        unique: field.unique,
+        value: fieldType(field.value, (reference) =>
+          resolve(reference, field.implicitName && field.value.kind === "named"),
+        ),
+        span: field.span,
+      })),
+      constraints: declaration.constraints.map((constraint) => ({
+        kind: "unique" as const,
+        fields: constraint.fields.map(({ text }) => text),
+        span: constraint.span,
+      })),
+      rules: declaration.rules,
+      span: declaration.span,
+      signatureSpan: declaration.signatureSpan,
+    };
+  });
   const aliases: SsfAlias[] = grammar.aliases.map((alias) => ({
     kind: "alias",
     name: structural(alias.name),
@@ -190,6 +265,15 @@ export function resolveGrammar(
       inventory: {
         ownedTypeNames,
         external: [...external].sort(),
+        externalSpellings: [...facts.externalSpellings.keys()].sort(),
+        subsets: [...facts.subsets.values()]
+          .map(({ name, identifiers, qualifierPrefix, rootType }) => ({
+            name,
+            identifiers,
+            qualifierPrefix,
+            rootType,
+          }))
+          .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0)),
         primitives: [...PRIMITIVES],
       },
     },

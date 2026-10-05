@@ -33,39 +33,39 @@ a set of Reservations with
   a reservedAt DateTime
   an optional endedAt DateTime
 
-a Claimed set of Reservations where status is ACTIVE or FULFILLED with
+a set of Claimed Reservations where status is ACTIVE or FULFILLED with
   unique resource
 ```
 
 ## Actions
 
 ```actions
-reserve (resource: Resource, claimant: Claimant, at: DateTime) : return (reservation: Reservation)
+reserve (resource: Resource, claimant: Claimant, at: DateTime) : returns (reservation: Reservation)
   where an active or fulfilled Reservation has resource
   then
-    refuse RESOURCE_UNAVAILABLE "This resource is not available."
+    refuses RESOURCE_UNAVAILABLE "This resource is not available."
   where no active or fulfilled Reservation has resource
   then
     add a new active Reservation with resource, claimant, and reservedAt at
-    return reservation
+    returns reservation
 
-cancel (reservation: Reservation, claimant: Claimant, at: DateTime) : return (reservation: Reservation)
+cancel (reservation: Reservation, claimant: Claimant, at: DateTime) : returns (reservation: Reservation)
   where reservation is unknown, is not active, or does not have claimant
   then
-    refuse RESERVATION_NOT_ACTIVE_FOR_CLAIMANT "There is no such active reservation for this claimant."
+    refuses RESERVATION_NOT_ACTIVE_FOR_CLAIMANT "There is no such active reservation for this claimant."
   where reservation is active and has claimant
   then
     mark the Reservation cancelled with endedAt at
-    return reservation
+    returns reservation
 
-fulfill (reservation: Reservation, claimant: Claimant, at: DateTime) : return (reservation: Reservation)
+fulfill (reservation: Reservation, claimant: Claimant, at: DateTime) : returns (reservation: Reservation)
   where reservation is unknown, is not active, or does not have claimant
   then
-    refuse RESERVATION_NOT_ACTIVE_FOR_CLAIMANT "There is no such active reservation for this claimant."
+    refuses RESERVATION_NOT_ACTIVE_FOR_CLAIMANT "There is no such active reservation for this claimant."
   where reservation is active and has claimant
   then
     mark the Reservation fulfilled with endedAt at
-    return reservation
+    returns reservation
 ```
 
 ## Queries

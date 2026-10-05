@@ -273,8 +273,8 @@ State text, structured action branches and outcomes, query choices, and source
 locations. Config-based checking compares
 member, input, action-result, query-row, return-name, optionality, and refusal
 shapes with resolvable TypeScript source. It also uses the SSF-owned names, aliases
-included, to prove qualified external-binding targets. Query choices are enforced when a reaction,
-view, or former evaluates a query. Opaque invariant/prose semantics are not
+included, and joined subset identifiers to prove qualified external-binding targets.
+Query choices are enforced when a reaction, view, or former evaluates a query. Opaque invariant/prose semantics are not
 compared with class fields, floor implementations, databases, or storage.
 
 ### Occurrence index and log sinks
@@ -606,8 +606,8 @@ vocabulary declaration rather than a replacement instance.
 supplied `digest` field. `validateApplicationManifest(...)` treats its input as untrusted data: it
 checks the complete top-level version-1 shape, the nested IR needed by tooling,
 inventory uniqueness and cross-field consistency, independently rederives persisted
-owned types from each included specification, endpoint, input-contract, and
-logical-wire path agreement, plain JSON portability, and exact canonical digest
+owned types and subset binding targets from each included specification, endpoint,
+input-contract, and logical-wire path agreement, plain JSON portability, and exact canonical digest
 equality. Previous versions are rejected without upconversion.
 Failures identify the offending `$` path. `parseApplicationManifest(...)`
 performs the same checks after JSON parsing and returns data in canonical record-key

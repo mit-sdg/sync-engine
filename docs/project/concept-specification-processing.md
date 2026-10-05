@@ -57,7 +57,7 @@ Its version-1 IR retains:
 - ordered external declarations and their optional explanations;
 - normalized full State fence text;
 - structured action inputs and named result rows;
-- structured branches and terminal return/refusal outcomes;
+- structured branches and terminal `returns`/`refuses` outcomes;
 - query inputs, cardinality, named rows, and optional prose bodies; and
 - one-based source locations.
 
@@ -83,27 +83,43 @@ blank fence lines do not shift them. Keep this parser as the one implementation 
 both repair diagnostics and checked-model owned-name extraction; do not recreate a
 parser under `src/engine/tooling`.
 
-The parser handles set, sequence, element, subset, alias, and field declarations,
-including field-level uniqueness constraints, and keeps their spellings as authored.
-Named State field references and parsed action and query type expressions supply alias
-candidates. A candidate joins an owner only when
-`plur` relates the two authored spellings and neither side has a second match; the
-pluralizer's output is never inserted, no transitive closure runs, and external,
-primitive, element, already-declared, ambiguous, and explicitly aliased candidates are
-excluded. Ambiguity on either side emits non-fatal advice naming the rejected spellings
-and owners. `alias Alias for Target` takes precedence and remains the escape hatch; its
-target is a unique declaration or subset, so chains cannot form.
+The parser handles set, sequence, singleton, subset, alias, and field declarations.
+Singletons use `a Type` or `an Type` while retaining `element` multiplicity in the IR;
+the retired `element` keyword is parsed only to diagnose and repair it. Indentation
+selects declaration versus field parsing. The parser includes field-level uniqueness
+constraints and keeps spellings as authored. The grammar gives a field written without a name the name its type implies (`an Author` is
+`author`, `a Verified User` is `verifiedUser`); later stages see only the resulting
+names. One capitalized type word declares a top-level type, and more declare a subset.
 
-Subset parents resolve after declarations and aliases are parsed, which lets forward
-references, alias parents, and valid chains work, while unresolved, external, primitive,
-invalid-alias, duplicate, ambiguous, self, and cyclic parents fail at their authored
-spans. Alias parent edges normalize to their targets before cycle validation. Type
-names, declaration-local field names, and enumeration values have separate name
-uniqueness scopes. A field's `unique` modifier records distinct values within the field's
-declaration.
+Graph validation classifies top-level sets and sequences before it joins spellings: one
+whose name is `plur`'s plural of exactly one external type's name is a set of that type
+and owns nothing, and every other top-level declaration owns its type. The comparison is
+directional, so `a set of User` beside `external Users` declares an owned `User`. Named State field
+references, subset types, and parsed action and query type expressions supply alias
+candidates, and the owners they may join are the owned non-element declarations and the
+external types. A candidate joins an owner only when `plur` relates the two authored
+spellings and neither side has a second match; the pluralizer's output is never
+inserted, no transitive closure runs, and primitive, element, already-declared,
+ambiguous, and explicitly aliased candidates are excluded. A join to an external type
+becomes an external spelling rather than an owned one. Ambiguity on either side emits
+non-fatal advice naming the rejected spellings and owners. `alias Alias for Target`
+takes precedence and remains the escape hatch; its target is a unique owned top-level
+declaration, so chains cannot form.
 
-State field value names are closed: the parser classifies owned, external, concept-local,
-primitive, and unresolved references, and an unresolved name fails with
+A subset is a qualified phrase, `Trusted Verified Users`: its leading word is its
+qualifier and the rest names its parent, so parents are acyclic by construction. The
+phrase's last word resolves through the same joins as any type name, which fixes the
+subset's root; a subset is keyed by its root and qualifiers, so `Verified User` and
+`Verified Users` name one subset. Forward references work; an undeclared parent, a
+duplicate subset, a qualifier repeated under one root, and an identifier (the words
+joined) that collides with the type namespace fail at their authored spans. Subsets
+resolve as `subset` references in State fields, stay out of the owned-name inventory,
+and are listed with their identifiers so signature validation can reject them with
+`SSF_SUBSET_SIGNATURE_TYPE`. A field's `unique` modifier records distinct values within
+the field's declaration.
+
+State field value names are closed: the parser classifies owned, external, subset,
+concept-local, primitive, and unresolved references, and an unresolved name fails with
 `SSF_UNDECLARED_TYPE`. Only the plural join or an alias makes a reference owned. Every nonblank line in the
 fence must parse or begin with `Rule:`; malformed lines produce diagnostics, and rule
 text stays opaque. The concept IR preserves the complete normalized State-fence text and
@@ -111,12 +127,15 @@ has no separate prose field. The parser does not prove rule text, the meaning a
 concept-local type carries, conditions, effects, query meaning, storage layout,
 State/storage agreement, or implementation semantics.
 
-Config-based binding validation uses only the derived owned-name inventory. A qualified
-target must name a declaration or alias of the selected target instance's definition; an
-external, primitive, ambiguous, or unresolved name is invalid. Checked manifests persist
-the sorted inventory, and their codec rederives it independently from the included State
-and operation types, requires canonical equality, and validates every qualified target
-against the derived fact. Operation types need not occur in State, but each resolves
+Config-based binding validation combines the parser's owned-name inventory with its
+joined subset identifiers. A qualified target must name an owned declaration, owned alias,
+or subset of the selected target instance's definition. Subsets of external types are
+valid targets, but external parameters, primitives, ambiguous or unresolved names, and
+top-level sets of external types remain invalid. Subset bindings record authored membership
+requirements without enforcing runtime membership or TypeScript specialization. Checked
+manifests persist the sorted owned-name inventory in `ownedTypes`. Their codec rederives
+it independently from the included State and operation types, requires canonical equality,
+and validates every qualified target against those names and the derived subset identifiers. Operation types need not occur in State, but each resolves
 against the same closed universe once evidence has joined singular and plural spellings,
 and only a unique plural pair affects ownership.
 
@@ -129,7 +148,7 @@ not duplicated in runtime registration.
 
 TypeScript resolution compares member names and the finite top-level shapes of
 inputs, action results, and query rows, including optionality. The checker also
-compares successful action terminal return names and registered refusal
+compares successful action terminal `returns` names and registered refusal
 mappings. It fails closed when a shape cannot be resolved.
 
 This comparison intentionally stops short of semantic type-name equivalence.
@@ -177,14 +196,14 @@ Validation combines the complete configured corpus and enforces:
 - every selected external parameter is bound exactly once, and no unknown external is
   bound;
 - each instance supplies all bindings inline or all detached, never a mixture;
-- every right side directly names a declared concrete type or an SSF-owned type of a
-  declared and selected target instance;
+- every right side directly names a declared concrete type or an SSF-owned type or subset
+  of a declared and selected target instance;
 - no target is an external parameter and no binding chain is resolved;
 - duplicates are invalid even when targets are textually identical; and
 - every concrete type is used.
 
 Declaration order has no semantics. Direct qualified targets resolve independently,
-so cyclic instance dependencies are valid when every edge ends at an owned type.
+so cyclic instance dependencies are valid when every edge ends at an owned type or subset.
 External-to-external edges remain invalid, including cycles, because they would be
 aliases with no direct concrete or owned target. For a definition with external
 parameters, one mixed-placement diagnostic suppresses duplicate, unknown, missing, and

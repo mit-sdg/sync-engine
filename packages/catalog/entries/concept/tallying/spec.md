@@ -31,26 +31,26 @@ Rule: count is a positive whole number
 ## Actions
 
 ```actions
-increment (subject: Subject) : return (subject: Subject, total: Number)
+increment (subject: Subject) : returns (subject: Subject, total: Number)
   where no Total has subject
   then
     add a Total with subject and a count of 1
     read that count as total
-    return subject, total
+    returns subject, total
   where a Total has subject
   then
     increase that Total's count by 1
     read that count as total
-    return subject, total
+    returns subject, total
 
-clear (subject: Subject) : return (subject: Subject)
+clear (subject: Subject) : returns (subject: Subject)
   where no Total has subject
   then
-    refuse NOTHING_TALLIED "That subject has no total to clear."
+    refuses NOTHING_TALLIED "That subject has no total to clear."
   where a Total has subject
   then
     delete that Total
-    return subject
+    returns subject
 ```
 
 ## Queries

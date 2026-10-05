@@ -26,6 +26,7 @@ export type SsfDiagnosticCode =
   | "SSF_ARTICLE"
   | "SSF_DUPLICATE_DECLARATION"
   | "SSF_DUPLICATE_FIELD"
+  | "SSF_DUPLICATE_SET_NAME"
   | "SSF_DUPLICATE_UNIQUE"
   | "SSF_INVALID_ALIAS_TARGET"
   | "SSF_INVALID_EXTERNAL_NAME"
@@ -39,9 +40,9 @@ export type SsfDiagnosticCode =
   | "SSF_NEAR_MISS_KEYWORD"
   | "SSF_OPTIONAL_COLLECTION"
   | "SSF_ORPHANED_LINE"
-  | "SSF_SUBSET_CYCLE"
   | "SSF_INVALID_SUBSET_CONDITION"
-  | "SSF_SUBSET_SELF_PARENT"
+  | "SSF_QUALIFIER_FIELD_NAME"
+  | "SSF_REPEATED_QUALIFIER"
   | "SSF_UNDECLARED_TYPE"
   | "SSF_UNKNOWN_UNIQUE_FIELD";
 
@@ -73,10 +74,16 @@ export interface SsfTypeName {
 }
 
 /**
- * `unresolved` is no longer a silent category: a field value that lands there always
- * carries `SSF_UNDECLARED_TYPE`, and every other case already has its own diagnostic.
+ * An `unresolved` field value always carries `SSF_UNDECLARED_TYPE`; every other name that
+ * fails to resolve has its own diagnostic.
  */
-export type SsfReferenceKind = "external" | "local" | "owned" | "primitive" | "unresolved";
+export type SsfReferenceKind =
+  | "external"
+  | "local"
+  | "owned"
+  | "primitive"
+  | "subset"
+  | "unresolved";
 
 export interface SsfTypeReference extends SsfTypeName {
   readonly referenceKind: SsfReferenceKind;
@@ -130,9 +137,16 @@ export interface SsfSubsetCondition {
 
 export interface SsfDeclaration {
   readonly kind: "declaration";
+  /**
+   * The declared type. A top-level set of an external type resolves as `external`; a subset,
+   * named by its whole phrase such as `Verified Users`, resolves as `subset`.
+   */
   readonly name: SsfTypeReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
+  /** A subset's leading qualifier: `Verified` in `Verified Users`. */
+  readonly qualifier?: string;
+  /** A subset's parent: the set its name names without the leading qualifier. */
   readonly parent?: SsfTypeReference;
   readonly condition?: SsfSubsetCondition;
   readonly fields: readonly SsfField[];
@@ -155,7 +169,22 @@ export type SsfStatement = SsfDeclaration | SsfAlias | SsfRuleLine;
 export interface SsfTypeInventory {
   readonly ownedTypeNames: readonly string[];
   readonly external: readonly string[];
+  /** Additional spellings, such as a plural, that resolve to an external type. */
+  readonly externalSpellings: readonly string[];
+  /** Subsets with the code identifiers their singular and plural spellings take. */
+  readonly subsets: readonly SsfSubsetIdentity[];
   readonly primitives: readonly string[];
+}
+
+export interface SsfSubsetIdentity {
+  /** The declared phrase, such as `Verified Users`. */
+  readonly name: string;
+  /** Identifiers such as `VerifiedUser` and `VerifiedUsers`, sorted. */
+  readonly identifiers: readonly string[];
+  /** The joined qualifiers that begin every identifier: `Verified` in `VerifiedUsers`. */
+  readonly qualifierPrefix: string;
+  /** The type of the top-level set the subset qualifies, such as `User`. */
+  readonly rootType: string;
 }
 
 export interface SsfDocument {
@@ -199,6 +228,8 @@ export interface SourceLine {
 export interface ParsedReference {
   readonly text: string;
   readonly span: SsfSpan;
+  /** Each word's span, for a phrase such as `Trusted Verified Users`. */
+  readonly wordSpans?: readonly SsfSpan[];
 }
 
 export interface ParsedNamed {
@@ -218,6 +249,8 @@ export type ParsedFieldType =
 export interface ParsedField {
   readonly name: string;
   readonly nameSpan: SsfSpan;
+  /** Whether the name is implied by the value's type rather than written. */
+  readonly implicitName: boolean;
   readonly optional: boolean;
   readonly unique: boolean;
   readonly value: ParsedFieldType;
@@ -236,10 +269,10 @@ export interface ParsedSubsetCondition {
 }
 
 export interface ParsedDeclaration {
+  /** The declared name: one word for a top-level declaration, a qualified phrase for a subset. */
   readonly name: ParsedReference;
   readonly declarationKind: "collection" | "subset";
   readonly multiplicity: SsfMultiplicity;
-  readonly parent?: ParsedReference;
   readonly condition?: ParsedSubsetCondition;
   readonly fields: ParsedField[];
   readonly constraints: ParsedUniqueConstraint[];

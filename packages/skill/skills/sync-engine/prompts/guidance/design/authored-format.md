@@ -27,20 +27,20 @@ external Owner
 
 ## Actions
 ```actions
-create (owner: Owner, title: String, dueAt?: DateTime) : return (item: Item)
+create (owner: Owner, title: String, dueAt?: DateTime) : returns (item: Item)
   where title is invalid
   then
-    refuse INVALID_TITLE "A valid title is required."
+    refuses INVALID_TITLE "A valid title is required."
   where title is valid
   then
     create the item
-    return item
+    returns item
 
-delete (item: Item) : return ()
+delete (item: Item) : returns ()
   where true
   then
     delete the item
-    return
+    returns
 ```
 
 ## Queries
@@ -55,11 +55,11 @@ _items (owner: Owner) : many (item: Item, title: String)
 A concept's Types section contains `external Name`, `opaque Name`, and
 `Name is VALUE or VALUE` declarations, or is empty. State uses supplied SSF; keep every
 State line inside its fence and prefix every invariant prose line with exact `Rule:`.
-Actions use `name: Type`, optional `name?: Type`, `: return`, parenthesized named results,
+Actions use `name: Type`, optional `name?: Type`, `: returns`, parenthesized named results,
 and one or more `where`/`then` branches. Indent `where` and `then` equally and each branch
-body deeper. Terminal success returns exactly the declared names. Declare an empty result
-`: return ()` and end its branches with bare `return`. Refuse with
-`refuse CODE "Normative sentence."`; keep codes unique within an action and never shared
+body deeper. Terminal success `returns` exactly the declared names. Declare an empty result
+`: returns ()` and end its branches with bare `returns`. Refuse with
+`refuses CODE "Normative sentence."`; keep codes unique within an action and never shared
 across actions. A returned name is a declared parameter, the row the branch created or
 changed, or a value an earlier line in that branch binds, as in
 `count the Tallies with subject as total`. Order an action's branches with its refusals

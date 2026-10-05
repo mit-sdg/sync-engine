@@ -147,8 +147,8 @@ instance with no external parameters has no placement mode.
 A right side must directly name either:
 
 - an application `concrete` type with a nonempty prose definition; or
-- a type the bounded SSF parser proves is owned by another declared, selected
-  instance's definition.
+- an owned type or joined subset identifier the bounded SSF parser resolves in another
+  declared, selected instance's definition.
 
 Reject external-to-external targets, alias chains, unresolved names, and unused
 concrete declarations. Do not reject a cycle merely because instance A targets an
@@ -218,8 +218,8 @@ For every concept, also verify manually that:
   multiplicity, naming, and indentation rules, with every invariant on a `Rule:` line;
   `check-design` parses the bounded structural declarations and inventories owned names,
   while the rules themselves remain a manual semantic review;
-- every action has explicit `where`/`then` branches and one terminal return or refusal
-  per branch;
+- every action has explicit `where`/`then` branches, and each branch ends in one
+  `returns` or `refuses` line;
 - action results and query rows use parenthesized named fields;
 - every query has indented prose stating what it answers, its unknown or empty case,
   and deterministic ordering for `many`;

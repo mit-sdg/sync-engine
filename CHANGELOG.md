@@ -1,9 +1,88 @@
 # Changelog
 
-This project follows Semantic Versioning. Stable 1.x preserves supported public
-contracts; older beta releases could change incompatibly. Pin an exact version,
+Stable 1.x patch releases preserve supported public contracts; minor releases may
+change them and list the migration steps. Older beta releases could change
+incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
+
+## [1.1.0] - 2026-10-05
+
+This release revises concept specification syntax: SSF fields may take their
+type's name, a plain set means the same thing for owned and external types,
+subsets are named by qualifying their parent set, and action branches end in
+`returns` or `refuses`.
+
+### Compatibility
+
+- This release changes the accepted specification syntax within 1.x. Existing
+  concept specifications must be migrated before they register or check.
+- The support policy promises backward compatibility for patch releases only.
+  Minor releases may change public APIs, behavior, or accepted specification
+  syntax, and the changelog lists each change with its migration steps.
+- Action signatures use `: returns (...)`, and each branch ends with
+  `returns ...` or `refuses CODE "Normative sentence."`. The retired `return`
+  and `refuse` keywords are rejected with a diagnostic naming the replacement.
+- An SSF field may omit its name and is then named for its type's words joined
+  with a lowercase first letter: `an Author` is `author`, `a set of Tags` is
+  `tags`, and `a Verified User` is `verifiedUser`. Two unnamed fields of one
+  type fail as duplicates.
+- A plain top-level set contains every individual of its type in the concept's
+  state, with every field it declares. A set named for the plural of an
+  external type, such as `a set of Users` beside `external User`, now holds
+  individuals of that type under the same rule; it previously declared a
+  separate owned type with that spelling. Authored plurals of external types in
+  fields, subsets, and signatures resolve to the external type.
+- Subsets are named by qualifying their parent set: `a set of Verified Users`,
+  `a set of Trusted Verified Users`, and `a Root Folder`. The name is
+  the whole phrase, a qualifier appears once among one set's subsets, and a
+  subset's joined identifier (`VerifiedUsers`) may not collide with another
+  type. `a Verified set of Users` is rejected with its repair.
+- A subset may type a State field, as in `a sponsor Verified User`, but not an
+  action or query argument or result: signatures take the parent type and
+  state membership in a condition. Instantiation bindings may target joined subset
+  identifiers, such as `Directory.SelectedHuman`; membership remains an authored
+  requirement without runtime enforcement. Top-level sets of external types cannot
+  be binding targets.
+- A field named like a qualifier, such as `a verified User` beside
+  `Verified Users`, draws advice.
+- Bun support expands to `>=1.3.4 <2`, including Bun 1.4 and later 1.x versions.
+  Setup defaults to `bun@1.3.4`; skill bootstrap accepts and preserves supported
+  exact Bun pins. CI continues to validate on Bun 1.4.
+- Singleton declarations use `a Type` or `an Type`, such as `a Settings` or
+  `a Root Directory`. The retired `element` keyword is rejected with a repair;
+  singleton ownership, subset membership, and the IR multiplicity are unchanged.
+
+### Migration
+
+- Pin core, HTTP, analysis, catalog, and skill to `1.1.0` when used together.
+- Replace `an element Type` with `a Type` or `an Type`, and remove any `of` after
+  `element`. Preserve indentation: an indented short form is a field.
+- In every `actions` fence, replace `: return (` with `: returns (`, terminal
+  `return` with `returns`, and `refuse` with `refuses`.
+- Rewrite each subset as a qualified set, `a Pending set of Invitations` as
+  `a set of Pending Invitations`, and name it by its phrase in prose, as in
+  `where invitation is in Pending Invitations`. Replace a subset used in a signature
+  with its parent type and a membership condition.
+- Rename an owned set whose name is the plural of an external type; it now
+  holds that external type's individuals. Where only some individuals of a type
+  should carry fields, move the fields to a qualified subset.
+- Run `check-design`, then the full application check, and regenerate and
+  review application manifests and wire contracts.
+
+### Generated formats
+
+- Concept specification and application manifest formats remain at version 1.
+  Rendered action signatures use `: returns`, and owned-name inventories omit
+  subsets and sets of external types.
+- Generated declarations and example artifacts are regenerated for `1.1.0`.
+
+### Runtime and security support
+
+- `1.1.0` is the newest stable release and the only one that receives fixes;
+  `1.0.0` users must upgrade.
+
+[Release][1.1.0] | [Changes since 1.0.0][1.1.0-compare]
 
 ## [1.0.0] - 2026-09-09
 
@@ -1457,6 +1536,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.1.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.1.0
+[1.1.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0
 [1.0.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.16...v1.0.0
 [1.0.0-beta.16]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.16

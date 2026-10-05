@@ -965,7 +965,7 @@ export function validateAuthoredApplicationDesign(
       } else if (target.externalTypes.includes(binding.target.type)) {
         issues.push({
           code: "EXTERNAL_BINDING_TARGET",
-          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is another external parameter; bindings must target a concrete application type or terminate directly at an owned type.`,
+          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is another external parameter; bindings must target a concrete application type or terminate directly at an owned type or subset.`,
           location: binding.location,
         });
       } else if (
@@ -974,7 +974,7 @@ export function validateAuthoredApplicationDesign(
       ) {
         issues.push({
           code: "UNRESOLVED_BINDING_TARGET",
-          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is not an owned type reported for definition ${JSON.stringify(target.definition)}.`,
+          message: `binding target ${JSON.stringify(`${binding.target.instance}.${binding.target.type}`)} is not an owned type or subset reported for definition ${JSON.stringify(target.definition)}.`,
           location: binding.location,
         });
       }

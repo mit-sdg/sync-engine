@@ -37,36 +37,36 @@ Rule: at most one Membership has each gathering and member pair
 ## Actions
 
 ```actions
-create (name: String, host: Person) : return (gathering: Gathering)
+create (name: String, host: Person) : returns (gathering: Gathering)
   where true
   then
     add a new gathering with name and host
     add a new membership with gathering and member host
-    return gathering
+    returns gathering
 
-join (gathering: Gathering, member: Person) : return (membership: Membership)
+join (gathering: Gathering, member: Person) : returns (membership: Membership)
   where gathering not in gatherings
   then
-    refuse GATHERING_NOT_FOUND "There is no such gathering."
+    refuses GATHERING_NOT_FOUND "There is no such gathering."
   where gathering in gatherings and some membership has gathering and member
   then
-    refuse ALREADY_JOINED "This person already belongs to the gathering."
+    refuses ALREADY_JOINED "This person already belongs to the gathering."
   where gathering in gatherings and no membership has gathering and member
   then
     add a new membership with gathering and member
-    return membership
+    returns membership
 
-leave (gathering: Gathering, member: Person) : return (membership: Membership)
+leave (gathering: Gathering, member: Person) : returns (membership: Membership)
   where gathering not in gatherings
   then
-    refuse GATHERING_NOT_FOUND "There is no such gathering."
+    refuses GATHERING_NOT_FOUND "There is no such gathering."
   where gathering in gatherings and no membership has gathering and member
   then
-    refuse NOT_JOINED "This person does not belong to the gathering."
+    refuses NOT_JOINED "This person does not belong to the gathering."
   where gathering in gatherings and some membership has gathering and member
   then
     delete that membership
-    return membership
+    returns membership
 ```
 
 ## Queries

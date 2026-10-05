@@ -24,19 +24,19 @@ a set of Selections with
   a room Room
   a mitigation String
 
-a Current set of Selections
+a set of Current Selections
 ```
 
 ## Actions
 
 ```actions
-choose(room: Room, mitigation: String) : return (selection: Selection)
+choose(room: Room, mitigation: String) : returns (selection: Selection)
   where true
   then
-    remove any selection with room from current
+    remove any selection with room from Current Selections
     add a new selection with room and mitigation
-    add selection to current
-    return selection
+    add selection to Current Selections
+    returns selection
 ```
 
 ## Queries

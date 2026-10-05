@@ -25,10 +25,10 @@ a set of Items with garbage
 ## Actions
 
 ```actions
-record() : return ()
+record() : returns ()
   where true
   then
-    return
+    returns
 ```
 
 ## Queries

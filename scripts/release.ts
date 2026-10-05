@@ -213,12 +213,22 @@ function majorRange(value: string | undefined): number | undefined {
 }
 
 function bunRange(value: string | undefined): string | undefined {
-  const match = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)\.(\d+)$/.exec(value ?? "");
+  const match = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)$/.exec(value ?? "");
   if (match === null) return undefined;
-  const major = Number(match[1]);
-  const minor = Number(match[2]);
-  if (Number(match[4]) !== major || Number(match[5]) !== minor + 1) return undefined;
+  if (Number(match[4]) !== Number(match[1]) + 1) return undefined;
   return `${match[1]}.${match[2]}.${match[3]}`;
+}
+
+function supportedBun(version: string, minimum: string): boolean {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (match === null) return false;
+  const [major, minor, patch] = match.slice(1).map(Number);
+  const [minimumMajor, minimumMinor, minimumPatch] = minimum.split(".").map(Number);
+  return (
+    [major, minor, patch].every(Number.isSafeInteger) &&
+    major === minimumMajor &&
+    (minor! > minimumMinor! || (minor === minimumMinor && patch! >= minimumPatch!))
+  );
 }
 
 export function projectReleaseManifests(sources: ReadonlyMap<string, string>): Map<string, string> {
@@ -266,6 +276,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     const engines = object(manifest.engines) ?? {};
     manifest.engines = engines;
     engines.node = facts.node;
+    if (typeof engines.bun === "string") engines.bun = facts.bun;
     const peerDependencies = object(manifest.peerDependencies) ?? {};
     for (const peerId of workspace.peerWorkspaceIds) {
       const peer = workspaceById(peerId);
@@ -302,6 +313,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
   skillRelease.skill = facts.version;
   skillRelease.toolchain = {
     bun: minimumBun,
+    bunRange: facts.bun,
     node: facts.node,
     typescript: facts.typescript,
   };
@@ -331,6 +343,7 @@ export function projectReleaseManifests(sources: ReadonlyMap<string, string>): M
     delete dependencies.typescript;
     development.typescript = facts.typescript;
     engines.node = facts.node;
+    if (typeof engines.bun === "string") engines.bun = facts.bun;
     if ((bunProjectManifests as readonly string[]).includes(path)) {
       engines.bun = facts.bun;
       manifest.packageManager = facts.packageManager;
@@ -440,7 +453,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
   }
   const bunVersion = bunRange(facts.bun);
   if (bunVersion === undefined) {
-    failures.push("package.json: engines.bun must support exactly one minor as >=X.Y.Z <X.Y+1");
+    failures.push(
+      "package.json: engines.bun must support one major from a minimum version as >=X.Y.Z <X+1",
+    );
   }
   const typescriptMajor = majorRange(facts.typescript);
   if (typescriptMajor === undefined) {
@@ -763,14 +778,17 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
       }
     }
     const bunSetups = uses.filter((use) => use.startsWith("oven-sh/setup-bun@")).length;
-    const bunVersions = [...source.matchAll(/bun-version:\s*["']?([^\s"']+)/g)].map(
-      (match) => match[1],
+    const bunVersions = [...source.matchAll(/bun-version:\s*(.+)$/gm)].map((match) =>
+      match[1].trim().replace(/^["']|["']$/g, ""),
     );
     if (
       bunVersion !== undefined &&
-      (bunVersions.length !== bunSetups || bunVersions.some((value) => value !== bunVersion))
+      (bunVersions.length !== bunSetups ||
+        bunVersions.some((value) => !supportedBun(value, bunVersion)))
     ) {
-      failures.push(`${path}: every setup-bun step must pin bun-version ${bunVersion}`);
+      failures.push(
+        `${path}: every setup-bun step must pin a supported Bun version satisfying ${facts.bun}`,
+      );
     }
   }
 

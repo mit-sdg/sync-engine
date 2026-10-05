@@ -5,7 +5,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkDesignCommand, checkDesignFiles } from "@command/check-design";
 import { parseSpec } from "@engine/reactions/concepts/concept-spec";
-import { specificationOwnedTypeNames } from "@engine/tooling/application-manifest-format";
+import {
+  specificationBindingTypeNames,
+  specificationOwnedTypeNames,
+} from "@engine/tooling/application-manifest-format";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 const concept = `# Noting
@@ -36,11 +39,11 @@ a set of Notes with
 ## Actions
 
 \`\`\`actions
-write (author: Person, text: String) : return (note: Note)
+write (author: Person, text: String) : returns (note: Note)
   where true
   then
     add a Note
-    return note
+    returns note
 \`\`\`
 
 ## Queries
@@ -346,6 +349,74 @@ Comments.User is Person
     }
   });
 
+  test("accepts sets and subsets of external types with implicitly named fields", async () => {
+    const readTracking = `# ReadTracking
+
+## Purpose
+
+Remember which posts a reader has read.
+
+## Principle
+
+After a reader marks a post read, the post is in read; marking it read again is refused.
+
+## Types
+
+\`\`\`types
+external Post
+  A post some other concept publishes.
+external User
+  A reader.
+\`\`\`
+
+## State
+
+\`\`\`state
+a set of Users with
+  a set of Posts
+
+a set of Read Posts
+
+a set of Starred Read Posts
+\`\`\`
+
+## Actions
+
+\`\`\`actions
+markRead (user: User, post: Post) : returns ()
+  where post is in Read Posts
+  then
+    refuses ALREADY_READ "This post is already read."
+  where post is not in Read Posts
+  then
+    add post to Read Posts
+    returns
+\`\`\`
+
+## Queries
+
+\`\`\`queries
+_isRead (post: Post) : one (read: Flag)
+  answers whether the post is in Read Posts
+\`\`\`
+`;
+    const root = await fixture({ "ReadTracking.md": readTracking });
+    try {
+      await expect(checkDesignFiles(["ReadTracking.md"], root)).resolves.toEqual([
+        { path: "ReadTracking.md", kind: "concept" },
+      ]);
+      expect(specificationOwnedTypeNames(parseSpec(readTracking).specification!)).toEqual([]);
+      expect(specificationBindingTypeNames(parseSpec(readTracking).specification!)).toEqual([
+        "ReadPost",
+        "ReadPosts",
+        "StarredReadPost",
+        "StarredReadPosts",
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("rejects undeclared signature types at their exact authored locations", async () => {
     const markdown = concept.replace("text: String", "text: Blancmange");
     const line = markdown.split("\n").findIndex((text) => text.includes("text: Blancmange")) + 1;
@@ -443,6 +514,25 @@ Comments.User is Person
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  test("includes subset identifiers rooted in an explicit alias as binding targets", () => {
+    const resolved = concept
+      .replace("external Person\n  The note author.", "")
+      .replace(
+        "a set of Notes with\n  an author Person\n  a text String",
+        "a set of People\n\nalias Human for People\n\na Selected Human",
+      )
+      .replaceAll(": Note", ": Human")
+      .replaceAll(": Person", ": Human");
+    const specification = parseSpec(resolved).specification!;
+    expect(specificationOwnedTypeNames(specification)).toEqual(["Human", "People"]);
+    expect(specificationBindingTypeNames(specification)).toEqual([
+      "Human",
+      "People",
+      "SelectedHuman",
+      "SelectedPeople",
+    ]);
   });
 
   test("attributes missing, non-regular, and unreadable operands", async () => {

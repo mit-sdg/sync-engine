@@ -1,13 +1,14 @@
 {
-  "skill": "1.0.0",
+  "skill": "1.1.0",
   "toolchain": {
-    "bun": "1.4.0",
+    "bun": "1.3.4",
+    "bunRange": ">=1.3.4 <2",
     "node": ">=24 <25",
     "typescript": ">=6 <7"
   },
   "packages": {
-    "@mit-sdg/sync-engine": "1.0.0",
-    "@mit-sdg/sync-engine-analysis": "1.0.0",
-    "@mit-sdg/sync-engine-catalog": "1.0.0"
+    "@mit-sdg/sync-engine": "1.1.0",
+    "@mit-sdg/sync-engine-analysis": "1.1.0",
+    "@mit-sdg/sync-engine-catalog": "1.1.0"
   }
 }

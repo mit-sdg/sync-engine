@@ -58,7 +58,7 @@ export const workspaceCatalog = [
       "SUPPORT.md",
       "package.json",
     ],
-    packageBudget: { files: 470, packedBytes: 560_000, unpackedBytes: 1_920_000 },
+    packageBudget: { files: 470, packedBytes: 560_000, unpackedBytes: 1_950_000 },
     assets: [
       { source: "src/command/setup", destination: "dist/command/setup" },
       {
@@ -239,7 +239,7 @@ export const workspaceCatalog = [
       "skills/sync-engine/scripts/roles.ts",
       "skills/sync-engine/scripts/work.ts",
     ],
-    packageBudget: { files: 64, packedBytes: 145_000, unpackedBytes: 570_000 },
+    packageBudget: { files: 64, packedBytes: 145_000, unpackedBytes: 575_000 },
     assets: [],
     bins: ["dist/command.js"],
   },
@@ -263,7 +263,7 @@ export const workspaceCatalog = [
     copiesExamples: false,
     publication: "private",
     requiredPackedFiles: ["README.md", "package.json", "dist/index.js", "dist/index.d.ts"],
-    packageBudget: { files: 28, packedBytes: 30_000, unpackedBytes: 100_000 },
+    packageBudget: { files: 28, packedBytes: 34_000, unpackedBytes: 130_000 },
     assets: [],
     bins: [],
   },

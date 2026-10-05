@@ -26,7 +26,7 @@ everything that was assembled.
 ## Install
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0
+bun add --exact @mit-sdg/sync-engine@1.1.0
 ```
 
 To start a new project:
@@ -34,7 +34,7 @@ To start a new project:
 ```sh
 mkdir board
 cd board
-bunx --package @mit-sdg/sync-engine@1.0.0 sync-engine setup
+bunx --package @mit-sdg/sync-engine@1.1.0 sync-engine setup
 ```
 
 `setup` completes the package manifest, adds development dependencies and
@@ -188,12 +188,13 @@ what the host is responsible for.
 
 ## Versions
 
-Version 1 is stable. Public APIs follow Semantic Versioning, and only the newest
+Version 1 is stable. Patch releases are backward compatible; minor releases may
+change public APIs and list migration steps in the changelog. Only the newest
 stable 1.x release receives fixes. Read the [changelog](CHANGELOG.md), regenerate
 pinned artifacts, and typecheck consumers before moving a pin.
 
 The library is ESM-only and runs on Node.js 24. The CLI, `setup`, and the
-examples need Bun 1.4, and typechecking needs TypeScript 6. The [support
+examples need Bun 1.3.4 or newer within 1.x, and typechecking needs TypeScript 6. The [support
 policy](SUPPORT.md) has the exact ranges.
 
 ## Working on sync-engine itself

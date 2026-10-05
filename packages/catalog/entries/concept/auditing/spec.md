@@ -49,24 +49,24 @@ Rule: within one Trail the positions are 1 through the number of Entries
 ## Actions
 
 ```actions
-record (trail: Trail, event: Event, actor: Actor, action: String, detail: String, target: Target, at: DateTime) : return (entry: Entry, position: Number)
+record (trail: Trail, event: Event, actor: Actor, action: String, detail: String, target: Target, at: DateTime) : returns (entry: Entry, position: Number)
   where action is blank or longer than 100 characters
   then
-    refuse INVALID_ENTRY_ACTION "An entry action must not be blank and must be at most 100 characters."
+    refuses INVALID_ENTRY_ACTION "An entry action must not be blank and must be at most 100 characters."
   where detail is longer than 500 characters
   then
-    refuse INVALID_ENTRY_DETAIL "An entry detail must be at most 500 characters."
+    refuses INVALID_ENTRY_DETAIL "An entry detail must be at most 500 characters."
   where an Entry in trail has event with the same actor, action, detail, and target
   then
     bind entry and position to that Entry and its position
-    return entry, position
+    returns entry, position
   where an Entry in trail has event with a different actor, action, detail, or target
   then
-    refuse ENTRY_EVENT_CONFLICT "This event is already recorded in this trail with different facts."
+    refuses ENTRY_EVENT_CONFLICT "This event is already recorded in this trail with different facts."
   where action and detail are accepted and no Entry in trail has event
   then
     add a new Entry with trail, event, actor, action, detail, target, and recordedAt at, taking the position after the last Entry in trail and 1 in an empty trail
-    return entry, position
+    returns entry, position
 ```
 
 ## Queries

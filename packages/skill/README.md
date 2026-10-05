@@ -14,7 +14,7 @@ The selected application root may use directory aliases. Within that root, boots
 
 ## Install and start
 
-Install `@mit-sdg/sync-engine-skill@1.0.0` through the package or Agent Skill mechanism supported by the coordinator. Load its `skills/sync-engine/` directory and expose the `sync-engine-skill` binary. Load one copy so the `sync-engine` skill name is unambiguous.
+Install `@mit-sdg/sync-engine-skill@1.1.0` through the package or Agent Skill mechanism supported by the coordinator. Load its `skills/sync-engine/` directory and expose the `sync-engine-skill` binary. Load one copy so the `sync-engine` skill name is unambiguous.
 
 From this repository, load `packages/skill/skills/sync-engine/`.
 
@@ -49,7 +49,8 @@ The overview includes the work brief, active decisions, concise activity, runs, 
 
 ## Support
 
-Stable 1.x follows Semantic Versioning for the documented CLI and workflow contracts.
+In stable 1.x, patch releases keep the documented CLI and workflow contracts
+compatible, and minor releases may change them, with migration steps in the changelog.
 Only the newest stable 1.x release receives fixes. Keep the skill and its required
 packages at the matching exact versions in `skills/sync-engine/release.json`.
 See the [support policy](https://github.com/mit-sdg/sync-engine/blob/main/SUPPORT.md)

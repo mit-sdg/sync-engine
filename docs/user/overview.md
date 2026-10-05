@@ -77,7 +77,7 @@ SSF. A bounded structural parser inventories the declarations, subsets, aliases,
 field-level uniqueness constraints a concept owns, and checks its subset graph and name
 uniqueness. Invariants SSF cannot express live on `Rule:` lines and stay opaque; every
 other line has to parse.
-Actions use explicit `where`/`then` branches and terminal returns or refusals;
+Actions use explicit `where`/`then` branches that end in a `returns` or `refuses` line;
 queries select `one`, `optional`, or `many`, return named rows, and explain their
 answers in an indented body. See [Concept
 specification format](reference/concept-specification.md).
@@ -109,8 +109,8 @@ instantiate Commenting as PostComments with
 
 Application `types` fences contain only concrete declarations. An inline `with`
 block binds each external parameter of that instance directly to either a
-concrete type or an owned type of another declared instance. Inline bindings are
-the recommended placement because the complete instance is readable in one
+concrete type, an owned type, or a joined subset identifier of another declared instance.
+Inline bindings are the recommended placement because the complete instance is readable in one
 place.
 
 Applications that deliberately centralize bindings may detach them:

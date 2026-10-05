@@ -31,30 +31,30 @@ a set of Accounts with
 ## Actions
 
 ```actions
-register (username: String, password: String) : return (account: Account)
+register (username: String, password: String) : returns (account: Account)
   where username is not 3 to 32 letters, digits, underscores, or hyphens
   then
-    refuse INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
+    refuses INVALID_USERNAME "A username must contain 3 to 32 letters, numbers, underscores, or hyphens."
   where password is shorter than 8 characters or longer than 128 characters
   then
-    refuse WEAK_PASSWORD "A password must contain 8 to 128 characters."
+    refuses WEAK_PASSWORD "A password must contain 8 to 128 characters."
   where username is already registered
   then
-    refuse USERNAME_TAKEN "That username is already registered."
+    refuses USERNAME_TAKEN "That username is already registered."
   where username and password are accepted
   then
     add a new account with username, a fresh salt, and a verifier derived from password and that salt
     bind account to that account
-    return account
+    returns account
 
-authenticate (username: String, password: String) : return (account: Account)
+authenticate (username: String, password: String) : returns (account: Account)
   where username is unknown or password does not verify
   then
-    refuse INVALID_CREDENTIALS "The username or password is incorrect."
+    refuses INVALID_CREDENTIALS "The username or password is incorrect."
   where password verifies
   then
     bind account to the verified account
-    return account
+    returns account
 ```
 
 ## Queries

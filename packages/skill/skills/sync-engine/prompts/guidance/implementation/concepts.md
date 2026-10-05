@@ -2,8 +2,8 @@
 
 Implement each concept as a plain TypeScript class. Actions take one named input object and return the exact object-shaped result:
 
-- `return (item: Item)` becomes `{ item }`;
-- `return ()` becomes `{}`;
+- `returns (item: Item)` becomes `{ item }`;
+- `returns ()` becomes `{}`;
 - `one` returns one row object;
 - `optional` is annotated `Row[]` or `Array<Row>` and returns zero or one row; and
 - `many` returns an array in its promised stable ordering.

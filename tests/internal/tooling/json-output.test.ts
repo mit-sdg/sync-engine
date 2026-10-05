@@ -90,11 +90,11 @@ a sequence of Notes
 ## Actions
 
 \`\`\`actions
-write (author: Person, text: String) : return (note: Note)
+write (author: Person, text: String) : returns (note: Note)
   where true
   then
     add a Note
-    return note
+    returns note
 \`\`\`
 
 ## Queries

@@ -73,8 +73,8 @@ export type ConceptSpecParseResult =
 const SECTION_NAMES = ["Purpose", "Principle", "Types", "State", "Actions", "Queries"] as const;
 type SectionName = (typeof SECTION_NAMES)[number];
 const PROMISES = new Set<string>(["one", "optional", "many"]);
-const REFUSE = /^refuse\s+(\S+)\s+("(?:[^"\\]|\\.)*")$/;
-const RETURN = /^return(?:\s+([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*))?$/;
+const REFUSE = /^refuses\s+(\S+)\s+("(?:[^"\\]|\\.)*")$/;
+const RETURN = /^returns(?:\s+([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*))?$/;
 
 interface SourceLine {
   readonly text: string;
@@ -509,6 +509,18 @@ class SignatureParser {
       name += `.${part.name}`;
     }
     if (name === "null" || name === "undefined") return { kind: name, location };
+    // A signature type is one word, so capitalized words after it and a space are an error.
+    this.#skipSpace();
+    const qualified = /^[A-Z][A-Za-z0-9_]*(?:\s+[A-Z][A-Za-z0-9_]*)*/.exec(
+      this.#line.text.slice(this.#index),
+    );
+    if (qualified !== null && /\s/.test(this.#line.text[this.#index - 1] ?? "")) {
+      const words = qualified[0].split(/\s+/);
+      this.#report(
+        `"${[name, ...words].join(" ")}" is more than one word, and a signature type is one word; if it names a subset, take the type of the set it qualifies and state membership in a \`where\` condition`,
+      );
+      return undefined;
+    }
     const arguments_: SpecType[] = [];
     if (this.#consume("<")) {
       if (this.#consume(">")) {
@@ -650,7 +662,7 @@ function refusalOf(
     refusal: {
       code: match[1],
       message,
-      location: at(line, line.text.indexOf("refuse") + 1),
+      location: at(line, line.text.indexOf("refuses") + 1),
     },
   };
 }
@@ -715,7 +727,10 @@ function branchesOf(
     const branch: SourceLine[] = [];
     while (index < lines.length && !beginsWhere(lines[index]!)) branch.push(lines[index++]!);
     if (branch.length === 0) {
-      branchProblem(`${action}'s then block needs a terminal return or refusal`, then);
+      branchProblem(
+        `${action}'s then block needs a terminal \`returns\` or \`refuses\` line`,
+        then,
+      );
       continue;
     }
 
@@ -723,10 +738,18 @@ function branchesOf(
       branchProblem(`${action}'s then-block lines must be indented`, shallow);
     }
     const terminal = branch[branch.length - 1]!;
-    for (const line of branch.slice(0, -1)) {
-      if (/^(?:return|refuse)(?:\s|$)/.test(line.text.trim())) {
-        branchProblem(`${action}'s return or refusal must terminate its then block`, line);
-      }
+    for (const line of branch) {
+      const singular = /^(return|refuse)(?:\s|$)/.exec(line.text.trim())?.[1];
+      if (singular !== undefined)
+        branchProblem(
+          `${action}'s then block has a \`${singular}\` line; write \`${singular}s\``,
+          line,
+        );
+      else if (line !== terminal && /^(?:returns|refuses)(?:\s|$)/.test(line.text.trim()))
+        branchProblem(
+          `${action}'s \`returns\` or \`refuses\` line must terminate its then block`,
+          line,
+        );
     }
 
     const returned = RETURN.exec(terminal.text.trim());
@@ -759,9 +782,9 @@ function branchesOf(
         codes.add(refusal.refusal.code);
         refusals.push(refusal.refusal);
       }
-    } else {
+    } else if (!/^(?:return|refuse)(?:\s|$)/.test(terminal.text.trim())) {
       branchProblem(
-        `${action}'s then block must end with \`return ...\` or \`refuse CODE "Normative sentence."\``,
+        `${action}'s then block must end with \`returns ...\` or \`refuses CODE "Normative sentence."\``,
         terminal,
       );
     }
@@ -784,10 +807,10 @@ function parseAction(
     );
     valid = false;
   }
-  if (signature.resolution !== "return") {
+  if (signature.resolution !== "returns") {
     report(
       "CONCEPT_SPEC_DECLARATION",
-      "an action's signature resolves with `: return (…)`",
+      "an action's signature resolves with `: returns (…)`",
       at(group.signature),
     );
     valid = false;

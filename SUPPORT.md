@@ -19,10 +19,10 @@ runtime requirements, and support boundaries in its package README.
 
 ## Stable compatibility
 
-Stable 1.x releases follow Semantic Versioning across every supported public
-subpath, including `/advanced`. Patch releases contain backward-compatible fixes;
-minor releases may add backward-compatible functionality. Incompatible public
-API or behavior changes require a new major version. The [changelog](CHANGELOG.md)
+Stable 1.x versions have the form `1.MINOR.PATCH`, across every supported public
+subpath, including `/advanced`. Patch releases contain backward-compatible fixes.
+Minor releases may add functionality and may also change public APIs, behavior,
+or accepted specification syntax incompatibly. The [changelog](CHANGELOG.md)
 records compatibility and migration effects for every release. Pin an exact
 version for reproducible coursework and review the changelog before upgrading.
 
@@ -68,7 +68,7 @@ The supported core runtime and toolchain ranges are:
 | Surface                                | Supported range     |
 | -------------------------------------- | ------------------- |
 | Built ESM library                      | Node.js `>=24 <25`  |
-| Core CLI, setup, scripts, and examples | Bun `>=1.4.0 <1.5`  |
+| Core CLI, setup, scripts, and examples | Bun `>=1.3.4 <2`    |
 | Type checking and generated TypeScript | TypeScript `>=6 <7` |
 
 CI runs on current GitHub-hosted Linux, macOS, and Windows images. Filesystems,

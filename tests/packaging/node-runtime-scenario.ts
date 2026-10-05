@@ -27,11 +27,11 @@ a set of Notes with
 ## Actions
 
 \`\`\`actions
-write(text: String) : return (note: Note)
+write(text: String) : returns (note: Note)
   where true
   then
     add a new note with text
-    return note
+    returns note
 \`\`\`
 
 ## Queries

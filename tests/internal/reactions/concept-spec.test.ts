@@ -17,20 +17,20 @@ function specification(
       "external Person\n  A person who may receive an invitation.\n  Identity is supplied by the application.\n\nexternal Workspace",
     state:
       "a set of Invitations with\n  a workspace Workspace\n  a guest Person\n\nRule: Invitation identities are never reused.",
-    actions: `invite(workspace: Workspace, guest: Person) : return (invitation: Invitation)
+    actions: `invite(workspace: Workspace, guest: Person) : returns (invitation: Invitation)
   where true
   then
     add a pending invitation
-    return invitation
+    returns invitation
 
-accept(invitation: Invitation) : return (invitation: Invitation, acceptedAt?: Time)
+accept(invitation: Invitation) : returns (invitation: Invitation, acceptedAt?: Time)
   where invitation is pending
   then
     mark invitation accepted
-    return acceptedAt, invitation
+    returns acceptedAt, invitation
   where invitation is not pending
   then
-    refuse NO_LONGER_OPEN "This invitation is no longer open."`,
+    refuses NO_LONGER_OPEN "This invitation is no longer open."`,
     queries: `_pending(workspace: Workspace) : many (invitation: Invitation, guest: Person)
   Returns pending invitations in creation order.
 _get(invitation: Invitation) : optional (workspace: Workspace)`,
@@ -137,7 +137,7 @@ describe("concept specification document structure", () => {
     const markdown = specification({
       purpose: "",
       principle: "",
-      actions: "invite() : return ()",
+      actions: "invite() : returns ()",
     });
     const lines = markdown.split("\n");
     const lineOf = (text: string): number => {
@@ -160,7 +160,7 @@ describe("concept specification document structure", () => {
       expect.objectContaining({
         code: "CONCEPT_SPEC_ACTION_BRANCH",
         message: expect.stringContaining("explicit where/then branch"),
-        location: { line: lineOf("invite() : return ()"), column: 1 },
+        location: { line: lineOf("invite() : returns ()"), column: 1 },
       }),
     ]);
   });
@@ -405,13 +405,13 @@ describe("Actions", () => {
         expect.objectContaining({ message: expect.stringContaining("at least one action") }),
       ]),
     );
-    expect(diagnosticsFor(specification({ actions: "invite() : return ()" }))).toEqual(
+    expect(diagnosticsFor(specification({ actions: "invite() : returns ()" }))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ message: expect.stringContaining("explicit where/then branch") }),
       ]),
     );
     expect(
-      diagnosticsFor(specification({ actions: "invite() : return ()\n  then\n    return" })),
+      diagnosticsFor(specification({ actions: "invite() : returns ()\n  then\n    returns" })),
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -425,7 +425,7 @@ describe("Actions", () => {
     expect(
       diagnosticsFor(
         specification({
-          actions: "invite() : return Invitation\n  where true\n  then\n    return invitation",
+          actions: "invite() : returns Invitation\n  where true\n  then\n    returns invitation",
         }),
       ),
     ).toEqual(
@@ -437,7 +437,7 @@ describe("Actions", () => {
       diagnosticsFor(
         specification({
           actions:
-            "invite() : return (invitation: Invitation)\n  where true\n  then\n    return invitation\n    audit it",
+            "invite() : returns (invitation: Invitation)\n  where true\n  then\n    returns invitation\n    audit it",
         }),
       ),
     ).toEqual(
@@ -448,7 +448,7 @@ describe("Actions", () => {
     expect(
       diagnosticsFor(
         specification({
-          actions: "invite() : return (invitation: Invitation)\n  where true\n  then\n    return",
+          actions: "invite() : returns (invitation: Invitation)\n  where true\n  then\n    returns",
         }),
       ),
     ).toEqual(
@@ -460,17 +460,51 @@ describe("Actions", () => {
     );
   });
 
+  test("points return and refuse to returns and refuses", () => {
+    expect(
+      diagnosticsFor(
+        specification({
+          actions:
+            "invite() : return (invitation: Invitation)\n  where true\n  then\n    returns invitation",
+        }),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining("`: returns (…)`") }),
+      ]),
+    );
+    for (const [lines, keyword] of [
+      ["return invitation", "return"],
+      ['refuse NOT_OPEN "The invitation is not open."', "refuse"],
+      ["return\n    returns invitation", "return"],
+      ['refuse NOT_OPEN "The invitation is not open."\n    returns invitation', "refuse"],
+    ]) {
+      expect(
+        diagnosticsFor(
+          specification({
+            actions: `invite() : returns (invitation: Invitation)\n  where true\n  then\n    ${lines}`,
+          }),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          code: "CONCEPT_SPEC_ACTION_BRANCH",
+          message: `invite's then block has a \`${keyword}\` line; write \`${keyword}s\`.`,
+        }),
+      ]);
+    }
+  });
+
   test("empty successful results use a plain terminal return", () => {
     expect(
       validSpecification(
         specification({
-          actions: "reset() : return ()\n  where true\n  then\n    clear everything\n    return",
+          actions: "reset() : returns ()\n  where true\n  then\n    clear everything\n    returns",
         }),
       ).actions[0].result.fields,
     ).toEqual([]);
     expect(
       diagnosticsFor(
-        specification({ actions: "reset() : return ()\n  where true\n  then\n    return value" }),
+        specification({ actions: "reset() : returns ()\n  where true\n  then\n    returns value" }),
       ),
     ).toEqual(
       expect.arrayContaining([

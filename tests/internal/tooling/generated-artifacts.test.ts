@@ -54,7 +54,9 @@ const ownedTypeModule = new URL(
   "./fixtures/generated-artifacts/owned-types/vocabulary.ts",
   import.meta.url,
 );
-const ownedTypeDesign = (name: "design" | "explicit-design" | "invalid-design") => ({
+const ownedTypeDesign = (
+  name: "design" | "explicit-design" | "invalid-design" | "subset-design",
+) => ({
   version: 1 as const,
   documents: [new URL(`./fixtures/generated-artifacts/owned-types/${name}.md`, import.meta.url)],
 });
@@ -131,25 +133,66 @@ describe("generated application artifacts", () => {
     expect(rendered).toContain("RequestBoundary.respond (");
   }, 15_000);
 
+  const ownedTargetApplication = (
+    design: "design" | "explicit-design" | "invalid-design" | "subset-design",
+  ) =>
+    resolveApplication(
+      {
+        assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
+        title: "Owned targets",
+        design: ownedTypeDesign(design),
+        conceptSet: { module: ownedTypeModule },
+      },
+      configUrl,
+    );
+
   test("proves qualified targets with the private SSF inventory for advanced vocabularies", async () => {
-    const application = (design: "design" | "explicit-design" | "invalid-design") =>
-      resolveApplication(
-        {
-          assemble: () => assemble({ vocabulary: ownedTypeVocabulary, composition: {} }),
-          title: "Owned targets",
-          design: ownedTypeDesign(design),
-          conceptSet: { module: ownedTypeModule },
-        },
-        configUrl,
-      );
-    await expect(renderGenerated(application("design"))).resolves.toMatchObject({
+    await expect(renderGenerated(ownedTargetApplication("design"))).resolves.toMatchObject({
       specification: expect.stringContaining("`Target` is `Targeting.Record`"),
     });
-    await expect(renderGenerated(application("explicit-design"))).resolves.toMatchObject({
-      specification: expect.stringContaining("`Target` is `Targeting.Entry`"),
+    await expect(renderGenerated(ownedTargetApplication("explicit-design"))).resolves.toMatchObject(
+      { specification: expect.stringContaining("`Target` is `Targeting.Entry`") },
+    );
+    await expect(renderGenerated(ownedTargetApplication("invalid-design"))).rejects.toThrow(
+      'binding target "Targeting.Recrod" is not an owned type or subset reported for definition "Targeting"',
+    );
+  }, 15_000);
+
+  test("accepts subset binding targets and independently validates their State declarations", async () => {
+    const application = ownedTargetApplication("subset-design");
+    await expect(renderGenerated(application)).resolves.toMatchObject({
+      specification: expect.stringContaining("`Target` is `Targeting.ArchivedRecords`"),
     });
-    await expect(renderGenerated(application("invalid-design"))).rejects.toThrow(
-      'binding target "Targeting.Recrod" is not an owned type reported for definition "Targeting"',
+    const manifest = await inspectGenerated(application, (assembly) =>
+      applicationManifest(assembly),
+    );
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    const targeting = manifest.design.concepts.find(
+      ({ definition }) => definition === "Targeting",
+    )!;
+    expect(targeting.ownedTypes).toEqual(["Entry", "Record", "Records"]);
+    const linking = manifest.design.concepts.find(({ definition }) => definition === "Linking")!;
+    const target = linking.instances[0]!.bindings[0]!.target;
+    if (target.kind !== "qualified") throw new Error("fixture binding is not qualified");
+    target.type = "ArchivedRecord";
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).not.toThrow();
+    target.type = "ArchivedRecrod";
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /does not name an SSF-owned type or subset/,
+    );
+    target.type = "ArchivedRecord";
+    targeting.specification.state.body = targeting.specification.state.body.replace(
+      "a set of Archived Records",
+      "",
+    );
+    manifest.concepts.find(({ name }) => name === "Targeting")!.specification = structuredClone(
+      targeting.specification,
+    );
+    manifest.digest = applicationManifestDigest(manifest);
+    expect(() => validateApplicationManifest(manifest)).toThrow(
+      /does not name an SSF-owned type or subset/,
     );
   }, 15_000);
 

@@ -72,28 +72,28 @@ a set of Sessions with
 ## Actions
 
 \`\`\`actions
-start() : return (session: Session, token: Session, expiresAt: Time, user: Person)
+start() : returns (session: Session, token: Session, expiresAt: Time, user: Person)
   where true
   then
     add a new session
-    return session, token, expiresAt, user
+    returns session, token, expiresAt, user
 
-verify(session: Session) : return (user: Person)
+verify(session: Session) : returns (user: Person)
   where session is denied
   then
-    refuse DENIED "This session lacks permission."
+    refuses DENIED "This session lacks permission."
   where session not in sessions
   then
-    refuse UNKNOWN_SESSION "This session is not known."
+    refuses UNKNOWN_SESSION "This session is not known."
   where session is known
   then
-    return user
+    returns user
 
-end(session: Session) : return (ended: Flag)
+end(session: Session) : returns (ended: Flag)
   where true
   then
     delete session
-    return ended
+    returns ended
 \`\`\`
 
 ## Queries

@@ -297,7 +297,8 @@ For the configured design corpus, `check`:
   variant's non-core `(instance, definition)` facts;
 - validates application `concrete` declarations, one binding placement per instance,
   and complete external binding closure;
-- proves qualified binding targets against the selected definition's SSF-owned names,
+- proves qualified binding targets against the selected definition's SSF-owned names
+  and subset identifiers,
   while rejecting external-to-external targets and alias chains;
 - resolves every `reaction:`, `view:`, `former:`, and `computation:` link;
 - requires every selected endpoint to have exactly one authored endpoint entry whose
@@ -388,7 +389,8 @@ earlier beta shapes are rejected and have no compatibility decoder.
 
 The manifest retains normalized full concept State text, structured concept
 action/query declarations, authored definition/instance identities and bindings, each
-definition's exact-spelling SSF-owned type inventory, resolved application types,
+definition's exact-spelling SSF-owned type inventory, resolved subset binding targets,
+resolved application types,
 application declaration identities, computation signatures, source locations, and
 digests over registered design contents. It excludes executable functions,
 constructor arguments, floor resources, object identity, occurrence state, and

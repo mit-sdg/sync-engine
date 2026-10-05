@@ -1,6 +1,6 @@
 /**
  * The **`Refuse` marker** — the implementation-language spelling of a
- * concept's declared refuse branch, the way `return` spells the success
+ * concept's declared `refuses` branch, the way `return` spells a `returns`
  * branch.
  *
  * A concept implementation refuses by `throw new Refuse(message, data?)`.

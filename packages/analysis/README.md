@@ -28,7 +28,7 @@ concept-specification and application-design locations.
 Pin analysis and core to the same exact release:
 
 ```sh
-bun add --exact @mit-sdg/sync-engine@1.0.0 @mit-sdg/sync-engine-analysis@1.0.0
+bun add --exact @mit-sdg/sync-engine@1.1.0 @mit-sdg/sync-engine-analysis@1.1.0
 ```
 
 The ESM package supports Node.js `>=24 <25`. Project analysis depends on
@@ -218,8 +218,9 @@ traversal limits.
 
 ## Support and security
 
-Stable 1.x follows Semantic Versioning; only the newest stable 1.x release
-receives fixes. Keep analysis and core pinned to the same exact release and
+In stable 1.x, patch releases are backward compatible and minor releases may
+change contracts, with migration steps in the changelog; only the newest stable
+1.x release receives fixes. Keep analysis and core pinned to the same exact release and
 review the changelog before upgrading. Report vulnerabilities through the
 [private reporting process](https://github.com/mit-sdg/sync-engine/blob/main/SECURITY.md).
 

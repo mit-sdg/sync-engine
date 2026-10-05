@@ -27,7 +27,7 @@ external Person
 a set of Discussions with
   a subject Subject
 
-an Open set of Discussions
+a set of Open Discussions
 
 a seq of Responses with
   a discussion Discussion
@@ -38,33 +38,33 @@ a seq of Responses with
 ## Actions
 
 ```actions
-open (subject: Subject) : return (discussion: Discussion)
+open (subject: Subject) : returns (discussion: Discussion)
   where no open discussion has subject
   then
     add a new discussion with subject
-    add discussion to open
-    return discussion
+    add discussion to Open Discussions
+    returns discussion
   where some open discussion has subject
   then
-    refuse DISCUSSION_ALREADY_OPEN "This subject already has an open discussion."
+    refuses DISCUSSION_ALREADY_OPEN "This subject already has an open discussion."
 
-respond (discussion: Discussion, author: Person, text: String) : return (response: Response)
-  where discussion in open
+respond (discussion: Discussion, author: Person, text: String) : returns (response: Response)
+  where discussion in Open Discussions
   then
     add a new response with discussion, author, and text
-    return response
-  where discussion not in open
+    returns response
+  where discussion not in Open Discussions
   then
-    refuse DISCUSSION_NOT_OPEN "This discussion is not open."
+    refuses DISCUSSION_NOT_OPEN "This discussion is not open."
 
-close (discussion: Discussion) : return ()
-  where discussion in open
+close (discussion: Discussion) : returns ()
+  where discussion in Open Discussions
   then
-    remove discussion from open
-    return
-  where discussion not in open
+    remove discussion from Open Discussions
+    returns
+  where discussion not in Open Discussions
   then
-    refuse DISCUSSION_NOT_OPEN "This discussion is not open."
+    refuses DISCUSSION_NOT_OPEN "This discussion is not open."
 ```
 
 ## Queries

@@ -36,54 +36,54 @@ a set of Reviews with
   an optional decidedAt DateTime
   an optional reason String
 
-a Pending set of Reviews where status is PENDING with
+a set of Pending Reviews where status is PENDING with
   unique subject
 ```
 
 ## Actions
 
 ```actions
-request (subject: Subject, requester: Person, reviewer: Person, at: DateTime) : return (review: Review)
+request (subject: Subject, requester: Person, reviewer: Person, at: DateTime) : returns (review: Review)
   where requester is reviewer
   then
-    refuse SELF_REVIEW_NOT_ALLOWED "A requester cannot review the same request."
-  where a pending Review has subject
+    refuses SELF_REVIEW_NOT_ALLOWED "A requester cannot review the same request."
+  where a Pending Review has subject
   then
-    refuse REVIEW_ALREADY_PENDING "This subject already has a pending review."
+    refuses REVIEW_ALREADY_PENDING "This subject already has a pending review."
   where requester differs from reviewer and no pending Review has subject
   then
-    add a new pending Review with subject, requester, reviewer, and requestedAt at
-    return review
+    add a new Pending Review with subject, requester, reviewer, and requestedAt at
+    returns review
 
-approve (review: Review, reviewer: Person, at: DateTime) : return (review: Review)
-  where review is unknown, is not pending, or does not have reviewer
+approve (review: Review, reviewer: Person, at: DateTime) : returns (review: Review)
+  where review is not in Reviews, is not in Pending Reviews, or does not have reviewer
   then
-    refuse REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
-  where review is pending and has reviewer
+    refuses REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
+  where review is in Pending Reviews and has reviewer
   then
     mark the Review approved with decidedAt at
-    return review
+    returns review
 
-reject (review: Review, reviewer: Person, reason: String, at: DateTime) : return (review: Review)
+reject (review: Review, reviewer: Person, reason: String, at: DateTime) : returns (review: Review)
   where reason is blank or longer than 500 characters
   then
-    refuse INVALID_REJECTION_REASON "A rejection reason must not be blank and must be at most 500 characters."
-  where review is unknown, is not pending, or does not have reviewer
+    refuses INVALID_REJECTION_REASON "A rejection reason must not be blank and must be at most 500 characters."
+  where review is not in Reviews, is not in Pending Reviews, or does not have reviewer
   then
-    refuse REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
-  where review is pending and has reviewer and reason is accepted
+    refuses REVIEW_NOT_PENDING_FOR_REVIEWER "There is no such pending review for this reviewer."
+  where review is in Pending Reviews and has reviewer and reason is accepted
   then
     mark the Review rejected with reason and decidedAt at
-    return review
+    returns review
 
-withdraw (review: Review, requester: Person, at: DateTime) : return (review: Review)
-  where review is unknown, is not pending, or does not have requester
+withdraw (review: Review, requester: Person, at: DateTime) : returns (review: Review)
+  where review is not in Reviews, is not in Pending Reviews, or does not have requester
   then
-    refuse REVIEW_NOT_PENDING_FOR_REQUESTER "There is no such pending review for this requester."
-  where review is pending and has requester
+    refuses REVIEW_NOT_PENDING_FOR_REQUESTER "There is no such pending review for this requester."
+  where review is in Pending Reviews and has requester
   then
     mark the Review withdrawn with decidedAt at
-    return review
+    returns review
 ```
 
 ## Queries
@@ -93,8 +93,8 @@ _get (review: Review) : optional (subject: Subject, requester: Person, reviewer:
   answers the Review's subject, requester, reviewer, status, request and decision times, and rejection reason
   answers no row for an unknown Review
 _pendingFor (reviewer: Person) : many (review: Review, subject: Subject, requester: Person, requestedAt: DateTime)
-  answers the Reviewer's pending Reviews with their subjects, requesters, and request times
-  answers no rows when the Reviewer has no pending Reviews
+  answers the Reviewer's Pending Reviews with their subjects, requesters, and request times
+  answers no rows when the Reviewer has no Pending Reviews
   orders rows by requestedAt and then Review identity
 _history (subject: Subject) : many (review: Review, requester: Person, reviewer: Person, status: ReviewStatus, requestedAt: DateTime, decidedAt?: DateTime)
   answers the Subject's Reviews with their requesters, reviewers, statuses, and request and decision times

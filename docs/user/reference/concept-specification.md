@@ -87,27 +87,27 @@ a set of Notes with
 ## Actions
 
 ```actions
-write(author: Person, text: String) : return (note: Note)
+write(author: Person, text: String) : returns (note: Note)
   where true
   then
     add a new note with author and text
-    return note
+    returns note
 
-discard(note: Note) : return (note: Note)
-  where note exists
+discard(note: Note) : returns (note: Note)
+  where note is in Notes
   then
     remove note
-    return note
-  where note does not exist
+    returns note
+  where note is not in Notes
   then
-    refuse NOTE_NOT_FOUND "There is no such note."
+    refuses NOTE_NOT_FOUND "There is no such note."
 ```
 
 ## Queries
 
 ```queries
 _get(note: Note) : optional (author: Person, text: String)
-  Returns no row when the note does not exist.
+  Returns no row when the note is not in Notes.
 ```
 ````
 
@@ -146,7 +146,7 @@ new name for it, and state narrowing constraints where they are enforced.
 
 Every State field and every named type in an action or query signature resolves to a
 concept-owned identity, an external parameter, a concept-local enumeration or opaque
-type, or an SSF primitive. An unresolved name fails with `SSF_UNDECLARED_TYPE`,
+type, or an SSF primitive; a State field may also name a declared subset. An unresolved name fails with `SSF_UNDECLARED_TYPE`,
 whether it appears in a State field or a signature, and the check descends into nested
 type arguments and unions. Owned, external, concept-local, and primitive names share one
 namespace, so a Types declaration may not shadow a primitive or a State declaration. Version 1 parses type-expression shape without
@@ -162,49 +162,70 @@ concept-specification IR.
 
 Authors must use Simple State Form (SSF), defined by the canonical
 [SSF language reference](https://github.com/mit-sdg/sync-engine/blob/main/packages/ssf/README.md).
-The parser recognizes set, sequence, element, subset, alias, and field declarations
+The parser recognizes set, sequence, singleton, subset, alias, and field declarations
 together with their multiplicities, identifiers, articles, uniqueness constraints, and
-subset graph. Declared names are taken as written.
+subset graph. Declared names are taken as written, and a field written without a name,
+such as `an Author` or `a Verified User`, is named for its type: `author`, `verifiedUser`.
+
+A plain top-level set, such as `a set of Users with a reputation Number`, contains every
+individual of its type in the concept's state, and each of them has its fields. When its
+type is the plural of an external type, as beside `external User`, the set holds
+individuals of that external type instead of introducing identities, and means the same
+thing. A subset qualifies its parent set: `a set of Verified Users`, `a set of Trusted
+Verified Users`, or `a Root Folder`. A singleton uses just `a Type` or `an Type`, with
+exactly one member; both articles are accepted. The old `element` keyword is rejected
+with a repair that removes it. A top-level line declares the singleton; an indented
+line with the same spelling declares a field. A subset is a type in State, so `a sponsor
+Verified User` holds only Verified Users; action and query signatures take the parent
+type and state membership in a condition, such as `where sponsor is in Verified Users`.
 
 Two spellings of one owned type, such as `Note` in an operation signature and `Notes` in
-the declaration, are joined when they form a singular and plural pair. Irregular pairs
-such as `Mouse`/`Mice` and `Person`/`People` join the same way. Both spellings have to be
-authored, and the pair has to be unambiguous on both sides; where it is not, the two
-names stay separate and the check reports advice. `alias Alias for Target` states a
-synonym directly. An alias takes precedence over a joined pair, targets a declaration or
-subset rather than another alias, and may appear before or after its target. Subset
-parents are likewise order-independent and may name a declaration, subset, or alias.
-Parents that name an external parameter or primitive, unresolved or duplicate names,
-self-parenting, and cycles fail with source-located diagnostics.
+the declaration, are joined when they form a singular and plural pair; an authored plural
+of an external type joins that type the same way. Irregular pairs such as `Mouse`/`Mice`
+and `Person`/`People` join too. Both spellings have to be authored, and the pair has to
+be unambiguous on both sides; where it is not, the two names stay separate and the check
+reports advice. `alias Alias for Target` states a synonym directly. An alias takes
+precedence over a joined pair, targets a top-level declaration the concept owns rather
+than another alias, a subset, or a set of an external type, and may appear before or
+after its target. Subset parents are likewise order-independent. An undeclared parent, a
+subset declared twice, a qualifier repeated among the subsets of one set, and an
+identifier another type already has fail with source-located diagnostics.
 
 Declaration and alias names are unique across the fence and share that namespace with
-external parameters, concept-local types, and SSF primitives. Field names are unique within their declaration,
-and enumeration values within their enumeration. Prefix a field with `unique` to require
+external parameters, concept-local types, and SSF primitives, and a subset's identifier
+(its words joined, as `VerifiedUsers`) may not collide with them. Field names are unique
+within their declaration, and enumeration values within their enumeration. Prefix a field with `unique` to require
 distinct values among members of that declaration; a unique collection field compares the
 whole collection. Require a _combination_ to be distinct with a `unique` line joining
 field names with `and`, such as `unique item and voter`. The modifier is shorthand for a
 line naming one field, so the line form is what a subset uses to constrain a field it
-inherits rather than declares; a subset's constraints bind only its own members. Every field writes a lowercase name before
-its value, and `optional` and `unique` sit between any article and that name in either
-order.
+inherits rather than declares; a subset's constraints bind only its own members. A
+field's lowercase name comes before its value unless the type names it, and `optional`
+and `unique` sit between any article and that name in either order.
 
 Invariant prose that SSF cannot express goes on a `Rule:` line, at the top level or
 indented under a declaration. The parser retains the line and makes no claim about it,
 while every other nonblank line must parse as a declaration, alias, or field. An
 unrecognized field value is retained as unresolved in the IR and fails the check.
 Operation signature types need not appear in State, but each must resolve against the
-same declared, owned, local, or primitive universe. Signature names first supply plural-join evidence; tooling
+same declared, owned, local, or primitive universe; a subset identifier in a signature
+fails with `SSF_SUBSET_SIGNATURE_TYPE`. Signature names first supply plural-join evidence; tooling
 then validates them against the resolved inventory, so a singular spelling established
 only by that join is accepted. The parser does not prove rules, type meaning, action
 conditions or effects, query meaning, storage layout, State/storage agreement, or
 implementation behavior.
 
-Config-based checking uses the owned-name inventory for one proof: a
-qualified external-binding target must name a declaration or alias owned by the selected
-target instance's definition. Checked manifests persist that inventory, and validation
-rederives it independently from State and operation signatures. External, primitive, and
-unresolved names cannot be binding targets. State changes continue to affect canonical
-design digests.
+Config-based checking accepts a qualified external-binding target that names an owned
+declaration, an owned alias, or a joined subset identifier of the selected target instance's
+definition. For example, a declared `Selected Humans` subset can be targeted as
+`Directory.SelectedHumans`, or `Directory.SelectedHuman` when that singular spelling
+resolves in SSF. Subsets of external types are also valid targets. A subset binding
+records an authored membership requirement; it does not enforce implementation behavior
+or membership at runtime. Action/query signature types still cannot name subsets.
+Checked manifests persist the owned-name inventory in `ownedTypes`; validation rederives
+that inventory and subset identifiers independently from State and operation signatures.
+External parameters, primitives, unresolved names, and top-level sets of external types
+cannot be binding targets. State changes continue to affect canonical design digests.
 
 ## `Actions`
 
@@ -212,25 +233,25 @@ design digests.
 Each action has this shape:
 
 ```text
-actionName(input: Type, optional?: Type) : return (result: Type)
+actionName(input: Type, optional?: Type) : returns (result: Type)
   where condition prose
   then
     effect prose
-    return result
+    returns result
 ```
 
 The exact requirements are:
 
 - the signature has parenthesized named input fields;
-- `: return` is followed by parenthesized named result fields;
+- `: returns` is followed by parenthesized named result fields;
 - one or more explicit `where`/`then` branches follow the signature;
 - an unconditional branch uses `where true`;
-- each `then` block ends with exactly one `return ...` or
-  `refuse CODE "Normative sentence."` line; and
+- each `then` block ends with exactly one `returns ...` or
+  `refuses CODE "Normative sentence."` line; and
 - bare result types are rejected.
 
 An empty successful result is written as `()` and terminates with plain
-`return`. For a nonempty result, every successful branch returns exactly the
+`returns`. For a nonempty result, every successful branch returns exactly the
 signature's result names, irrespective of order.
 
 A refusal code may occur only in the action that declares it. The sentence is
@@ -300,7 +321,7 @@ checking fails closed when it cannot resolve an input, action-result, or query-r
 shape. It does not claim semantic type-name equivalence or State/storage
 agreement.
 
-Each successful action branch's terminal return names are checked against the
+Each successful action branch's terminal `returns` names are checked against the
 declared result fields. Conditions, effects, query-body meaning, persistence,
 transactions, and durability remain implementation and test responsibilities.
 

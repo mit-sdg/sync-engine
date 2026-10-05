@@ -27,17 +27,17 @@ a set of Entries with
 ## Actions
 
 ```actions
-create(operationId: Operation, name: String) : return (entryId: String, name: String)
+create(operationId: Operation, name: String) : returns (entryId: String, name: String)
   where operationId identifies an entry with name
   then
-    return entryId, name
+    returns entryId, name
   where operationId or name belongs to a different entry
   then
-    refuse CONFLICT "The operation or name is already committed differently."
+    refuses CONFLICT "The operation or name is already committed differently."
   where operationId and name are new
   then
     add an entry for operationId and name
-    return entryId, name
+    returns entryId, name
 ```
 
 ## Queries

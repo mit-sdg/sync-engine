@@ -36,11 +36,11 @@ ${state}
 ## Actions
 
 \`\`\`actions
-add(target: Target) : return ()
+add(target: Target) : returns ()
   where true
   then
     add a comment
-    return
+    returns
 \`\`\`
 
 ## Queries
