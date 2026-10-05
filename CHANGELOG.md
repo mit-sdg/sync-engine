@@ -6,7 +6,7 @@ incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## [1.1.0] - 2026-09-29
+## [1.1.0] - 2026-10-05
 
 This release revises concept specification syntax: SSF fields may take their
 type's name, a plain set means the same thing for owned and external types,
@@ -44,9 +44,8 @@ subsets are named by qualifying their parent set, and action branches end in
   identifiers, such as `Directory.SelectedHuman`; membership remains an authored
   requirement without runtime enforcement. Top-level sets of external types cannot
   be binding targets.
-- A field named like a qualifier, such as `a verified User` beside `Verified
-Users`, draws advice.
-
+- A field named like a qualifier, such as `a verified User` beside
+  `Verified Users`, draws advice.
 - Bun support expands to `>=1.3.4 <2`, including Bun 1.4 and later 1.x versions.
   Setup defaults to `bun@1.3.4`; skill bootstrap accepts and preserves supported
   exact Bun pins. CI continues to validate on Bun 1.4.
@@ -56,9 +55,9 @@ Users`, draws advice.
 - Pin core, HTTP, analysis, catalog, and skill to `1.1.0` when used together.
 - In every `actions` fence, replace `: return (` with `: returns (`, terminal
   `return` with `returns`, and `refuse` with `refuses`.
-- Rewrite each subset as a qualified set, `a Pending set of Invitations` as `a
-set of Pending Invitations`, and name it by its phrase in prose, as in `where
-invitation is in Pending Invitations`. Replace a subset used in a signature
+- Rewrite each subset as a qualified set, `a Pending set of Invitations` as
+  `a set of Pending Invitations`, and name it by its phrase in prose, as in
+  `where invitation is in Pending Invitations`. Replace a subset used in a signature
   with its parent type and a membership condition.
 - Rename an owned set whose name is the plural of an external type; it now
   holds that external type's individuals. Where only some individuals of a type
