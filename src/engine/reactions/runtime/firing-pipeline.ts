@@ -92,7 +92,7 @@ export class FiringPipeline {
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
     private readonly assertRows: (flow: string, count: number) => void,
     private readonly consumeAction: (flow: string) => boolean,
-    private readonly rowsExceed: (count: number) => boolean = () => false,
+    private readonly rowsExceed: (count: number) => boolean,
   ) {}
 
   async fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void> {

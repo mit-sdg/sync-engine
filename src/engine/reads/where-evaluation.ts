@@ -17,12 +17,13 @@ import type { Condition, CustomOp, WhereOp } from "./where-ops.ts";
 import { setOwn } from "@engine/utils/own-property";
 
 /*
- * Reads run ahead of the evaluation that consumes them. The rows of one line,
- * and the rows of one selection, do not depend on each other, so their reads
- * may overlap. Answers are still consumed in row order, so results, their
- * order, and the reported fault are those of evaluating the rows one after
- * another. Two bounds keep this cheap: a window of rows read ahead of the one
- * being consumed, and a cap on reads in flight per engine.
+ * Rows read together. The rows of one line, and the rows of one selection, do
+ * not depend on each other, so an engine assembled with `concurrentReads` may
+ * evaluate several at once. Answers are still consumed in row order, so the
+ * results, their order, and the reported fault are those of reading the rows
+ * one after another, provided queries and computations are free of side
+ * effects and no action changes the state being read meanwhile. Without
+ * `concurrentReads`, every line reads its rows one after another.
  */
 
 /** Check a running row count; an engine-owned check can also be asked without recording. */
@@ -31,48 +32,55 @@ export type AssertRows = ((count: number) => void) & {
   readonly exceeds?: (count: number) => boolean;
 };
 
-export const DEFAULT_READ_AHEAD = 16;
-export const DEFAULT_CONCURRENT_READS = 64;
-
-/** Bounds on overlapping reads, shared by every evaluation one engine runs. */
+/** How one engine reads rows together; set by the `concurrentReads` assembly option. */
 export interface ReadConcurrency {
-  /** Rows read ahead of the row being consumed, per line or selection. 1 reads in sequence. */
-  readonly readAhead: number;
-  /** Query calls in flight at once. */
-  readonly slots: ReadSlots;
+  /** Rows of one line or selection evaluated at once, the row being consumed included. */
+  readonly window: number;
+  /** Rows started ahead of the row being consumed, counted across the whole engine. */
+  readonly ahead: RowsAhead;
 }
 
-/** A counting semaphore held only around leaf query calls, so nested evaluation cannot deadlock. */
-export class ReadSlots {
-  private active = 0;
-  private readonly waiting: (() => void)[] = [];
+/**
+ * A count of rows started ahead, shared by every evaluation one engine runs.
+ * An evaluation that finds it spent does not wait: it reads its next row when
+ * it reaches it, as it would without read-ahead, so nesting cannot deadlock.
+ */
+export class RowsAhead {
+  private started = 0;
 
   constructor(readonly capacity: number) {}
 
-  async run<T>(read: () => Promise<T> | T): Promise<T> {
-    if (this.active >= this.capacity) {
-      await new Promise<void>((resolve) => this.waiting.push(resolve));
-    } else {
-      this.active += 1;
-    }
-    try {
-      return await read();
-    } finally {
-      const next = this.waiting.shift();
-      if (next === undefined) this.active -= 1;
-      else next();
-    }
+  take(): boolean {
+    if (this.started >= this.capacity) return false;
+    this.started += 1;
+    return true;
+  }
+
+  give(): void {
+    this.started -= 1;
   }
 }
 
-export function readConcurrency(
-  readAhead = DEFAULT_READ_AHEAD,
-  concurrentReads = DEFAULT_CONCURRENT_READS,
-): ReadConcurrency {
-  return { readAhead, slots: new ReadSlots(concurrentReads) };
+/** The `concurrentReads` assembly option. */
+export interface ConcurrentReads {
+  /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+  readonly window: number;
+  /** Rows started ahead at once across the whole engine. Default 64. */
+  readonly maxRowsAhead?: number;
 }
 
-/** A row limit reached by a row read ahead, recorded only if evaluation reaches that row. */
+export const DEFAULT_MAX_ROWS_AHEAD = 64;
+
+/** The engine's read concurrency for an assembly option; undefined reads rows one after another. */
+export function readConcurrency(options: ConcurrentReads | undefined): ReadConcurrency | undefined {
+  if (options === undefined) return undefined;
+  return {
+    window: options.window,
+    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD),
+  };
+}
+
+/** A row limit reached by a row started ahead, recorded only if evaluation reaches that row. */
 class DeferredRowLimit extends Error {
   constructor(readonly count: number) {
     super(`row limit reached at ${count} rows`);
@@ -92,51 +100,49 @@ function deferredGuard(assertRows: AssertRows | undefined): AssertRows | undefin
 
 /**
  * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
- * `consume` takes its answer in row order, returning `false` to stop. Rows
- * launched ahead check limits without recording; a limit one of them reached
- * is recorded through the caller's guard when its row is consumed. Before
- * returning or rethrowing, the rows already launched settle, so an evaluation
+ * `consume` takes its answer in row order. The row being consumed is checked
+ * against limits as usual; rows started ahead check without recording, and a
+ * limit one of them reached is recorded when its row is consumed. Before
+ * returning or rethrowing, the rows already started settle, so an evaluation
  * never finishes with its reads still running.
  */
 export async function inRowOrder<T>(
   count: number,
-  reads: ReadConcurrency | undefined,
+  reads: ReadConcurrency,
   assertRows: AssertRows | undefined,
   launch: (index: number, assertRows: AssertRows | undefined) => Promise<T>,
-  consume: (index: number, value: T) => boolean | void,
+  consume: (index: number, value: T) => void,
 ): Promise<void> {
   const canDefer = assertRows === undefined || assertRows.exceeds !== undefined;
-  const window = canDefer ? Math.max(1, reads?.readAhead ?? 1) : 1;
-  if (window === 1 || count <= 1) {
-    for (let index = 0; index < count; index += 1) {
-      if (consume(index, await launch(index, assertRows)) === false) return;
-    }
+  if (!canDefer || reads.window <= 1 || count <= 1) {
+    for (let index = 0; index < count; index += 1) consume(index, await launch(index, assertRows));
     return;
   }
   const guard = deferredGuard(assertRows);
-  const launched: (Promise<T> | undefined)[] = [];
+  const startedAhead: (Promise<T> | undefined)[] = [];
   let next = 0;
-  let index = 0;
   try {
-    for (; index < count; index += 1) {
-      while (next < count && next < index + window) {
-        const pending = launch(next, guard);
+    for (let index = 0; index < count; index += 1) {
+      const current = startedAhead[index] ?? launch(index, assertRows);
+      startedAhead[index] = undefined;
+      next = Math.max(next, index + 1);
+      while (next < count && next < index + reads.window && reads.ahead.take()) {
+        const pending = launch(next, guard).finally(() => reads.ahead.give());
         pending.catch(() => {});
-        launched[next] = pending;
+        startedAhead[next] = pending;
         next += 1;
       }
       let value: T;
       try {
-        value = await (launched[index] as Promise<T>);
+        value = await current;
       } catch (error) {
         if (error instanceof DeferredRowLimit) assertRows?.(error.count);
         throw error;
       }
-      launched[index] = undefined;
-      if (consume(index, value) === false) return;
+      consume(index, value);
     }
   } finally {
-    const unsettled = launched.filter((pending) => pending !== undefined);
+    const unsettled = startedAhead.filter((pending) => pending !== undefined);
     if (unsettled.length > 0) await Promise.allSettled(unsettled);
   }
 }
@@ -277,24 +283,11 @@ async function lineRows(
   assertRows?: AssertRows,
 ): Promise<unknown[]> {
   if (op.query !== undefined) {
-    const rows = await leafRows(queryOf(op.query, env, site), op.in, frame, env);
+    const rows = await queryRows(queryOf(op.query, env, site), op.in, frame);
     assertRows?.(rows.length);
     return rows;
   }
   return viewRows(viewOf(op, env), op.in, frame, env, assertRows);
-}
-
-/** One query call, holding one of the engine's read slots while it runs. */
-function leafRows(
-  query: InstrumentedQuery,
-  input: Mapping,
-  frame: Frame,
-  env: ReadEnv | undefined,
-): Promise<unknown[]> {
-  const slots = env?.reads?.slots;
-  return slots === undefined
-    ? queryRows(query, input, frame)
-    : slots.run(() => queryRows(query, input, frame));
 }
 
 function passesNot(not: Mapping | undefined, frame: Frame, row: unknown): boolean {
@@ -321,25 +314,31 @@ function hasUnboundInput(frame: Frame, input: Mapping): boolean {
 type ReadOp = Extract<EvaluableOp, { op: "find" | "whether" | "no" | "count" }>;
 const UNBOUND = Symbol("unbound input");
 
+function isReadOp(op: EvaluableOp): op is ReadOp {
+  return op.op === "find" || op.op === "whether" || op.op === "no" || op.op === "count";
+}
+
 /**
- * Apply a reading line to every frame. The frames' reads are independent, so
- * they may run ahead of the frame being consumed; frames are consumed in order.
+ * Apply a reading line to every frame with rows read together. Each frame's
+ * read depends only on that frame; frames are consumed, and their results
+ * appended, in order.
  */
 async function applyReadOp(
   frames: Frames,
   op: ReadOp,
   env: ReadEnv | undefined,
+  reads: ReadConcurrency,
   assertRows?: AssertRows,
 ): Promise<Frames> {
   const result = new Frames();
   await inRowOrder(
     frames.length,
-    env?.reads,
+    reads,
     assertRows,
     async (index, guard): Promise<unknown[] | typeof UNBOUND> => {
       const frame = frames[index];
       if (op.op === "count") {
-        const rows = await leafRows(queryOf(op.query, env, "count"), op.in, frame, env);
+        const rows = await queryRows(queryOf(op.query, env, "count"), op.in, frame);
         guard?.(rows.length);
         return rows;
       }
@@ -350,40 +349,40 @@ async function applyReadOp(
       const frame = frames[index];
       switch (op.op) {
         case "find": {
-          if (rows === UNBOUND) break;
+          if (rows === UNBOUND) return;
           if (Object.keys(op.out).length === 0) {
             if (rows.some((row) => passesNot("not" in op ? op.not : undefined, frame, row))) {
               pushFrame(result, frame, assertRows);
             }
-            break;
+            return;
           }
           const passing = rows.filter((row) =>
             passesNot("not" in op ? op.not : undefined, frame, row),
           );
           appendFrames(result, expandDistinctRows(frame, passing, op.out, assertRows), assertRows);
-          break;
+          return;
         }
         case "whether": {
           if (rows === UNBOUND) {
             pushFrame(result, { ...frame }, assertRows);
-            break;
+            return;
           }
           const matches = expandDistinctRows(frame, rows, op.out, assertRows);
           if (matches.length === 0) pushFrame(result, { ...frame }, assertRows);
           else appendFrames(result, matches, assertRows);
-          break;
+          return;
         }
         case "no": {
-          if (rows === UNBOUND) break;
+          if (rows === UNBOUND) return;
           const matches = expandDistinctRows(frame, rows, op.out, assertRows);
           if (matches.length === 0) pushFrame(result, frame, assertRows);
-          break;
+          return;
         }
         case "count": {
-          if (rows === UNBOUND) break;
-          if (op.out in frame && frame[op.out] !== rows.length) break;
+          if (rows === UNBOUND) return;
+          if (op.out in frame && frame[op.out] !== rows.length) return;
           pushFrame(result, { ...frame, [op.out]: rows.length }, assertRows);
-          break;
+          return;
         }
       }
     },
@@ -398,12 +397,52 @@ async function applyOp(
   assertRows?: AssertRows,
 ): Promise<Frames> {
   assertRows?.(frames.length);
-  if (op.op === "find" || op.op === "whether" || op.op === "no" || op.op === "count") {
-    return applyReadOp(frames, op, env, assertRows);
-  }
+  const reads = env?.reads;
+  if (reads !== undefined && isReadOp(op)) return applyReadOp(frames, op, env, reads, assertRows);
   const result = new Frames();
   for (const frame of frames) {
     switch (op.op) {
+      case "find": {
+        if (hasUnboundInput(frame, op.in)) break;
+        const rows = await lineRows(op, frame, env, "find", assertRows);
+        if (Object.keys(op.out).length === 0) {
+          if (rows.some((row) => passesNot("not" in op ? op.not : undefined, frame, row))) {
+            pushFrame(result, frame, assertRows);
+          }
+          break;
+        }
+        const passing = rows.filter((row) =>
+          passesNot("not" in op ? op.not : undefined, frame, row),
+        );
+        appendFrames(result, expandDistinctRows(frame, passing, op.out, assertRows), assertRows);
+        break;
+      }
+      case "whether": {
+        if (hasUnboundInput(frame, op.in)) {
+          pushFrame(result, { ...frame }, assertRows);
+          break;
+        }
+        const rows = await lineRows(op, frame, env, "whether", assertRows);
+        const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+        if (matches.length === 0) pushFrame(result, { ...frame }, assertRows);
+        else appendFrames(result, matches, assertRows);
+        break;
+      }
+      case "no": {
+        if (hasUnboundInput(frame, op.in)) break;
+        const rows = await lineRows(op, frame, env, "no", assertRows);
+        const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+        if (matches.length === 0) pushFrame(result, frame, assertRows);
+        break;
+      }
+      case "count": {
+        const query = queryOf(op.query, env, "count");
+        const rows = await queryRows(query, op.in, frame);
+        assertRows?.(rows.length);
+        if (op.out in frame && frame[op.out] !== rows.length) break;
+        pushFrame(result, { ...frame, [op.out]: rows.length }, assertRows);
+        break;
+      }
       case "holds": {
         if ("fused" in op) {
           if ((await op.fused.computation.fn(bindInputMapping(frame, op.fused.in))) === true) {
@@ -454,8 +493,8 @@ async function applyOp(
         break;
       }
       default: {
-        const _exhausted: never = op.op;
-        throw new Error(`Unknown where op kind: ${String(_exhausted)}`);
+        const _exhausted: never = op;
+        throw new Error(`Unknown where op kind: ${(_exhausted as { op?: unknown }).op}`);
       }
     }
   }

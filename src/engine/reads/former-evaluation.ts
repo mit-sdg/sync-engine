@@ -208,6 +208,15 @@ async function evalNode(
     case "each": {
       const selected = arrange(await selectFrames(node, frame, env, assertRows), node.arranged);
       const items: unknown[] = [];
+      if (env.reads === undefined) {
+        for (const rowFrame of selected) {
+          const item = await evalNode(formerName, node.as, rowFrame, env, assertRows);
+          if (item === DROP_ROW) continue;
+          assertRows?.(items.length + 1);
+          items.push(item);
+        }
+        return items;
+      }
       await inRowOrder(
         selected.length,
         env.reads,

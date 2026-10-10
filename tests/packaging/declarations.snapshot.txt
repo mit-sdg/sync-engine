@@ -23,6 +23,7 @@ export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts
 export type { OperationalEvent, OperationalObserver, OperationalResultClass, RawFaultReport, RawFaultReporter, } from "../engine/reactions/runtime/operational.ts";
 export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
 export type { QueryCacheMode } from "../engine/reactions/runtime/instrumenting.ts";
+export type { ConcurrentReads } from "../engine/reads/where-evaluation.ts";
 export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogSink, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
 === dist/boundary/index.d.ts ===
@@ -216,6 +217,7 @@ export declare function verifyCommand(args: readonly string[]): Promise<Verifica
  * refuses the second with `NOT_PENDING`, and logs both reaction names.
  */
 import type { ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
+import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
 import type { InstrumentedConcept, QueryCacheMode } from "../../reactions/runtime/instrumenting.ts";
 import { type LogSink, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
@@ -296,6 +298,13 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     logSink?: LogSink;
     /** Opt-in production execution limits. */
     executionLimits?: ExecutionLimits;
+    /**
+     * Read the rows of a line or selection together, consumed in row order, so
+     * independent reads overlap. Results, their order, and the reported fault are
+     * those of reading one after another, provided queries and computations are
+     * free of side effects. Unset, every line reads its rows one after another.
+     */
+    concurrentReads?: ConcurrentReads;
     /** Bounded synchronous handoff for stable operational events. */
     observers?: readonly OperationalObserver[];
     /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -774,10 +783,6 @@ export interface ExecutionLimits {
     maxFiringsPerFlow: number;
     maxRowsPerEvaluation: number;
     maxRequestDurationMs: number;
-    /** Rows read ahead of the row being consumed, per line or selection; 1 reads in sequence. Default 16. */
-    maxReadAhead?: number;
-    /** Query calls one engine keeps in flight at once. Default 64. */
-    maxConcurrentReads?: number;
 }
 type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
 /** Resolve one caller timeout against optional host execution limits. */
@@ -807,10 +812,6 @@ export declare class RuntimeLifecycle {
     action(flow: string): boolean;
     firing(flow: string): boolean;
     rows(count: number): boolean;
-    readConcurrency(): {
-        readAhead?: number;
-        concurrentReads?: number;
-    };
     private resolveIdle;
     private clearFlowCounts;
     private clearSettledContext;
@@ -1966,7 +1967,7 @@ export declare class FiringPipeline {
     constructor(matcher: TriggerMatcher, actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
         readEnv(): ReadEnv;
-    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean, rowsExceed?: (count: number) => boolean);
+    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean, rowsExceed: (count: number) => boolean);
     fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
     /**
      * Open settlement frontiers for one flow until none qualifies a trigger.
@@ -2413,10 +2414,6 @@ export interface ExecutionControl {
     action(flow: string): boolean;
     firing(flow: string): boolean;
     rows(count: number): boolean;
-    readConcurrency?(): {
-        readAhead?: number;
-        concurrentReads?: number;
-    };
     admitFlow?(flow: string, route: string, correlationId: string): unknown;
     abandon?(flow: string): void;
     flowSettled?(flow: string): void;
@@ -2538,6 +2535,7 @@ import type { AuthoredDeclarationIdentity } from "../../reads/declaration-identi
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
+import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
 import type { RelationView } from "../../reads/lines.ts";
 import type { ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
@@ -2556,7 +2554,7 @@ export declare class Reacting {
     private readonly triggerMatcher;
     private readonly firingPipeline;
     private readonly execution?;
-    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode);
+    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
@@ -3107,7 +3105,7 @@ export interface ReadEnv {
     viewByName(name: string, site: string): RelationView;
     /** A registered former, by sentence. */
     formerByName(name: string, site: string): FormerRef;
-    /** Bounds on overlapping reads; absent, rows are read one after another. */
+    /** How rows are read together; absent, every line reads its rows one after another. */
     readonly reads?: ReadConcurrency;
 }
 export declare class Registry {
@@ -3142,7 +3140,7 @@ export declare class Registry {
     authoredIdentityOf(ref: object): AuthoredDeclarationIdentity | undefined;
     private viewNamed;
     readBackEnv(): ReadBackEnv;
-    /** Set the bounds on overlapping reads for every later evaluation. */
+    /** Set how every later evaluation reads rows together; undefined reads them one after another. */
     configureReads(reads: ReadConcurrency | undefined): void;
     readEnv(): ReadEnv;
     private conceptNamed;
@@ -4604,33 +4602,44 @@ export type AssertRows = ((count: number) => void) & {
     /** Whether `count` rows would breach the limit, without recording a breach. */
     readonly exceeds?: (count: number) => boolean;
 };
-export declare const DEFAULT_READ_AHEAD = 16;
-export declare const DEFAULT_CONCURRENT_READS = 64;
-/** Bounds on overlapping reads, shared by every evaluation one engine runs. */
+/** How one engine reads rows together; set by the `concurrentReads` assembly option. */
 export interface ReadConcurrency {
-    /** Rows read ahead of the row being consumed, per line or selection. 1 reads in sequence. */
-    readonly readAhead: number;
-    /** Query calls in flight at once. */
-    readonly slots: ReadSlots;
+    /** Rows of one line or selection evaluated at once, the row being consumed included. */
+    readonly window: number;
+    /** Rows started ahead of the row being consumed, counted across the whole engine. */
+    readonly ahead: RowsAhead;
 }
-/** A counting semaphore held only around leaf query calls, so nested evaluation cannot deadlock. */
-export declare class ReadSlots {
+/**
+ * A count of rows started ahead, shared by every evaluation one engine runs.
+ * An evaluation that finds it spent does not wait: it reads its next row when
+ * it reaches it, as it would without read-ahead, so nesting cannot deadlock.
+ */
+export declare class RowsAhead {
     readonly capacity: number;
-    private active;
-    private readonly waiting;
+    private started;
     constructor(capacity: number);
-    run<T>(read: () => Promise<T> | T): Promise<T>;
+    take(): boolean;
+    give(): void;
 }
-export declare function readConcurrency(readAhead?: number, concurrentReads?: number): ReadConcurrency;
+/** The `concurrentReads` assembly option. */
+export interface ConcurrentReads {
+    /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+    readonly window: number;
+    /** Rows started ahead at once across the whole engine. Default 64. */
+    readonly maxRowsAhead?: number;
+}
+export declare const DEFAULT_MAX_ROWS_AHEAD = 64;
+/** The engine's read concurrency for an assembly option; undefined reads rows one after another. */
+export declare function readConcurrency(options: ConcurrentReads | undefined): ReadConcurrency | undefined;
 /**
  * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
- * `consume` takes its answer in row order, returning `false` to stop. Rows
- * launched ahead check limits without recording; a limit one of them reached
- * is recorded through the caller's guard when its row is consumed. Before
- * returning or rethrowing, the rows already launched settle, so an evaluation
+ * `consume` takes its answer in row order. The row being consumed is checked
+ * against limits as usual; rows started ahead check without recording, and a
+ * limit one of them reached is recorded when its row is consumed. Before
+ * returning or rethrowing, the rows already started settle, so an evaluation
  * never finishes with its reads still running.
  */
-export declare function inRowOrder<T>(count: number, reads: ReadConcurrency | undefined, assertRows: AssertRows | undefined, launch: (index: number, assertRows: AssertRows | undefined) => Promise<T>, consume: (index: number, value: T) => boolean | void): Promise<void>;
+export declare function inRowOrder<T>(count: number, reads: ReadConcurrency, assertRows: AssertRows | undefined, launch: (index: number, assertRows: AssertRows | undefined) => Promise<T>, consume: (index: number, value: T) => void): Promise<void>;
 /** Evaluate a where-op list over the working set, one op at a time. */
 export declare function applyWhereOps(frames: Frames, ops: readonly (WhereOp | ViewOpIR | Condition)[], env?: ReadEnv, assertRows?: AssertRows): Promise<Frames>;
 

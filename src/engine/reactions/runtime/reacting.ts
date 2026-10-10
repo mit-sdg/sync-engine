@@ -20,7 +20,7 @@ import { assertThenInputsAreData, lintReactionOpens } from "@engine/reads/reacti
 import { Registry } from "@engine/reads/definition-registry";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
 import { applyWhereOps, readConcurrency } from "@engine/reads/where-evaluation";
-import type { AssertRows } from "@engine/reads/where-evaluation";
+import type { AssertRows, ConcurrentReads } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalJson } from "@engine/utils/canonical-json";
@@ -69,6 +69,7 @@ export class Reacting {
     execution?: ExecutionControl,
     requireDeclaredRefusals = false,
     queryCache: QueryCacheMode = "memoize",
+    concurrentReads?: ConcurrentReads,
   ) {
     this.Action = actionConcept;
     this.execution = execution;
@@ -110,8 +111,7 @@ export class Reacting {
       (flowToken) => this.consumeAction(flowToken),
       (count) => this.rowsExceed(count),
     );
-    const reads = execution?.readConcurrency?.();
-    this.registry.configureReads(readConcurrency(reads?.readAhead, reads?.concurrentReads));
+    this.registry.configureReads(readConcurrency(concurrentReads));
   }
 
   addObserver(observer: EngineObserver): () => void {

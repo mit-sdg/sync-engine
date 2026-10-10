@@ -29,6 +29,7 @@ import { when } from "@engine/reactions/authoring/words";
 import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
 import { rolesOf } from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
+import type { ConcurrentReads } from "@engine/reads/where-evaluation";
 import type { InstrumentedConcept, QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 import {
   MemoryStore,
@@ -234,6 +235,13 @@ export interface AssembleBaseOptions<
   logSink?: LogSink;
   /** Opt-in production execution limits. */
   executionLimits?: ExecutionLimits;
+  /**
+   * Read the rows of a line or selection together, consumed in row order, so
+   * independent reads overlap. Results, their order, and the reported fault are
+   * those of reading one after another, provided queries and computations are
+   * free of side effects. Unset, every line reads its rows one after another.
+   */
+  concurrentReads?: ConcurrentReads;
   /** Bounded synchronous handoff for stable operational events. */
   observers?: readonly OperationalObserver[];
   /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -385,6 +393,17 @@ const respondRaceObserver: EngineObserver = {
   },
 };
 
+function assertConcurrentReads(reads: ConcurrentReads | undefined): void {
+  if (reads === undefined) return;
+  for (const name of ["window", "maxRowsAhead"] as const) {
+    const value = reads[name];
+    if (value === undefined && name === "maxRowsAhead") continue;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+      throw new Error(`assemble: concurrentReads.${name} must be a positive integer.`);
+    }
+  }
+}
+
 /**
  * Assemble the application: construct and instrument the vocabulary's
  * concepts, walk the composition registering every tagged export under its
@@ -421,6 +440,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
   if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
     throw new Error('assemble: queryCache must be "memoize" or "none".');
   }
+  assertConcurrentReads(options.concurrentReads);
 
   // Resolve every selected raw object before attaching metadata or instrumenting any of them.
   // The identity check is deliberately local to this assembly construction.
@@ -470,6 +490,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     lifecycle,
     true,
     options.queryCache,
+    options.concurrentReads,
   );
   engine.logging = options.logging ?? Logging.OFF;
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);

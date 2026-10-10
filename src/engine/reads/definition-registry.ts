@@ -5,7 +5,6 @@ import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
 import type { InstrumentedQuery, ReactionDeclaration } from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
-import { readConcurrency } from "./where-evaluation.ts";
 import type { ReadConcurrency } from "./where-evaluation.ts";
 import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
@@ -37,7 +36,7 @@ export interface ReadEnv {
   viewByName(name: string, site: string): RelationView;
   /** A registered former, by sentence. */
   formerByName(name: string, site: string): FormerRef;
-  /** Bounds on overlapping reads; absent, rows are read one after another. */
+  /** How rows are read together; absent, every line reads its rows one after another. */
   readonly reads?: ReadConcurrency;
 }
 
@@ -52,7 +51,7 @@ export class Registry {
   private readonly validator: ViewFormerValidator;
   private readonly binder: ImportedIrBinder;
   private env: ReadEnv | undefined;
-  private reads: ReadConcurrency | undefined = readConcurrency();
+  private reads: ReadConcurrency | undefined;
 
   constructor() {
     for (const ref of standardComputations) {
@@ -220,7 +219,7 @@ export class Registry {
     };
   }
 
-  /** Set the bounds on overlapping reads for every later evaluation. */
+  /** Set how every later evaluation reads rows together; undefined reads them one after another. */
   configureReads(reads: ReadConcurrency | undefined): void {
     this.reads = reads;
     this.env = undefined;
