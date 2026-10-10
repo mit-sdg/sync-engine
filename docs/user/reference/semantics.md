@@ -739,7 +739,10 @@ Automatic occurrence retention bounds settled-flow inspection, and
 `ExecutionLimits` provides the engine-owned production budget. Row limits stop
 engine-owned expansion during reaction matching, where evaluation, direct reads, and former
 evaluation. A query implementation still owns the memory needed to construct its
-answer.
+answer. With `concurrentReads` (below), rows started ahead check the row limit
+without recording a breach; a breach is recorded only when evaluation reaches
+the row that caused it, so at most `window - 1` rows per line or selection are
+read past a limit before the evaluation fails.
 These limits do not replace host limits for connections, request rate, DDoS
 protection, exporter queues, or autoscaling.
 
@@ -791,6 +794,22 @@ an asynchronous action body or another query and does not receive a
 transactional snapshot of concept state. Query implementations must avoid side
 effects; concept storage must provide any isolation required between reads and
 writes.
+
+By default a line applied to many frames reads one frame's answer after
+another, and a selection forms one row after another. An assembly given the
+`concurrentReads` option reads them together and consumes the answers in row
+order: `window` rows of one line or selection are evaluated at once, the row
+being consumed included (`1` reads them one after another), and at most
+`maxRowsAhead` rows (default 64) are started ahead across the engine; an
+evaluation that finds that count spent reads its next row when it reaches it,
+and never waits for it. Results, their order, and the reported fault are those
+of reading the rows one after another, provided queries and computations are
+free of side effects and no action changes the state being read meanwhile; a
+computation inside a row body may run before an earlier row's. A failed
+evaluation answers after the rows it already started have settled, so a query
+that never settles keeps it open, as it would once reached in sequence. Lines
+of one `where` block still run in order, since a later line reads what an
+earlier one bound.
 
 `earlier` reads matching action records whose invocation position precedes the
 trigger in the same flow. Ordinary query reads instead read concept state when

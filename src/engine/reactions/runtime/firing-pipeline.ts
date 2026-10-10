@@ -92,6 +92,7 @@ export class FiringPipeline {
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
     private readonly assertRows: (flow: string, count: number) => void,
     private readonly consumeAction: (flow: string) => boolean,
+    private readonly rowsExceed: (count: number) => boolean,
   ) {}
 
   async fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void> {
@@ -676,8 +677,12 @@ export class FiringPipeline {
         key,
         await mapValueTreeAsync(value, (node) =>
           isFusedFormer(node)
-            ? formTree(node as FusedFormer, this.definitions.readEnv(), (count) =>
-                this.assertRows(input[flow] as string, count),
+            ? formTree(
+                node as FusedFormer,
+                this.definitions.readEnv(),
+                Object.assign((count: number) => this.assertRows(input[flow] as string, count), {
+                  exceeds: this.rowsExceed,
+                }),
               )
             : DESCEND,
         ),

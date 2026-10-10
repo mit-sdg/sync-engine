@@ -5,6 +5,7 @@ import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
 import type { InstrumentedQuery, ReactionDeclaration } from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
+import type { ReadConcurrency } from "./where-evaluation.ts";
 import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
 import {
@@ -35,6 +36,8 @@ export interface ReadEnv {
   viewByName(name: string, site: string): RelationView;
   /** A registered former, by sentence. */
   formerByName(name: string, site: string): FormerRef;
+  /** How rows are read together; absent, every line reads its rows one after another. */
+  readonly reads?: ReadConcurrency;
 }
 
 export class Registry {
@@ -48,6 +51,7 @@ export class Registry {
   private readonly validator: ViewFormerValidator;
   private readonly binder: ImportedIrBinder;
   private env: ReadEnv | undefined;
+  private reads: ReadConcurrency | undefined;
 
   constructor() {
     for (const ref of standardComputations) {
@@ -215,8 +219,15 @@ export class Registry {
     };
   }
 
+  /** Set how every later evaluation reads rows together; undefined reads them one after another. */
+  configureReads(reads: ReadConcurrency | undefined): void {
+    this.reads = reads;
+    this.env = undefined;
+  }
+
   readEnv(): ReadEnv {
     this.env ??= {
+      reads: this.reads,
       query: (ref, site) => this.resolver.query(ref.concept, ref.query, site),
       computation: (name, site) => this.resolver.computation(name, site),
       viewByName: (name, site) => {

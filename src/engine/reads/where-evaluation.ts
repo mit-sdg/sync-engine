@@ -16,9 +16,139 @@ import { conditionOp } from "./where-ops.ts";
 import type { Condition, CustomOp, WhereOp } from "./where-ops.ts";
 import { setOwn } from "@engine/utils/own-property";
 
+/*
+ * Rows read together. The rows of one line, and the rows of one selection, do
+ * not depend on each other, so an engine assembled with `concurrentReads` may
+ * evaluate several at once. Answers are still consumed in row order, so the
+ * results, their order, and the reported fault are those of reading the rows
+ * one after another, provided queries and computations are free of side
+ * effects and no action changes the state being read meanwhile. Without
+ * `concurrentReads`, every line reads its rows one after another.
+ */
+
+/** Check a running row count; an engine-owned check can also be asked without recording. */
+export type AssertRows = ((count: number) => void) & {
+  /** Whether `count` rows would breach the limit, without recording a breach. */
+  readonly exceeds?: (count: number) => boolean;
+};
+
+/** How one engine reads rows together; set by the `concurrentReads` assembly option. */
+export interface ReadConcurrency {
+  /** Rows of one line or selection evaluated at once, the row being consumed included. */
+  readonly window: number;
+  /** Rows started ahead of the row being consumed, counted across the whole engine. */
+  readonly ahead: RowsAhead;
+}
+
+/**
+ * A count of rows started ahead, shared by every evaluation one engine runs.
+ * An evaluation that finds it spent does not wait: it reads its next row when
+ * it reaches it, as it would without read-ahead, so nesting cannot deadlock.
+ */
+export class RowsAhead {
+  private started = 0;
+
+  constructor(readonly capacity: number) {}
+
+  take(): boolean {
+    if (this.started >= this.capacity) return false;
+    this.started += 1;
+    return true;
+  }
+
+  give(): void {
+    this.started -= 1;
+  }
+}
+
+/** The `concurrentReads` assembly option. */
+export interface ConcurrentReads {
+  /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+  readonly window: number;
+  /** Rows started ahead at once across the whole engine. Default 64. */
+  readonly maxRowsAhead?: number;
+}
+
+export const DEFAULT_MAX_ROWS_AHEAD = 64;
+
+/** The engine's read concurrency for an assembly option; undefined reads rows one after another. */
+export function readConcurrency(options: ConcurrentReads | undefined): ReadConcurrency | undefined {
+  if (options === undefined) return undefined;
+  return {
+    window: options.window,
+    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD),
+  };
+}
+
+/** A row limit reached by a row started ahead, recorded only if evaluation reaches that row. */
+class DeferredRowLimit extends Error {
+  constructor(readonly count: number) {
+    super(`row limit reached at ${count} rows`);
+  }
+}
+
+function deferredGuard(assertRows: AssertRows | undefined): AssertRows | undefined {
+  if (assertRows === undefined) return undefined;
+  const exceeds = assertRows.exceeds as (count: number) => boolean;
+  return Object.assign(
+    (count: number) => {
+      if (exceeds(count)) throw new DeferredRowLimit(count);
+    },
+    { exceeds },
+  );
+}
+
+/**
+ * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
+ * `consume` takes its answer in row order. The row being consumed is checked
+ * against limits as usual; rows started ahead check without recording, and a
+ * limit one of them reached is recorded when its row is consumed. Before
+ * returning or rethrowing, the rows already started settle, so an evaluation
+ * never finishes with its reads still running.
+ */
+export async function inRowOrder<T>(
+  count: number,
+  reads: ReadConcurrency,
+  assertRows: AssertRows | undefined,
+  launch: (index: number, assertRows: AssertRows | undefined) => Promise<T>,
+  consume: (index: number, value: T) => void,
+): Promise<void> {
+  const canDefer = assertRows === undefined || assertRows.exceeds !== undefined;
+  if (!canDefer || reads.window <= 1 || count <= 1) {
+    for (let index = 0; index < count; index += 1) consume(index, await launch(index, assertRows));
+    return;
+  }
+  const guard = deferredGuard(assertRows);
+  const startedAhead: (Promise<T> | undefined)[] = [];
+  let next = 0;
+  try {
+    for (let index = 0; index < count; index += 1) {
+      const current = startedAhead[index] ?? launch(index, assertRows);
+      startedAhead[index] = undefined;
+      next = Math.max(next, index + 1);
+      while (next < count && next < index + reads.window && reads.ahead.take()) {
+        const pending = launch(next, guard).finally(() => reads.ahead.give());
+        pending.catch(() => {});
+        startedAhead[next] = pending;
+        next += 1;
+      }
+      let value: T;
+      try {
+        value = await current;
+      } catch (error) {
+        if (error instanceof DeferredRowLimit) assertRows?.(error.count);
+        throw error;
+      }
+      consume(index, value);
+    }
+  } finally {
+    const unsettled = startedAhead.filter((pending) => pending !== undefined);
+    if (unsettled.length > 0) await Promise.allSettled(unsettled);
+  }
+}
+
 /** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
 type EvaluableOp = ViewOp | ViewOpIR;
-type AssertRows = (count: number) => void;
 
 function pushFrame(into: Frames, frame: Frame, assertRows?: AssertRows): void {
   assertRows?.(into.length + 1);
@@ -181,6 +311,85 @@ function hasUnboundInput(frame: Frame, input: Mapping): boolean {
   return unbound;
 }
 
+type ReadOp = Extract<EvaluableOp, { op: "find" | "whether" | "no" | "count" }>;
+const UNBOUND = Symbol("unbound input");
+
+function isReadOp(op: EvaluableOp): op is ReadOp {
+  return op.op === "find" || op.op === "whether" || op.op === "no" || op.op === "count";
+}
+
+/**
+ * Apply a reading line to every frame with rows read together. Each frame's
+ * read depends only on that frame; frames are consumed, and their results
+ * appended, in order.
+ */
+async function applyReadOp(
+  frames: Frames,
+  op: ReadOp,
+  env: ReadEnv | undefined,
+  reads: ReadConcurrency,
+  assertRows?: AssertRows,
+): Promise<Frames> {
+  const result = new Frames();
+  await inRowOrder(
+    frames.length,
+    reads,
+    assertRows,
+    async (index, guard): Promise<unknown[] | typeof UNBOUND> => {
+      const frame = frames[index];
+      if (op.op === "count") {
+        const rows = await queryRows(queryOf(op.query, env, "count"), op.in, frame);
+        guard?.(rows.length);
+        return rows;
+      }
+      if (hasUnboundInput(frame, op.in)) return UNBOUND;
+      return lineRows(op, frame, env, op.op, guard);
+    },
+    (index, rows) => {
+      const frame = frames[index];
+      switch (op.op) {
+        case "find": {
+          if (rows === UNBOUND) return;
+          if (Object.keys(op.out).length === 0) {
+            if (rows.some((row) => passesNot("not" in op ? op.not : undefined, frame, row))) {
+              pushFrame(result, frame, assertRows);
+            }
+            return;
+          }
+          const passing = rows.filter((row) =>
+            passesNot("not" in op ? op.not : undefined, frame, row),
+          );
+          appendFrames(result, expandDistinctRows(frame, passing, op.out, assertRows), assertRows);
+          return;
+        }
+        case "whether": {
+          if (rows === UNBOUND) {
+            pushFrame(result, { ...frame }, assertRows);
+            return;
+          }
+          const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+          if (matches.length === 0) pushFrame(result, { ...frame }, assertRows);
+          else appendFrames(result, matches, assertRows);
+          return;
+        }
+        case "no": {
+          if (rows === UNBOUND) return;
+          const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+          if (matches.length === 0) pushFrame(result, frame, assertRows);
+          return;
+        }
+        case "count": {
+          if (rows === UNBOUND) return;
+          if (op.out in frame && frame[op.out] !== rows.length) return;
+          pushFrame(result, { ...frame, [op.out]: rows.length }, assertRows);
+          return;
+        }
+      }
+    },
+  );
+  return result;
+}
+
 async function applyOp(
   frames: Frames,
   op: EvaluableOp,
@@ -188,6 +397,8 @@ async function applyOp(
   assertRows?: AssertRows,
 ): Promise<Frames> {
   assertRows?.(frames.length);
+  const reads = env?.reads;
+  if (reads !== undefined && isReadOp(op)) return applyReadOp(frames, op, env, reads, assertRows);
   const result = new Frames();
   for (const frame of frames) {
     switch (op.op) {

@@ -305,6 +305,7 @@ const register = {
     "ConceptImplementation",
     "ConceptRegistration",
     "ConceptSetAssemblyOptions",
+    "ConcurrentReads",
     "ExecutionLimits",
     "FileLogSink",
     "FiringRecord",

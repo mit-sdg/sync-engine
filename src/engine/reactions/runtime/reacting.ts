@@ -19,7 +19,8 @@ import { readBackReaction } from "@engine/reads/read-back";
 import { assertThenInputsAreData, lintReactionOpens } from "@engine/reads/reaction-validation";
 import { Registry } from "@engine/reads/definition-registry";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
-import { applyWhereOps } from "@engine/reads/where-evaluation";
+import { applyWhereOps, readConcurrency } from "@engine/reads/where-evaluation";
+import type { AssertRows, ConcurrentReads } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalJson } from "@engine/utils/canonical-json";
@@ -68,6 +69,7 @@ export class Reacting {
     execution?: ExecutionControl,
     requireDeclaredRefusals = false,
     queryCache: QueryCacheMode = "memoize",
+    concurrentReads?: ConcurrentReads,
   ) {
     this.Action = actionConcept;
     this.execution = execution;
@@ -107,7 +109,9 @@ export class Reacting {
       (record, durationMs) => this.react(record, durationMs),
       (flowToken, count) => this.assertRows(flowToken, count),
       (flowToken) => this.consumeAction(flowToken),
+      (count) => this.rowsExceed(count),
     );
+    this.registry.configureReads(readConcurrency(concurrentReads));
   }
 
   addObserver(observer: EngineObserver): () => void {
@@ -283,9 +287,7 @@ export class Reacting {
     if (this.execution !== undefined) this.instrumentation.invalidateAll();
     try {
       this.registry.assertFormable(fused.former);
-      return await formTree(fused, this.registry.readEnv(), (count) =>
-        this.assertRows(flowToken, count),
-      );
+      return await formTree(fused, this.registry.readEnv(), this.rowGuard(flowToken));
     } finally {
       this.Action.store.flowSettled(flowToken);
       this.execution?.flowSettled?.(flowToken);
@@ -455,11 +457,11 @@ export class Reacting {
           ? this.applyEarlier(current, op.pattern)
           : op.op === "now"
             ? this.applyNow(current, op.out)
-            : await applyWhereOps(current, [op], this.registry.readEnv(), (count) =>
-                this.assertRows(
-                  typeof current[0]?.[flow] === "string" ? current[0][flow] : "",
-                  count,
-                ),
+            : await applyWhereOps(
+                current,
+                [op],
+                this.registry.readEnv(),
+                this.rowGuard(typeof current[0]?.[flow] === "string" ? current[0][flow] : ""),
               );
       if (current.length === 0) break;
     }
@@ -513,6 +515,17 @@ export class Reacting {
       }
     }
     return new Frames(...result);
+  }
+
+  /** A flow's row-limit check, which reads run ahead can also ask without recording a breach. */
+  private rowGuard(flowToken: string): AssertRows {
+    return Object.assign((count: number) => this.assertRows(flowToken, count), {
+      exceeds: (count: number) => this.rowsExceed(count),
+    });
+  }
+
+  private rowsExceed(count: number): boolean {
+    return this.execution?.rows(count) === false;
   }
 
   private assertRows(flowToken: string, count: number): void {

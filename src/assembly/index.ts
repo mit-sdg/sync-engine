@@ -26,6 +26,7 @@ export type {
 } from "@engine/reactions/runtime/operational";
 export type { ActionRefusal } from "@engine/reactions/runtime/instrumenting";
 export type { QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
+export type { ConcurrentReads } from "@engine/reads/where-evaluation";
 export type {
   FiringRecord,
   IntegrityFailureRecord,

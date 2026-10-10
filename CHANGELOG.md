@@ -6,6 +6,23 @@ incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [Unreleased]
+
+### Added
+
+- The `concurrentReads: { window, maxRowsAhead? }` assembly option reads the
+  rows of one `where` line, and the rows of one selection, together and
+  consumes them in row order. `window` rows are evaluated at once, the consumed
+  row included; at most `maxRowsAhead` rows (default 64) are started ahead
+  across the engine, and an evaluation that finds that count spent reads its
+  next row when it reaches it. Results, their order, and the reported fault are
+  those of reading one after another, provided queries and computations are
+  free of side effects and no action changes the state being read meanwhile. A
+  row limit reached by a row started ahead is recorded only when evaluation
+  reaches that row, and a failed evaluation answers after the rows it started
+  have settled. Without the option, evaluation is unchanged.
+- `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads` type.
+
 ## [1.1.0] - 2026-10-05
 
 This release revises concept specification syntax: SSF fields may take their
