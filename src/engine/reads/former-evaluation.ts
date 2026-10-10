@@ -1,7 +1,8 @@
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
 
 import { Frames, readPatternValue } from "./frames.ts";
-import { applyWhereOps } from "./where-evaluation.ts";
+import { applyWhereOps, inRowOrder } from "./where-evaluation.ts";
+import type { AssertRows } from "./where-evaluation.ts";
 import { varNamesInPattern } from "./operation-footprint.ts";
 import { FormerFault } from "./former-nodes.ts";
 import type { FormerRef, FusedFormer } from "./former-nodes.ts";
@@ -10,8 +11,6 @@ import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
 import type { ReadEnv } from "./definition-registry.ts";
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { setOwn } from "@engine/utils/own-property";
-import { inRowOrder } from "./read-ahead.ts";
-import type { AssertRows } from "./read-ahead.ts";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;

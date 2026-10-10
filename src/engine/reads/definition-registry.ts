@@ -1,12 +1,12 @@
 /** Own the definitions and read environments installed in one engine. */
 
-import { readConcurrency } from "./read-ahead.ts";
-import type { ReadConcurrency } from "./read-ahead.ts";
 import { logger } from "@engine/utils/logger";
 import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
 import type { InstrumentedQuery, ReactionDeclaration } from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
+import { readConcurrency } from "./where-evaluation.ts";
+import type { ReadConcurrency } from "./where-evaluation.ts";
 import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
 import {

@@ -19,7 +19,8 @@ import { readBackReaction } from "@engine/reads/read-back";
 import { assertThenInputsAreData, lintReactionOpens } from "@engine/reads/reaction-validation";
 import { Registry } from "@engine/reads/definition-registry";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
-import { applyWhereOps } from "@engine/reads/where-evaluation";
+import { applyWhereOps, readConcurrency } from "@engine/reads/where-evaluation";
+import type { AssertRows } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalJson } from "@engine/utils/canonical-json";
@@ -40,8 +41,6 @@ import type {
 } from "../types.ts";
 import { ActionScheduler } from "./action-scheduler.ts";
 import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
-import { readConcurrency } from "@engine/reads/read-ahead";
-import type { AssertRows } from "@engine/reads/read-ahead";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
 import { ConceptInstrumentation, type QueryCacheMode } from "./instrumenting.ts";
