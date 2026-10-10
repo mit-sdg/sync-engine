@@ -5,6 +5,45 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.17] - 2026-10-10
+
+This beta lets an assembly read the rows of a line or selection together, so
+independent reads overlap instead of waiting on one another. Nothing changes
+unless an assembly asks for it.
+
+### Compatibility
+
+- New assembly option `concurrentReads: { rowsAtOnce, maxRowsAhead? }`. With
+  it, a line applied to many frames and a selection forming many rows evaluate
+  up to `rowsAtOnce` rows at once, the consumed row included, and consume them
+  in row order. At most `maxRowsAhead` rows (64 when unset) are started ahead at
+  once across the assembly, and an evaluation that finds that count spent reads
+  its next row when it reaches it. Answers, their order, the reported fault,
+  and recorded row-limit breaches are those of reading one after another, given
+  side-effect-free reads and no action changing the state being read meanwhile.
+  A fault is reported as soon as its row is consumed; rows started ahead then
+  stop at their next row check. Without the option, rows are read one after
+  another as before.
+- `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads` type.
+- The reference now states that computations, conditions, and custom ops used
+  by reads must be free of side effects, as queries already had to be.
+
+### Migration
+
+None. To read rows together, pass `concurrentReads: { rowsAtOnce: 16 }` to
+`assemble`, and size the database client's connection pool above
+`maxRowsAhead` plus the evaluations expected at once.
+
+### Generated formats
+
+None.
+
+### Runtime and security support
+
+None.
+
+[Release][1.0.0-beta.17] | [Changes since 1.0.0-beta.16][1.0.0-beta.17-compare]
+
 ## [1.0.0-beta.16] - 2026-08-22
 
 This beta makes endpoint paths part of the checked authored design, fixes analysis
@@ -1381,6 +1420,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.17]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.17
+[1.0.0-beta.17-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.16...v1.0.0-beta.17
 [1.0.0-beta.16]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.16
 [1.0.0-beta.16-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.15...v1.0.0-beta.16
 [1.0.0-beta.15]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.15
