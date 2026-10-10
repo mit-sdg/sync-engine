@@ -8,6 +8,7 @@ export interface ExecutionControl {
   action(flow: string): boolean;
   firing(flow: string): boolean;
   rows(count: number): boolean;
+  readConcurrency?(): { readAhead?: number; concurrentReads?: number };
   admitFlow?(flow: string, route: string, correlationId: string): unknown;
   abandon?(flow: string): void;
   flowSettled?(flow: string): void;

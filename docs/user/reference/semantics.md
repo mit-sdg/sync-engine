@@ -735,7 +735,10 @@ Automatic occurrence retention bounds settled-flow inspection, and
 `ExecutionLimits` provides the engine-owned production budget. Row limits stop
 engine-owned expansion during reaction matching, where evaluation, direct reads, and former
 evaluation. A query implementation still owns the memory needed to construct its
-answer.
+answer. Rows read ahead (below) check the row limit without recording a breach;
+a breach is recorded only when evaluation reaches the row that caused it, so at
+most `maxReadAhead` rows per line or selection are read past a limit before the
+evaluation fails.
 These limits do not replace host limits for connections, request rate, DDoS
 protection, exporter queues, or autoscaling.
 
@@ -787,6 +790,17 @@ an asynchronous action body or another query and does not receive a
 transactional snapshot of concept state. Query implementations must avoid side
 effects; concept storage must provide any isolation required between reads and
 writes.
+
+A line applied to many frames, and a selection forming many rows, reads its
+rows' answers concurrently and consumes them in row order. Results, their
+order, and the reported fault are those of reading the rows one after another;
+a failed evaluation answers after the reads it already started have settled.
+`ExecutionLimits.maxReadAhead` (default 16) bounds the rows read ahead of the
+row being consumed, per line or selection; `1` reads rows one after another.
+`maxConcurrentReads` (default 64) bounds the query calls one engine has in
+flight at once. Both defaults apply when no execution limits are given. Lines
+of one `where` block still run in order, since a later line reads what an
+earlier one bound.
 
 `earlier` reads matching action records whose invocation position precedes the
 trigger in the same flow. Ordinary query reads instead read concept state when

@@ -15,10 +15,11 @@ import type { ViewOp } from "./views.ts";
 import { conditionOp } from "./where-ops.ts";
 import type { Condition, CustomOp, WhereOp } from "./where-ops.ts";
 import { setOwn } from "@engine/utils/own-property";
+import { inRowOrder } from "./read-ahead.ts";
+import type { AssertRows } from "./read-ahead.ts";
 
 /** An op as evaluation accepts it: authored (live refs, symbols) or IR (names). */
 type EvaluableOp = ViewOp | ViewOpIR;
-type AssertRows = (count: number) => void;
 
 function pushFrame(into: Frames, frame: Frame, assertRows?: AssertRows): void {
   assertRows?.(into.length + 1);
@@ -153,11 +154,24 @@ async function lineRows(
   assertRows?: AssertRows,
 ): Promise<unknown[]> {
   if (op.query !== undefined) {
-    const rows = await queryRows(queryOf(op.query, env, site), op.in, frame);
+    const rows = await leafRows(queryOf(op.query, env, site), op.in, frame, env);
     assertRows?.(rows.length);
     return rows;
   }
   return viewRows(viewOf(op, env), op.in, frame, env, assertRows);
+}
+
+/** One query call, holding one of the engine's read slots while it runs. */
+function leafRows(
+  query: InstrumentedQuery,
+  input: Mapping,
+  frame: Frame,
+  env: ReadEnv | undefined,
+): Promise<unknown[]> {
+  const slots = env?.reads?.slots;
+  return slots === undefined
+    ? queryRows(query, input, frame)
+    : slots.run(() => queryRows(query, input, frame));
 }
 
 function passesNot(not: Mapping | undefined, frame: Frame, row: unknown): boolean {
@@ -181,6 +195,79 @@ function hasUnboundInput(frame: Frame, input: Mapping): boolean {
   return unbound;
 }
 
+type ReadOp = Extract<EvaluableOp, { op: "find" | "whether" | "no" | "count" }>;
+const UNBOUND = Symbol("unbound input");
+
+/**
+ * Apply a reading line to every frame. The frames' reads are independent, so
+ * they may run ahead of the frame being consumed; frames are consumed in order.
+ */
+async function applyReadOp(
+  frames: Frames,
+  op: ReadOp,
+  env: ReadEnv | undefined,
+  assertRows?: AssertRows,
+): Promise<Frames> {
+  const result = new Frames();
+  await inRowOrder(
+    frames.length,
+    env?.reads,
+    assertRows,
+    async (index, guard): Promise<unknown[] | typeof UNBOUND> => {
+      const frame = frames[index];
+      if (op.op === "count") {
+        const rows = await leafRows(queryOf(op.query, env, "count"), op.in, frame, env);
+        guard?.(rows.length);
+        return rows;
+      }
+      if (hasUnboundInput(frame, op.in)) return UNBOUND;
+      return lineRows(op, frame, env, op.op, guard);
+    },
+    (index, rows) => {
+      const frame = frames[index];
+      switch (op.op) {
+        case "find": {
+          if (rows === UNBOUND) break;
+          if (Object.keys(op.out).length === 0) {
+            if (rows.some((row) => passesNot("not" in op ? op.not : undefined, frame, row))) {
+              pushFrame(result, frame, assertRows);
+            }
+            break;
+          }
+          const passing = rows.filter((row) =>
+            passesNot("not" in op ? op.not : undefined, frame, row),
+          );
+          appendFrames(result, expandDistinctRows(frame, passing, op.out, assertRows), assertRows);
+          break;
+        }
+        case "whether": {
+          if (rows === UNBOUND) {
+            pushFrame(result, { ...frame }, assertRows);
+            break;
+          }
+          const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+          if (matches.length === 0) pushFrame(result, { ...frame }, assertRows);
+          else appendFrames(result, matches, assertRows);
+          break;
+        }
+        case "no": {
+          if (rows === UNBOUND) break;
+          const matches = expandDistinctRows(frame, rows, op.out, assertRows);
+          if (matches.length === 0) pushFrame(result, frame, assertRows);
+          break;
+        }
+        case "count": {
+          if (rows === UNBOUND) break;
+          if (op.out in frame && frame[op.out] !== rows.length) break;
+          pushFrame(result, { ...frame, [op.out]: rows.length }, assertRows);
+          break;
+        }
+      }
+    },
+  );
+  return result;
+}
+
 async function applyOp(
   frames: Frames,
   op: EvaluableOp,
@@ -188,50 +275,12 @@ async function applyOp(
   assertRows?: AssertRows,
 ): Promise<Frames> {
   assertRows?.(frames.length);
+  if (op.op === "find" || op.op === "whether" || op.op === "no" || op.op === "count") {
+    return applyReadOp(frames, op, env, assertRows);
+  }
   const result = new Frames();
   for (const frame of frames) {
     switch (op.op) {
-      case "find": {
-        if (hasUnboundInput(frame, op.in)) break;
-        const rows = await lineRows(op, frame, env, "find", assertRows);
-        if (Object.keys(op.out).length === 0) {
-          if (rows.some((row) => passesNot("not" in op ? op.not : undefined, frame, row))) {
-            pushFrame(result, frame, assertRows);
-          }
-          break;
-        }
-        const passing = rows.filter((row) =>
-          passesNot("not" in op ? op.not : undefined, frame, row),
-        );
-        appendFrames(result, expandDistinctRows(frame, passing, op.out, assertRows), assertRows);
-        break;
-      }
-      case "whether": {
-        if (hasUnboundInput(frame, op.in)) {
-          pushFrame(result, { ...frame }, assertRows);
-          break;
-        }
-        const rows = await lineRows(op, frame, env, "whether", assertRows);
-        const matches = expandDistinctRows(frame, rows, op.out, assertRows);
-        if (matches.length === 0) pushFrame(result, { ...frame }, assertRows);
-        else appendFrames(result, matches, assertRows);
-        break;
-      }
-      case "no": {
-        if (hasUnboundInput(frame, op.in)) break;
-        const rows = await lineRows(op, frame, env, "no", assertRows);
-        const matches = expandDistinctRows(frame, rows, op.out, assertRows);
-        if (matches.length === 0) pushFrame(result, frame, assertRows);
-        break;
-      }
-      case "count": {
-        const query = queryOf(op.query, env, "count");
-        const rows = await queryRows(query, op.in, frame);
-        assertRows?.(rows.length);
-        if (op.out in frame && frame[op.out] !== rows.length) break;
-        pushFrame(result, { ...frame, [op.out]: rows.length }, assertRows);
-        break;
-      }
       case "holds": {
         if ("fused" in op) {
           if ((await op.fused.computation.fn(bindInputMapping(frame, op.fused.in))) === true) {
@@ -282,8 +331,8 @@ async function applyOp(
         break;
       }
       default: {
-        const _exhausted: never = op;
-        throw new Error(`Unknown where op kind: ${(_exhausted as { op?: unknown }).op}`);
+        const _exhausted: never = op.op;
+        throw new Error(`Unknown where op kind: ${String(_exhausted)}`);
       }
     }
   }

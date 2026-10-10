@@ -423,7 +423,7 @@ describe("assembly execution lifecycle", () => {
     const app = assemble({
       vocabulary: words,
       composition: { matrix },
-      executionLimits: limits({ maxRowsPerEvaluation: 5 }),
+      executionLimits: limits({ maxRowsPerEvaluation: 5, maxReadAhead: 1 }),
     });
 
     await expect(app.concepts.Matrix._large({})).rejects.toThrow("row limit");

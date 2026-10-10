@@ -1,5 +1,7 @@
 /** Own the definitions and read environments installed in one engine. */
 
+import { readConcurrency } from "./read-ahead.ts";
+import type { ReadConcurrency } from "./read-ahead.ts";
 import { logger } from "@engine/utils/logger";
 import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
@@ -35,6 +37,8 @@ export interface ReadEnv {
   viewByName(name: string, site: string): RelationView;
   /** A registered former, by sentence. */
   formerByName(name: string, site: string): FormerRef;
+  /** Bounds on overlapping reads; absent, rows are read one after another. */
+  readonly reads?: ReadConcurrency;
 }
 
 export class Registry {
@@ -48,6 +52,7 @@ export class Registry {
   private readonly validator: ViewFormerValidator;
   private readonly binder: ImportedIrBinder;
   private env: ReadEnv | undefined;
+  private reads: ReadConcurrency | undefined = readConcurrency();
 
   constructor() {
     for (const ref of standardComputations) {
@@ -215,8 +220,15 @@ export class Registry {
     };
   }
 
+  /** Set the bounds on overlapping reads for every later evaluation. */
+  configureReads(reads: ReadConcurrency | undefined): void {
+    this.reads = reads;
+    this.env = undefined;
+  }
+
   readEnv(): ReadEnv {
     this.env ??= {
+      reads: this.reads,
       query: (ref, site) => this.resolver.query(ref.concept, ref.query, site),
       computation: (name, site) => this.resolver.computation(name, site),
       viewByName: (name, site) => {

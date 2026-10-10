@@ -40,6 +40,8 @@ import type {
 } from "../types.ts";
 import { ActionScheduler } from "./action-scheduler.ts";
 import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
+import { readConcurrency } from "@engine/reads/read-ahead";
+import type { AssertRows } from "@engine/reads/read-ahead";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
 import { ConceptInstrumentation, type QueryCacheMode } from "./instrumenting.ts";
@@ -107,7 +109,10 @@ export class Reacting {
       (record, durationMs) => this.react(record, durationMs),
       (flowToken, count) => this.assertRows(flowToken, count),
       (flowToken) => this.consumeAction(flowToken),
+      (count) => this.rowsExceed(count),
     );
+    const reads = execution?.readConcurrency?.();
+    this.registry.configureReads(readConcurrency(reads?.readAhead, reads?.concurrentReads));
   }
 
   addObserver(observer: EngineObserver): () => void {
@@ -283,9 +288,7 @@ export class Reacting {
     if (this.execution !== undefined) this.instrumentation.invalidateAll();
     try {
       this.registry.assertFormable(fused.former);
-      return await formTree(fused, this.registry.readEnv(), (count) =>
-        this.assertRows(flowToken, count),
-      );
+      return await formTree(fused, this.registry.readEnv(), this.rowGuard(flowToken));
     } finally {
       this.execution?.flowSettled?.(flowToken);
     }
@@ -454,11 +457,11 @@ export class Reacting {
           ? this.applyEarlier(current, op.pattern)
           : op.op === "now"
             ? this.applyNow(current, op.out)
-            : await applyWhereOps(current, [op], this.registry.readEnv(), (count) =>
-                this.assertRows(
-                  typeof current[0]?.[flow] === "string" ? current[0][flow] : "",
-                  count,
-                ),
+            : await applyWhereOps(
+                current,
+                [op],
+                this.registry.readEnv(),
+                this.rowGuard(typeof current[0]?.[flow] === "string" ? current[0][flow] : ""),
               );
       if (current.length === 0) break;
     }
@@ -512,6 +515,17 @@ export class Reacting {
       }
     }
     return new Frames(...result);
+  }
+
+  /** A flow's row-limit check, which reads run ahead can also ask without recording a breach. */
+  private rowGuard(flowToken: string): AssertRows {
+    return Object.assign((count: number) => this.assertRows(flowToken, count), {
+      exceeds: (count: number) => this.rowsExceed(count),
+    });
+  }
+
+  private rowsExceed(count: number): boolean {
+    return this.execution?.rows(count) === false;
   }
 
   private assertRows(flowToken: string, count: number): void {

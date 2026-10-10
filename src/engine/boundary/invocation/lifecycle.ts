@@ -5,6 +5,10 @@ export interface ExecutionLimits {
   maxFiringsPerFlow: number;
   maxRowsPerEvaluation: number;
   maxRequestDurationMs: number;
+  /** Rows read ahead of the row being consumed, per line or selection; 1 reads in sequence. Default 16. */
+  maxReadAhead?: number;
+  /** Query calls one engine keeps in flight at once. Default 64. */
+  maxConcurrentReads?: number;
 }
 
 type AdmissionRejection = "draining" | "active-flow-limit" | "pending-request-limit";
@@ -17,8 +21,8 @@ export function requestTimeout(timeoutMs: number | undefined, limits?: Execution
   return timeoutMs ?? limits?.maxRequestDurationMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
-function assertPositiveInteger(value: number, name: keyof ExecutionLimits): void {
-  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+function assertPositiveInteger(value: number | undefined, name: keyof ExecutionLimits): void {
+  if (value === undefined || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
     throw new Error(`executionLimits.${name} must be a positive finite integer.`);
   }
 }
@@ -34,6 +38,9 @@ function assertExecutionLimits(limits: ExecutionLimits): void {
   ];
   for (const name of names) {
     assertPositiveInteger(limits[name], name);
+  }
+  for (const name of ["maxReadAhead", "maxConcurrentReads"] as const) {
+    if (limits[name] !== undefined) assertPositiveInteger(limits[name], name);
   }
   if (limits.maxRequestDurationMs > MAX_TIMER_DELAY_MS) {
     throw new Error(
@@ -179,6 +186,13 @@ export class RuntimeLifecycle {
 
   rows(count: number): boolean {
     return this.limits === undefined || count <= this.limits.maxRowsPerEvaluation;
+  }
+
+  readConcurrency(): { readAhead?: number; concurrentReads?: number } {
+    return {
+      readAhead: this.limits?.maxReadAhead,
+      concurrentReads: this.limits?.maxConcurrentReads,
+    };
   }
 
   private resolveIdle(): void {

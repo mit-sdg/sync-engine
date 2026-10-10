@@ -10,10 +10,11 @@ import type { ArrangedIR, FormerNodeIR, PatternIR, SpliceIR } from "./ir.ts";
 import type { ReadEnv } from "./definition-registry.ts";
 import type { Frame, Mapping } from "@engine/reactions/types";
 import { setOwn } from "@engine/utils/own-property";
+import { inRowOrder } from "./read-ahead.ts";
+import type { AssertRows } from "./read-ahead.ts";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;
-type AssertRows = (count: number) => void;
 
 /** Whether an input pattern reads through an unbound variable — absence propagates. */
 function inputUnbound(input: PatternIR, frame: Frame): boolean {
@@ -208,12 +209,17 @@ async function evalNode(
     case "each": {
       const selected = arrange(await selectFrames(node, frame, env, assertRows), node.arranged);
       const items: unknown[] = [];
-      for (const rowFrame of selected) {
-        const item = await evalNode(formerName, node.as, rowFrame, env, assertRows);
-        if (item === DROP_ROW) continue;
-        assertRows?.(items.length + 1);
-        items.push(item);
-      }
+      await inRowOrder(
+        selected.length,
+        env.reads,
+        assertRows,
+        (index, guard) => evalNode(formerName, node.as, selected[index], env, guard),
+        (_index, item) => {
+          if (item === DROP_ROW) return;
+          assertRows?.(items.length + 1);
+          items.push(item);
+        },
+      );
       return items;
     }
     case "count":
