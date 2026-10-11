@@ -5,6 +5,43 @@ behavior, and generated formats may change incompatibly between releases. Pin
 an exact version, follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [1.0.0-beta.18] - 2026-10-11
+
+This beta adds a query cache mode that keeps a running invocation's answers when
+another invocation arrives, so concurrent invocations stop re-reading what they
+had read. Nothing changes unless an assembly asks for it.
+
+### Compatibility
+
+- New `queryCache` mode `"since-dispatch"`. Until an outside invocation settles,
+  reads done for its flow reuse only memoized answers whose query began at or
+  after it was dispatched, the freshness the default mode gives by clearing
+  every cache at dispatch, while invocations already running keep the answers
+  they read. A direct `form` and a direct query root read the same way from
+  their own start; any other read reuses only answers begun since the latest of
+  those starts. Action invalidation is unchanged.
+- `createInvoker`'s `refresh` receives the admitted ask's flow and runs after
+  admission, just before dispatch; a function it returns is called once the ask
+  has settled. A `refresh` taking no argument still works. Asks refused by input
+  validation or admission no longer refresh; no read could follow them.
+- A direct query root under `"since-dispatch"` no longer clears that query's
+  answers for running invocations.
+
+### Migration
+
+None. To keep answers across invocations, pass `queryCache: "since-dispatch"`
+to `assemble`.
+
+### Generated formats
+
+None.
+
+### Runtime and security support
+
+None.
+
+[Release][1.0.0-beta.18] | [Changes since 1.0.0-beta.17][1.0.0-beta.18-compare]
+
 ## [1.0.0-beta.17] - 2026-10-10
 
 This beta lets an assembly read the rows of a line or selection together, so
@@ -1420,6 +1457,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.0.0-beta.18]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.18
+[1.0.0-beta.18-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.17...v1.0.0-beta.18
 [1.0.0-beta.17]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.17
 [1.0.0-beta.17-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0-beta.16...v1.0.0-beta.17
 [1.0.0-beta.16]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0-beta.16
