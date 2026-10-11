@@ -237,9 +237,9 @@ export interface AssembleBaseOptions<
   executionLimits?: ExecutionLimits;
   /**
    * Read the rows of a line or selection together, consumed in row order, so
-   * independent reads overlap. Results, their order, and the reported fault are
-   * those of reading one after another, provided queries and computations are
-   * free of side effects. Unset, every line reads its rows one after another.
+   * independent reads overlap. Answers, their order, the reported fault, and
+   * row-limit breaches are those of reading one after another, provided reads
+   * are free of side effects. Unset, every line reads its rows one after another.
    */
   concurrentReads?: ConcurrentReads;
   /** Bounded synchronous handoff for stable operational events. */
@@ -393,13 +393,16 @@ const respondRaceObserver: EngineObserver = {
   },
 };
 
-function assertConcurrentReads(reads: ConcurrentReads | undefined): void {
+function assertConcurrentReads(reads: unknown): void {
   if (reads === undefined) return;
-  for (const name of ["window", "maxRowsAhead"] as const) {
-    const value = reads[name];
+  if (reads === null || typeof reads !== "object") {
+    throw new Error("assemble: concurrentReads must be an object such as { rowsAtOnce: 16 }.");
+  }
+  for (const name of ["rowsAtOnce", "maxRowsAhead"] as const) {
+    const value = (reads as Record<string, unknown>)[name];
     if (value === undefined && name === "maxRowsAhead") continue;
     if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-      throw new Error(`assemble: concurrentReads.${name} must be a positive integer.`);
+      throw new Error(`assemble: concurrentReads.${name} must be a positive finite integer.`);
     }
   }
 }

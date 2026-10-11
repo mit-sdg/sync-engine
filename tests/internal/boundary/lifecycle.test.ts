@@ -428,7 +428,10 @@ describe("assembly execution lifecycle", () => {
 
     await expect(app.concepts.Matrix._large({})).rejects.toThrow("row limit");
     await expect(app.form(matrix({}))).rejects.toThrow("row limit");
-    expect(app.concepts.Matrix.rightReads).toBe(2);
+    // Reading rows together (`bun run test:read-ahead`) may read past the limit by rowsAtOnce - 1 rows.
+    const readAhead = app.engine.readEnv().readAhead;
+    if (readAhead === undefined) expect(app.concepts.Matrix.rightReads).toBe(2);
+    else expect(app.concepts.Matrix.rightReads).toBeLessThanOrEqual(2 + readAhead.rowsAtOnce - 1);
   });
 
   test("stops repeated earlier expansion at the first over-limit cross-product frame", async () => {

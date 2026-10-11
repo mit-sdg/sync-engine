@@ -3,6 +3,9 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite-plus";
 import { applicationExamples } from "./examples/register.ts";
 
+/** `bun run test:read-ahead` runs the suite with every assembly reading rows together. */
+const readAheadEverywhere = process.env.READ_AHEAD_EVERYWHERE === "1";
+
 export default defineConfig({
   resolve: {
     alias: [
@@ -97,6 +100,7 @@ export default defineConfig({
       "tests/**/*.test.ts",
     ],
     exclude: ["tests/packaging/application/**", "packages/http/tests/packaging/multi-instance/**"],
+    setupFiles: readAheadEverywhere ? ["tests/utils/read-ahead-everywhere.ts"] : [],
     coverage: {
       // Instrument project code only; V8's profiler makes TypeScript-compiler tests several times slower.
       provider: "istanbul",

@@ -15,6 +15,7 @@ import {
   isFusedFormer,
 } from "@engine/reads/former-nodes";
 import { formTree } from "@engine/reads/former-evaluation";
+import type { AssertRows } from "@engine/reads/where-evaluation";
 import type { ReadEnv } from "@engine/reads/definition-registry";
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
@@ -90,9 +91,8 @@ export class FiringPipeline {
     },
     private readonly reactionLogger: ReactionLogger,
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
-    private readonly assertRows: (flow: string, count: number) => void,
+    private readonly rowGuard: (flow: string) => AssertRows,
     private readonly consumeAction: (flow: string) => boolean,
-    private readonly rowsExceed: (count: number) => boolean,
   ) {}
 
   async fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void> {
@@ -161,7 +161,7 @@ export class FiringPipeline {
     let actionSymbols: symbol[];
     try {
       [matched, actionSymbols] = this.matcher.match(record, reaction);
-      this.assertRows(record.flow, matched.length);
+      this.rowGuard(record.flow)(matched.length);
     } catch (error) {
       this.failStage(
         reaction,
@@ -197,7 +197,7 @@ export class FiringPipeline {
         if (!(frames instanceof Frames)) {
           throw new TypeError("A reaction where function must return Frames.");
         }
-        this.assertRows(provenance.flow, frames.length);
+        this.rowGuard(provenance.flow)(frames.length);
         frameTriggerIds = this.assertProvenance(frames, provenance, actionSymbols);
       } catch (error) {
         this.failStage(
@@ -412,7 +412,7 @@ export class FiringPipeline {
         next.push(...(await this.runStepNode(currentFrame, node, reaction, fill)));
       }
       current = new Frames(...next);
-      this.assertRows(fill.flow, current.length);
+      this.rowGuard(fill.flow)(current.length);
       if (current.length === 0) break;
     }
   }
@@ -680,9 +680,7 @@ export class FiringPipeline {
             ? formTree(
                 node as FusedFormer,
                 this.definitions.readEnv(),
-                Object.assign((count: number) => this.assertRows(input[flow] as string, count), {
-                  exceeds: this.rowsExceed,
-                }),
+                this.rowGuard(input[flow] as string),
               )
             : DESCEND,
         ),

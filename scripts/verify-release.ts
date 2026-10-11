@@ -7,6 +7,7 @@ const gates = [
   ["run", "release:check"],
   ["run", "check"],
   ["run", "test"],
+  ["run", "test:read-ahead"],
   ["run", "coverage"],
   ["run", "declarations:check"],
   ["run", "examples:check"],

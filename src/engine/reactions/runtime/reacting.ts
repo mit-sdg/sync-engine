@@ -19,7 +19,7 @@ import { readBackReaction } from "@engine/reads/read-back";
 import { assertThenInputsAreData, lintReactionOpens } from "@engine/reads/reaction-validation";
 import { Registry } from "@engine/reads/definition-registry";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
-import { applyWhereOps, readConcurrency } from "@engine/reads/where-evaluation";
+import { applyWhereOps, readAheadFor } from "@engine/reads/where-evaluation";
 import type { AssertRows, ConcurrentReads } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
@@ -107,11 +107,10 @@ export class Reacting {
       this.registry,
       this.reactionLogger,
       (record, durationMs) => this.react(record, durationMs),
-      (flowToken, count) => this.assertRows(flowToken, count),
+      (flowToken) => this.rowGuard(flowToken),
       (flowToken) => this.consumeAction(flowToken),
-      (count) => this.rowsExceed(count),
     );
-    this.registry.configureReads(readConcurrency(concurrentReads));
+    this.registry.configureReadAhead(readAheadFor(concurrentReads));
   }
 
   addObserver(observer: EngineObserver): () => void {
@@ -516,15 +515,11 @@ export class Reacting {
     return new Frames(...result);
   }
 
-  /** A flow's row-limit check, which reads run ahead can also ask without recording a breach. */
+  /** A flow's row-limit check; rows read together ask it without recording a breach. */
   private rowGuard(flowToken: string): AssertRows {
     return Object.assign((count: number) => this.assertRows(flowToken, count), {
-      exceeds: (count: number) => this.rowsExceed(count),
+      exceeds: (count: number) => this.execution?.rows(count) === false,
     });
-  }
-
-  private rowsExceed(count: number): boolean {
-    return this.execution?.rows(count) === false;
   }
 
   private assertRows(flowToken: string, count: number): void {

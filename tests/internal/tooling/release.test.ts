@@ -483,8 +483,9 @@ describe("release source facts", () => {
     "concurrency:\n  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true",
     "name: Generated artifacts",
     "run: bun run examples:check",
+    "run: bun run test:read-ahead",
     "name: CI required",
-    "needs: [check, release, build, package, generated, scenario, test, coverage]",
+    "needs: [check, release, build, package, generated, scenario, test, read-ahead, coverage]",
   ])("rejects CI without %s", (fact) => {
     const sources = fixture();
     replaceSource(sources, ".github/workflows/ci.yml", fact, "omitted-ci-fact");
