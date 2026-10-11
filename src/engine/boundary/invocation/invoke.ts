@@ -260,6 +260,11 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   lifecycle?: RuntimeLifecycle;
   /** Refresh standing reads before a new application-interface ask. */
   refresh?: () => void;
+  /**
+   * Open an admitted application-interface ask's reads before it is
+   * dispatched, returning the function that closes them once it has settled.
+   */
+  openReads?: (flow: string) => () => void;
 }): Invoker<C> {
   const {
     boundary,
@@ -271,187 +276,197 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
     onValidatorFault,
     lifecycle,
     refresh,
+    openReads,
   } = opts;
   const deadlinePolicy = lifecycle ?? new RuntimeLifecycle();
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
-      const startedAt = performance.now();
-      let requestId: string | undefined;
-      let correlationId = invokeOpts.correlationId;
-      const settle = <T extends InvocationResult>(result: T): T => {
-        const resultClass = result.ok
-          ? "success"
-          : result.error.kind === "domain"
-            ? "domain-error"
-            : "framework-error";
-        lifecycle?.events.emit({
-          type: "invocation-settled",
-          at: Date.now(),
-          ...(requestId === undefined ? {} : { flow: requestId }),
-          route: path,
-          ...(correlationId === undefined ? {} : { correlationId }),
-          result: resultClass,
-          ...(!result.ok && result.error.kind === "framework"
-            ? { frameworkCode: result.error.code }
-            : {}),
-          durationMs: performance.now() - startedAt,
-        });
-        return result;
-      };
-      if (isAborted(invokeOpts.signal)) {
-        return settle(frameworkError(FrameworkErrorCode.ABORTED));
-      }
-      if (routes !== undefined && !routes.has(path)) {
-        return settle(frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`));
-      }
-      refresh?.();
-      // Validate the declared outer shape before recording an ask. Required
-      // keys test presence, defaults fill absent keys, and then the endpoint's
-      // application-supplied validator checks the complete admitted value.
+      let closeReads: (() => void) | undefined;
       try {
-        const contract = contracts?.[path];
-        if (contract !== undefined) {
-          const admitted = admitInput(contract, path, input);
-          if (!admitted.ok) {
-            return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail));
-          }
-          input = admitted.admitted as typeof input;
-        }
-        const inputValidator = validators?.[path]?.input;
-        if (inputValidator !== undefined) {
-          const validation = validateRuntimeValue(inputValidator, input);
-          if (!validation.ok) {
-            if (validation.errorClass === "ValidatorFault") {
-              onValidatorFault?.({
-                path,
-                phase: "input",
-                error: validation.fault,
-                ...(correlationId === undefined ? {} : { correlationId }),
-              });
-            }
-            return settle(
-              frameworkError(
-                FrameworkErrorCode.INVALID_INPUT,
-                ("detail" in validation ? validation.detail : undefined) ??
-                  `${path} failed runtime validation`,
-              ),
-            );
-          }
-        }
-      } catch {
-        return settle(
-          frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`),
-        );
-      }
-      const timeoutMs = requestTimeout(invokeOpts.timeoutMs, lifecycle?.limits);
-      const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
-      if (timeoutError !== undefined) {
-        return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError));
-      }
-      requestId = crypto.randomUUID();
-      correlationId ??= requestId;
-      const rejection = lifecycle?.admit(requestId, path, correlationId);
-      if (rejection !== undefined) {
-        return settle(frameworkError(FrameworkErrorCode.UNAVAILABLE));
-      }
-
-      let reqFn: (args: Record<string | symbol, unknown>) => unknown;
-      let request: Record<string | symbol, unknown>;
-      try {
-        reqFn = instrumented.request as unknown as typeof reqFn;
-        const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
-        request = {
-          ...resolvedInput,
-          requestId,
-          correlationId,
-          path,
-          [flow]: requestId,
+        const startedAt = performance.now();
+        let requestId: string | undefined;
+        let correlationId = invokeOpts.correlationId;
+        const settle = <T extends InvocationResult>(result: T): T => {
+          const resultClass = result.ok
+            ? "success"
+            : result.error.kind === "domain"
+              ? "domain-error"
+              : "framework-error";
+          lifecycle?.events.emit({
+            type: "invocation-settled",
+            at: Date.now(),
+            ...(requestId === undefined ? {} : { flow: requestId }),
+            route: path,
+            ...(correlationId === undefined ? {} : { correlationId }),
+            result: resultClass,
+            ...(!result.ok && result.error.kind === "framework"
+              ? { frameworkCode: result.error.code }
+              : {}),
+            durationMs: performance.now() - startedAt,
+          });
+          return result;
         };
-      } catch {
-        lifecycle?.abandon(requestId);
-        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
-      }
-      if (isAborted(invokeOpts.signal)) {
-        lifecycle?.abandon(requestId);
-        return settle(frameworkError(FrameworkErrorCode.ABORTED));
-      }
-
-      let responsePromise: Promise<Record<string, unknown>>;
-      const deadline = performance.now() + timeoutMs;
-      try {
-        responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal, {
-          success: validators?.[path]?.output,
-          domainError: validators?.[path]?.domainError,
-          onInvalid: (phase, errorClass) =>
-            onInvalidResponse?.({ path, requestId, phase, errorClass }),
-          onFault: (phase, error) => onValidatorFault?.({ path, requestId, phase, error }),
-        });
-      } catch {
-        lifecycle?.abandon(requestId);
-        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
-      }
-      const response = responsePromise.then(
-        (value) => {
-          lifecycle?.pendingSettled(requestId);
-          return { kind: "response", value } as const;
-        },
-        (error: unknown) => {
-          lifecycle?.pendingSettled(requestId);
-          return { kind: "response-error", error } as const;
-        },
-      );
-      if (isAborted(invokeOpts.signal)) {
-        boundary.cancel(requestId);
-        lifecycle?.abandon(requestId);
-        return settle(frameworkError(FrameworkErrorCode.ABORTED));
-      }
-      const dispatch = Promise.resolve()
-        .then(() => reqFn(request))
-        .then(
-          () => ({ kind: "dispatched" }) as const,
-          (error: unknown) => ({ kind: "dispatch-error", error }) as const,
-        );
-      const first = await Promise.race([dispatch, response]);
-
-      if (first.kind === "dispatch-error") {
-        boundary.cancel(requestId);
-        lifecycle?.abandon(requestId);
-        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
-      }
-
-      if (first.kind === "response") {
-        // Let the causal cascade finish when it can, but an accepted answer is
-        // authoritative and cannot wait beyond the caller's original deadline.
-        await waitForDispatch(dispatch, deadline, invokeOpts.signal);
-        return settle(
-          fromEnvelope(first.value, frameworkResponses.has(first.value) ? "framework" : "authored"),
-        );
-      }
-      const settled = first.kind === "dispatched" ? await response : first;
-      if (settled.kind === "response") {
-        return settle(
-          fromEnvelope(
-            settled.value,
-            frameworkResponses.has(settled.value) ? "framework" : "authored",
-          ),
-        );
-      }
-      try {
-        throw settled.error;
-      } catch (err) {
-        if (err instanceof DOMException) {
-          if (err.name === "TimeoutError") {
-            return settle(frameworkError(FrameworkErrorCode.TIMED_OUT));
-          }
-          if (err.name === "AbortError") {
-            return settle(frameworkError(FrameworkErrorCode.ABORTED));
-          }
-        }
         if (isAborted(invokeOpts.signal)) {
           return settle(frameworkError(FrameworkErrorCode.ABORTED));
         }
-        return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
+        if (routes !== undefined && !routes.has(path)) {
+          return settle(frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`));
+        }
+        refresh?.();
+        // Validate the declared outer shape before recording an ask. Required
+        // keys test presence, defaults fill absent keys, and then the endpoint's
+        // application-supplied validator checks the complete admitted value.
+        try {
+          const contract = contracts?.[path];
+          if (contract !== undefined) {
+            const admitted = admitInput(contract, path, input);
+            if (!admitted.ok) {
+              return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail));
+            }
+            input = admitted.admitted as typeof input;
+          }
+          const inputValidator = validators?.[path]?.input;
+          if (inputValidator !== undefined) {
+            const validation = validateRuntimeValue(inputValidator, input);
+            if (!validation.ok) {
+              if (validation.errorClass === "ValidatorFault") {
+                onValidatorFault?.({
+                  path,
+                  phase: "input",
+                  error: validation.fault,
+                  ...(correlationId === undefined ? {} : { correlationId }),
+                });
+              }
+              return settle(
+                frameworkError(
+                  FrameworkErrorCode.INVALID_INPUT,
+                  ("detail" in validation ? validation.detail : undefined) ??
+                    `${path} failed runtime validation`,
+                ),
+              );
+            }
+          }
+        } catch {
+          return settle(
+            frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`),
+          );
+        }
+        const timeoutMs = requestTimeout(invokeOpts.timeoutMs, lifecycle?.limits);
+        const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
+        if (timeoutError !== undefined) {
+          return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError));
+        }
+        requestId = crypto.randomUUID();
+        correlationId ??= requestId;
+        const rejection = lifecycle?.admit(requestId, path, correlationId);
+        if (rejection !== undefined) {
+          return settle(frameworkError(FrameworkErrorCode.UNAVAILABLE));
+        }
+        closeReads = openReads?.(requestId);
+
+        let reqFn: (args: Record<string | symbol, unknown>) => unknown;
+        let request: Record<string | symbol, unknown>;
+        try {
+          reqFn = instrumented.request as unknown as typeof reqFn;
+          const resolvedInput = (input as Record<string, unknown> | undefined) ?? {};
+          request = {
+            ...resolvedInput,
+            requestId,
+            correlationId,
+            path,
+            [flow]: requestId,
+          };
+        } catch {
+          lifecycle?.abandon(requestId);
+          return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
+        }
+        if (isAborted(invokeOpts.signal)) {
+          lifecycle?.abandon(requestId);
+          return settle(frameworkError(FrameworkErrorCode.ABORTED));
+        }
+
+        let responsePromise: Promise<Record<string, unknown>>;
+        const deadline = performance.now() + timeoutMs;
+        try {
+          responsePromise = boundary.register(requestId, timeoutMs, invokeOpts.signal, {
+            success: validators?.[path]?.output,
+            domainError: validators?.[path]?.domainError,
+            onInvalid: (phase, errorClass) =>
+              onInvalidResponse?.({ path, requestId, phase, errorClass }),
+            onFault: (phase, error) => onValidatorFault?.({ path, requestId, phase, error }),
+          });
+        } catch {
+          lifecycle?.abandon(requestId);
+          return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
+        }
+        const response = responsePromise.then(
+          (value) => {
+            lifecycle?.pendingSettled(requestId);
+            return { kind: "response", value } as const;
+          },
+          (error: unknown) => {
+            lifecycle?.pendingSettled(requestId);
+            return { kind: "response-error", error } as const;
+          },
+        );
+        if (isAborted(invokeOpts.signal)) {
+          boundary.cancel(requestId);
+          lifecycle?.abandon(requestId);
+          return settle(frameworkError(FrameworkErrorCode.ABORTED));
+        }
+        const dispatch = Promise.resolve()
+          .then(() => reqFn(request))
+          .then(
+            () => ({ kind: "dispatched" }) as const,
+            (error: unknown) => ({ kind: "dispatch-error", error }) as const,
+          );
+        const first = await Promise.race([dispatch, response]);
+
+        if (first.kind === "dispatch-error") {
+          boundary.cancel(requestId);
+          lifecycle?.abandon(requestId);
+          return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
+        }
+
+        if (first.kind === "response") {
+          // Let the causal cascade finish when it can, but an accepted answer is
+          // authoritative and cannot wait beyond the caller's original deadline.
+          await waitForDispatch(dispatch, deadline, invokeOpts.signal);
+          return settle(
+            fromEnvelope(
+              first.value,
+              frameworkResponses.has(first.value) ? "framework" : "authored",
+            ),
+          );
+        }
+        const settled = first.kind === "dispatched" ? await response : first;
+        if (settled.kind === "response") {
+          return settle(
+            fromEnvelope(
+              settled.value,
+              frameworkResponses.has(settled.value) ? "framework" : "authored",
+            ),
+          );
+        }
+        try {
+          throw settled.error;
+        } catch (err) {
+          if (err instanceof DOMException) {
+            if (err.name === "TimeoutError") {
+              return settle(frameworkError(FrameworkErrorCode.TIMED_OUT));
+            }
+            if (err.name === "AbortError") {
+              return settle(frameworkError(FrameworkErrorCode.ABORTED));
+            }
+          }
+          if (isAborted(invokeOpts.signal)) {
+            return settle(frameworkError(FrameworkErrorCode.ABORTED));
+          }
+          return settle(frameworkError(FrameworkErrorCode.TRANSPORT_ERROR));
+        }
+      } finally {
+        closeReads?.();
       }
     },
   } as Invoker<C>;

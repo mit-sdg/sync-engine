@@ -317,7 +317,7 @@ async function lineRows(
   assertRows?: AssertRows,
 ): Promise<unknown[]> {
   if (op.query !== undefined) {
-    const rows = await queryRows(queryOf(op.query, env, site), op.in, frame);
+    const rows = await queryRows(queryOf(op.query, env, site), op.in, frame, env?.since);
     assertRows?.(rows.length);
     return rows;
   }
@@ -361,7 +361,7 @@ async function readLine(
   assertRows?: AssertRows,
 ): Promise<unknown[] | typeof UNBOUND> {
   if (op.op === "count") {
-    const rows = await queryRows(queryOf(op.query, env, "count"), op.in, frame);
+    const rows = await queryRows(queryOf(op.query, env, "count"), op.in, frame, env?.since);
     assertRows?.(rows.length);
     return rows;
   }

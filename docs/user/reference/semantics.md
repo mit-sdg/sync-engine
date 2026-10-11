@@ -346,7 +346,13 @@ An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
 actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
-caches before dispatch. `queryCache: "none"` disables this memoization; repeated
+caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
+without clearing: reads done for an outside invocation reuse only answers whose
+query began at or after that invocation was dispatched, so invocations already
+running keep the answers they read. Reads that serve no invocation then being
+answered, such as a direct `form` or reactions that continue after the
+response, reuse only answers begun since the latest dispatch. Action
+invalidation is unchanged. `queryCache: "none"` disables memoization; repeated
 reads execute the query implementation independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
 So must the computations, conditions, and custom ops that reads use: evaluation

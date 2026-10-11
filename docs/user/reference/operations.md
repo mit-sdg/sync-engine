@@ -57,6 +57,12 @@ belongs to one assembly, while a database client's connection pool is usually
 shared by the whole process: size the pool above the sum over the process's
 assemblies, so actions' writes are not queued behind reads.
 
+Under `queryCache: "memoize"`, each outside invocation clears every query cache,
+so concurrent invocations re-read what earlier ones had read, and the more so
+the faster each reads. `queryCache: "since-dispatch"` removes that loss: memory
+then holds the answers begun since the oldest invocation still being answered,
+rather than since the latest dispatch.
+
 Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions
 inside the state-owning action. Retryable operations need domain idempotency keys

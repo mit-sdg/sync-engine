@@ -773,6 +773,11 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     lifecycle?: RuntimeLifecycle;
     /** Refresh standing reads before a new application-interface ask. */
     refresh?: () => void;
+    /**
+     * Open an admitted application-interface ask's reads before it is
+     * dispatched, returning the function that closes them once it has settled.
+     */
+    openReads?: (flow: string) => () => void;
 }): Invoker<C>;
 
 === dist/engine/boundary/invocation/lifecycle.d.ts ===
@@ -1966,7 +1971,7 @@ export declare class FiringPipeline {
     private readonly settlement;
     constructor(matcher: TriggerMatcher, actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
-        readEnv(): ReadEnv;
+        readEnv(flow?: unknown): ReadEnv;
     }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, rowGuard: (flow: string) => AssertRows, consumeAction: (flow: string) => boolean);
     fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
     /**
@@ -2042,7 +2047,8 @@ import type { ActionRecord } from "./actions.ts";
 import type { AnyAction, InstrumentedAction } from "../types.ts";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
-export type QueryCacheMode = "memoize" | "none";
+import type { DispatchPoints } from "../../utils/memoize.ts";
+export type QueryCacheMode = "memoize" | "since-dispatch" | "none";
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
     readonly error: string;
@@ -2064,13 +2070,16 @@ export interface InstrumentationState {
     actions: ActionConcept;
     boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
     queryCaches: WeakMap<object, Array<{
-        invalidate: () => void;
+        invalidate(): void;
+        prune?(oldest: number): void;
     }>>;
     scheduler: ActionScheduling;
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
     requireDeclaredRefusals?: boolean;
     queryCache?: QueryCacheMode;
+    /** Present under `queryCache: "since-dispatch"`: the point an answer begun now carries. */
+    dispatchPoints?: DispatchPoints;
     registerConcept(name: string, instrumented: object): void;
     execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
@@ -2097,6 +2106,8 @@ export declare class ConceptInstrumentation {
     instrument<T extends object>(concept: T): T;
     private invalidate;
     invalidateAll(): void;
+    /** Forget every memoized answer begun before `oldest`, which no read may reuse any more. */
+    pruneAll(oldest: number): void;
     rawConceptOf(instrumented: object): object;
 }
 
@@ -2554,6 +2565,7 @@ export declare class Reacting {
     private readonly triggerMatcher;
     private readonly firingPipeline;
     private readonly execution?;
+    private readonly invocationReads?;
     constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
@@ -2561,6 +2573,14 @@ export declare class Reacting {
     set logging(level: Logging);
     registerComputations(computations: Record<string, ComputationRef>): void;
     invalidateAllCaches(): void;
+    /**
+     * Open an outside invocation's reads, before it is dispatched. Under
+     * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
+     * begun from now on, and answers no invocation may reuse any more are
+     * forgotten; otherwise every query cache is cleared. Call the returned
+     * function once the invocation has settled.
+     */
+    beginInvocation(flow: string): () => void;
     register(reactions: ReactionMap, authoredByBase?: Readonly<Record<string, AuthoredDeclarationIdentity>>): void;
     readEnv(): ReadEnv;
     form(fused: FusedFormer): Promise<unknown>;
@@ -3085,6 +3105,7 @@ export declare class AuthoredDeclarationIdentities {
 
 === dist/engine/reads/definition-registry.d.ts ===
 /** Own the definitions and read environments installed in one engine. */
+import type { InvocationReads } from "./invocation-reads.ts";
 import type { InstrumentedQuery, ReactionDeclaration } from "../reactions/types.ts";
 import type { ReadAhead } from "./where-evaluation.ts";
 import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
@@ -3106,6 +3127,11 @@ export interface ReadEnv {
     formerByName(name: string, site: string): FormerRef;
     /** How rows are read together; absent, every line reads its rows one after another. */
     readonly readAhead?: ReadAhead;
+    /**
+     * Under `queryCache: "since-dispatch"`, the earliest dispatch point whose
+     * memoized answers these reads may reuse; absent, the latest.
+     */
+    readonly since?: number;
 }
 export declare class Registry {
     private readonly conceptsByName;
@@ -3119,6 +3145,7 @@ export declare class Registry {
     private readonly binder;
     private env;
     private readAhead;
+    private invocationReads;
     constructor();
     get concepts(): Map<string, object>;
     registerConcept(name: string, instrumented: object): void;
@@ -3141,7 +3168,11 @@ export declare class Registry {
     readBackEnv(): ReadBackEnv;
     /** Set how every later evaluation reads rows together; undefined reads them one after another. */
     configureReadAhead(readAhead: ReadAhead | undefined): void;
-    readEnv(): ReadEnv;
+    /** Under `queryCache: "since-dispatch"`, which answers reads done for each flow may reuse. */
+    configureInvocationReads(invocationReads: InvocationReads | undefined): void;
+    /** The environment for reads; given the flow they serve, they reuse only the answers it may. */
+    readEnv(flow?: unknown): ReadEnv;
+    private sharedEnv;
     private conceptNamed;
     private computationNamed;
     private indexView;
@@ -3455,6 +3486,36 @@ export declare class ImportedIrBinder {
     private assertConsequenceUsable;
     private assertBindingPartitions;
 }
+
+=== dist/engine/reads/invocation-reads.d.ts ===
+/**
+ * Which memoized query answers each outside invocation may reuse, under
+ * `queryCache: "since-dispatch"`.
+ *
+ * Every outside invocation opens a new dispatch point. Reads done for its flow
+ * reuse only answers whose query began at or after that point, so the
+ * invocation sees every change that landed before it was dispatched, as when
+ * every cache is cleared at dispatch. Unlike clearing, invocations already
+ * running keep the answers they read. A read that serves no invocation being
+ * served uses the latest point, which is what clearing at each dispatch gives.
+ */
+export declare class InvocationReads {
+    private latest;
+    private readonly sinceByFlow;
+    /** Dispatch points of invocations being served, oldest first. */
+    private readonly running;
+    private readonly ended;
+    /** Open a new dispatch point for `flow`; the returned function ends it once. */
+    begin(flow: string): () => void;
+    /** The earliest point whose answers reads for `flow` may reuse. */
+    since(flow: unknown): number;
+    /** The point an answer begun now carries; every invocation running may reuse it. */
+    get now(): number;
+    /** Answers begun before this point can no longer be reused by any read. */
+    get oldest(): number;
+}
+/** Dispatch points for an assembly's `queryCache` mode; undefined unless it is "since-dispatch". */
+export declare function invocationReadsFor(queryCache: string | undefined): InvocationReads | undefined;
 
 === dist/engine/reads/ir.d.ts ===
 /**
@@ -4089,8 +4150,12 @@ export declare function patternVariables(...mappings: Array<Mapping | undefined>
  * array of records is any number of answers. Anything else is a query fault.
  */
 import type { Frame, InstrumentedQuery, Mapping } from "../reactions/types.ts";
+/** A cached implementation that can reuse answers begun since an earlier dispatch point. */
+type EvaluationQuery = InstrumentedQuery & {
+    readSince?: (since: number, args: [Mapping]) => unknown;
+};
 /** Give engine-owned evaluations the cached implementation behind a direct-read root. */
-export declare function registerEvaluationQuery(direct: InstrumentedQuery, evaluation: InstrumentedQuery): void;
+export declare function registerEvaluationQuery(direct: InstrumentedQuery, evaluation: EvaluationQuery): void;
 /**
  * A query returned something other than one record or an array of records.
  * This is a runtime fault, never a refusal: queries have no refusal posture, so
@@ -4110,9 +4175,11 @@ export declare function assertConceptQuery(query: unknown, op: string, hint?: st
 /**
  * Fill a query input pattern from the current frame, invoke the query, and
  * normalize its answer to rows. Each caller decides how to handle an unbound
- * input.
+ * input. Given `since`, a memoized answer is reused only if its query began at
+ * or after that dispatch point.
  */
-export declare function queryRows(query: InstrumentedQuery, input: Mapping, frame: Frame): Promise<unknown[]>;
+export declare function queryRows(query: InstrumentedQuery, input: Mapping, frame: Frame, since?: number): Promise<unknown[]>;
+export {};
 
 === dist/engine/reads/query-contracts.d.ts ===
 import type { QueryPromise } from "./query-metadata.ts";
@@ -5984,15 +6051,34 @@ export {};
  * Query memoization between mutations.
  *
  * Instrumentation invalidates every query cache before and after an action
- * body. This module owns only cache identity and rejected-promise eviction.
+ * body. This module owns only cache identity, rejected-promise eviction, and,
+ * for `queryCache: "since-dispatch"`, which dispatch point each answer began at.
  */
 type AnyFn = (...args: never[]) => unknown;
 interface MemoizedQuery<T extends AnyFn> {
     (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
     invalidate(): void;
 }
+interface DispatchPointMemoizedQuery<T extends AnyFn> extends MemoizedQuery<T> {
+    /** Answer from an entry begun at or after `since`, or run the query and keep its answer. */
+    readSince(since: number, args: Parameters<T>): ReturnType<T>;
+    /** Forget every answer begun before `oldest`, which no read may reuse any more. */
+    prune(oldest: number): void;
+}
+/** The dispatch point an answer begun now carries. */
+export interface DispatchPoints {
+    readonly now: number;
+}
 /** Memoize a query until invalidated; a rejected promise is never retained. */
 export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
+/**
+ * Memoize a query by the dispatch point each answer began at. A plain call
+ * reuses only answers begun at the latest point, as when every cache is
+ * cleared at dispatch; `readSince` reuses any answer begun at or after an
+ * earlier point. One entry per key suffices: a fresh answer satisfies every
+ * reader. A rejected promise is never retained.
+ */
+export declare function memoizeQuerySinceDispatch<T extends AnyFn>(fn: T, points: DispatchPoints): DispatchPointMemoizedQuery<T>;
 export {};
 
 === dist/engine/utils/ordinal.d.ts ===

@@ -16,11 +16,12 @@ import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-cont
 import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
-import { memoizeQuery } from "@engine/utils/memoize";
+import { memoizeQuery, memoizeQuerySinceDispatch } from "@engine/utils/memoize";
+import type { DispatchPoints } from "@engine/utils/memoize";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
-export type QueryCacheMode = "memoize" | "none";
+export type QueryCacheMode = "memoize" | "since-dispatch" | "none";
 
 function uncachedQuery<T extends (...args: never[]) => unknown>(
   query: T,
@@ -56,12 +57,14 @@ export type InstrumentedConcept<T extends object> = {
 export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
-  queryCaches: WeakMap<object, Array<{ invalidate: () => void }>>;
+  queryCaches: WeakMap<object, Array<{ invalidate(): void; prune?(oldest: number): void }>>;
   scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   requireDeclaredRefusals?: boolean;
   queryCache?: QueryCacheMode;
+  /** Present under `queryCache: "since-dispatch"`: the point an answer begun now carries. */
+  dispatchPoints?: DispatchPoints;
   registerConcept(name: string, instrumented: object): void;
   execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
@@ -165,7 +168,12 @@ export function instrumentConcept<T extends object>(
         const memoized = boundActions.get(actionKey);
         if (memoized !== undefined) return memoized;
         const query = value.bind(concept);
-        const withCache = state.queryCache === "none" ? uncachedQuery(query) : memoizeQuery(query);
+        const withCache =
+          state.queryCache === "none"
+            ? uncachedQuery(query)
+            : state.dispatchPoints !== undefined
+              ? memoizeQuerySinceDispatch(query, state.dispatchPoints)
+              : memoizeQuery(query);
         const displayName = `${conceptNameOf(concept)}.${String(property)}`;
         const directQuery =
           state.execution?.admitFlow === undefined
@@ -446,6 +454,20 @@ export class ConceptInstrumentation {
       const concept = ref.deref();
       if (concept !== undefined) this.invalidate(concept);
       else this.state.concepts.delete(ref);
+    }
+  }
+
+  /** Forget every memoized answer begun before `oldest`, which no read may reuse any more. */
+  pruneAll(oldest: number): void {
+    for (const ref of this.state.concepts) {
+      const concept = ref.deref();
+      if (concept === undefined) {
+        this.state.concepts.delete(ref);
+        continue;
+      }
+      this.state.queryCaches
+        .get(this.rawConceptOf(concept))
+        ?.forEach((cache) => cache.prune?.(oldest));
     }
   }
 

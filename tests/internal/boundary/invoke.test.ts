@@ -60,6 +60,29 @@ describe("createInvoker", () => {
     expect(refreshes).toEqual(["refreshed"]);
   });
 
+  test("opens an admitted ask's reads before dispatch and closes them once it settles", async () => {
+    const reads: string[] = [];
+    const requesting = new Requesting();
+    const reaction = new Reacting();
+    const invoker = createInvoker({
+      boundary: requesting,
+      instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
+      contracts: { "/required": { required: ["value"] } },
+      openReads: (flow) => {
+        reads.push(`open ${flow}`);
+        return () => reads.push(`close ${flow}`);
+      },
+    });
+
+    await invoker.invoke("/required", {});
+    expect(reads).toEqual([]);
+
+    const result = await invoker.invoke("/required", { value: 1 }, { timeoutMs: 20 });
+    expect(result.ok).toBe(false);
+    const flow = reads[0]?.slice("open ".length);
+    expect(reads).toEqual([`open ${flow}`, `close ${flow}`]);
+  });
+
   test("invokes endpoint and returns success with echoed value", async () => {
     const { invoker } = setup();
 

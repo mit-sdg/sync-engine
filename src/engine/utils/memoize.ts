@@ -2,7 +2,8 @@
  * Query memoization between mutations.
  *
  * Instrumentation invalidates every query cache before and after an action
- * body. This module owns only cache identity and rejected-promise eviction.
+ * body. This module owns only cache identity, rejected-promise eviction, and,
+ * for `queryCache: "since-dispatch"`, which dispatch point each answer began at.
  */
 
 type AnyFn = (...args: never[]) => unknown;
@@ -19,6 +20,18 @@ class QueryCacheKeyDepthError extends Error {
 interface MemoizedQuery<T extends AnyFn> {
   (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
   invalidate(): void;
+}
+
+interface DispatchPointMemoizedQuery<T extends AnyFn> extends MemoizedQuery<T> {
+  /** Answer from an entry begun at or after `since`, or run the query and keep its answer. */
+  readSince(since: number, args: Parameters<T>): ReturnType<T>;
+  /** Forget every answer begun before `oldest`, which no read may reuse any more. */
+  prune(oldest: number): void;
+}
+
+/** The dispatch point an answer begun now carries. */
+export interface DispatchPoints {
+  readonly now: number;
 }
 
 interface IdentityTable {
@@ -139,5 +152,68 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
     cache = new Map();
   };
   return wrapper as MemoizedQuery<T>;
+}
+
+/**
+ * Memoize a query by the dispatch point each answer began at. A plain call
+ * reuses only answers begun at the latest point, as when every cache is
+ * cleared at dispatch; `readSince` reuses any answer begun at or after an
+ * earlier point. One entry per key suffices: a fresh answer satisfies every
+ * reader. A rejected promise is never retained.
+ */
+export function memoizeQuerySinceDispatch<T extends AnyFn>(
+  fn: T,
+  points: DispatchPoints,
+): DispatchPointMemoizedQuery<T> {
+  let cache = new Map<string, { value: unknown; begun: number }>();
+  /** Keys in the order their answers began, grouped by point, for pruning. */
+  let begun: { point: number; keys: string[] }[] = [];
+  const identities = identityTable();
+  const readSince = function (
+    this: ThisParameterType<T>,
+    since: number,
+    args: Parameters<T>,
+  ): ReturnType<T> {
+    let key: string;
+    try {
+      key = queryCacheKey(args, identities);
+    } catch (error) {
+      if (error instanceof QueryCacheKeyDepthError) return fn.call(this, ...args) as ReturnType<T>;
+      throw error;
+    }
+    const known = cache.get(key);
+    if (known !== undefined && known.begun >= since) return known.value as ReturnType<T>;
+    const point = points.now;
+    const result = fn.call(this, ...args);
+    const promise = normalizePromiseLike(result);
+    // Cache the normalized promise so structural thenables execute only once.
+    const entry = { value: promise ?? result, begun: point };
+    cache.set(key, entry);
+    const last = begun.at(-1);
+    if (last?.point === point) last.keys.push(key);
+    else begun.push({ point, keys: [key] });
+    if (promise !== undefined) {
+      const kept = cache;
+      void promise.catch(() => {
+        if (kept.get(key) === entry) kept.delete(key);
+      });
+    }
+    return entry.value as ReturnType<T>;
+  };
+  const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
+    return readSince.call(this, points.now, args);
+  };
+  wrapper.readSince = readSince;
+  wrapper.invalidate = () => {
+    cache = new Map();
+    begun = [];
+  };
+  wrapper.prune = (oldest: number) => {
+    while (begun.length > 0 && begun[0]!.point < oldest) {
+      const { point, keys } = begun.shift()!;
+      for (const key of keys) if (cache.get(key)?.begun === point) cache.delete(key);
+    }
+  };
+  return wrapper as DispatchPointMemoizedQuery<T>;
 }
 import { normalizePromiseLike } from "./promise-like.ts";

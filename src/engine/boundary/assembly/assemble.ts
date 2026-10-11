@@ -440,8 +440,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.conceptSet === undefined
       ? options.vocabulary!
       : conceptSetVocabulary(options.conceptSet);
-  if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
-    throw new Error('assemble: queryCache must be "memoize" or "none".');
+  if (
+    options.queryCache !== undefined &&
+    !["memoize", "since-dispatch", "none"].includes(options.queryCache)
+  ) {
+    throw new Error('assemble: queryCache must be "memoize", "since-dispatch" or "none".');
   }
   assertConcurrentReads(options.concurrentReads);
 
@@ -723,7 +726,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
         phase,
       });
     },
-    refresh: () => engine.invalidateAllCaches(),
+    openReads: (flow) => engine.beginInvocation(flow),
   });
 
   const publicInterface: ApplicationInterface = {
