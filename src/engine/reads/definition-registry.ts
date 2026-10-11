@@ -41,9 +41,9 @@ export interface ReadEnv {
   readonly readAhead?: ReadAhead;
   /**
    * Under `queryCache: "since-dispatch"`, the earliest dispatch point whose
-   * memoized answers these reads may reuse; absent, the latest.
+   * memoized answers a read may reuse, asked at each read; absent, the current.
    */
-  readonly since?: number;
+  readonly since?: () => number;
 }
 
 export class Registry {
@@ -70,7 +70,7 @@ export class Registry {
     });
     this.authored = new AuthoredReferenceResolver(this.resolver, {
       computationNamed: (name) => this.computationNamed(name),
-      readEnv: () => this.readEnv(),
+      readEnv: (flow) => this.readEnv(flow),
     });
     this.validator = new ViewFormerValidator({
       resolver: this.resolver,
@@ -238,10 +238,11 @@ export class Registry {
   }
 
   /** The environment for reads; given the flow they serve, they reuse only the answers it may. */
-  readEnv(flow?: unknown): ReadEnv {
+  readEnv(flow?: string): ReadEnv {
     const env = this.sharedEnv();
-    if (this.invocationReads === undefined) return env;
-    return { ...env, since: this.invocationReads.since(flow) };
+    const invocationReads = this.invocationReads;
+    if (invocationReads === undefined) return env;
+    return { ...env, since: () => invocationReads.since(flow) };
   }
 
   private sharedEnv(): ReadEnv {

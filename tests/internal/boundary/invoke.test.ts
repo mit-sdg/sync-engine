@@ -44,43 +44,53 @@ function setup() {
 }
 
 describe("createInvoker", () => {
-  test("refreshes standing reads before admitting each application ask", async () => {
-    const refreshes: string[] = [];
+  test("refreshes an admitted ask's reads before dispatch and closes them once it settles", async () => {
+    const steps: string[] = [];
     const requesting = new Requesting();
     const reaction = new Reacting();
+    const instrumented = reaction.instrumentConcept(requesting, "RequestBoundary");
     const invoker = createInvoker({
       boundary: requesting,
-      instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
+      instrumented: new Proxy(instrumented, {
+        get(target, property, receiver) {
+          const value = Reflect.get(target, property, receiver);
+          if (property !== "request") return value;
+          return (args: Record<string | symbol, unknown>) => {
+            steps.push("dispatch");
+            return value(args);
+          };
+        },
+      }),
       contracts: { "/required": { required: ["value"] } },
-      refresh: () => refreshes.push("refreshed"),
-    });
-
-    await invoker.invoke("/required", {});
-
-    expect(refreshes).toEqual(["refreshed"]);
-  });
-
-  test("opens an admitted ask's reads before dispatch and closes them once it settles", async () => {
-    const reads: string[] = [];
-    const requesting = new Requesting();
-    const reaction = new Reacting();
-    const invoker = createInvoker({
-      boundary: requesting,
-      instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
-      contracts: { "/required": { required: ["value"] } },
-      openReads: (flow) => {
-        reads.push(`open ${flow}`);
-        return () => reads.push(`close ${flow}`);
+      refresh: (flow) => {
+        steps.push(`refresh ${flow}`);
+        return () => steps.push(`close ${flow}`);
       },
     });
 
     await invoker.invoke("/required", {});
-    expect(reads).toEqual([]);
+    expect(steps).toEqual([]);
 
     const result = await invoker.invoke("/required", { value: 1 }, { timeoutMs: 20 });
     expect(result.ok).toBe(false);
-    const flow = reads[0]?.slice("open ".length);
-    expect(reads).toEqual([`open ${flow}`, `close ${flow}`]);
+    const flow = steps[0]?.slice("refresh ".length);
+    expect(steps).toEqual([`refresh ${flow}`, "dispatch", `close ${flow}`]);
+  });
+
+  test("a refresh that returns nothing is still called once per admitted ask", async () => {
+    let refreshes = 0;
+    const requesting = new Requesting();
+    const reaction = new Reacting();
+    const invoker = createInvoker({
+      boundary: requesting,
+      instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
+      refresh: () => {
+        refreshes += 1;
+      },
+    });
+
+    await invoker.invoke("/anything", {}, { timeoutMs: 20 });
+    expect(refreshes).toBe(1);
   });
 
   test("invokes endpoint and returns success with echoed value", async () => {

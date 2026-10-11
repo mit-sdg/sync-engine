@@ -93,7 +93,12 @@ export class Reacting {
       execution,
       requireDeclaredRefusals,
       queryCache: queryCache ?? "memoize",
-      ...(this.invocationReads === undefined ? {} : { dispatchPoints: this.invocationReads }),
+      ...(this.invocationReads === undefined
+        ? {}
+        : {
+            dispatchPoints: this.invocationReads,
+            openReads: (flowToken: string) => this.openReads(flowToken),
+          }),
       react: (record, durationMs) => this.react(record, durationMs),
       settle: (flowToken) => this.firingPipeline.settle(flowToken),
       emit: (record, durationMs) => this.reactionLogger.emit(record, durationMs),
@@ -146,18 +151,18 @@ export class Reacting {
   /**
    * Open an outside invocation's reads, before it is dispatched. Under
    * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
-   * begun from now on, and answers no invocation may reuse any more are
-   * forgotten; otherwise every query cache is cleared. Call the returned
-   * function once the invocation has settled.
+   * begun from now on until the returned function closes them, and answers no
+   * open read may reuse any more are forgotten; otherwise every query cache is
+   * cleared and the returned function does nothing.
    */
-  beginInvocation(flow: string): () => void {
+  openReads(flow: string): () => void {
     if (this.invocationReads === undefined) {
       this.invalidateAllCaches();
       return () => {};
     }
-    const end = this.invocationReads.begin(flow);
+    const close = this.invocationReads.openFor(flow);
     this.instrumentation.pruneAll(this.invocationReads.oldest);
-    return end;
+    return close;
   }
 
   register(
@@ -306,12 +311,12 @@ export class Reacting {
     if (this.execution?.admitFlow?.(flowToken, route, flowToken) !== undefined) {
       throw new Error(`Read "${route}" is unavailable.`);
     }
-    const endReads = this.execution === undefined ? undefined : this.beginInvocation(flowToken);
+    const closeReads = this.execution === undefined ? undefined : this.openReads(flowToken);
     try {
       this.registry.assertFormable(fused.former);
       return await formTree(fused, this.registry.readEnv(flowToken), this.rowGuard(flowToken));
     } finally {
-      endReads?.();
+      closeReads?.();
       this.execution?.flowSettled?.(flowToken);
     }
   }
@@ -474,6 +479,7 @@ export class Reacting {
           if (key !== undefined) optionalBindings.add(key);
         }
       }
+      const flowToken = typeof current[0]?.[flow] === "string" ? current[0][flow] : undefined;
       current =
         op.op === "earlier"
           ? this.applyEarlier(current, op.pattern)
@@ -482,8 +488,8 @@ export class Reacting {
             : await applyWhereOps(
                 current,
                 [op],
-                this.registry.readEnv(current[0]?.[flow]),
-                this.rowGuard(typeof current[0]?.[flow] === "string" ? current[0][flow] : ""),
+                this.registry.readEnv(flowToken),
+                this.rowGuard(flowToken ?? ""),
               );
       if (current.length === 0) break;
     }

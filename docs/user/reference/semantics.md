@@ -347,13 +347,15 @@ by concept instance and argument between invalidation points. Instrumented
 actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
-without clearing: reads done for an outside invocation reuse only answers whose
-query began at or after that invocation was dispatched, so invocations already
-running keep the answers they read. Reads that serve no invocation then being
-answered, such as a direct `form` or reactions that continue after the
-response, reuse only answers begun since the latest dispatch. Action
-invalidation is unchanged. `queryCache: "none"` disables memoization; repeated
-reads execute the query implementation independently.
+without clearing: until an outside invocation settles (its cascade has finished
+or its deadline has passed), reads done for its flow reuse only answers whose
+query began at or after it was dispatched, so invocations already running keep
+the answers they read. A direct `form` and a direct query root read the same
+way from their own start. Any other read, such as a reaction in a flow begun by
+a direct action, reuses only answers begun since the latest of those starts,
+decided at each read. Action invalidation is unchanged. `queryCache: "none"`
+disables memoization; repeated reads execute the query implementation
+independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
 So must the computations, conditions, and custom ops that reads use: evaluation
 may run them in another order than the rows', and for rows whose answers it

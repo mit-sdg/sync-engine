@@ -110,19 +110,19 @@ function rowsOfAnswer(value: unknown, query: NamedQuery): unknown[] {
  * Fill a query input pattern from the current frame, invoke the query, and
  * normalize its answer to rows. Each caller decides how to handle an unbound
  * input. Given `since`, a memoized answer is reused only if its query began at
- * or after that dispatch point.
+ * or after the dispatch point it gives at the moment of the read.
  */
 export async function queryRows(
   query: InstrumentedQuery,
   input: Mapping,
   frame: Frame,
-  since?: number,
+  since?: () => number,
 ): Promise<unknown[]> {
   const evaluate: EvaluationQuery = evaluationQueries.get(query) ?? query;
   const args = bindInputMapping(frame, input);
   const answer =
     since !== undefined && evaluate.readSince !== undefined
-      ? evaluate.readSince(since, [args])
+      ? evaluate.readSince(since(), [args])
       : evaluate(args);
   return rowsOfAnswer(await answer, query);
 }

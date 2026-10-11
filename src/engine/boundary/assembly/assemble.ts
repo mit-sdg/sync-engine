@@ -726,7 +726,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
         phase,
       });
     },
-    openReads: (flow) => engine.beginInvocation(flow),
+    refresh: (flow) => engine.openReads(flow),
   });
 
   const publicInterface: ApplicationInterface = {

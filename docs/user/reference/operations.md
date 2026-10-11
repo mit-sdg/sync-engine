@@ -59,9 +59,11 @@ assemblies, so actions' writes are not queued behind reads.
 
 Under `queryCache: "memoize"`, each outside invocation clears every query cache,
 so concurrent invocations re-read what earlier ones had read, and the more so
-the faster each reads. `queryCache: "since-dispatch"` removes that loss: memory
-then holds the answers begun since the oldest invocation still being answered,
-rather than since the latest dispatch.
+the faster each reads. `queryCache: "since-dispatch"` removes that loss. Memory then
+holds at most one answer per query and argument, kept while some invocation,
+direct `form`, or direct query root still open began before it; older answers
+are dropped when the next one opens. A `form` or query that never settles keeps
+those answers until it does, since only invocations have a deadline.
 
 Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions

@@ -258,13 +258,11 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
   }) => void;
   /** Root admission, pending waits, drain state, and actual-flow quiescence. */
   lifecycle?: RuntimeLifecycle;
-  /** Refresh standing reads before a new application-interface ask. */
-  refresh?: () => void;
   /**
-   * Open an admitted application-interface ask's reads before it is
-   * dispatched, returning the function that closes them once it has settled.
+   * Refresh standing reads for an admitted application-interface ask, before
+   * it is dispatched. A returned function is called once the ask has settled.
    */
-  openReads?: (flow: string) => () => void;
+  refresh?: (flow: string) => void | (() => void);
 }): Invoker<C> {
   const {
     boundary,
@@ -276,95 +274,91 @@ export function createInvoker<C extends ContractShape = ContractShape>(opts: {
     onValidatorFault,
     lifecycle,
     refresh,
-    openReads,
   } = opts;
   const deadlinePolicy = lifecycle ?? new RuntimeLifecycle();
 
   return {
     async invoke(path, input, invokeOpts: InvokeOptions = {}) {
-      let closeReads: (() => void) | undefined;
+      const startedAt = performance.now();
+      let requestId: string | undefined;
+      let correlationId = invokeOpts.correlationId;
+      const settle = <T extends InvocationResult>(result: T): T => {
+        const resultClass = result.ok
+          ? "success"
+          : result.error.kind === "domain"
+            ? "domain-error"
+            : "framework-error";
+        lifecycle?.events.emit({
+          type: "invocation-settled",
+          at: Date.now(),
+          ...(requestId === undefined ? {} : { flow: requestId }),
+          route: path,
+          ...(correlationId === undefined ? {} : { correlationId }),
+          result: resultClass,
+          ...(!result.ok && result.error.kind === "framework"
+            ? { frameworkCode: result.error.code }
+            : {}),
+          durationMs: performance.now() - startedAt,
+        });
+        return result;
+      };
+      if (isAborted(invokeOpts.signal)) {
+        return settle(frameworkError(FrameworkErrorCode.ABORTED));
+      }
+      if (routes !== undefined && !routes.has(path)) {
+        return settle(frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`));
+      }
+      // Validate the declared outer shape before recording an ask. Required
+      // keys test presence, defaults fill absent keys, and then the endpoint's
+      // application-supplied validator checks the complete admitted value.
       try {
-        const startedAt = performance.now();
-        let requestId: string | undefined;
-        let correlationId = invokeOpts.correlationId;
-        const settle = <T extends InvocationResult>(result: T): T => {
-          const resultClass = result.ok
-            ? "success"
-            : result.error.kind === "domain"
-              ? "domain-error"
-              : "framework-error";
-          lifecycle?.events.emit({
-            type: "invocation-settled",
-            at: Date.now(),
-            ...(requestId === undefined ? {} : { flow: requestId }),
-            route: path,
-            ...(correlationId === undefined ? {} : { correlationId }),
-            result: resultClass,
-            ...(!result.ok && result.error.kind === "framework"
-              ? { frameworkCode: result.error.code }
-              : {}),
-            durationMs: performance.now() - startedAt,
-          });
-          return result;
-        };
-        if (isAborted(invokeOpts.signal)) {
-          return settle(frameworkError(FrameworkErrorCode.ABORTED));
-        }
-        if (routes !== undefined && !routes.has(path)) {
-          return settle(frameworkError(FrameworkErrorCode.NOT_FOUND, `Unknown endpoint: ${path}`));
-        }
-        refresh?.();
-        // Validate the declared outer shape before recording an ask. Required
-        // keys test presence, defaults fill absent keys, and then the endpoint's
-        // application-supplied validator checks the complete admitted value.
-        try {
-          const contract = contracts?.[path];
-          if (contract !== undefined) {
-            const admitted = admitInput(contract, path, input);
-            if (!admitted.ok) {
-              return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail));
-            }
-            input = admitted.admitted as typeof input;
+        const contract = contracts?.[path];
+        if (contract !== undefined) {
+          const admitted = admitInput(contract, path, input);
+          if (!admitted.ok) {
+            return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, admitted.detail));
           }
-          const inputValidator = validators?.[path]?.input;
-          if (inputValidator !== undefined) {
-            const validation = validateRuntimeValue(inputValidator, input);
-            if (!validation.ok) {
-              if (validation.errorClass === "ValidatorFault") {
-                onValidatorFault?.({
-                  path,
-                  phase: "input",
-                  error: validation.fault,
-                  ...(correlationId === undefined ? {} : { correlationId }),
-                });
-              }
-              return settle(
-                frameworkError(
-                  FrameworkErrorCode.INVALID_INPUT,
-                  ("detail" in validation ? validation.detail : undefined) ??
-                    `${path} failed runtime validation`,
-                ),
-              );
+          input = admitted.admitted as typeof input;
+        }
+        const inputValidator = validators?.[path]?.input;
+        if (inputValidator !== undefined) {
+          const validation = validateRuntimeValue(inputValidator, input);
+          if (!validation.ok) {
+            if (validation.errorClass === "ValidatorFault") {
+              onValidatorFault?.({
+                path,
+                phase: "input",
+                error: validation.fault,
+                ...(correlationId === undefined ? {} : { correlationId }),
+              });
             }
+            return settle(
+              frameworkError(
+                FrameworkErrorCode.INVALID_INPUT,
+                ("detail" in validation ? validation.detail : undefined) ??
+                  `${path} failed runtime validation`,
+              ),
+            );
           }
-        } catch {
-          return settle(
-            frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`),
-          );
         }
-        const timeoutMs = requestTimeout(invokeOpts.timeoutMs, lifecycle?.limits);
-        const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
-        if (timeoutError !== undefined) {
-          return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError));
-        }
-        requestId = crypto.randomUUID();
-        correlationId ??= requestId;
-        const rejection = lifecycle?.admit(requestId, path, correlationId);
-        if (rejection !== undefined) {
-          return settle(frameworkError(FrameworkErrorCode.UNAVAILABLE));
-        }
-        closeReads = openReads?.(requestId);
-
+      } catch {
+        return settle(
+          frameworkError(FrameworkErrorCode.INVALID_INPUT, `${path} failed input admission`),
+        );
+      }
+      const timeoutMs = requestTimeout(invokeOpts.timeoutMs, lifecycle?.limits);
+      const timeoutError = deadlinePolicy.validateTimeout(timeoutMs);
+      if (timeoutError !== undefined) {
+        return settle(frameworkError(FrameworkErrorCode.INVALID_INPUT, timeoutError));
+      }
+      requestId = crypto.randomUUID();
+      correlationId ??= requestId;
+      const rejection = lifecycle?.admit(requestId, path, correlationId);
+      if (rejection !== undefined) {
+        return settle(frameworkError(FrameworkErrorCode.UNAVAILABLE));
+      }
+      const closeReads = refresh?.(requestId);
+      try {
         let reqFn: (args: Record<string | symbol, unknown>) => unknown;
         let request: Record<string | symbol, unknown>;
         try {
