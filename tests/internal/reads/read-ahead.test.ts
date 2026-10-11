@@ -1,10 +1,11 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { vocabulary } from "@sync-engine/advanced";
-import { compute, each, former } from "@sync-engine/language";
+import { each, former } from "@sync-engine/language";
 import type { Empty } from "@sync-engine/internal/reactions/types";
 import type { ExecutionLimits } from "@sync-engine/boundary";
 import type { OperationalEvent } from "@sync-engine/internal/reactions/runtime/operational";
 import type { ConcurrentReads } from "@sync-engine/internal/reads/where-evaluation";
+import type { QueryCacheMode } from "@sync-engine/internal/reactions/runtime/instrumenting";
 import { assemble } from "@sync-engine/internal/boundary/assembly/assemble";
 
 const limits = (overrides: Partial<ExecutionLimits> = {}): ExecutionLimits => ({
@@ -22,7 +23,7 @@ const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 /** A concept whose detail reads take longer for earlier rows, and count what is in flight. */
 function shelf(
   size: number,
-  options: { failAt?: number[]; hangAt?: number[]; rowsPerDetail?: number } = {},
+  options: { failAt?: number[]; hangAt?: number[]; rowsPerDetail?: number; wideAt?: number } = {},
 ) {
   let release!: () => void;
   const hung = new Promise<void>((resolve) => (release = resolve));
@@ -31,6 +32,7 @@ function shelf(
     inFlight = 0;
     maxInFlight = 0;
     detailReads = 0;
+    noteReads = 0;
     started: number[] = [];
 
     _items(_: Empty) {
@@ -46,15 +48,15 @@ function shelf(
         if (options.hangAt?.includes(item)) await hung;
         await pause((size - item) * 2);
         if (options.failAt?.includes(item)) throw new Error(`detail ${item} failed`);
-        return Array.from({ length: options.rowsPerDetail ?? 1 }, (_, part) => ({
-          label: `${item}.${part}`,
-        }));
+        const rows = item === options.wideAt ? 30 : (options.rowsPerDetail ?? 1);
+        return Array.from({ length: rows }, (_, part) => ({ label: `${item}.${part}` }));
       } finally {
         this.inFlight -= 1;
       }
     }
 
     async _note({ label }: { label: string }) {
+      this.noteReads += 1;
       this.inFlight += 1;
       this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
       try {
@@ -65,11 +67,7 @@ function shelf(
       }
     }
   }
-  let ticks = 0;
-  const words = vocabulary({
-    concepts: { Shelf: ShelfConcept },
-    computations: { tick: (_: { label: string }) => (ticks += 1) },
-  });
+  const words = vocabulary({ concepts: { Shelf: ShelfConcept }, computations: {} });
   const { Shelf } = words.concepts;
   const listing = former("the shelf ()", (_input, { item, label }) =>
     each(Shelf._items({}).is({ item }))
@@ -84,15 +82,7 @@ function shelf(
         .form({ label, note }),
     }),
   );
-  const ticked = former("the ticked shelf ()", (_input, { item, label, tick }) =>
-    each(Shelf._items({}).is({ item })).form({
-      item,
-      ticks: each(Shelf._detail({ item }).is({ label }))
-        .where(compute(words.computations.tick, { label }, tick))
-        .form({ tick }),
-    }),
-  );
-  return { words, listing, nested, ticked, release };
+  return { words, listing, nested, release };
 }
 
 function application(
@@ -102,36 +92,39 @@ function application(
     concurrentReads?: ConcurrentReads;
     executionLimits?: ExecutionLimits;
     observers?: ((event: OperationalEvent) => void)[];
+    queryCache?: QueryCacheMode;
   } = {},
 ) {
   return assemble({ vocabulary: words, composition, retention: { window: 0 }, ...options });
 }
 
+/** Rows started ahead and not yet settled, across the engine. */
+const rowsAhead = (app: ReturnType<typeof application>) =>
+  app.engine.readEnv().readAhead?.ahead.inUse ?? 0;
+
+const breaches = (events: OperationalEvent[]) =>
+  events.filter((event) => event.type === "execution-limit-breached").length;
+
 describe("without concurrentReads, every line reads its rows one after another", () => {
-  test("rows are read in order, one at a time", async () => {
-    const { words, listing } = shelf(6);
-    const app = application(words, { listing });
+  // `bun run test:read-ahead` gives every assembly concurrentReads.
+  test.skipIf(process.env.READ_AHEAD_EVERYWHERE === "1")(
+    "rows are read in order, one at a time",
+    async () => {
+      const { words, listing } = shelf(6);
+      const app = application(words, { listing });
 
-    await app.form(listing({}));
+      await app.form(listing({}));
 
-    expect(app.concepts.Shelf.maxInFlight).toBe(1);
-    expect(app.concepts.Shelf.started).toEqual([0, 1, 2, 3, 4, 5]);
-  });
-
-  test("computations in nested row bodies run in row order", async () => {
-    const { words, ticked } = shelf(6);
-    const app = application(words, { ticked });
-
-    const formed = (await app.form(ticked({}))) as { item: number; ticks: { tick: number }[] }[];
-
-    expect(formed.map((row) => row.ticks[0].tick)).toEqual([1, 2, 3, 4, 5, 6]);
-  });
+      expect(app.concepts.Shelf.maxInFlight).toBe(1);
+      expect(app.concepts.Shelf.started).toEqual([0, 1, 2, 3, 4, 5]);
+    },
+  );
 });
 
 describe("with concurrentReads, rows are read together and consumed in row order", () => {
   test("rows keep their order when later rows answer first", async () => {
     const { words, listing } = shelf(12);
-    const app = application(words, { listing }, { concurrentReads: { window: 16 } });
+    const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 16 } });
 
     const formed = (await app.form(listing({}))) as { item: number; label: string }[];
 
@@ -140,11 +133,12 @@ describe("with concurrentReads, rows are read together and consumed in row order
       Array.from({ length: 12 }, (_, index) => `${index}.0`),
     );
     expect(app.concepts.Shelf.maxInFlight).toBeGreaterThan(1);
+    expect(rowsAhead(app)).toBe(0);
   });
 
-  test("a window of 1 reads rows one after another", async () => {
+  test("rowsAtOnce 1 reads rows one after another", async () => {
     const { words, listing } = shelf(6);
-    const app = application(words, { listing }, { concurrentReads: { window: 1 } });
+    const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 1 } });
 
     await app.form(listing({}));
 
@@ -152,9 +146,9 @@ describe("with concurrentReads, rows are read together and consumed in row order
     expect(app.concepts.Shelf.started).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
-  test("the window bounds the rows of one line evaluated at once, the consumed row included", async () => {
+  test("rowsAtOnce bounds the rows of one line evaluated at once, the consumed row included", async () => {
     const { words, listing } = shelf(20);
-    const app = application(words, { listing }, { concurrentReads: { window: 3 } });
+    const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 3 } });
 
     await app.form(listing({}));
 
@@ -164,7 +158,11 @@ describe("with concurrentReads, rows are read together and consumed in row order
 
   test("maxRowsAhead bounds rows started ahead across nested selections and evaluations", async () => {
     const { words, nested } = shelf(12, { rowsPerDetail: 4 });
-    const app = application(words, { nested }, { concurrentReads: { window: 8, maxRowsAhead: 2 } });
+    const app = application(
+      words,
+      { nested },
+      { concurrentReads: { rowsAtOnce: 8, maxRowsAhead: 2 } },
+    );
 
     const [first, second] = (await Promise.all([app.form(nested({})), app.form(nested({}))])) as {
       item: number;
@@ -176,86 +174,127 @@ describe("with concurrentReads, rows are read together and consumed in row order
     expect(first.every((row) => row.notes.length === 4)).toBe(true);
     // Each evaluation reads its consumed rows one at a time, and two rows ahead are shared.
     expect(app.concepts.Shelf.maxInFlight).toBeLessThanOrEqual(2 + 2);
+    expect(rowsAhead(app)).toBe(0);
   });
 
   test("a spent count of rows ahead is never waited on, so deep nesting completes", async () => {
     const { words, nested } = shelf(6, { rowsPerDetail: 3 });
-    const app = application(words, { nested }, { concurrentReads: { window: 4, maxRowsAhead: 1 } });
+    const app = application(
+      words,
+      { nested },
+      { concurrentReads: { rowsAtOnce: 4, maxRowsAhead: 1 } },
+    );
     const plain = shelf(6, { rowsPerDetail: 3 });
     const sequential = application(plain.words, { nested: plain.nested });
 
     expect(await app.form(nested({}))).toEqual(await sequential.form(plain.nested({})));
   });
 
+  test("every row is read once, as when reading one after another", async () => {
+    const read = async (concurrentReads?: ConcurrentReads) => {
+      const { words, nested } = shelf(10, { rowsPerDetail: 3 });
+      const app = application(words, { nested }, { concurrentReads, queryCache: "none" });
+      await app.form(nested({}));
+      return [app.concepts.Shelf.detailReads, app.concepts.Shelf.noteReads];
+    };
+
+    expect(await read({ rowsAtOnce: 4 })).toEqual(await read());
+    expect(await read({ rowsAtOnce: 16, maxRowsAhead: 3 })).toEqual(await read());
+  });
+
   test("the first failing row's fault is reported, though a later row failed first", async () => {
     const { words, listing } = shelf(10, { failAt: [3, 8] });
-    const app = application(words, { listing }, { concurrentReads: { window: 16 } });
+    const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 16 } });
 
     await expect(app.form(listing({}))).rejects.toThrow("detail 3 failed");
   });
 
-  test("a failed evaluation answers only after the rows it started have settled", async () => {
-    const { words, listing } = shelf(10, { failAt: [0] });
-    const app = application(words, { listing }, { concurrentReads: { window: 16 } });
+  test("a fault is reported at once, though a row started ahead never settles", async () => {
+    const { words, listing, release } = shelf(4, { failAt: [0], hangAt: [1] });
+    const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 4 } });
 
     await expect(app.form(listing({}))).rejects.toThrow("detail 0 failed");
-    expect(app.concepts.Shelf.inFlight).toBe(0);
-  });
-
-  test("a started row that never settles keeps a failed evaluation open until it does", async () => {
-    const { words, listing, release } = shelf(4, { failAt: [0], hangAt: [1] });
-    const app = application(words, { listing }, { concurrentReads: { window: 4 } });
-
-    const outcome = app.form(listing({})).then(
-      () => "answered",
-      (error: Error) => error.message,
-    );
-    expect(await Promise.race([outcome, pause(50).then(() => "open")])).toBe("open");
+    await app.whenIdle();
+    // The hung row keeps its place in the count of rows ahead until it settles.
+    expect(rowsAhead(app)).toBe(1);
 
     release();
-    expect(await outcome).toContain("detail 0 failed");
+    await vi.waitFor(() => expect(rowsAhead(app)).toBe(0));
   });
 
-  test("a row limit reached by a row started ahead is recorded once, at the row that reaches it", async () => {
+  test("rows started ahead of a fault stop at their next line", async () => {
+    const { words, nested, release } = shelf(4, { failAt: [0], hangAt: [1, 2, 3] });
+    const app = application(words, { nested }, { concurrentReads: { rowsAtOnce: 4 } });
+
+    await expect(app.form(nested({}))).rejects.toThrow("detail 0 failed");
+    release();
+    await vi.waitFor(() => expect(rowsAhead(app)).toBe(0));
+
+    expect(app.concepts.Shelf.detailReads).toBe(4);
+    expect(app.concepts.Shelf.noteReads).toBe(0);
+  });
+
+  test("a row limit reached inside a row started ahead is recorded once, when that row is consumed", async () => {
+    const run = async (concurrentReads?: ConcurrentReads) => {
+      const events: OperationalEvent[] = [];
+      const { words, listing } = shelf(12, { wideAt: 5 });
+      const app = application(
+        words,
+        { listing },
+        {
+          concurrentReads,
+          executionLimits: limits({ maxRowsPerEvaluation: 20 }),
+          observers: [(event) => events.push(event)],
+        },
+      );
+      const fault = await app.form(listing({})).then(
+        () => "answered",
+        (error: Error) => error.message,
+      );
+      return { fault, breaches: breaches(events), reads: app.concepts.Shelf.detailReads };
+    };
+
+    const sequential = await run();
+    const together = await run({ rowsAtOnce: 4 });
+
+    expect(sequential.fault).toContain("row limit");
+    expect(together.fault).toBe(sequential.fault);
+    expect(sequential.breaches).toBe(1);
+    expect(together.breaches).toBe(1);
+    // Rows 0 to 5 are reached; at most three more were started past row 5.
+    expect(together.reads).toBeLessThanOrEqual(6 + 3);
+  });
+
+  test("a row limit reached inside a row the evaluation never reaches is not recorded", async () => {
     const events: OperationalEvent[] = [];
-    const { words, listing } = shelf(20, { rowsPerDetail: 3 });
+    // Row 5 answers before row 3 and is over the limit; row 3 fails first in row order.
+    const { words, listing } = shelf(12, { failAt: [3], wideAt: 5 });
     const app = application(
       words,
       { listing },
       {
-        concurrentReads: { window: 4 },
+        concurrentReads: { rowsAtOnce: 8 },
         executionLimits: limits({ maxRowsPerEvaluation: 20 }),
         observers: [(event) => events.push(event)],
       },
     );
 
-    await expect(app.form(listing({}))).rejects.toThrow("row limit");
-
-    const breaches = events.filter((event) => event.type === "execution-limit-breached");
-    expect(breaches).toHaveLength(1);
-    // The seventh row's three labels take the frame count past 20; at most the
-    // window's other rows were started beyond it.
-    expect(app.concepts.Shelf.detailReads).toBeLessThanOrEqual(7 + 3);
-    expect(app.concepts.Shelf.inFlight).toBe(0);
-  });
-
-  test("computations in nested row bodies may run out of row order, so they must be free of side effects", async () => {
-    const { words, ticked } = shelf(6);
-    const app = application(words, { ticked }, { concurrentReads: { window: 6 } });
-
-    const formed = (await app.form(ticked({}))) as { item: number; ticks: { tick: number }[] }[];
-
-    expect(formed.map((row) => row.item)).toEqual([0, 1, 2, 3, 4, 5]);
-    expect(formed.map((row) => row.ticks[0].tick)).not.toEqual([1, 2, 3, 4, 5, 6]);
+    await expect(app.form(listing({}))).rejects.toThrow("detail 3 failed");
+    expect(breaches(events)).toBe(0);
   });
 
   test("the option is validated", () => {
     const { words, listing } = shelf(2);
-    expect(() => application(words, { listing }, { concurrentReads: { window: 0 } })).toThrow(
-      "concurrentReads.window",
+    const assembled = (concurrentReads: unknown) => () =>
+      application(words, { listing }, { concurrentReads: concurrentReads as ConcurrentReads });
+
+    expect(assembled({ rowsAtOnce: 0 })).toThrow(
+      "concurrentReads.rowsAtOnce must be a positive finite integer",
     );
-    expect(() =>
-      application(words, { listing }, { concurrentReads: { window: 4, maxRowsAhead: 1.5 } }),
-    ).toThrow("concurrentReads.maxRowsAhead");
+    expect(assembled({ rowsAtOnce: 4, maxRowsAhead: 1.5 })).toThrow(
+      "concurrentReads.maxRowsAhead must be a positive finite integer",
+    );
+    expect(assembled({ window: 4 })).toThrow("concurrentReads.rowsAtOnce");
+    expect(assembled(null)).toThrow("concurrentReads must be an object");
   });
 });

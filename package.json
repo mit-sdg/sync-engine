@@ -83,6 +83,7 @@
     "release:verify": "bun scripts/verify-release.ts",
     "scenario": "bun run build && bun scripts/examples.ts scenario",
     "test": "LOG_LEVEL=error vp test --maxWorkers=2",
+    "test:read-ahead": "READ_AHEAD_EVERYWHERE=1 LOG_LEVEL=error vp test --maxWorkers=2",
     "typecheck": "tsc --noEmit",
     "catalog:listing": "bun scripts/update-catalog-listing.ts"
   },

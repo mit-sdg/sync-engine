@@ -802,8 +802,9 @@ export function checkRelease(sources: ReadonlyMap<string, string>): string[] {
     "run: bun run package:check",
     "name: Generated artifacts",
     "run: bun run examples:check",
+    "run: bun run test:read-ahead",
     "name: CI required",
-    "needs: [check, release, build, package, generated, scenario, test, coverage]",
+    "needs: [check, release, build, package, generated, scenario, test, read-ahead, coverage]",
   ]) {
     if (!ci.includes(fact)) failures.push(`.github/workflows/ci.yml: missing ${fact}`);
   }

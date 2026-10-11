@@ -10,18 +10,23 @@ follow the [support policy](SUPPORT.md), and review the
 
 ### Added
 
-- The `concurrentReads: { window, maxRowsAhead? }` assembly option reads the
-  rows of one `where` line, and the rows of one selection, together and
-  consumes them in row order. `window` rows are evaluated at once, the consumed
-  row included; at most `maxRowsAhead` rows (default 64) are started ahead
-  across the engine, and an evaluation that finds that count spent reads its
-  next row when it reaches it. Results, their order, and the reported fault are
-  those of reading one after another, provided queries and computations are
-  free of side effects and no action changes the state being read meanwhile. A
-  row limit reached by a row started ahead is recorded only when evaluation
-  reaches that row, and a failed evaluation answers after the rows it started
-  have settled. Without the option, evaluation is unchanged.
+- The `concurrentReads: { rowsAtOnce, maxRowsAhead? }` assembly option reads
+  the rows of one `where` line, and the rows of one selection, together and
+  consumes them in row order. `rowsAtOnce` rows are evaluated at once, the
+  consumed row included; at most `maxRowsAhead` rows (64 when unset) are started
+  ahead at once across the assembly, and an evaluation that finds that count
+  spent reads its next row when it reaches it. Answers, their order, the
+  reported fault, and recorded row-limit breaches are those of reading one
+  after another, given side-effect-free reads and no action changing the state
+  being read meanwhile. A fault is reported as soon as its row is consumed;
+  rows started ahead then stop at their next row check. Without the option,
+  rows are read one after another as before.
 - `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads` type.
+
+### Changed
+
+- The reference now states that computations, conditions, and custom ops used
+  by reads must be free of side effects, as queries already had to be.
 
 ## [1.1.0] - 2026-10-05
 
