@@ -44,7 +44,7 @@ function setup() {
 }
 
 describe("createInvoker", () => {
-  test("refreshes an admitted ask's reads before dispatch and closes them once it settles", async () => {
+  test("refreshes each ask's reads before validation and dispatch, and closes them once it settles", async () => {
     const steps: string[] = [];
     const requesting = new Requesting();
     const reaction = new Reacting();
@@ -69,15 +69,18 @@ describe("createInvoker", () => {
     });
 
     await invoker.invoke("/required", {});
-    expect(steps).toEqual([]);
+    const refused = steps[0]?.slice("refresh ".length);
+    expect(steps).toEqual([`refresh ${refused}`, `close ${refused}`]);
 
+    steps.length = 0;
     const result = await invoker.invoke("/required", { value: 1 }, { timeoutMs: 20 });
     expect(result.ok).toBe(false);
     const flow = steps[0]?.slice("refresh ".length);
+    expect(flow).not.toBe(refused);
     expect(steps).toEqual([`refresh ${flow}`, "dispatch", `close ${flow}`]);
   });
 
-  test("a refresh that returns nothing is still called once per admitted ask", async () => {
+  test("a refresh that returns nothing is still called once per ask", async () => {
     let refreshes = 0;
     const requesting = new Requesting();
     const reaction = new Reacting();

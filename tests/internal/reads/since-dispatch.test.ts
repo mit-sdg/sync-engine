@@ -144,8 +144,26 @@ function shelf() {
       return {};
     }
   }
-  const words = vocabulary({ concepts: { Shelf: ShelfConcept }, computations: {} });
-  const { Shelf } = words.concepts;
+  class BellConcept {
+    heard: unknown[] = [];
+
+    ring(_: Record<string, never>) {
+      return {};
+    }
+
+    hear({ reading }: { reading: unknown }) {
+      this.heard.push(reading);
+      return {};
+    }
+  }
+  const words = vocabulary({
+    concepts: { Shelf: ShelfConcept, Bell: BellConcept },
+    computations: {},
+  });
+  const { Shelf, Bell } = words.concepts;
+  const once = former("the value read once ()", (_input, { value }) =>
+    where(Shelf._value({}).is({ value })).form({ value }),
+  );
   const twice = former("the value read twice ()", (_input, { value, again }) =>
     where(
       Shelf._value({}).is({ value }),
@@ -168,11 +186,12 @@ function shelf() {
   const FormTwice = endpoint("/form-twice", () => receive().then(respond({ reading: twice({}) })));
   const Ping = endpoint("/ping", () => receive().then(respond({ pong: true })));
   const Poked = reaction(() => when(Shelf.poke({})).then(Shelf.record({ reading: twice({}) })));
+  const Rung = reaction(() => when(Bell.ring({})).then(Bell.hear({ reading: once({}) })));
   const open = () => gates.splice(0).forEach((release) => release());
   return {
     words,
     twice,
-    composition: { twice, Read, ReadTwice, FormTwice, Ping, Poked },
+    composition: { twice, once, Read, ReadTwice, FormTwice, Ping, Poked, Rung },
     open,
     waiting: () => gates.length,
   };
@@ -230,6 +249,29 @@ describe.each(["memoize", "since-dispatch"] as const)("queryCache %s", (queryCac
     expect(state.recorded).toEqual([{ value: 1, again: 2 }]);
   });
 });
+
+describe.each(["memoize", "since-dispatch"] as const)(
+  "queryCache %s, refused asks",
+  (queryCache) => {
+    test("an ask refused at validation still refreshes reads that serve no invocation", async () => {
+      const { app: assembled, shelf: state } = app(queryCache);
+      const ring = async () => {
+        await assembled.concepts.Bell.ring({});
+        await assembled.whenIdle();
+      };
+
+      await ring();
+      state.value = 2;
+      await ring();
+      const refused = await assembled.invoker.invoke("/ping", {}, { timeoutMs: -1 });
+      expect(refused.ok).toBe(false);
+      await ring();
+
+      // The second ring shows the reads can be stale; the refused ask refreshed them.
+      expect(assembled.concepts.Bell.heard).toEqual([{ value: 1 }, { value: 1 }, { value: 2 }]);
+    });
+  },
+);
 
 describe("queryCache since-dispatch", () => {
   /** Reads made by one ask that pauses between two reads of `_value` while `/ping` arrives. */

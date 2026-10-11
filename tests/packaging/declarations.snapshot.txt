@@ -772,8 +772,9 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     /** Root admission, pending waits, drain state, and actual-flow quiescence. */
     lifecycle?: RuntimeLifecycle;
     /**
-     * Refresh standing reads for an admitted application-interface ask, before
-     * it is dispatched. A returned function is called once the ask has settled.
+     * Refresh standing reads before a new application-interface ask, given the
+     * flow its request runs in once admitted. A returned function is called once
+     * the ask has settled, admitted or not.
      */
     refresh?: (flow: string) => void | (() => void);
 }): Invoker<C>;

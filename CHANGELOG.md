@@ -20,10 +20,10 @@ had read. Nothing changes unless an assembly asks for it.
   they read. A direct `form` and a direct query root read the same way from
   their own start; any other read reuses only answers begun since the latest of
   those starts. Action invalidation is unchanged.
-- `createInvoker`'s `refresh` receives the admitted ask's flow and runs after
-  admission, just before dispatch; a function it returns is called once the ask
-  has settled. A `refresh` taking no argument still works. Asks refused by input
-  validation or admission no longer refresh; no read could follow them.
+- `createInvoker`'s `refresh` receives the flow the ask's request runs in once
+  admitted, and a function it returns is called once the ask has settled,
+  admitted or not. It runs where it always has, before input validation, and a
+  `refresh` taking no argument still works.
 - A direct query root under `"since-dispatch"` no longer clears that query's
   answers for running invocations.
 
