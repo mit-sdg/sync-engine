@@ -87,7 +87,7 @@ export class FiringPipeline {
     private readonly firingBook: FiringBook,
     private readonly definitions: {
       formerNamed(name: string): FormerRef | undefined;
-      readEnv(): ReadEnv;
+      readEnv(flow?: string): ReadEnv;
     },
     private readonly reactionLogger: ReactionLogger,
     private readonly react: (record: ActionRecord, durationMs?: number) => Promise<void>,
@@ -679,7 +679,7 @@ export class FiringPipeline {
           isFusedFormer(node)
             ? formTree(
                 node as FusedFormer,
-                this.definitions.readEnv(),
+                this.definitions.readEnv(input[flow] as string),
                 this.rowGuard(input[flow] as string),
               )
             : DESCEND,

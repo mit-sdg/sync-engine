@@ -43,6 +43,8 @@ import { ActionScheduler } from "./action-scheduler.ts";
 import { ActionConcept, breachLimit, type ActionRecord } from "./actions.ts";
 import { FiringBook } from "./firing.ts";
 import { FiringPipeline } from "./firing-pipeline.ts";
+import { invocationReadsFor } from "@engine/reads/invocation-reads";
+import type { InvocationReads } from "@engine/reads/invocation-reads";
 import { ConceptInstrumentation, type QueryCacheMode } from "./instrumenting.ts";
 import { Logging, ReactionLogger } from "./logging.ts";
 import type { EngineObserver } from "./logging.ts";
@@ -63,16 +65,19 @@ export class Reacting {
   private readonly triggerMatcher: TriggerMatcher;
   private readonly firingPipeline: FiringPipeline;
   private readonly execution?: ExecutionControl;
+  private readonly invocationReads?: InvocationReads;
 
   constructor(
     actionConcept: ActionConcept = new ActionConcept(),
     execution?: ExecutionControl,
     requireDeclaredRefusals = false,
-    queryCache: QueryCacheMode = "memoize",
+    queryCache?: QueryCacheMode,
     concurrentReads?: ConcurrentReads,
+    readHoldMs?: number,
   ) {
     this.Action = actionConcept;
     this.execution = execution;
+    this.invocationReads = invocationReadsFor(queryCache, readHoldMs);
     this.reactionLogger = new ReactionLogger(actionConcept, actionConcept.redactor);
     this.firingBook = new FiringBook(
       actionConcept.store,
@@ -88,7 +93,13 @@ export class Reacting {
       scheduler: this.actionScheduler,
       execution,
       requireDeclaredRefusals,
-      queryCache,
+      queryCache: queryCache ?? "memoize",
+      ...(this.invocationReads === undefined
+        ? {}
+        : {
+            dispatchPoints: this.invocationReads,
+            openReads: (flowToken: string) => this.openReads(flowToken),
+          }),
       react: (record, durationMs) => this.react(record, durationMs),
       settle: (flowToken) => this.firingPipeline.settle(flowToken),
       emit: (record, durationMs) => this.reactionLogger.emit(record, durationMs),
@@ -111,6 +122,7 @@ export class Reacting {
       (flowToken) => this.consumeAction(flowToken),
     );
     this.registry.configureReadAhead(readAheadFor(concurrentReads));
+    this.registry.configureInvocationReads(this.invocationReads);
   }
 
   addObserver(observer: EngineObserver): () => void {
@@ -135,6 +147,23 @@ export class Reacting {
 
   invalidateAllCaches(): void {
     this.instrumentation.invalidateAll();
+  }
+
+  /**
+   * Open an outside invocation's reads, before it is dispatched. Under
+   * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
+   * begun from now on until the returned function closes them, and answers no
+   * open read may reuse any more are forgotten; otherwise every query cache is
+   * cleared and the returned function does nothing.
+   */
+  openReads(flow: string): () => void {
+    if (this.invocationReads === undefined) {
+      this.invalidateAllCaches();
+      return () => {};
+    }
+    const close = this.invocationReads.openFor(flow);
+    this.instrumentation.pruneAll(this.invocationReads.oldest);
+    return close;
   }
 
   register(
@@ -283,11 +312,12 @@ export class Reacting {
     if (this.execution?.admitFlow?.(flowToken, route, flowToken) !== undefined) {
       throw new Error(`Read "${route}" is unavailable.`);
     }
-    if (this.execution !== undefined) this.instrumentation.invalidateAll();
+    const closeReads = this.execution === undefined ? undefined : this.openReads(flowToken);
     try {
       this.registry.assertFormable(fused.former);
-      return await formTree(fused, this.registry.readEnv(), this.rowGuard(flowToken));
+      return await formTree(fused, this.registry.readEnv(flowToken), this.rowGuard(flowToken));
     } finally {
+      closeReads?.();
       this.Action.store.flowSettled(flowToken);
       this.execution?.flowSettled?.(flowToken);
     }
@@ -451,6 +481,7 @@ export class Reacting {
           if (key !== undefined) optionalBindings.add(key);
         }
       }
+      const flowToken = typeof current[0]?.[flow] === "string" ? current[0][flow] : undefined;
       current =
         op.op === "earlier"
           ? this.applyEarlier(current, op.pattern)
@@ -459,8 +490,8 @@ export class Reacting {
             : await applyWhereOps(
                 current,
                 [op],
-                this.registry.readEnv(),
-                this.rowGuard(typeof current[0]?.[flow] === "string" ? current[0][flow] : ""),
+                this.registry.readEnv(flowToken),
+                this.rowGuard(flowToken ?? ""),
               );
       if (current.length === 0) break;
     }

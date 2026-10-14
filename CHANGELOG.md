@@ -22,8 +22,23 @@ follow the [support policy](SUPPORT.md), and review the
   rows started ahead then stop at their next row check. Without the option,
   rows are read one after another as before.
 - `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads` type.
+- The `queryCache` mode `"since-dispatch"` keeps a running invocation's answers
+  when another invocation arrives, so concurrent invocations stop re-reading
+  what they had read. Until an outside invocation settles, reads done for its
+  flow reuse only memoized answers whose query began at or after it was
+  dispatched, the freshness `"memoize"` gives by clearing every cache at
+  dispatch. A direct `form` and a direct query root read the same way from their
+  own start; any other read reuses only answers begun since the latest of those
+  starts. Action invalidation is unchanged. A direct query stops holding answers
+  once its read has begun, and no read holds them past the request deadline
+  (`executionLimits.maxRequestDurationMs`, 30 seconds by default).
 
 ### Changed
+
+- `createInvoker`'s `refresh` receives the flow the ask's request runs in once
+  admitted, and a function it returns is called once the ask has settled,
+  admitted or not. It still runs before input validation, and a `refresh`
+  taking no argument still works.
 
 - The reference now states that computations, conditions, and custom ops used
   by reads must be free of side effects, as queries already had to be.

@@ -2,7 +2,8 @@
  * Query memoization between mutations.
  *
  * Instrumentation invalidates every query cache before and after an action
- * body. This module owns only cache identity and rejected-promise eviction.
+ * body. This module owns only cache identity, rejected-promise eviction, and the
+ * dispatch point each answer began at.
  */
 
 type AnyFn = (...args: never[]) => unknown;
@@ -18,8 +19,19 @@ class QueryCacheKeyDepthError extends Error {
 
 interface MemoizedQuery<T extends AnyFn> {
   (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
+  /** Answer from an entry begun at or after `since`, or run the query and keep its answer. */
+  readSince(since: number, args: Parameters<T>): ReturnType<T>;
   invalidate(): void;
+  /** Forget every answer begun before `oldest`, which no read may reuse any more. */
+  prune(oldest: number): void;
 }
+
+/** The dispatch point an answer begun now carries. */
+export interface DispatchPoints {
+  readonly current: number;
+}
+
+const UNCHANGING: DispatchPoints = { current: 0 };
 
 interface IdentityTable {
   symbols: Map<symbol, number>;
@@ -109,11 +121,28 @@ function queryCacheKey(args: readonly unknown[], identities = identityTable()): 
   return args.map((value) => encode(value)).join("|");
 }
 
-/** Memoize a query until invalidated; a rejected promise is never retained. */
-export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
-  let cache = new Map<string, unknown>();
+/**
+ * Memoize a query until invalidated; a rejected promise is never retained.
+ *
+ * Under `queryCache: "since-dispatch"`, `points` gives the dispatch point an
+ * answer begun now carries. A plain call reuses only answers begun at the
+ * current point, as when every cache is cleared at dispatch; `readSince`
+ * reuses any answer begun at or after an earlier point. One entry per key
+ * suffices, since a fresh answer satisfies every reader, and entries stay in
+ * the order their answers began, so pruning stops at the first one it keeps.
+ * Without `points` every answer carries point 0 and is reused until invalidated.
+ */
+export function memoizeQuery<T extends AnyFn>(
+  fn: T,
+  points: DispatchPoints = UNCHANGING,
+): MemoizedQuery<T> {
+  let cache = new Map<string, { value: unknown; begun: number }>();
   const identities = identityTable();
-  const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
+  const readSince = function (
+    this: ThisParameterType<T>,
+    since: number,
+    args: Parameters<T>,
+  ): ReturnType<T> {
     let key: string;
     try {
       key = queryCacheKey(args, identities);
@@ -121,22 +150,35 @@ export function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T> {
       if (error instanceof QueryCacheKeyDepthError) return fn.call(this, ...args) as ReturnType<T>;
       throw error;
     }
-    if (cache.has(key)) return cache.get(key) as ReturnType<T>;
+    const known = cache.get(key);
+    if (known !== undefined && known.begun >= since) return known.value as ReturnType<T>;
+    const begun = points.current;
     const result = fn.call(this, ...args);
     const promise = normalizePromiseLike(result);
+    // Cache the normalized promise so structural thenables execute only once.
+    const entry = { value: promise ?? result, begun };
+    cache.delete(key);
+    cache.set(key, entry);
     if (promise !== undefined) {
-      // Cache the normalized promise so structural thenables execute only once.
-      cache.set(key, promise);
+      const kept = cache;
       void promise.catch(() => {
-        if (cache.get(key) === promise) cache.delete(key);
+        if (kept.get(key) === entry) kept.delete(key);
       });
-      return promise as ReturnType<T>;
     }
-    cache.set(key, result);
-    return result as ReturnType<T>;
+    return entry.value as ReturnType<T>;
   };
+  const wrapper = function (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
+    return readSince.call(this, points.current, args);
+  };
+  wrapper.readSince = readSince;
   wrapper.invalidate = () => {
     cache = new Map();
+  };
+  wrapper.prune = (oldest: number) => {
+    for (const [key, entry] of cache) {
+      if (entry.begun >= oldest) return;
+      cache.delete(key);
+    }
   };
   return wrapper as MemoizedQuery<T>;
 }

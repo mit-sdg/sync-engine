@@ -86,7 +86,7 @@ import {
   Requesting,
   settleRequestInterpreterFailure,
 } from "../invocation/invoke.ts";
-import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
+import { requestTimeout, RuntimeLifecycle } from "../invocation/lifecycle.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import {
   assertInputContractsMatchReceivePatterns,
@@ -449,8 +449,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.conceptSet === undefined
       ? options.vocabulary!
       : conceptSetVocabulary(options.conceptSet);
-  if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
-    throw new Error('assemble: queryCache must be "memoize" or "none".');
+  if (
+    options.queryCache !== undefined &&
+    !["memoize", "since-dispatch", "none"].includes(options.queryCache)
+  ) {
+    throw new Error('assemble: queryCache must be "memoize", "since-dispatch" or "none".');
   }
   assertConcurrentReads(options.concurrentReads);
 
@@ -503,6 +506,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     true,
     options.queryCache,
     options.concurrentReads,
+    requestTimeout(undefined, options.executionLimits),
   );
   engine.logging = options.logging ?? Logging.OFF;
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);
@@ -740,7 +744,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
         phase,
       });
     },
-    refresh: () => engine.invalidateAllCaches(),
+    refresh: (flow) => engine.openReads(flow),
   });
 
   const publicInterface: ApplicationInterface = {

@@ -58,6 +58,17 @@ belongs to one assembly, while a database client's connection pool is usually
 shared by the whole process: size the pool above the sum over the process's
 assemblies, so actions' writes are not queued behind reads.
 
+Under `queryCache: "memoize"`, each outside invocation clears every query cache,
+so concurrent invocations re-read what earlier ones had read, and the more so
+the faster each reads. `queryCache: "since-dispatch"` removes that loss. Memory then
+holds at most one answer per query and argument, kept while some invocation,
+direct `form`, or direct query root still open began before it; older answers
+are dropped when the next one opens. A direct query stops holding answers once
+its read has begun, and nothing holds them past the request deadline
+(`executionLimits.maxRequestDurationMs`, 30 seconds by default): a `form` still
+running then reads only answers begun since the latest start, so a read that
+never settles cannot keep every later answer.
+
 Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions
 inside the state-owning action. Retryable operations need domain idempotency keys

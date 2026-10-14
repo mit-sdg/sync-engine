@@ -1,6 +1,7 @@
 /** Resolve definition-site vocabulary references to one assembly's live members. */
 
 import { isActionRef, isQueryRef } from "@engine/reactions/authoring/references";
+import { flow } from "@engine/reactions/context";
 import type { NameResolver } from "@engine/reactions/resolving";
 import type {
   ActionPattern,
@@ -21,7 +22,7 @@ export class AuthoredReferenceResolver {
     private readonly resolver: NameResolver,
     private readonly definitions: {
       computationNamed(name: string): ComputationRef | undefined;
-      readEnv(): ReadEnv;
+      readEnv(flow?: string): ReadEnv;
     },
   ) {}
 
@@ -109,7 +110,14 @@ export class AuthoredReferenceResolver {
       if (node.transformOps === undefined) continue;
       const ops = node.transformOps.map((op) => this.resolveWhereOp(op, site) as WhereOp);
       node.transformOps = ops;
-      node.transform = (frames) => applyWhereOps(frames, ops, this.definitions.readEnv());
+      node.transform = (frames) => {
+        const flowToken = frames[0]?.[flow];
+        return applyWhereOps(
+          frames,
+          ops,
+          this.definitions.readEnv(typeof flowToken === "string" ? flowToken : undefined),
+        );
+      };
     }
   }
 }
