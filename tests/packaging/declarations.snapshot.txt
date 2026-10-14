@@ -2577,7 +2577,7 @@ export declare class Reacting {
     private readonly firingPipeline;
     private readonly execution?;
     private readonly invocationReads?;
-    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads);
+    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads, readHoldMs?: number);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
@@ -3517,8 +3517,14 @@ export declare class ImportedIrBinder {
  * landed before it began, as when every cache is cleared at dispatch. Unlike
  * clearing, invocations already running keep the answers they read. Any other
  * read uses the current point, which is what clearing at each dispatch gives.
+ *
+ * A point stays open at most `holdMs`, the request deadline. After that its
+ * flow reads at the latest point, which only reuses less, so a read that never
+ * settles cannot keep every later answer.
  */
 export declare class InvocationReads {
+    private readonly holdMs?;
+    constructor(holdMs?: number | undefined);
     private latest;
     private readonly sinceByFlow;
     /** Points of the reads still open, in the order they opened, which is ascending. */
@@ -3533,7 +3539,7 @@ export declare class InvocationReads {
     get oldest(): number;
 }
 /** Dispatch points for an assembly's `queryCache` mode; undefined unless it is "since-dispatch". */
-export declare function invocationReadsFor(queryCache: string | undefined): InvocationReads | undefined;
+export declare function invocationReadsFor(queryCache: string | undefined, holdMs?: number): InvocationReads | undefined;
 
 === dist/engine/reads/ir.d.ts ===
 /**
