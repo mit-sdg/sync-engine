@@ -99,13 +99,13 @@ describe("queryCache since-dispatch, memory", () => {
   });
 
   test("a direct form that never settles keeps later answers only until the request deadline", async () => {
-    const { assembled, paused, open, waiting, alive } = app(20);
+    const { assembled, paused, open, waiting, alive } = app(200);
     const hung = assembled.form(paused({}));
     await until(() => waiting() === 1);
 
     await readMany(assembled);
     expect(alive()).toBeGreaterThanOrEqual(READS);
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await new Promise((resolve) => setTimeout(resolve, 250));
     // The next invocation forgets what no open read may reuse.
     await readMany(assembled, READS);
 

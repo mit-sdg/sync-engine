@@ -32,7 +32,11 @@ export class InvocationReads {
       if (!this.open.delete(since)) return;
       if (this.sinceByFlow.get(flow) === since) this.sinceByFlow.delete(flow);
     };
-    if (this.holdMs !== undefined) timer = setTimeout(close, this.holdMs);
+    if (this.holdMs !== undefined) {
+      timer = setTimeout(close, this.holdMs);
+      // The hold only tidies the cache; it never keeps a process alive.
+      (timer as { unref?: () => void }).unref?.();
+    }
     return close;
   }
 

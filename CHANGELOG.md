@@ -39,7 +39,6 @@ follow the [support policy](SUPPORT.md), and review the
   admitted, and a function it returns is called once the ask has settled,
   admitted or not. It still runs before input validation, and a `refresh`
   taking no argument still works.
-
 - The reference now states that computations, conditions, and custom ops used
   by reads must be free of side effects, as queries already had to be.
 

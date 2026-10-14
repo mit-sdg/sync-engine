@@ -348,7 +348,9 @@ actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
 without clearing: until an outside invocation settles (its cascade has finished
-or its deadline has passed), reads done for its flow reuse only answers whose
+or the assembly's request deadline, `executionLimits.maxRequestDurationMs`, has
+passed, even for a call given a longer `timeoutMs`), reads done for its flow
+reuse only answers whose
 query began at or after it was dispatched, so invocations already running keep
 the answers they read. A direct `form` and a direct query root read the same
 way from their own start. Any other read, such as a reaction in a flow begun by
