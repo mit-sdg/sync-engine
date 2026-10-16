@@ -2413,6 +2413,12 @@ export declare function unifyPattern(recordValues: Record<string, unknown>, patt
 export declare function unifyOutputPattern(outcome: ActionOutcome, pattern: Mapping, frame: Frame): Frame | undefined;
 /** Match action identity, provenance, posture, input, and output for one trigger. */
 export declare function matchArguments(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol): Frame | undefined;
+/**
+ * Match a stored record as a trigger does: action, provenance, and posture on the record as
+ * stored, then input, output, and outcome on a copy taken through `seen`, so the values a
+ * match binds are the reaction's own and repeated references stay shared within one `seen`.
+ */
+export declare function matchRecordCopy(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol, seen: WeakMap<object, unknown>): Frame | undefined;
 /** Match one record against a posture channel, exclusions, provenance, and payload pattern. */
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: {
     get(candidate: object): object | undefined;
@@ -2620,6 +2626,7 @@ export declare class Reacting {
     private compileWhere;
     private applyLoweredWhere;
     private applyNow;
+    /** Bind from earlier records of the frame's flow, each matched on a copy as triggers are. */
     private applyEarlier;
     /** A flow's row-limit check; rows read together ask it without recording a breach. */
     private rowGuard;

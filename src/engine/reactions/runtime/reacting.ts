@@ -51,8 +51,7 @@ import type { EngineObserver } from "./logging.ts";
 import type { ExecutionControl } from "./operational.ts";
 import { ReactionCatalog } from "./reaction-catalog.ts";
 import { exportConcepts, exportReactions, readBack, renderApp } from "./reacting-export.ts";
-import { matchArguments as matchActionArguments } from "./matching.ts";
-import { TriggerMatcher } from "./matching.ts";
+import { matchRecordCopy, TriggerMatcher } from "./matching.ts";
 
 export class Reacting {
   public Action: ActionConcept;
@@ -473,6 +472,8 @@ export class Reacting {
     ops: readonly (BoundWhereOp | AnyWhereOp)[],
   ): Promise<Frames> {
     let current = frames;
+    // One copy of each stored value per evaluation, shared by its `earlier` lines and frames.
+    const copies = new WeakMap<object, unknown>();
     const optionalBindings = new Set<string | symbol>();
     for (const op of ops) {
       if (op.op === "whether") {
@@ -484,7 +485,7 @@ export class Reacting {
       const flowToken = typeof current[0]?.[flow] === "string" ? current[0][flow] : undefined;
       current =
         op.op === "earlier"
-          ? this.applyEarlier(current, op.pattern)
+          ? this.applyEarlier(current, op.pattern, copies)
           : op.op === "now"
             ? this.applyNow(current, op.out)
             : await applyWhereOps(
@@ -517,7 +518,12 @@ export class Reacting {
     });
   }
 
-  private applyEarlier(frames: Frames, pattern: ActionTriggerPattern): Frames {
+  /** Bind from earlier records of the frame's flow, each matched on a copy as triggers are. */
+  private applyEarlier(
+    frames: Frames,
+    pattern: ActionTriggerPattern,
+    copies: WeakMap<object, unknown>,
+  ): Frames {
     const result: Frame[] = [];
     for (const frame of frames) {
       const flowToken = frame[flow];
@@ -531,11 +537,12 @@ export class Reacting {
       const scope = position >= 0 ? records.slice(0, position) : records;
       for (const record of scope) {
         const probe = Symbol("earlier");
-        const matched = matchActionArguments(
+        const matched = matchRecordCopy(
           this.Action._matchingRecord(record),
           pattern,
           frame,
           probe,
+          copies,
         );
         if (matched !== undefined) {
           const { [probe]: _recordId, ...rest } = matched;

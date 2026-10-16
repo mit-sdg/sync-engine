@@ -187,6 +187,22 @@ export function matchArguments(
   return next === undefined ? undefined : { ...next, [recordBinding]: record.id };
 }
 
+/**
+ * Match a stored record as a trigger does: action, provenance, and posture on the record as
+ * stored, then input, output, and outcome on a copy taken through `seen`, so the values a
+ * match binds are the reaction's own and repeated references stay shared within one `seen`.
+ */
+export function matchRecordCopy(
+  record: ActionRecord,
+  pattern: ActionTriggerPattern,
+  frame: Frame,
+  recordBinding: symbol,
+  seen: WeakMap<object, unknown>,
+): Frame | undefined {
+  if (!admits(record, pattern)) return undefined;
+  return matchArguments(snapshotRecord(record, seen), pattern, frame, recordBinding);
+}
+
 function isExcepted(
   clause: ChannelPattern,
   recordConcept: object,

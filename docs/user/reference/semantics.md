@@ -39,7 +39,13 @@ Matching snapshots arrays, plain records, and ordinary `Date` values when the
 ask begins, preserving cycles and repeated references. Other object kinds retain
 identity semantics. The action implementation still receives the caller's
 original input object, so later mutation cannot rewrite the occurrence that
-reactions match.
+reactions match. A reaction matches each record, through a trigger or through
+`earlier`, on its own copy of these values and binds from that copy, so changing
+a bound array, record, or `Date` cannot rewrite the occurrence for any other
+match; other object kinds are shared. One match, or one evaluation of a
+reaction's `where`, shares one copy of each repeated reference across its frames,
+so a consequence that changes a bound value in place changes it for sibling
+frames' consequences too.
 
 The action then settles in one of two outcome postures:
 

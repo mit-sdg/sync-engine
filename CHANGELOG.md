@@ -58,6 +58,18 @@ follow the [support policy](SUPPORT.md), and review the
   the guard against cycles, so cyclic arrays compare by their unfolding where
   they used to overflow the stack, or compare unequal inside a record. Values
   from JSON have no holes or cycles and are unaffected.
+- `earlier(...)` matches each earlier record on the reaction's own copy and
+  binds from it, as action triggers already did. It used to bind the engine's
+  stored values, so an action that changed a value bound through `earlier` in
+  place, as tidying an input does, changed the record itself: a later `earlier`
+  stopped matching it, a later stage of an endpoint could wait out its deadline,
+  and one concept's action could rewrite state another concept had returned.
+  Values bound through `earlier` are now distinct from the objects another
+  reaction binds; within one evaluation of a reaction's `where`, its lines and
+  frames share one copy of each repeated reference. Class instances, maps, and
+  sets still bind by identity. `earlier` now reads a record as triggers do, so
+  a non-enumerable key on an action's output no longer takes part in `earlier`
+  matching, and a getter on it is read when the record is copied.
 
 ## [1.1.0] - 2026-10-05
 
