@@ -3461,18 +3461,17 @@ export interface Frames<TFrame extends Frame = Frame> {
  */
 export declare function bindInputMapping(frame: Frame, input: Mapping): Mapping;
 /**
- * Expand one source frame by a query's result rows into the accumulator.
+ * The frame one query result row makes of `frame`, or undefined when the row does not unify.
  *
- * Each row yields a fresh frame extending `frame` with the `output` symbol
- * bindings — and bindings **unify**: a fresh variable binds the row's value,
- * while an already-bound variable is an equality test, and a row whose value
- * differs contributes nothing. This is the binding behavior used by a line
- * ("an already-bound name tests equality instead"), and the same discipline
- * trigger patterns keep. A query that returns no unifiable rows contributes
- * nothing — the source frame is dropped, giving inner-join / fan-out
- * semantics.
+ * `output` is the query's output mapping as `Object.entries`, so a caller expanding many rows
+ * takes it once. The row yields a fresh frame extending `frame` with the `output` symbol
+ * bindings, and bindings **unify**: a fresh variable binds the row's value, while an
+ * already-bound variable is an equality test, and a row whose value differs contributes
+ * nothing. This is the binding behavior used by a line ("an already-bound name tests equality
+ * instead"), and the same discipline trigger patterns keep. New bindings are collected apart
+ * and the frame is copied only for a row that unifies.
  */
-export declare function expandOutputRows(into: Frames, frame: Frame, rows: unknown[], output: Mapping): void;
+export declare function outputRow(frame: Frame, row: unknown, output: readonly (readonly [string, unknown])[]): Frame | undefined;
 export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
 }
 

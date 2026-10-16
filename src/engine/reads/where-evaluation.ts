@@ -4,7 +4,7 @@ import { isQueryRef } from "@engine/reactions/authoring/references";
 import type { Frame, InstrumentedQuery, Mapping } from "@engine/reactions/types";
 import type { ComputationRef } from "./computations.ts";
 import type { ReadEnv } from "./definition-registry.ts";
-import { bindInputMapping, expandOutputRows, Frames, readPatternValue } from "./frames.ts";
+import { bindInputMapping, Frames, outputRow, readPatternValue } from "./frames.ts";
 import { structurallyEqual } from "./value-equality.ts";
 import { liveOf } from "./ir.ts";
 import type { QueryRefIR, ViewOpIR } from "./ir.ts";
@@ -200,10 +200,9 @@ function expandDistinctRows(
   assertRows?: AssertRows,
 ): Frames {
   const matches = new Frames();
+  const entries = Object.entries(output);
   for (const row of rows) {
-    const candidate = new Frames();
-    expandOutputRows(candidate, frame, [row], output);
-    const matched = candidate[0];
+    const matched = outputRow(frame, row, entries);
     if (matched === undefined || matches.some((prior) => structurallyEqual(prior, matched)))
       continue;
     pushFrame(matches, matched, assertRows);

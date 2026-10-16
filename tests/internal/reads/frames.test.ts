@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   Frames,
   bindInputMapping,
-  expandOutputRows,
+  outputRow,
   readPatternValue,
   varKeyOf,
 } from "@sync-engine/internal/reads/frames";
@@ -33,38 +33,66 @@ describe("Frames primitives", () => {
     }
   });
 
-  test("expands only rows that contain and unify every output slot", () => {
+  test("makes a frame only of rows that contain and unify every output slot", () => {
     const value = Symbol("value");
-    const result = new Frames();
-    expandOutputRows(
-      result,
-      { [value]: { nested: 1 } },
-      [{ value: { nested: 1 }, kind: "ok" }, { value: { nested: 2 }, kind: "bad" }, null],
-      { value, kind: "ok" },
-    );
-    expect(result).toEqual(new Frames({ [value]: { nested: 1 } }));
+    const output = Object.entries({ value, kind: "ok" });
+    const frame = { [value]: { nested: 1 } };
+    expect(outputRow(frame, { value: { nested: 1 }, kind: "ok" }, output)).toEqual(frame);
+    expect(outputRow(frame, { value: { nested: 2 }, kind: "bad" }, output)).toBeUndefined();
+    expect(outputRow(frame, null, output)).toBeUndefined();
+    expect(outputRow(frame, null, [])).toEqual(frame);
   });
 
   test("unifies a variable repeated within one output pattern", () => {
     const value = Symbol("value");
-    const result = new Frames();
+    const output = Object.entries({ left: value, right: { inner: [value] } });
+    const first = { tag: "a" };
 
-    expandOutputRows(result, {}, [{ left: 1, right: 2 }], { left: value, right: value });
+    const matched = outputRow({}, { left: first, right: { inner: [{ tag: "a" }] } }, output);
+    expect(matched?.[value]).toBe(first);
+    expect(outputRow({}, { left: first, right: { inner: [{ tag: "b" }] } }, output)).toBe(
+      undefined,
+    );
+    expect(outputRow({}, { left: 1, right: { inner: [2] } }, output)).toBeUndefined();
+  });
 
-    expect(result).toHaveLength(0);
+  test("tests a name bound to undefined like any other binding", () => {
+    const value = Symbol("value");
+    const output = Object.entries({ left: value, right: value });
+    const matched = outputRow({}, { left: undefined, right: undefined }, output);
+    expect(matched).toBeDefined();
+    expect(Object.hasOwn(matched!, value)).toBe(true);
+    expect(outputRow({}, { left: undefined, right: null }, output)).toBeUndefined();
+    expect(outputRow({ [value]: undefined }, { left: null, right: null }, output)).toBeUndefined();
+  });
+
+  test("extends the frame without changing it, keeping key order and row values", () => {
+    const kept = Symbol("kept");
+    const frame = { [kept]: 1, first: "frame" };
+    const box = { tag: "box" };
+    const output = Object.entries({
+      a: { $var: "1" },
+      b: { $var: "__proto__" },
+      c: { $var: "constructor" },
+    });
+
+    const matched = outputRow(frame, { a: box, b: "proto", c: "made" }, output);
+    expect(Object.keys(matched!)).toEqual(["1", "first", "__proto__", "constructor"]);
+    expect(matched?.["1"]).toBe(box);
+    expect(Object.getPrototypeOf(matched)).toBe(Object.prototype);
+    expect(matched?.[kept]).toBe(1);
+    expect(outputRow(frame, { a: box, b: "proto" }, output)).toBeUndefined();
+    expect(frame).toEqual({ [kept]: 1, first: "frame" });
   });
 
   test("requires own row fields and safely binds Object.prototype names", () => {
     for (const name of ["constructor", "toString", "__proto__"]) {
-      const missing = new Frames();
-      expandOutputRows(missing, {}, [{}], { [name]: Symbol(name) });
-      expect(missing).toHaveLength(0);
+      expect(outputRow({}, {}, Object.entries({ [name]: Symbol(name) }))).toBeUndefined();
 
-      const bound = new Frames();
-      expandOutputRows(bound, {}, [{ value: name }], { value: { $var: name } });
-      expect(bound).toHaveLength(1);
-      expect(Object.hasOwn(bound[0], name)).toBe(true);
-      expect(bound[0][name]).toBe(name);
+      const bound = outputRow({}, { value: name }, Object.entries({ value: { $var: name } }));
+      expect(bound).toBeDefined();
+      expect(Object.hasOwn(bound!, name)).toBe(true);
+      expect(bound![name]).toBe(name);
     }
   });
 
