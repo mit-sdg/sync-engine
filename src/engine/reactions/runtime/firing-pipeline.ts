@@ -161,6 +161,7 @@ export class FiringPipeline {
     let actionSymbols: symbol[];
     try {
       [matched, actionSymbols] = this.matcher.match(record, reaction);
+      if (matched.length === 0) return undefined;
       this.rowGuard(record.flow)(matched.length);
     } catch (error) {
       this.failStage(
@@ -173,7 +174,6 @@ export class FiringPipeline {
       );
       return undefined;
     }
-    if (matched.length === 0) return undefined;
 
     this.reactionLogger.frames(`Matched \`reaction\`: ${reaction.name} with \`when\`:`, matched);
     return {

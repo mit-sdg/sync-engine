@@ -41,6 +41,12 @@ follow the [support policy](SUPPORT.md), and review the
   taking no argument still works.
 - The reference now states that computations, conditions, and custom ops used
   by reads must be free of side effects, as queries already had to be.
+- Reaction matching tests each action trigger's action, provenance, posture,
+  and copied input before copying the rest of a record, so a reaction whose
+  action trigger fails that test copies no output, outcome, or fault. Matches,
+  their order, and their isolation are unchanged; a getter on a raw action
+  output, or one user code defines on a stored input, is now read only for
+  reactions that pass the test.
 
 ## [1.1.0] - 2026-10-05
 

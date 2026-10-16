@@ -2425,6 +2425,12 @@ export declare class TriggerMatcher {
     constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
         hasConsumed(recordId: string, reaction: string): boolean;
     }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
+    /**
+     * Each action clause is tested on the record's action, provenance, posture, and copied input
+     * first, and only a record that passes is copied whole (a channel clause copies every
+     * candidate), so a reaction's frames hold its own copy and a rejected one copies no output,
+     * outcome, or fault.
+     */
     match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
     posture(record: ActionRecord): ChannelPosture | undefined;
     matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
