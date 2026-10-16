@@ -47,6 +47,17 @@ follow the [support policy](SUPPORT.md), and review the
   their order, and their isolation are unchanged; a getter on a raw action
   output, or one user code defines on a stored input, is now read only for
   reactions that pass the test.
+- Read and action-pattern equality compare arrays by length and every index, a
+  hole comparing as `undefined`. It used to skip holes on the left only, so
+  `[, 1]` equalled `[5, 1]` but not the reverse, and an answer could depend on
+  row order. Many-row read matching and view answers now keep both such rows,
+  so a view or former promising at most one row can fault where it answered
+  before. A bound variable, a `$oneOf`, `$lit` or `.is.not` value, or a
+  trigger literal now tells `[, 1]` from `[5, 1]` in both directions, and a hole
+  in a line's `.is` pattern matches only `undefined`. Arrays now join records in
+  the guard against cycles, so cyclic arrays compare by their unfolding where
+  they used to overflow the stack, or compare unequal inside a record. Values
+  from JSON have no holes or cycles and are unaffected.
 
 ## [1.1.0] - 2026-10-05
 

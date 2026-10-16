@@ -534,6 +534,35 @@ describe("where ops: distinct fills", () => {
     );
   });
 
+  test("keeps rows that differ where one has a hole, in either order", async () => {
+    const rows = [
+      // eslint-disable-next-line no-sparse-arrays -- holes are the case under test.
+      { a: [, 1], b: 0 },
+      { a: [5, 1], b: 0 },
+    ];
+    expect((await fills(rows)).out).toHaveLength(2);
+    expect((await fills(rows.toReversed())).out).toHaveLength(2);
+  });
+
+  test("matches a hole in a line pattern only to undefined, so is and is.not agree", async () => {
+    const { reacting } = setup();
+    const raw = new RowsConcept();
+    const { Rows } = reacting.instrument({ Rows: raw });
+    // eslint-disable-next-line no-sparse-arrays -- holes are the case under test.
+    const holey = [, 1];
+    const passes = async (a: unknown[]) => {
+      raw.rows = [{ a }];
+      reacting.invalidateAllCaches();
+      const line = lineOf({ query: Rows._rows }, {});
+      return [
+        (await applyWhereOps(new Frames({}), [line.is({ a: holey })])).length,
+        (await applyWhereOps(new Frames({}), [line.is.not({ a: holey })])).length,
+      ];
+    };
+    expect(await passes([5, 1])).toEqual([0, 1]);
+    expect(await passes([undefined, 1])).toEqual([1, 0]);
+  });
+
   test("never runs a value's toJSON while removing duplicates", async () => {
     const throwing = Object.defineProperty(() => 0, "toJSON", {
       get(): never {

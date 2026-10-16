@@ -4533,9 +4533,14 @@ export {};
 /**
  * Equality for live values that cross the engine boundary.
  *
- * Records and arrays compare structurally. Dates compare by timestamp. Other
- * object kinds compare only by identity, which avoids guessing at the meaning
- * of maps, sets, class instances, and custom prototypes.
+ * Records and arrays compare structurally. Arrays compare by length and every
+ * index, a hole comparing as `undefined`; other array properties are ignored.
+ * Dates compare by timestamp. Other object kinds compare only by identity,
+ * which avoids guessing at the meaning of maps, sets, class instances, and
+ * custom prototypes. A pair of records or arrays met again during one
+ * comparison is taken as equal, since it is either still being compared or
+ * already found equal, so cyclic values compare by their unfolding and a shared
+ * pair is compared once.
  *
  * This is the lenient runtime equality: any pair of values is comparable and
  * symbol keys participate. For design-time comparison of serialized IR —

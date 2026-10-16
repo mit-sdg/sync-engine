@@ -130,11 +130,12 @@ function unifyOutputPattern(pattern: unknown, value: unknown, frame: Frame, fres
     return true;
   }
   if (Array.isArray(pattern)) {
-    return (
-      Array.isArray(value) &&
-      pattern.length === value.length &&
-      pattern.every((item, index) => unifyOutputPattern(item, value[index], frame, fresh))
-    );
+    if (!Array.isArray(value) || pattern.length !== value.length) return false;
+    // Every index, so a hole in the pattern matches only `undefined`, as equality compares it.
+    for (let index = 0; index < pattern.length; index += 1) {
+      if (!unifyOutputPattern(pattern[index], value[index], frame, fresh)) return false;
+    }
+    return true;
   }
   if (isPlainMapping(pattern)) {
     const marker = asMarker(pattern);

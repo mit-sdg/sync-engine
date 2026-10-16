@@ -381,7 +381,10 @@ and safe but may occupy separate entries when their graph shapes differ.
 
 Read equality and literal action-pattern equality are structural for arrays and
 plain records, timestamp-based for `Date`, and identity-based for maps, sets,
-class instances, and other objects. Reusing an already-bound variable in an
+class instances, and other objects. Arrays compare by length and every index, a
+hole comparing as `undefined`, in values and in line patterns alike; other
+array properties are ignored. Cyclic arrays and records compare equal when they
+unfold to the same value, so `a = [a]` equals `b = [[b]]`. Reusing an already-bound variable in an
 action pattern uses this same equality. Many-row read matching retains the first
 structurally distinct fill. Former `.distinct(...)`
 uses JavaScript `Set` semantics and skips `undefined`. `.first(...)` uses the
