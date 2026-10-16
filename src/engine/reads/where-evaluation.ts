@@ -201,13 +201,42 @@ function expandDistinctRows(
 ): Frames {
   const matches = new Frames();
   const entries = Object.entries(output);
+  const isNew = firstDistinct();
+  let names: (string | symbol)[] | undefined;
   for (const row of rows) {
     const matched = outputRow(frame, row, entries);
-    if (matched === undefined || matches.some((prior) => structurallyEqual(prior, matched)))
-      continue;
-    pushFrame(matches, matched, assertRows);
+    if (matched === undefined) continue;
+    names ??= Reflect.ownKeys(matched).filter((key) => !Object.hasOwn(frame, key));
+    if (isNew(matched, names)) pushFrame(matches, matched, assertRows);
   }
   return matches;
+}
+
+/**
+ * Keep the first of structurally equal fills without comparing every pair. Equal fills hold
+ * equal primitives at the same names, so a fill is compared, in the order the pairwise test
+ * used, only with earlier kept fills that agree on those. Strings, numbers, and booleans enter
+ * the key; every other value shares one placeholder and is left to the comparison, so building
+ * the key never runs user code.
+ */
+function firstDistinct(): (fill: Frame, names: readonly (string | symbol)[]) => boolean {
+  const kept = new Map<string, Frame[]>();
+  return (fill, names) => {
+    const key = JSON.stringify(names.map((name) => primitivePart(fill[name])));
+    const same = kept.get(key);
+    if (same === undefined) {
+      kept.set(key, [fill]);
+      return true;
+    }
+    if (same.some((prior) => structurallyEqual(prior, fill))) return false;
+    same.push(fill);
+    return true;
+  };
+}
+
+function primitivePart(value: unknown): unknown {
+  const type = typeof value;
+  return type === "string" || type === "number" || type === "boolean" ? value : 0;
 }
 
 function queryOf(
@@ -281,12 +310,13 @@ async function viewRows(
   }
   if (view.outs.length === 0) return survivors.length > 0 ? [{}] : [];
   const rows: Record<string, unknown>[] = [];
+  const isNew = firstDistinct();
   for (const survivor of survivors) {
     const row: Record<string, unknown> = {};
     for (const out of view.outs) {
       if (Object.hasOwn(survivor, out)) setOwn(row, out, survivor[out]);
     }
-    if (!rows.some((prior) => structurallyEqual(prior, row))) {
+    if (isNew(row, view.outs)) {
       assertRows?.(rows.length + 1);
       rows.push(row);
     }

@@ -238,6 +238,41 @@ describe("views: evaluation", () => {
     expect(await admitted("mallory")).toBe(0); // neither
   });
 
+  test("a row two alternatives both answer is answered once, in first order", async () => {
+    const { reacting, Filing } = setup();
+    const ownersOf = view("the owners of (file)", ({ file }, { owner }, _bindings) => [
+      where(refs.Filing._get({ id: file }).is({ owner })),
+      where(refs.Filing._get({ id: file }).is({ owner }), is.lt(file, "g")),
+    ]);
+    await Filing.add({ id: "f1", owner: "priya" });
+    await Filing.add({ id: "f1", owner: "sam" });
+    const { file, owner } = $vars;
+
+    const answers = await applyWhereOps(
+      new Frames({ [file]: "f1" }),
+      [ownersOf({ file }).is({ owner })],
+      reacting.readEnv(),
+    );
+    expect(answers.map((frame) => frame[owner])).toEqual(["priya", "sam"]);
+  });
+
+  test("an optional view two alternatives answer alike keeps its promise", async () => {
+    const { reacting, Filing } = setup();
+    const ownerOf = view("the one owner of (file)", ({ file }, { owner }, _bindings) => [
+      where(refs.Filing._get({ id: file }).is({ owner })),
+      where(refs.Filing._get({ id: file }).is({ owner }), is.lt(file, "g")),
+    ]).optional();
+    await Filing.add({ id: "f1", owner: "priya" });
+    const { file, owner } = $vars;
+
+    const answers = await applyWhereOps(
+      new Frames({ [file]: "f1" }),
+      [ownerOf({ file }).is({ owner })],
+      reacting.readEnv(),
+    );
+    expect(answers.map((frame) => frame[owner])).toEqual(["priya"]);
+  });
+
   test("count aggregates at the moment of asking", async () => {
     const { reacting, Seating } = setup();
     const hasRoom = hasRoomView();
