@@ -142,6 +142,7 @@ describe("earlier binds the reaction's own copies", () => {
     await assembly.whenIdle();
     expect(instances.Recorder.same).toEqual([true]);
   });
+
   test("refusal data bound through earlier cannot reach the refusing concept's state", async () => {
     class RefusingShelfConcept {
       rows: Order[] = [{ name: " kept ", tags: [] }];
@@ -204,5 +205,21 @@ describe("earlier binds the reaction's own copies", () => {
     ] as never);
     await concepts.Shelf.take({});
     expect(shelf.rows).toEqual([{ name: " kept ", tags: [] }]);
+  });
+  test("two earlier lines matching one record both match, even on a value equal only to itself", async () => {
+    const { assembly, instances } = build({
+      Ask: reaction(({ order }: Vars) =>
+        when(Shop.place({ order }).responds()).then(Nudge.nudge({ kind: "go" })),
+      ),
+      Twice: reaction(({ order }: Vars) =>
+        when(Nudge.nudge({ kind: "go" }).responds())
+          .where(earlier(Shop.place, { order }), earlier(Shop.place, { order }))
+          .then(Recorder.record({ tag: "twice" })),
+      ),
+    });
+    const order = { name: "a", tags: [], at: new Date(Number.NaN) };
+    await (assembly as any).concepts.Shop.place({ order });
+    await assembly.whenIdle();
+    expect(instances.Recorder.seen).toEqual(["twice"]);
   });
 });

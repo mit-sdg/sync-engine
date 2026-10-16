@@ -2414,9 +2414,11 @@ export declare function unifyOutputPattern(outcome: ActionOutcome, pattern: Mapp
 /** Match action identity, provenance, posture, input, and output for one trigger. */
 export declare function matchArguments(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol): Frame | undefined;
 /**
- * Match a stored record as a trigger does: action, provenance, and posture on the record as
- * stored, then input, output, and outcome on a copy taken through `seen`, so the values a
- * match binds are the reaction's own and repeated references stay shared within one `seen`.
+ * Match a stored record as a trigger does: action, provenance, posture, and input on the
+ * record as stored, then the values matching reads on a copy taken through `seen`, so the
+ * values a match binds are the reaction's own and repeated references stay shared within one
+ * `seen`. A record this `seen` already copied is tested on that copy alone, since frames may
+ * hold values from it that equal only themselves, such as an invalid `Date`.
  */
 export declare function matchRecordCopy(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol, seen: WeakMap<object, unknown>): Frame | undefined;
 /** Match one record against a posture channel, exclusions, provenance, and payload pattern. */
@@ -2432,10 +2434,9 @@ export declare class TriggerMatcher {
         hasConsumed(recordId: string, reaction: string): boolean;
     }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
     /**
-     * Each action clause is tested on the record's action, provenance, posture, and copied input
-     * first, and only a record that passes is copied whole (a channel clause copies every
-     * candidate), so a reaction's frames hold its own copy and a rejected one copies no output,
-     * outcome, or fault.
+     * Each action clause is tested on the record's action, provenance, posture, and stored input
+     * first, and only a record that passes is copied (a channel clause copies every candidate), so
+     * a reaction's frames hold its own copy and a rejected one copies nothing.
      */
     match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
     posture(record: ActionRecord): ChannelPosture | undefined;

@@ -140,20 +140,22 @@ function admits(record: ActionRecord, pattern: ActionTriggerPattern): boolean {
 }
 
 /**
- * Whether a trigger clause can match a record before the rest of it is copied: action,
- * provenance, and posture on the record as stored, and input on the copy the full match will
- * read, taken through the same `seen` map. Channel clauses are left to the full match.
+ * Whether a trigger clause or `earlier` line can match a record before it is copied: action,
+ * provenance, posture, and input on the record as stored. The stored input is the ask's own
+ * snapshot (once its flow has ended, the redacted store copy), and no user code holds it:
+ * triggers and `earlier` bind copies, observers and logs read redacted projections, and only
+ * the engine's own observer filters see the record, reading its concept, action, and outcome.
+ * So it unifies as its copy would against frames holding no copy of this record. Channel
+ * clauses are left to the full match.
  */
 function mayMatch(
   record: ActionRecord,
   clause: ActionTriggerPattern | ChannelPattern,
   frame: Frame,
-  seen: WeakMap<object, unknown>,
 ): boolean {
   if ("channel" in clause) return true;
   if (!admits(record, clause)) return false;
-  const input = snapshotValue(record.input, seen) as Record<string, unknown>;
-  return unifyPattern(input, clause.input, frame) !== undefined;
+  return unifyPattern(record.input, clause.input, frame) !== undefined;
 }
 
 /** Match action identity, provenance, posture, input, and output for one trigger. */
@@ -188,9 +190,11 @@ export function matchArguments(
 }
 
 /**
- * Match a stored record as a trigger does: action, provenance, and posture on the record as
- * stored, then input, output, and outcome on a copy taken through `seen`, so the values a
- * match binds are the reaction's own and repeated references stay shared within one `seen`.
+ * Match a stored record as a trigger does: action, provenance, posture, and input on the
+ * record as stored, then the values matching reads on a copy taken through `seen`, so the
+ * values a match binds are the reaction's own and repeated references stay shared within one
+ * `seen`. A record this `seen` already copied is tested on that copy alone, since frames may
+ * hold values from it that equal only themselves, such as an invalid `Date`.
  */
 export function matchRecordCopy(
   record: ActionRecord,
@@ -199,7 +203,7 @@ export function matchRecordCopy(
   recordBinding: symbol,
   seen: WeakMap<object, unknown>,
 ): Frame | undefined {
-  if (!admits(record, pattern)) return undefined;
+  if (!seen.has(record.input) && !mayMatch(record, pattern, frame)) return undefined;
   return matchArguments(snapshotRecord(record, seen), pattern, frame, recordBinding);
 }
 
@@ -259,13 +263,12 @@ export function matchChannel(
   return unified === undefined ? undefined : { ...unified, [recordBinding]: record.id };
 }
 
+/** Copy the values matching reads; the `output`, which it never reads, is left out. */
 function snapshotRecord(record: ActionRecord, seen: WeakMap<object, unknown>): ActionRecord {
+  const { output: _output, ...matched } = record;
   return {
-    ...record,
+    ...matched,
     input: snapshotValue(record.input, seen) as Record<string, unknown>,
-    ...(record.output === undefined
-      ? {}
-      : { output: snapshotValue(record.output, seen) as Record<string, unknown> }),
     ...(record.outcome === undefined
       ? {}
       : { outcome: snapshotValue(record.outcome, seen) as ActionRecord["outcome"] }),
@@ -286,10 +289,9 @@ export class TriggerMatcher {
   ) {}
 
   /**
-   * Each action clause is tested on the record's action, provenance, posture, and copied input
-   * first, and only a record that passes is copied whole (a channel clause copies every
-   * candidate), so a reaction's frames hold its own copy and a rejected one copies no output,
-   * outcome, or fault.
+   * Each action clause is tested on the record's action, provenance, posture, and stored input
+   * first, and only a record that passes is copied (a channel clause copies every candidate), so
+   * a reaction's frames hold its own copy and a rejected one copies nothing.
    */
   match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]] {
     const snapshots = new WeakMap<object, unknown>();
@@ -301,7 +303,7 @@ export class TriggerMatcher {
       const stored = this.records._matchingRecord(this.records._getById(record.id) ?? record);
       if (
         this.consumption.hasConsumed(stored.id, reaction.name) ||
-        !mayMatch(stored, clause, seed, snapshots)
+        !mayMatch(stored, clause, seed)
       ) {
         return [new Frames(), [actionSymbol]];
       }
@@ -328,7 +330,7 @@ export class TriggerMatcher {
           if (this.consumption.hasConsumed(candidate.id, reaction.name)) continue;
           if (parentConsumed.has(candidate.id)) continue;
           const stored = this.records._matchingRecord(candidate);
-          if (!mayMatch(stored, clause, frame, snapshots)) continue;
+          if (!mayMatch(stored, clause, frame)) continue;
           const matchingCandidate = snapshotRecord(stored, snapshots);
           const matched =
             "channel" in clause
