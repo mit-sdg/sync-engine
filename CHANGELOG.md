@@ -32,6 +32,22 @@ follow the [support policy](SUPPORT.md), and review the
   starts. Action invalidation is unchanged. A direct query stops holding answers
   once its read has begun, and no read holds them past the request deadline
   (`executionLimits.maxRequestDurationMs`, 30 seconds by default).
+- `registerConcept` takes `batched`, a list of queries the class implements in
+  list form: each such method takes a list of inputs and returns one answer per
+  input, in the same order. Compositions and direct callers still ask with one
+  input and get one answer, and vocabulary types read the list form that way.
+  With a query cache and `concurrentReads`, the reads pending for one batched
+  query are grouped until the current event-loop turn ends and answered by one
+  call; equal inputs share one answer. A group whose call throws is read again
+  one input at a time, and a wrong-length answer faults the group's reads. A
+  registration that names no query under `batched` behaves exactly as before.
+- The `groupBatchedQueries` assembly option, `true` by default, turns grouping
+  off when `false`: every read then calls a batched method with a list of one.
+- `@mit-sdg/sync-engine/assembly` exports `checkBatchedQuery`, which checks a
+  batched query's law on sample inputs.
+- `sync-engine check` reads a batched query's input and row shapes from its list
+  form, and fails when a query takes a list without being named under `batched`
+  or is named there without taking a list.
 
 ### Changed
 

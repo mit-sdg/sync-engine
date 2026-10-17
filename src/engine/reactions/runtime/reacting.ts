@@ -73,6 +73,7 @@ export class Reacting {
     queryCache?: QueryCacheMode,
     concurrentReads?: ConcurrentReads,
     readHoldMs?: number,
+    groupBatchedQueries = true,
   ) {
     this.Action = actionConcept;
     this.execution = execution;
@@ -93,6 +94,9 @@ export class Reacting {
       execution,
       requireDeclaredRefusals,
       queryCache: queryCache ?? "memoize",
+      // Grouping needs reads issued together, and "none" runs every read on its own.
+      groupBatchedQueries:
+        groupBatchedQueries && queryCache !== "none" && (concurrentReads?.rowsAtOnce ?? 1) > 1,
       ...(this.invocationReads === undefined
         ? {}
         : {

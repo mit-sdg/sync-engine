@@ -5,6 +5,7 @@ export type {
   ConceptSetAssemblyOptions,
 } from "@engine/boundary/assembly/assembly-facade";
 export { conceptFloor, conceptSet, registerConcept } from "@engine/boundary/assembly/concept-set";
+export { checkBatchedQuery } from "@engine/reactions/concepts/batched-law";
 export type {
   ConceptImplementation,
   ConceptFloor,

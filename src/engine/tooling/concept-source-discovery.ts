@@ -14,6 +14,8 @@ export interface RegisteredConceptSource {
   specPath: string;
   /** The file contents imported by that declaration. */
   specText: string;
+  /** The queries the registration names under `batched`, when it names any. */
+  batched?: readonly string[];
 }
 
 type DiscoveryContext = TypeScriptSourceContext;
@@ -444,12 +446,35 @@ export function registeredConceptSources(
       );
     }
 
+    const batchedValue = propertyValue(options.source, options.object, "batched", context);
+    const batched: string[] = [];
+    if (batchedValue !== undefined) {
+      const list = unwrap(batchedValue.expression);
+      if (!ts.isArrayLiteralExpression(list)) {
+        return failure(
+          batchedValue.source,
+          `registration \`${entry.name}\` batched must list query names literally`,
+        );
+      }
+      for (const element of list.elements) {
+        const name = unwrap(element as ts.Expression);
+        if (!ts.isStringLiteralLike(name)) {
+          return failure(
+            batchedValue.source,
+            `registration \`${entry.name}\` batched must list query names literally`,
+          );
+        }
+        batched.push(name.text);
+      }
+    }
+
     return {
       conceptName: entry.name,
       className: implementation.name.text,
       classPath: resolve(implementation.getSourceFile().fileName),
       specPath,
       specText: readFileSync(specPath, "utf8"),
+      ...(batchedValue === undefined ? {} : { batched }),
     };
   });
 }

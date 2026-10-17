@@ -377,3 +377,19 @@ export interface WhenBuilderWithFunctionWhere {
   then(node: ConsequenceNode): ReactionPartition;
   then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
+
+/**
+ * A query as its readers see it. A query's input is always one record, so a
+ * method whose parameter is a list is the list form of a batched query: it
+ * takes a list of inputs and answers one per input. Readers still ask it with
+ * one input and get one answer, as the engine calls it on their behalf.
+ */
+export type SingleQuery<F> = F extends (input: infer P) => infer A
+  ? unknown extends P
+    ? F
+    : [P] extends [readonly (infer I)[]]
+      ? Awaited<A> extends readonly (infer Each)[]
+        ? (input: I) => Promise<Each>
+        : F
+      : F
+  : F;

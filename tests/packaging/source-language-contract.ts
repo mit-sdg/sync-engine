@@ -316,3 +316,30 @@ vocabulary({
 
 // @ts-expect-error A many query returns an array, including when the method is asynchronous.
 vocabulary({ concepts: { Invalid: AsyncRecordPromisedAsMany } });
+
+class BatchedShelf {
+  async _title(inputs: readonly { id: string }[]): Promise<{ title: string }[][]> {
+    return inputs.map(({ id }) => [{ title: id }]);
+  }
+
+  async _book(inputs: { id: string }[]): Promise<{ title: string }[]> {
+    return inputs.map(({ id }) => ({ title: id }));
+  }
+}
+
+const batchedWords = vocabulary({
+  concepts: { Shelf: { class: BatchedShelf, batched: ["_title", "_book"] } },
+  computations: {},
+});
+const { Shelf: Shelving } = batchedWords.concepts;
+// A batched query reads like its single form: one input, one answer's rows.
+Shelving._title({ id: "a" }).is({ title: "a" });
+Shelving._book({ id: "a" }).is({ title: "a" });
+// @ts-expect-error A batched query is still asked with one input, never a list.
+Shelving._title([{ id: "a" }]);
+// @ts-expect-error A batched query's rows keep their declared field types.
+Shelving._title({ id: "a" }).is({ title: 1 });
+// @ts-expect-error A batched query's input keeps its declared field types.
+Shelving._book({ id: 1 });
+const batchedAnswer: ReturnType<typeof Shelving._title> = Promise.resolve([{ title: "a" }]);
+void batchedAnswer;

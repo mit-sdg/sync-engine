@@ -26,6 +26,7 @@ import {
   type ShapeResolution,
   type TypeScriptCheckerContext,
   resultShapeOfMethod,
+  shapeOfListElement,
   shapeOfTypeNode,
   shapesEqual,
 } from "@engine/tooling/typescript-shapes";
@@ -138,6 +139,8 @@ interface Member {
   name: string;
   inputs: Inputs;
   result: ShapeResolution;
+  /** A query whose parameter is a list: the list form of a batched query. */
+  listForm: boolean;
 }
 
 function sourceMember(method: ts.MethodDeclaration, context: CheckerContext): Member {
@@ -154,12 +157,26 @@ function sourceMember(method: ts.MethodDeclaration, context: CheckerContext): Me
       detail: "overloaded concept members do not expose one implementation shape",
       site: method,
     };
-    return { name, inputs: unsupported, result: unsupported };
+    return { name, inputs: unsupported, result: unsupported, listForm: false };
+  }
+  const [parameter] = method.parameters;
+  const listInputs =
+    name.startsWith("_") && method.parameters.length === 1 && parameter.type !== undefined
+      ? shapeOfListElement(parameter.type, parameter, context)
+      : undefined;
+  if (listInputs !== undefined) {
+    return {
+      name,
+      inputs: listInputs,
+      result: resultShapeOfMethod(method, "batched query", context),
+      listForm: true,
+    };
   }
   return {
     name,
     inputs: inputsOfMethod(method, context),
     result: resultShapeOfMethod(method, name.startsWith("_") ? "query" : "action", context),
+    listForm: false,
   };
 }
 
@@ -198,8 +215,11 @@ function classIn(source: ts.SourceFile, name: string): ts.ClassDeclaration | und
   return undefined;
 }
 
-function registeredClass(registry: ts.SourceFile): { name: string; from: string } | undefined {
+function registeredClass(
+  registry: ts.SourceFile,
+): { name: string; from: string; batched: ReadonlySet<string> } | undefined {
   let name: string | undefined;
+  const batched = new Set<string>();
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -211,6 +231,15 @@ function registeredClass(registry: ts.SourceFile): { name: string; from: string 
         if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
         if (property.name.text === "class" && ts.isIdentifier(property.initializer)) {
           name = property.initializer.text;
+        }
+        if (property.name.text === "batched") {
+          let list: ts.Expression = property.initializer;
+          while (ts.isAsExpression(list) || ts.isSatisfiesExpression(list)) list = list.expression;
+          if (ts.isArrayLiteralExpression(list)) {
+            for (const element of list.elements) {
+              if (ts.isStringLiteralLike(element)) batched.add(element.text);
+            }
+          }
         }
       }
     }
@@ -226,7 +255,7 @@ function registeredClass(registry: ts.SourceFile): { name: string; from: string 
     const bindings = statement.importClause?.namedBindings;
     if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
     if (bindings.elements.some((element) => element.name.text === name)) {
-      return { name, from: statement.moduleSpecifier.text };
+      return { name, from: statement.moduleSpecifier.text, batched };
     }
   }
   return undefined;
@@ -253,7 +282,11 @@ function compare(
   members: readonly Member[],
   locationBase: string,
   report: (what: string) => void,
-  options: { checkMembership: boolean; sourceInputMembers?: ReadonlySet<string> } = {
+  options: {
+    checkMembership: boolean;
+    sourceInputMembers?: ReadonlySet<string>;
+    batched?: ReadonlySet<string>;
+  } = {
     checkMembership: true,
   },
 ): void {
@@ -281,6 +314,17 @@ function compare(
         report(`the ${kind} \`${declaration.name}\` source declaration could not be located`);
       }
       continue;
+    }
+
+    const batched = options.batched?.has(declaration.name) === true;
+    if (member.listForm && !batched) {
+      report(
+        `the ${kind} \`${declaration.name}\` takes a list of inputs, so its registration must name it under \`batched\``,
+      );
+    } else if (!member.listForm && batched) {
+      report(
+        `the registration names the ${kind} \`${declaration.name}\` under \`batched\`, so it must take a list of inputs`,
+      );
     }
 
     if (!member.inputs.ok) {
@@ -318,6 +362,7 @@ function sourceFailures(
   locationBase: string,
   sourceInputMembers?: ReadonlySet<string>,
   suppliedContext?: CheckerContext,
+  batched: ReadonlySet<string> = new Set(),
 ): string[] {
   const findings: string[] = [];
   const report = (what: string): void => void findings.push(`${label}: ${what}.`);
@@ -341,7 +386,7 @@ function sourceFailures(
 
   const runtimeSelected = sourceInputMembers !== undefined;
   const members = membersOfClass(declaration, context, runtimeSelected);
-  const options = { checkMembership: !runtimeSelected, sourceInputMembers };
+  const options = { checkMembership: !runtimeSelected, sourceInputMembers, batched };
   compare(
     "action",
     spec.actions,
@@ -389,6 +434,9 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
     spec,
     label,
     projectRoot === "" ? directory : projectRoot,
+    undefined,
+    undefined,
+    registered.batched,
   );
 }
 
@@ -448,6 +496,7 @@ function conceptSourceFailures(
         root,
         concept.sourceInputMembers,
         sourceAnalysis.context,
+        new Set(source.batched ?? []),
       ),
     );
   }

@@ -126,6 +126,12 @@ export interface ConceptRegistration<
   spec: string;
   /** The Error class that signals each refusal code the specification declares. */
   refusals?: Readonly<Record<string, ErrorConstructor>>;
+  /**
+   * Queries the class implements in list form: each takes a list of inputs and
+   * returns one answer per input, in the same order. Readers still ask them
+   * with one input; the engine groups reads that are pending together.
+   */
+  batched?: readonly string[];
   floors?: F;
 }
 
@@ -265,6 +271,14 @@ export function registerConcept<
     specification,
     registration as ConceptRegistration<ConceptClass, Record<string, FloorFactory>>,
   );
+  for (const query of registration.batched ?? []) {
+    if (!specification.queries.some(({ name }) => name === query)) {
+      throw new Error(
+        `registerConcept(${registration.class.name}): batched names ${JSON.stringify(query)}, ` +
+          "which the specification does not declare as a query.",
+      );
+    }
+  }
   for (const [name, factory] of Object.entries(registration.floors ?? {})) {
     if (name === "" || typeof factory !== "function") {
       throw new Error(`registerConcept: floor "${name}" needs an implementation factory.`);
@@ -283,6 +297,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     principle?: string;
     queries?: QueryPromises;
     refusals?: RefusalContracts;
+    batched?: readonly string[];
     specification?: ConceptSpec;
   };
 };
@@ -422,6 +437,7 @@ export function conceptSet<
       principle,
       ...(queries.length === 0 ? {} : { queries: promises }),
       ...(Object.keys(refusals).length === 0 ? {} : { refusals }),
+      ...(registration.batched === undefined ? {} : { batched: [...registration.batched] }),
       specification: registration.specification,
     });
   }

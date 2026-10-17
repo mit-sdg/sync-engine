@@ -122,6 +122,23 @@ function queryCacheKey(args: readonly unknown[], identities = identityTable()): 
 }
 
 /**
+ * Key one query input the way the cache keys it, or answer `undefined` when the
+ * input is too deep to key. Each key function keeps its own identity table, so
+ * keys compare only within one function.
+ */
+export function queryInputKeys(): (input: unknown) => string | undefined {
+  const identities = identityTable();
+  return (input) => {
+    try {
+      return queryCacheKey([input], identities);
+    } catch (error) {
+      if (error instanceof QueryCacheKeyDepthError) return undefined;
+      throw error;
+    }
+  };
+}
+
+/**
  * Memoize a query until invalidated; a rejected promise is never retained.
  *
  * Under `queryCache: "since-dispatch"`, `points` gives the dispatch point an

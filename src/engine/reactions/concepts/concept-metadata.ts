@@ -79,6 +79,8 @@ export interface ConceptMetadata {
   queries?: Readonly<Record<string, QueryPromise>>;
   outcomes?: OutcomeContracts;
   refusals?: RefusalContracts;
+  /** Queries the class implements in list form: a list of inputs in, one answer per input out. */
+  batched?: readonly string[];
   /** Parsed authored contract; registration semantics use only selected fields. */
   specification?: ConceptSpecificationIR;
 }
@@ -119,6 +121,7 @@ function metadataCompatible(left: ConceptMetadata, right: ConceptMetadata): bool
     left.principle === right.principle &&
     canonicallyEqual(left.queries, right.queries) &&
     canonicallyEqual(left.outcomes, right.outcomes) &&
+    canonicallyEqual([...(left.batched ?? [])].sort(), [...(right.batched ?? [])].sort()) &&
     canonicallyEqual(left[CONCEPT_PROTOCOL], right[CONCEPT_PROTOCOL]) &&
     canonicallyEqual(left[CONCEPT_MEMBER_ROLES], right[CONCEPT_MEMBER_ROLES]) &&
     sameRefusals(left.refusals, right.refusals)
@@ -140,6 +143,11 @@ export function attachConceptMetadata(concept: object, metadata: ConceptMetadata
 
 export function conceptMetadataOf(concept: object): ConceptMetadata | undefined {
   return metadataByConcept.get(concept);
+}
+
+/** Whether a concept's vocabulary declares the query in list form. */
+export function isBatchedQuery(concept: object, query: string): boolean {
+  return metadataByConcept.get(concept)?.batched?.includes(query) === true;
 }
 
 /**

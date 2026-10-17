@@ -244,6 +244,12 @@ export interface AssembleBaseOptions<
    * are free of side effects. Unset, every line reads its rows one after another.
    */
   concurrentReads?: ConcurrentReads;
+  /**
+   * Whether a batched query groups the reads pending for it into one call of its
+   * list form. Grouping happens only with `concurrentReads` and a query cache.
+   * `false` calls the list form with a list of one for every read. Defaults to `true`.
+   */
+  groupBatchedQueries?: boolean;
   /** Bounded synchronous handoff for stable operational events. */
   observers?: readonly OperationalObserver[];
   /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -456,6 +462,12 @@ export function assemble<T extends Record<string, ConceptClass>>(
     throw new Error('assemble: queryCache must be "memoize", "since-dispatch" or "none".');
   }
   assertConcurrentReads(options.concurrentReads);
+  if (
+    options.groupBatchedQueries !== undefined &&
+    typeof options.groupBatchedQueries !== "boolean"
+  ) {
+    throw new Error("assemble: groupBatchedQueries must be true or false.");
+  }
 
   // Resolve every selected raw object before attaching metadata or instrumenting any of them.
   // The identity check is deliberately local to this assembly construction.
@@ -507,6 +519,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.queryCache,
     options.concurrentReads,
     requestTimeout(undefined, options.executionLimits),
+    options.groupBatchedQueries ?? true,
   );
   engine.logging = options.logging ?? Logging.OFF;
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);

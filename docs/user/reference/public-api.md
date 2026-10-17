@@ -120,7 +120,7 @@ formers](semantics.md#views-and-formers).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ConcurrentReads`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ConcurrentReads`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `checkBatchedQuery`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -221,11 +221,12 @@ the named computation references supplied to `conceptSet`. The complete
 `applicationConceptSet` retains all three facets and the internal declaration
 needed by assembly and tooling.
 
-| API               | Compact signature                                                 |
-| ----------------- | ----------------------------------------------------------------- |
-| `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
-| `conceptSet`      | `conceptSet({ ...registeredConcepts }, computations?)`            |
-| `conceptFloor`    | `conceptFloor(conceptSet, { name, instances, resources, close })` |
+| API                 | Compact signature                                                 |
+| ------------------- | ----------------------------------------------------------------- |
+| `registerConcept`   | `registerConcept({ class, spec, refusals?, batched?, floors? })`  |
+| `conceptSet`        | `conceptSet({ ...registeredConcepts }, computations?)`            |
+| `conceptFloor`      | `conceptFloor(conceptSet, { name, instances, resources, close })` |
+| `checkBatchedQuery` | `checkBatchedQuery(instance, query, sampleInputs)`                |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
@@ -262,6 +263,18 @@ The optional second `conceptSet` argument supplies named pure computations.
 The set exposes inferred references under `set.computations`. Compose raw
 records before constructing one set; refs from separate concept sets cannot be
 combined.
+
+`batched` names queries the class implements in list form. Each such method
+takes a list of inputs and returns one answer per input, in the same order;
+compositions and direct callers still ask it with one input and get one answer.
+Registration rejects a name the specification does not declare as a query, a
+name given twice, and a method that destructures one input. Its input names come
+from the specification. `checkBatchedQuery` checks a list form's law on the raw
+instance with sample inputs: each answer equals the answer for that input
+alone, in order, reversed, and with duplicates, an empty list answers an empty
+list, and answers at different positions share no objects. It rejects with what
+differed. Execution semantics for batched queries are in
+[semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`

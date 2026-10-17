@@ -58,6 +58,12 @@ belongs to one assembly, while a database client's connection pool is usually
 shared by the whole process: size the pool above the sum over the process's
 assemblies, so actions' writes are not queued behind reads.
 
+A query a registration names under `batched` answers a list of inputs at once,
+so the reads grouped for it take one database command instead of one each.
+Grouping needs `concurrentReads` and a query cache. `groupBatchedQueries: false`
+turns grouping off for the whole assembly without changing any class: every
+read then calls the batched method with a list of one.
+
 Under `queryCache: "memoize"`, each outside invocation clears every query cache,
 so concurrent invocations re-read what earlier ones had read, and the more so
 the faster each reads. `queryCache: "since-dispatch"` removes that loss. Memory then

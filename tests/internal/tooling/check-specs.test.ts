@@ -440,6 +440,94 @@ describe("input and result shapes", () => {
   });
 });
 
+describe("batched queries", () => {
+  const registry = (batched: string) =>
+    REGISTRY.replace("spec });", `spec, batched: [${batched}] });`);
+
+  test("a list form named under batched is checked by its element's input and row shapes", async () => {
+    const where = await concept(
+      "refresh () : returns ()\n  then\n    returns",
+      [
+        "  refresh() { return {}; }",
+        "  async _title(inputs: { item: number }[]): Promise<{ title: string }[][]> { return inputs.map(() => []); }",
+        "  async _one(inputs: readonly { item: number }[]): Promise<{ title: string }[]> { return inputs.map(() => ({ title: '' })); }",
+        "  async _wrong(inputs: { other: number }[]): Promise<{ other: string }[]> { return []; }",
+      ].join("\n"),
+      [
+        "_title (item: Item) : many (title: Text)",
+        "_one (item: Item) : one (title: Text)",
+        "_wrong (item: Item) : one (title: Text)",
+      ].join("\n"),
+    );
+    await writeFile(join(where, "registry.ts"), registry(`"_title", "_one", "_wrong"`));
+
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining("`_wrong` declares the inputs `item` but the class takes `other`"),
+      expect.stringContaining(
+        "`_wrong` declares the row fields `title` but the class returns `other`",
+      ),
+    ]);
+  });
+
+  test("a list form must be named under batched, and a batched query must take a list", async () => {
+    const where = await concept(
+      "refresh () : returns ()\n  then\n    returns",
+      [
+        "  refresh() { return {}; }",
+        "  async _unnamed(inputs: { item: number }[]): Promise<{ title: string }[]> { return []; }",
+        "  _single({ item }: { item: number }): { title: string } { return { title: String(item) }; }",
+      ].join("\n"),
+      [
+        "_unnamed (item: Item) : one (title: Text)",
+        "_single (item: Item) : one (title: Text)",
+      ].join("\n"),
+    );
+    await writeFile(join(where, "registry.ts"), registry(`"_single"`));
+
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining(
+        "the query `_unnamed` takes a list of inputs, so its registration must name it under `batched`",
+      ),
+      expect.stringContaining(
+        "the registration names the query `_single` under `batched`, so it must take a list of inputs",
+      ),
+    ]);
+  });
+
+  test("static registration discovery reads batched names and rejects computed ones", async () => {
+    const where = await concept(
+      "refresh () : returns ()\n  then\n    returns",
+      [
+        "  refresh() { return {}; }",
+        "  async _title(inputs: { item: number }[]): Promise<{ title: string }[]> { return []; }",
+      ].join("\n"),
+      "_title (item: Item) : one (title: Text)",
+    );
+    await writeFile(join(where, "registry.ts"), registry(`"_title"`));
+    await writeFile(
+      join(directory, "concepts.ts"),
+      `import { conceptSet } from "@mit-sdg/sync-engine/assembly";\n` +
+        `import { sessioning } from "./sessioning/registry.ts";\n` +
+        `export const applicationConceptSet = conceptSet({ Sessioning: sessioning });\n`,
+    );
+
+    expect(
+      registeredConceptSources(join(directory, "concepts.ts")).map(({ batched }) => batched),
+    ).toEqual([["_title"]]);
+
+    await writeFile(
+      join(where, "registry.ts"),
+      REGISTRY.replace("spec });", "spec, batched: names });").replace(
+        "export const",
+        'const names = ["_title"];\nexport const',
+      ),
+    );
+    expect(() => registeredConceptSources(join(directory, "concepts.ts"))).toThrow(
+      "registration `Sessioning` batched must list query names literally",
+    );
+  });
+});
+
 describe("uninterpreted state rules", () => {
   test("marked contradictions do not participate in source checking", async () => {
     const where = await concept(

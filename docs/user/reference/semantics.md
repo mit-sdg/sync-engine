@@ -16,6 +16,7 @@ cookbook](../guide/read-construction.md).
 | In-process action serialization             | [Execution and concurrency](#execution-and-concurrency)                                   |
 | Read binding, absence, and cardinality      | [Reading: declarations govern](#reading-declarations-govern)                              |
 | Query promises, caching, and equality       | [Queries](#queries)                                                                       |
+| Queries implemented in list form            | [Batched queries](#batched-queries)                                                       |
 | Views and formed results                    | [Views and formers](#views-and-formers)                                                   |
 | Placement of race-sensitive decisions       | [Decisions that must not race](#decisions-that-must-not-race)                             |
 | Sibling and endpoint settlement             | [Sibling paths and endpoint settlement](#sibling-paths-and-endpoint-settlement)           |
@@ -399,6 +400,38 @@ source order; it does not inspect a timestamp field.
 
 How such a fault is delivered depends on where the read occurs. See
 [Failures between action asks](#failures-between-action-asks).
+
+### Batched queries
+
+A registration may name queries under `batched`. Such a query's method takes a
+list of inputs and returns a list with one answer per input, in the same order;
+each answer is what the query answers for that input alone. Readers do not
+change: a reaction, view, former, or direct caller still asks with one input and
+gets one answer, and promises, cardinality checks, and row limits apply to each
+answer as to an ordinary query's. Only reads the query cache cannot answer reach
+the method. Inside the class, the method is an ordinary method that takes a
+list.
+
+With a query cache and `concurrentReads`, the engine groups the reads pending
+for one batched query on one concept instance until the current turn of the
+event loop ends, then calls the method once with their inputs. It never delays
+a read to collect more. Equal inputs share one position and one answer, as a
+cache hit would. Without `concurrentReads`, under `queryCache: "none"`, or with
+`groupBatchedQueries: false`, every read calls the method with a list of one.
+A grouped read begins when it is asked, so `since-dispatch` reuse is decided
+as for an ordinary read begun at that moment.
+
+If the method throws for a group, the engine logs a warning and reads each of
+the group's inputs again with a list of one, so a bad input fails only its own
+read. If the method returns something other than a list of the right length,
+every read in the group faults with an error naming the query and both lengths.
+
+The method must keep the batched law: whatever else shares the list, in any
+order and with duplicates, each input gets the answer it gets alone, an empty
+list gets an empty list, and answers at different positions share no objects.
+The engine cannot check this as it runs; `checkBatchedQuery` checks it on
+sample inputs. The method is still a query, so it must be side-effect-free, and
+its answer for an input may depend only on stored state and that input.
 
 ## Views and formers
 

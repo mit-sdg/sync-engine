@@ -116,6 +116,38 @@ semantic design binding: it neither performs this specialization nor proves
 that source and design agree. Keep both declarations aligned; the current
 checker validates each contract independently.
 
+A query read for many rows at once, such as one row's detail inside an `each`,
+can be written in list form when its storage answers many inputs in one command.
+Name it under `batched` and write the method to take the whole list:
+
+```ts no-check
+export const trashing = registerConcept({
+  class: TrashingConcept,
+  spec,
+  batched: ["_isTrashed"],
+});
+
+// In TrashingConcept:
+async _isTrashed(inputs: { item: string }[]) {
+  const ids = [...new Set(inputs.map(({ item }) => item))];
+  const docs = await this.trashed.find({ _id: { $in: ids } }).toArray();
+  const found = new Set(docs.map((doc) => doc._id));
+  return inputs.map(({ item }) => ({ trashed: found.has(item) }));
+}
+```
+
+The specification and every reader stay as they were: compositions still write
+`Trashing._isTrashed({ item })`, and the engine groups the reads issued
+together into one call. Return exactly one answer per input, in input order,
+even for duplicates and for inputs with nothing stored; a query that answers
+many rows answers each input with its own list. Build fresh objects for every
+position instead of handing two positions one object. Your own code that calls
+the method directly passes a list. Test each batched query with
+`checkBatchedQuery(new TrashingConcept(...), "_isTrashed", samples)`, giving
+samples that cover missing keys, several rows, and no rows. Only queries can be
+batched; leave a query in its single form unless its storage really pays per
+call.
+
 Before implementation, verify the draft grammar without loading an application:
 
 ```sh

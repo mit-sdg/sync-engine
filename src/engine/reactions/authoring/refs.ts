@@ -52,6 +52,7 @@ import type {
   InstrumentedAction,
   Mapping,
   Reaction,
+  SingleQuery,
   TriggerActionLine,
 } from "../types.ts";
 import { validateQueryContractMap } from "@engine/reads/query-contracts";
@@ -148,7 +149,7 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A
 type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   readonly [
     K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never
-  ]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
+  ]: K extends `_${string}` ? QueryLineFn<SingleQuery<I[K]>> : ActionLineFn<I[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
@@ -206,7 +207,7 @@ type DeclaredQueryPromise<Entry, Key extends PropertyKey> = Entry extends {
     : never;
 
 type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
-  [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer
+  [K in QueryKeys<I>]: SingleQuery<I[K]> extends (...args: never[]) => infer Answer
     ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true
       ? never
       : K
@@ -294,6 +295,38 @@ function classContracts(cls: ConceptClass): ConceptMetadata {
   };
 }
 
+function validateBatchedQueries(conceptName: string, cls: ConceptClass, batched: unknown): void {
+  if (batched === undefined) return;
+  if (!Array.isArray(batched)) {
+    throw new Error(`Vocabulary: "${conceptName}": batched must list query names.`);
+  }
+  const seen = new Set<string>();
+  for (const name of batched) {
+    const member =
+      typeof name === "string" && name.startsWith("_")
+        ? callableConceptMember(cls.prototype as object, name)
+        : undefined;
+    if (member === undefined) {
+      throw new Error(
+        `Vocabulary: "${conceptName}": batched names ${JSON.stringify(name)}, which is not a query ` +
+          `(a \`_\`-prefixed method) of ${cls.name}.`,
+      );
+    }
+    if (seen.has(name)) {
+      throw new Error(`Vocabulary: "${conceptName}": batched names "${name}" twice.`);
+    }
+    seen.add(name);
+    // A destructured or placeholder parameter is the single form; a batched
+    // query takes the whole list as one parameter.
+    if (rolesOf(member) !== undefined) {
+      throw new Error(
+        `Vocabulary: "${conceptName}.${name}" is batched, so it takes a list of inputs, ` +
+          `but ${cls.name} declares it to take one input.`,
+      );
+    }
+  }
+}
+
 function validateConceptMetadata(
   conceptName: string,
   cls: ConceptClass,
@@ -301,6 +334,7 @@ function validateConceptMetadata(
 ): void {
   const prototype = cls.prototype as Record<string, unknown>;
   validateQueryContractMap(metadata.queries, prototype, `Vocabulary: "${conceptName}"`, cls.name);
+  validateBatchedQueries(conceptName, cls, metadata.batched);
   for (const action of new Set([
     ...Object.keys(metadata.outcomes ?? {}),
     ...Object.keys(metadata.refusals ?? {}),
@@ -427,7 +461,19 @@ export function vocabulary(
     ] as const) {
       for (const memberName of names) {
         const member = callableConceptMember(cls.prototype as object, memberName);
-        setOwn(roles, memberName, member === undefined ? undefined : rolesOf(member));
+        // A batched query's list parameter names no roles; its specification does.
+        const specified = declaredContracts.batched?.includes(memberName)
+          ? declaredContracts.specification?.queries.find(({ name }) => name === memberName)?.inputs
+          : undefined;
+        setOwn(
+          roles,
+          memberName,
+          specified !== undefined
+            ? [...specified]
+            : member === undefined || declaredContracts.batched?.includes(memberName)
+              ? undefined
+              : rolesOf(member),
+        );
       }
     }
     const declaredMetadata: ConceptMetadata = {
