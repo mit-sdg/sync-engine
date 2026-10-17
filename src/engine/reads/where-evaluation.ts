@@ -49,6 +49,7 @@ export interface ReadAhead {
  */
 export class RowsAhead {
   private started = 0;
+  private readonly settledWaiters = new Set<() => void>();
 
   constructor(readonly capacity: number) {}
 
@@ -67,6 +68,15 @@ export class RowsAhead {
     if (this.started === 0)
       throw new Error("RowsAhead: a row was given back that was never taken.");
     this.started -= 1;
+    if (this.started > 0) return;
+    for (const resolve of this.settledWaiters) resolve();
+    this.settledWaiters.clear();
+  }
+
+  /** Resolves once no row started ahead is still running, abandoned rows included. */
+  whenSettled(): Promise<void> {
+    if (this.started === 0) return Promise.resolve();
+    return new Promise((resolve) => this.settledWaiters.add(resolve));
   }
 }
 

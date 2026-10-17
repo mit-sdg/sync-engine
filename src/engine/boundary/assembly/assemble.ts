@@ -546,6 +546,11 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.groupBatchedQueries ?? true,
   );
   engine.logging = options.logging ?? Logging.OFF;
+  // Rows started ahead keep reading after their evaluation faults, so idle and
+  // drain also wait for them; without concurrentReads they resolve as before.
+  const rowsAhead = engine.rowsAhead;
+  const afterRowsAhead = (idle: Promise<void>): Promise<void> =>
+    rowsAhead === undefined ? idle : idle.then(() => rowsAhead.whenSettled());
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);
   engine.registerComputations(declaredComputations);
   const computations: ComputationInventoryIR[] = [
@@ -812,8 +817,8 @@ export function assemble<T extends Record<string, ConceptClass>>(
     ),
     contracts,
     validators,
-    beginDrain: () => lifecycle.beginDrain(),
-    whenIdle: () => lifecycle.whenIdle(),
+    beginDrain: () => afterRowsAhead(lifecycle.beginDrain()),
+    whenIdle: () => afterRowsAhead(lifecycle.whenIdle()),
     publicInterface,
     authoredDeclarations: [...declarationIdentities.inventory()].sort((left, right) =>
       ordinal(`${left.identity}\0${left.kind}`, `${right.identity}\0${right.kind}`),

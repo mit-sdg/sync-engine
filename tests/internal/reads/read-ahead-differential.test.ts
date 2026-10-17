@@ -423,11 +423,11 @@ async function outcome(
     result = { recorded: app.concepts.Ledger.recorded };
   }
   if (concurrentReads !== undefined) {
-    // Rows abandoned after a fault may still be settling; none stays counted once they have.
-    await app.whenIdle();
+    // Rows abandoned after a fault may still be settling; idle waits for them.
     const ahead = () => app.engine.readEnv().readAhead?.ahead.inUse;
     if (ahead() !== 0) abandoned.runs += 1;
-    await vi.waitFor(() => expect(ahead()).toBe(0), { interval: 1 });
+    await app.whenIdle();
+    expect(ahead()).toBe(0);
   }
   const breaches = events.filter((event) => event.type === "execution-limit-breached").length;
   return { ...result, failures, breaches };
@@ -510,7 +510,7 @@ describe("reading rows together answers as reading them one after another", () =
       faults: 0.15,
       breaches: 0.18,
     });
-    // The check that no row stays ahead also met rows still settling after a fault.
+    // Idle also waited for rows still settling after a fault.
     expect(abandoned.runs - before).toBeGreaterThan(50);
   });
 

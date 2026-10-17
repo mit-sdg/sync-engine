@@ -214,12 +214,30 @@ describe("with concurrentReads, rows are read together and consumed in row order
     const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 4 } });
 
     await expect(app.form(listing({}))).rejects.toThrow("detail 0 failed");
-    await app.whenIdle();
     // The hung row keeps its place in the count of rows ahead until it settles.
     expect(rowsAhead(app)).toBe(1);
 
     release();
     await vi.waitFor(() => expect(rowsAhead(app)).toBe(0));
+  });
+
+  test("idle and drain wait for rows started ahead of a fault", async () => {
+    const { words, listing, release } = shelf(4, { failAt: [0], hangAt: [1] });
+    const app = application(words, { listing }, { concurrentReads: { rowsAtOnce: 4 } });
+
+    await expect(app.form(listing({}))).rejects.toThrow("detail 0 failed");
+    let idle = false;
+    let drained = false;
+    void app.whenIdle().then(() => (idle = true));
+    void app.beginDrain().then(() => (drained = true));
+    await pause(20);
+    expect({ idle, drained }).toEqual({ idle: false, drained: false });
+
+    release();
+    await app.beginDrain();
+    expect(idle).toBe(true);
+    expect(app.concepts.Shelf.inFlight).toBe(0);
+    expect(rowsAhead(app)).toBe(0);
   });
 
   test("rows started ahead of a fault stop at their next line", async () => {
