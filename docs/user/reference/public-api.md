@@ -269,9 +269,11 @@ takes a list of inputs and returns one answer per input, in the same order;
 compositions and direct callers still ask it with one input and get one answer.
 `registerConcept` rejects a name the specification does not declare as a
 query, and TypeScript accepts only the class's query names. `conceptSet` rejects
-a name given twice and a method that destructures one input or takes a rest
-parameter, and `assemble` rejects a selected implementation whose batched
-method does so. Its input names come from the specification. Readers of the
+a name given twice and a method that destructures one input, and `assemble`
+rejects a selected implementation whose batched method does so; `sync-engine
+check` also rejects a rest parameter. A `RegisteredConcept<C>` written out
+without its batched names reads every query in its own form, so keep the
+inferred type of `registerConcept(...)`. Its input names come from the specification. Readers of the
 concept set's refs and of an assembled concept ask a batched query with one
 input; a query that takes a list without being named keeps its own types.
 `checkBatchedQuery` checks a list form's law on the raw instance with sample

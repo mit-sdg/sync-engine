@@ -84,12 +84,14 @@ export function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined
 }
 
 /**
- * Whether a method takes its whole input list as one parameter, as a batched
- * query's list form does: neither a destructured or placeholder input, which
- * is the single form, nor a rest parameter.
+ * Whether a method may take its whole input list, as a batched query's list
+ * form does: it does not destructure one input or take a placeholder, which is
+ * the single form. Wrappers such as spies take `(...args)` and pass the list
+ * on, so only `sync-engine check`, which sees declared types, rejects a rest
+ * parameter.
  */
 export function takesWholeList(fn: (...args: never[]) => unknown): boolean {
-  return rolesOf(fn) === undefined && !/^[^(]*\(\s*\.\.\./.test(String(fn));
+  return rolesOf(fn) === undefined;
 }
 
 /**

@@ -5,6 +5,7 @@
  */
 import { describe, expect, test, vi } from "vite-plus/test";
 import { vocabulary } from "@sync-engine/advanced";
+import { vocabularyClasses } from "@sync-engine/internal/reactions/authoring/refs";
 import { each, former } from "@sync-engine/language";
 import type { Empty } from "@sync-engine/internal/reactions/types";
 import type { ConcurrentReads } from "@sync-engine/internal/reads/where-evaluation";
@@ -59,6 +60,7 @@ function application(
     concurrentReads?: ConcurrentReads;
     queryCache?: QueryCacheMode;
     groupBatchedQueries?: boolean;
+    instances?: Record<string, never>;
   } = {},
 ) {
   return assemble({ vocabulary: words, composition, retention: { window: 0 }, ...options });
@@ -406,8 +408,26 @@ describe("registration", () => {
     expect(() => declare(["_one"])).toThrow(
       'Vocabulary: "Plain._one" is batched, so it takes a list of inputs, but Plain declares it to take one input.',
     );
-    expect(() => declare(["_spread"])).toThrow('Vocabulary: "Plain._spread" is batched');
+    // A rest parameter looks like a wrapper at runtime; `sync-engine check` rejects it.
+    expect(() => declare(["_spread"])).not.toThrow();
     expect(() => declare(5)).toThrow('Vocabulary: "Plain": batched must list query names.');
+  });
+
+  test("assembly accepts a spy wrapped around a batched query", async () => {
+    const { words, listing } = library(4);
+    const instance = new (vocabularyClasses(words).Library as new () => {
+      _book(inputs: readonly { book: number }[]): Promise<unknown[]>;
+      lists: number[][];
+    })();
+    const spy = vi.spyOn(instance, "_book");
+    const app = application(
+      words,
+      { listing },
+      { concurrentReads: { rowsAtOnce: 16 }, instances: { Library: instance as never } },
+    );
+
+    expect(await app.form(listing({}))).toEqual(titles(4));
+    expect(spy).toHaveBeenCalledOnce();
   });
 
   test("assembly rejects a selected implementation whose batched query takes one input", () => {

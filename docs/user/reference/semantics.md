@@ -434,7 +434,8 @@ naming the query.
 
 The method must keep the batched law: whatever else shares the list, in any
 order and with duplicates, each input gets the answer it gets alone, an empty
-list gets an empty list, and answers to different inputs share no objects. The
+list gets an empty list, and answers to different inputs share no objects;
+answers to equal inputs may share them, as a cache hit's readers do. The
 engine cannot check this as it runs; `checkBatchedQuery` checks it on sample
 inputs. The method is still a query, so it must be side-effect-free, and its
 answer for an input may depend only on stored state and that input. Every
