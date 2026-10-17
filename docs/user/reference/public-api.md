@@ -140,6 +140,7 @@ assemble(options: ConceptSetAssemblyOptions): Assembly
 | `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
 | `queryCache`                      | no          | `"memoize"`; `"since-dispatch"` keeps running invocations' answers across later ones; `"none"` disables it   |
 | `concurrentReads`                 | no          | Rows read one after another; `{ rowsAtOnce, maxRowsAhead? }` reads a line's rows together, in row order      |
+| `groupBatchedQueries`             | no          | `true` groups a batched query's pending reads; `false` sends every read as a list of one                     |
 | `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`     |
 | `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
 | `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
@@ -155,11 +156,23 @@ manual prune operation.
 Every assembly owns an internal occurrence index; `logSink` neither replaces it
 nor restricts `retention`.
 
+`ConcurrentReads` is `{ rowsAtOnce, maxRowsAhead? }`, both positive integers:
+at most `rowsAtOnce` rows of one line or selection are read at once, and at
+most `maxRowsAhead` rows (64 when unset) are started ahead across the assembly.
+Both fields are experimental: they may change or be removed in any minor
+release, and the changelog lists the change. A batched query's pending reads
+are grouped only with a query cache and `rowsAtOnce` above 1; otherwise, and
+with `groupBatchedQueries: false`, each read calls the list form with a list of
+one. See [ordering and state-read timing](semantics.md#ordering-and-state-read-timing)
+and [batched queries](semantics.md#batched-queries).
+
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
 both lifecycle promises resolve when accepted action, query, and former work
-actually settles. `form(...)` resolves to the formed runtime value; an optional
-record former contributes `null` to that result.
+actually settles. With `concurrentReads`, they also wait for rows started ahead
+to settle, including rows abandoned after a fault. `form(...)` resolves to the
+formed runtime value; an optional record former contributes `null` to that
+result.
 `ActionRefusal` is the direct-action refusal result.
 For a registered exception, it contains the specification code and sentence as
 `detail`. The standard boundary refusal funnel exposes the code without that
@@ -266,16 +279,26 @@ combined.
 
 `batched` names queries the class implements in list form. Each such method
 takes a list of inputs and returns one answer per input, in the same order;
-compositions and direct callers still ask it with one input and get one answer.
-`registerConcept` rejects a name the specification does not declare as a
-query, and TypeScript accepts only the class's query names. `conceptSet` rejects
-a name given twice and a method that destructures one input, and `assemble`
-rejects a selected implementation whose batched method does so; `sync-engine
-check` also rejects a rest parameter. A `RegisteredConcept<C>` written out
-without its batched names reads every query in its own form, so keep the
-inferred type of `registerConcept(...)`. Its input names come from the specification. Readers of the
-concept set's refs and of an assembled concept ask a batched query with one
-input; a query that takes a list without being named keeps its own types.
+compositions and callers of an assembled concept still ask it with one input
+and get one answer, while code holding the raw class instance calls the list
+form. `registerConcept` rejects a name the specification does not declare as a
+query, and TypeScript accepts only the class's query names. `conceptSet`
+rejects a name given twice and a batched method that destructures one input or
+takes a `_` placeholder, and `assemble` rejects a selected implementation whose
+batched method does so. Only `sync-engine check` verifies from the types that
+the method takes a list; it also rejects a rest parameter. A
+`RegisteredConcept<C>` written out without its batched names reads every query
+in its own form, so keep the inferred type of `registerConcept(...)`; its input
+names come from the specification. The same holds for `Assembly<T, Batched>`:
+its second parameter maps each concept-set key to the query names batched for
+it, and `concepts` types those queries as taking one input. It defaults to no
+names, so a written-out `Assembly<T>` types a batched query in its class's list
+form; keep the inferred type of `assemble(...)`. Readers of the concept set's
+refs and of an assembled concept ask a batched query with one input; a query
+that takes a list without being named keeps its own types.
+When reads are grouped, each input is copied as plain data when it is asked.
+If a grouped call throws, each of its inputs is read again alone, all at once,
+as without grouping.
 `checkBatchedQuery` checks a list form's law on the raw instance with sample
 inputs: each answer equals the answer for that input alone, in order, reversed,
 and with duplicates, no position is left empty, an empty list answers an empty
@@ -777,10 +800,12 @@ It follows the same stable compatibility policy as other public subpaths.
 `vocabulary` is the low-level declaration API for callers that deliberately do
 not use registered specifications or implementation floors. Concept entries are
 either a concept class or `{ class, spec?, purpose?, principle?, queries?,
-outcomes?, refusals? }`. Ordinary config-based applications use `conceptSet`
+outcomes?, refusals?, batched? }`. Ordinary config-based applications use `conceptSet`
 from `/assembly`, which creates the executable declaration internally. A direct
 vocabulary can still be passed to `assemble` through the advanced
-`VocabularyAssemblyOptions` alternative.
+`VocabularyAssemblyOptions` alternative. Only `assemble` honours `batched`: an
+engine from `createEngine` calls a batched query's method with the one input as
+asked, not with a list, so instrument a batched class only through `assemble`.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

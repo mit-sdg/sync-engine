@@ -65,6 +65,7 @@ inferring an answer from implementation source.
 - Bind the current instant only in a reaction `where` with `now(variable)` and pass it to concept action inputs. One host-clock read stamps the flow for every reaction, and callers cannot author it; do not model a clock-read concept.
 - Treat generated TypeScript as a caller contract. Add explicit validators for
   runtime values.
+- Leave the opt-in performance options `queryCache: "since-dispatch"`, `concurrentReads`, and `batched` off unless the user asks for them.
 - Do not assume transactions across actions, rollback, replay, restart recovery, distributed serialization, cancellation of accepted work, or exactly-once execution.
 - Change application source declarations, regenerate artifacts, and review the
   generated diff.

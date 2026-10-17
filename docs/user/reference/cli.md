@@ -269,6 +269,10 @@ For each selected application concept, `check`:
   headings and application-only Markdown;
 - compares action and query member names;
 - compares input, action-result, and query-row field names and optionality;
+- reads a batched query's input shape from its list parameter and its row
+  shape from the list it returns, and fails when a query takes a list of records without being named under
+  `batched`, when a named query does not take a list (a rest parameter
+  included), or when `batched` is not a literal list of query names;
 - checks successful branch return names and refusal mappings; and
 - records source provenance.
 
