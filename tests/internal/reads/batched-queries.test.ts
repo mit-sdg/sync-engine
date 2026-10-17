@@ -284,7 +284,7 @@ describe("the grouping adapter", () => {
       expect(await answer).toEqual({ echo: asked });
       expect(lists).toEqual([[asked]]);
       // Data is copied; other objects, such as a set, are passed as they are.
-      expect((lists[0]?.[0] as typeof input).tags).toBe(tags);
+      expect((lists[0]![0] as typeof input).tags).toBe(tags);
     },
   );
 
@@ -369,9 +369,7 @@ describe("the grouping adapter", () => {
 
       const hung = read(1);
       expect(await Promise.all([read(2), read(3)])).toEqual([2, 3]);
-      expect(await Promise.race([hung, turn().then(() => "still waiting")])).toBe(
-        "still waiting",
-      );
+      expect(await Promise.race([hung, turn().then(() => "still waiting")])).toBe("still waiting");
     } finally {
       warn.mockRestore();
     }
