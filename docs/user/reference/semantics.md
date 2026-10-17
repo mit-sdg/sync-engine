@@ -283,11 +283,11 @@ Applications must not use evaluation order as semantic priority. No engine-wide
 lock serializes all concepts or all flows, and the guarantee does not extend
 across processes.
 
-Without [`concurrentReads`](#ordering-and-state-read-timing), a line's rows are
-still read one after another. Separate root flows that overlap may interleave
-their reads and actions in any order, and that order may differ between
-releases, so a read in one flow can see or miss another flow's write. Order
-within one flow is unchanged. Keep a decision that must not race inside one
+Separate root flows that overlap may interleave their reads and actions in any
+order, and that order may differ between releases, so a read in one flow can
+see or miss another flow's write. Order within one flow is unchanged, and
+without [`concurrentReads`](#ordering-and-state-read-timing) a line's rows are
+read one after another. Keep a decision that must not race inside one
 concept action ([Decisions that must not race](#decisions-that-must-not-race)).
 
 ## Reading: declarations govern
@@ -423,15 +423,15 @@ ordinary method that takes a list. `batched` takes effect only in `assemble`: a
 `createEngine` engine instruments the method as an ordinary query, even when a
 vocabulary names it batched, so a read there passes it one input, not a list.
 
-Grouping needs a query cache and `concurrentReads.rowsAtOnce` above 1. With
-both, the engine groups the reads pending for one batched query on one concept
+Reads are grouped only with a query cache and `concurrentReads.rowsAtOnce`
+above 1. Then the engine groups the reads pending for one batched query on one concept
 instance until the current turn of the event loop ends, then calls the method
 once with their inputs, in the order they were asked. It never waits on a timer
 to collect more. Each read keeps its own position, so equal inputs can appear
 more than once. Each input of a grouped read is copied as plain data when it is
 asked: records, arrays, and `Date` values are copied deeply, and class
-instances, maps, and sets are kept by identity, so a later change by the caller
-does not reach the list. The list the method receives is frozen. Without
+instances, maps, and sets are kept by identity. A later change to a copied
+record, array, or `Date` does not reach the list. The list the method receives is frozen. Without
 `concurrentReads`, with `rowsAtOnce: 1`, under
 `queryCache: "none"`, or with `groupBatchedQueries: false`, every read calls
 the method with a list of one. A grouped read's reuse under `since-dispatch` is
@@ -886,8 +886,8 @@ together and uses the answers in row order:
 - `rowsAtOnce` rows of one line or selection are evaluated at once, the row
   being used included; `1` reads them one after another.
 - At most `maxRowsAhead` rows (64 when unset) are started ahead at once across
-  the assembly. An evaluation that finds that count spent reads its next row
-  when it reaches it, and never waits for it.
+  the assembly. When that count is spent, an evaluation reads its next row only
+  when it reaches it, without waiting.
 - Answers, their order, the reported fault, and recorded row-limit breaches
   are those of reading the rows one after another, given side-effect-free reads
   ([Queries](#queries)) and no action changing the state being read meanwhile.

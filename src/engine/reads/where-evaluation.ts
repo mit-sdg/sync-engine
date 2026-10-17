@@ -82,9 +82,9 @@ export class RowsAhead {
 
 /** The `concurrentReads` assembly option. Experimental: it may change or be removed in any minor release. */
 export interface ConcurrentReads {
-  /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+  /** Rows of one line or selection evaluated at once, the row being used included; 1 reads them one after another. */
   readonly rowsAtOnce: number;
-  /** Rows started ahead at once across the whole engine; 64 when unset. */
+  /** Rows started ahead at once across the assembly; 64 when unset. */
   readonly maxRowsAhead?: number;
 }
 

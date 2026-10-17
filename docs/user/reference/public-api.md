@@ -140,7 +140,7 @@ assemble(options: ConceptSetAssemblyOptions): Assembly
 | `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
 | `queryCache`                      | no          | `"memoize"`; `"since-dispatch"` keeps running invocations' answers across later ones; `"none"` disables it   |
 | `concurrentReads`                 | no          | Rows read one after another; `{ rowsAtOnce, maxRowsAhead? }` reads a line's rows together, in row order      |
-| `groupBatchedQueries`             | no          | `true` groups a batched query's pending reads; `false` sends every read as a list of one                     |
+| `groupBatchedQueries`             | no          | `true`; groups pending batched reads with a query cache and `rowsAtOnce` above 1; `false` sends lists of one |
 | `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`     |
 | `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
 | `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
@@ -287,8 +287,8 @@ rejects a name given twice and a batched method that destructures one input or
 takes a `_` placeholder, and `assemble` rejects a selected implementation whose
 batched method does so. Only `sync-engine check` verifies from the types that
 the method takes a list; it also rejects a rest parameter. A
-`RegisteredConcept<C>` written out without its batched names reads every query
-in its own form, so keep the inferred type of `registerConcept(...)`; its input
+`RegisteredConcept<C>` written out without its batched names types every query
+in its class's form, so keep the inferred type of `registerConcept(...)`; its input
 names come from the specification. The same holds for `Assembly<T, Batched>`:
 its second parameter maps each concept-set key to the query names batched for
 it, and `concepts` types those queries as taking one input. It defaults to no
@@ -301,9 +301,11 @@ If a grouped call throws, each of its inputs is read again alone, all at once,
 as without grouping.
 `checkBatchedQuery` checks a list form's law on the raw instance with sample
 inputs: each answer equals the answer for that input alone, in order, reversed,
-and with duplicates, no position is left empty, an empty list answers an empty
+and with duplicates, no answer is missing, an empty list answers an empty
 list, and answers to different inputs share no objects. It passes the list
-frozen, as the engine does, and rejects with what differed. Execution semantics for batched queries are in
+frozen, as the engine does, and rejects with what differed. It fails on an
+answer it cannot compare, such as a promise or an object that keeps its data in
+private fields. Execution semantics for batched queries are in
 [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied
@@ -803,8 +805,8 @@ either a concept class or `{ class, spec?, purpose?, principle?, queries?,
 outcomes?, refusals?, batched? }`. Ordinary config-based applications use `conceptSet`
 from `/assembly`, which creates the executable declaration internally. A direct
 vocabulary can still be passed to `assemble` through the advanced
-`VocabularyAssemblyOptions` alternative. Only `assemble` honours `batched`: an
-engine from `createEngine` calls a batched query's method with the one input as
+`VocabularyAssemblyOptions` alternative. `batched` takes effect only in
+`assemble`: an engine from `createEngine` calls a batched query's method with the one input as
 asked, not with a list, so instrument a batched class only through `assemble`.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and

@@ -139,15 +139,16 @@ async _isTrashed(inputs: { item: string }[]) {
 The specification and every reader stay as they were: compositions and callers
 of the assembled concept still write `Trashing._isTrashed({ item })` and get
 one answer. With a query cache (any `queryCache` but `"none"`) and
-`concurrentReads.rowsAtOnce` above 1, the engine groups the reads issued
+`concurrentReads.rowsAtOnce` above 1 (`concurrentReads` is experimental), the
+engine groups the reads issued
 together into one call; otherwise each read calls the method with a list of
 one. If a grouped call throws, each of its inputs is read again alone, all at
 once, as without grouping. Return exactly one answer per input, in input order,
 even for duplicates and for inputs with nothing stored; a query that answers
 many rows answers each input with its own list. Build fresh objects for every
 input instead of handing two inputs one object. The list you receive is frozen,
-and each input in it is a plain-data copy made when the read was asked, so copy
-the list before sorting. Code that holds the raw class instance, such as your
+so copy it before sorting. Each input in it is a copy made when the read was
+asked. Code that holds the raw class instance, such as your
 own tests, calls the method with a list.
 
 Write the `batched` names literally, as a list of strings in the

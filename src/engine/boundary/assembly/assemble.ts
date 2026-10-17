@@ -252,6 +252,7 @@ export interface AssembleBaseOptions<
    * independent reads overlap. Answers, their order, the reported fault, and
    * row-limit breaches are those of reading one after another, provided reads
    * are free of side effects. Unset, every line reads its rows one after another.
+   * Experimental: it may change or be removed in any minor release.
    */
   concurrentReads?: ConcurrentReads;
   /**
