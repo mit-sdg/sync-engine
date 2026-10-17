@@ -1,5 +1,5 @@
 import { vocabulary } from "@sync-engine/advanced";
-import { conceptSet } from "@sync-engine/assembly";
+import { conceptSet, registerConcept } from "@sync-engine/assembly";
 import type { RegisteredConcept } from "@sync-engine/assembly";
 import {
   compute,
@@ -326,6 +326,34 @@ class BatchedShelf {
     return inputs.map(({ id }) => ({ title: id }));
   }
 }
+
+class ListTakingShelf {
+  async _byIds(ids: string[]): Promise<{ title: string }[]> {
+    return ids.map((title) => ({ title }));
+  }
+
+  async _byRecords(records: { id: string }[]): Promise<{ title: string }[]> {
+    return records.map(({ id }) => ({ title: id }));
+  }
+}
+
+// A query that takes a list but is not named under `batched` keeps its own types.
+const unbatchedWords = vocabulary({ concepts: { Listed: ListTakingShelf }, computations: {} });
+unbatchedWords.concepts.Listed._byIds(["a"]);
+unbatchedWords.concepts.Listed._byRecords([{ id: "a" }]);
+// @ts-expect-error An unbatched list-taking query is not asked with one input.
+unbatchedWords.concepts.Listed._byRecords({ id: "a" });
+
+function registeredBatchedContract(spec: string): void {
+  const registration = registerConcept({ class: BatchedShelf, spec, batched: ["_title"] });
+  const set = conceptSet({ Shelf: registration });
+  set.concepts.Shelf._title({ id: "a" }).is({ title: "a" });
+  // @ts-expect-error A query the registration does not name keeps its list form.
+  set.concepts.Shelf._book({ id: "a" });
+  // @ts-expect-error batched names only the class's queries.
+  registerConcept({ class: BatchedShelf, spec, batched: ["_missing"] });
+}
+void registeredBatchedContract;
 
 const batchedWords = vocabulary({
   concepts: { Shelf: { class: BatchedShelf, batched: ["_title", "_book"] } },

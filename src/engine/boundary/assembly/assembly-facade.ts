@@ -1,5 +1,6 @@
 import type { ComputationFn } from "@engine/reads/computations";
 import type {
+  BatchedQueryNames,
   ConceptClassesOf,
   ConceptEntry,
   DeclaredVocabulary,
@@ -10,14 +11,18 @@ import { assemble as assembleEngine } from "./assemble.ts";
 import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources } from "./assemble.ts";
 import type {
   AnyRegisteredConcept,
+  BatchedQueriesOfSet,
   ConceptClassesOfSet,
   ConceptImplementation,
   RegisteredConceptSet,
 } from "./concept-set.ts";
 
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
-export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<
-  AssembledApp<TConcepts>,
+export type Assembly<
+  TConcepts extends Record<string, new (...args: never[]) => object>,
+  Batched extends { readonly [K in keyof TConcepts]?: PropertyKey } = Record<never, never>,
+> = Pick<
+  AssembledApp<TConcepts, Batched>,
   "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form"
 >;
 
@@ -49,13 +54,15 @@ export type ConceptSetAssemblyOptions<
 export function assemble<
   S extends Record<string, AnyRegisteredConcept>,
   TComputations extends Record<string, ComputationFn>,
->(options: ConceptSetAssemblyOptions<S, TComputations>): Assembly<ConceptClassesOfSet<S>>;
+>(
+  options: ConceptSetAssemblyOptions<S, TComputations>,
+): Assembly<ConceptClassesOfSet<S>, BatchedQueriesOfSet<S>>;
 export function assemble<
   TEntries extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 >(
   options: VocabularyAssemblyOptions<TEntries, TComputations>,
-): Assembly<ConceptClassesOf<TEntries>>;
+): Assembly<ConceptClassesOf<TEntries>, BatchedQueryNames<TEntries>>;
 export function assemble(
   options:
     | ConceptSetAssemblyOptions<Record<string, AnyRegisteredConcept>, Record<string, ComputationFn>>

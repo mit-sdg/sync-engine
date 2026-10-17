@@ -36,11 +36,14 @@ follow the [support policy](SUPPORT.md), and review the
   list form: each such method takes a list of inputs and returns one answer per
   input, in the same order. Compositions and direct callers still ask with one
   input and get one answer, and vocabulary types read the list form that way.
-  With a query cache and `concurrentReads`, the reads pending for one batched
-  query are grouped until the current event-loop turn ends and answered by one
-  call; equal inputs share one answer. A group whose call throws is read again
-  one input at a time, and a wrong-length answer faults the group's reads. A
-  registration that names no query under `batched` behaves exactly as before.
+  With a query cache and `concurrentReads` reading more than one row at once,
+  the reads pending for one batched query are grouped until the current
+  event-loop turn ends and answered by one call, which receives a frozen list.
+  A group whose call throws is read again one input at a time, and an answer
+  list of the wrong length or with an empty position faults the group's reads.
+  Assembly rejects a selected implementation that takes one input for a batched
+  query. A registration that names no query under `batched` behaves exactly as
+  before, types included.
 - The `groupBatchedQueries` assembly option, `true` by default, turns grouping
   off when `false`: every read then calls a batched method with a list of one.
 - `@mit-sdg/sync-engine/assembly` exports `checkBatchedQuery`, which checks a

@@ -379,17 +379,15 @@ export interface WhenBuilderWithFunctionWhere {
 }
 
 /**
- * A query as its readers see it. A query's input is always one record, so a
- * method whose parameter is a list is the list form of a batched query: it
- * takes a list of inputs and answers one per input. Readers still ask it with
- * one input and get one answer, as the engine calls it on their behalf.
+ * A batched query as its readers ask it. Its method takes a list of inputs and
+ * answers one per input; readers ask it with one input and get one answer, as
+ * the engine calls the method on their behalf. Only queries a registration
+ * names under `batched` are read this way.
  */
-export type SingleQuery<F> = F extends (input: infer P) => infer A
-  ? unknown extends P
-    ? F
-    : [P] extends [readonly (infer I)[]]
-      ? Awaited<A> extends readonly (infer Each)[]
-        ? (input: I) => Promise<Each>
-        : F
+export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A
+  ? [P] extends [readonly (infer I)[]]
+    ? Awaited<A> extends readonly (infer Each)[]
+      ? (input: I) => Promise<Each>
       : F
+    : F
   : F;

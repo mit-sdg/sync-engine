@@ -161,7 +161,10 @@ function sourceMember(method: ts.MethodDeclaration, context: CheckerContext): Me
   }
   const [parameter] = method.parameters;
   const listInputs =
-    name.startsWith("_") && method.parameters.length === 1 && parameter.type !== undefined
+    name.startsWith("_") &&
+    method.parameters.length === 1 &&
+    parameter.dotDotDotToken === undefined &&
+    parameter.type !== undefined
       ? shapeOfListElement(parameter.type, parameter, context)
       : undefined;
   if (listInputs !== undefined) {
@@ -217,9 +220,9 @@ function classIn(source: ts.SourceFile, name: string): ts.ClassDeclaration | und
 
 function registeredClass(
   registry: ts.SourceFile,
-): { name: string; from: string; batched: ReadonlySet<string> } | undefined {
+): { name: string; from: string; batched: ReadonlySet<string> | undefined } | undefined {
   let name: string | undefined;
-  const batched = new Set<string>();
+  let batched: Set<string> | undefined = new Set<string>();
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -235,11 +238,9 @@ function registeredClass(
         if (property.name.text === "batched") {
           let list: ts.Expression = property.initializer;
           while (ts.isAsExpression(list) || ts.isSatisfiesExpression(list)) list = list.expression;
-          if (ts.isArrayLiteralExpression(list)) {
-            for (const element of list.elements) {
-              if (ts.isStringLiteralLike(element)) batched.add(element.text);
-            }
-          }
+          const names = ts.isArrayLiteralExpression(list) ? list.elements : undefined;
+          if (names === undefined || !names.every(ts.isStringLiteralLike)) batched = undefined;
+          else for (const element of names) batched?.add(element.text);
         }
       }
     }
@@ -427,6 +428,9 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
   const registered = registeredClass(parseFile(registryPath));
   if (registered === undefined) {
     return [`${label}: registry.ts does not register a class imported by name.`];
+  }
+  if (registered.batched === undefined) {
+    return [`${label}: registry.ts batched must list query names literally.`];
   }
   return sourceFailures(
     resolve(dirname(registryPath), registered.from),

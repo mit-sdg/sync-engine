@@ -445,7 +445,9 @@ export function shapeOfListElement(
 ): ShapeResolution | undefined {
   const type = context.checker.getTypeFromTypeNode(typeNode);
   const element = arrayElement(type, context.checker);
-  if (element === undefined) return undefined;
+  // A query's input is a record, so only a list of records is a list form.
+  const recordLike = ts.TypeFlags.Object | ts.TypeFlags.Intersection | ts.TypeFlags.Union;
+  if (element === undefined || (element.flags & recordLike) === 0) return undefined;
   const alternatives = resolveObjectAlternatives(
     element,
     element,

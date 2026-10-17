@@ -84,6 +84,15 @@ export function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined
 }
 
 /**
+ * Whether a method takes its whole input list as one parameter, as a batched
+ * query's list form does: neither a destructured or placeholder input, which
+ * is the single form, nor a rest parameter.
+ */
+export function takesWholeList(fn: (...args: never[]) => unknown): boolean {
+  return rolesOf(fn) === undefined && !/^[^(]*\(\s*\.\.\./.test(String(fn));
+}
+
+/**
  * Collect the registered information available for one concept instance:
  * its actions (with observed input roles and declared refusal codes), its
  * queries, and — when the class authors them — `static purpose` and

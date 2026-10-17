@@ -141,8 +141,9 @@ The specification and every reader stay as they were: compositions still write
 together into one call. Return exactly one answer per input, in input order,
 even for duplicates and for inputs with nothing stored; a query that answers
 many rows answers each input with its own list. Build fresh objects for every
-position instead of handing two positions one object. Your own code that calls
-the method directly passes a list. Test each batched query with
+input instead of handing two inputs one object. The list you receive is frozen,
+so copy it before sorting. Your own code that calls the method directly passes
+a list. Test each batched query with
 `checkBatchedQuery(new TrashingConcept(...), "_isTrashed", samples)`, giving
 samples that cover missing keys, several rows, and no rows. Only queries can be
 batched; leave a query in its single form unless its storage really pays per

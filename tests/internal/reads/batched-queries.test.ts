@@ -137,6 +137,25 @@ describe("grouped reads", () => {
     }
   });
 
+  test.each(["memoize", "since-dispatch"] as const)(
+    "under queryCache %s, an action landing between a read and its group's call leaves no stale answer",
+    async (queryCache) => {
+      const { words } = library(4);
+      const app = application(words, {}, { concurrentReads: { rowsAtOnce: 16 }, queryCache });
+      const library_ = app.concepts.Library;
+
+      const before = library_._book({ book: 1 });
+      await library_.count({ books: [] });
+      const after = await library_._book({ book: 1 });
+
+      expect(await before).toEqual([{ title: "title 1" }]);
+      expect(after).toEqual([{ title: "title 1" }]);
+      // The action cleared the cache, so the read after it was asked again,
+      // here in the same group, which is sent after the action's write.
+      expect(library_.lists.flat().filter((book) => book === 1)).toHaveLength(2);
+    },
+  );
+
   test("an answer list of the wrong length fails every read in the group, naming the query", async () => {
     const { words } = library(4, { shortBy: 1 });
     const app = application(words, {}, { concurrentReads: { rowsAtOnce: 16 } });
@@ -202,50 +221,100 @@ describe("reads that are not grouped call the list form with a list of one", () 
 
 describe("the grouping adapter", () => {
   const turn = () => new Promise<void>((resolve) => setImmediate(resolve));
+  const echo = (lists: unknown[][]) => async (inputs: readonly unknown[]) => {
+    lists.push([...inputs]);
+    return inputs.map((input) => ({ echo: input }));
+  };
 
-  test("equal inputs share one slot and one answer", async () => {
+  test("equal inputs each keep their own position and answer", async () => {
     const lists: unknown[][] = [];
-    const read = batchedQuery(
-      async (inputs) => {
-        lists.push(inputs);
-        return inputs.map((input) => ({ echo: input }));
-      },
-      "Echo._echo",
-      true,
-    );
+    const read = batchedQuery(echo(lists), "Echo._echo", true);
 
     const answers = await Promise.all([read({ a: 1 }), read({ a: 2 }), read({ a: 1 })]);
 
-    expect(lists).toEqual([[{ a: 1 }, { a: 2 }]]);
+    expect(lists).toEqual([[{ a: 1 }, { a: 2 }, { a: 1 }]]);
     expect(answers).toEqual([{ echo: { a: 1 } }, { echo: { a: 2 } }, { echo: { a: 1 } }]);
-    expect(answers[0]).toBe(answers[2]);
+    expect(answers[0]).not.toBe(answers[2]);
   });
 
   test("reads in later turns form later groups; nothing waits for more", async () => {
     const lists: unknown[][] = [];
-    const read = batchedQuery(
-      async (inputs) => {
-        lists.push(inputs);
-        return inputs;
-      },
-      "Echo._echo",
-      true,
-    );
+    const read = batchedQuery(echo(lists), "Echo._echo", true);
 
     const first = read(1);
     await turn();
     await turn();
     const second = read(2);
 
-    expect(await Promise.all([first, second])).toEqual([1, 2]);
+    expect(await Promise.all([first, second])).toEqual([{ echo: 1 }, { echo: 2 }]);
     expect(lists).toEqual([[1], [2]]);
   });
 
-  test("a list form that throws synchronously is retried one input at a time", async () => {
+  test("an input is read as it was asked, even if the caller changes it before the group is sent", async () => {
+    const lists: unknown[][] = [];
+    const read = batchedQuery(echo(lists), "Echo._echo", true);
+    const input = { book: 1 };
+
+    const first = read(input);
+    input.book = 2;
+    const second = read(input);
+
+    expect(await Promise.all([first, second])).toEqual([
+      { echo: { book: 1 } },
+      { echo: { book: 2 } },
+    ]);
+  });
+
+  test("the list is frozen, so a list form that sorts its inputs in place is read one at a time", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     try {
       const read = batchedQuery(
-        (inputs) => {
+        async (inputs) => (inputs as number[]).sort((left, right) => left - right),
+        "Echo._echo",
+        true,
+      );
+
+      expect(await Promise.all([read(2), read(1)])).toEqual([2, 1]);
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("a failing group of one fails its read without being called again", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      let calls = 0;
+      const read = batchedQuery(
+        async () => {
+          calls += 1;
+          throw new Error("store unavailable");
+        },
+        "Echo._echo",
+        true,
+      );
+
+      await expect(read(1)).rejects.toThrow("store unavailable");
+      expect(calls).toBe(1);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("a failed group is retried one input at a time, in order", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const lists: unknown[][] = [];
+      let active = 0;
+      let mostActive = 0;
+      const read = batchedQuery(
+        async (inputs) => {
+          lists.push([...inputs]);
+          active += 1;
+          mostActive = Math.max(mostActive, active);
+          await turn();
+          active -= 1;
           if (inputs.length > 1) throw new Error("lists of one only");
           return inputs;
         },
@@ -253,7 +322,9 @@ describe("the grouping adapter", () => {
         true,
       );
 
-      expect(await Promise.all([read(1), read(2)])).toEqual([1, 2]);
+      expect(await Promise.all([read(1), read(2), read(3)])).toEqual([1, 2, 3]);
+      expect(lists).toEqual([[1, 2, 3], [1], [2], [3]]);
+      expect(mostActive).toBe(1);
     } finally {
       warn.mockRestore();
     }
@@ -266,6 +337,40 @@ describe("the grouping adapter", () => {
       "Batched query Echo._echo returned object for 1 input; it must return one answer per input, in the same order.",
     );
   });
+
+  test("an answer list with an empty position fails every read in the group", async () => {
+    const holed = async () => {
+      // Positions 1 and 3 answered; position 2 never set.
+      const answers: unknown[] = [];
+      answers[0] = { title: "one" };
+      answers[2] = { title: "three" };
+      return answers;
+    };
+    const read = batchedQuery(holed, "Echo._echo", true);
+
+    const reads = await Promise.allSettled([read(1), read(2), read(3)]);
+
+    for (const settled of reads) {
+      expect(settled).toMatchObject({
+        status: "rejected",
+        reason: { message: expect.stringContaining("left answer 2 of 3 inputs empty") },
+      });
+    }
+  });
+
+  test("grouping keeps working while a test fakes timers", async () => {
+    vi.useFakeTimers();
+    try {
+      const lists: unknown[][] = [];
+      const read = batchedQuery(echo(lists), "Echo._echo", true);
+      const answer = read(1);
+      vi.useRealTimers();
+
+      expect(await answer).toEqual({ echo: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("registration", () => {
@@ -277,12 +382,18 @@ describe("registration", () => {
       async _many(inputs: { id: string }[]) {
         return inputs.map(({ id }) => ({ id }));
       }
+      async _spread(...inputs: { id: string }[]) {
+        return inputs.map(({ id }) => ({ id }));
+      }
       act(_: Empty) {
         return {};
       }
     }
-    const declare = (batched: string[]) =>
-      vocabulary({ concepts: { Plain: { class: Plain, batched } }, computations: {} });
+    const declare = (batched: unknown) =>
+      vocabulary({
+        concepts: { Plain: { class: Plain, batched: batched as string[] } },
+        computations: {},
+      });
 
     expect(() => declare(["_many"])).not.toThrow();
     expect(() => declare(["_missing"])).toThrow(
@@ -295,43 +406,91 @@ describe("registration", () => {
     expect(() => declare(["_one"])).toThrow(
       'Vocabulary: "Plain._one" is batched, so it takes a list of inputs, but Plain declares it to take one input.',
     );
+    expect(() => declare(["_spread"])).toThrow('Vocabulary: "Plain._spread" is batched');
+    expect(() => declare(5)).toThrow('Vocabulary: "Plain": batched must list query names.');
+  });
+
+  test("assembly rejects a selected implementation whose batched query takes one input", () => {
+    const { words } = library(1);
+    const single = {
+      lists: [] as number[][],
+      _shelf: () => [],
+      _book: ({ book }: { book: number }) => [{ title: `title ${book}` }],
+      count: () => ({ found: 0 }),
+    };
+
+    expect(() =>
+      assemble({
+        vocabulary: words,
+        composition: {},
+        instances: { Library: single as never },
+        retention: { window: 0 },
+      }),
+    ).toThrow(
+      'assemble: "Library._book" is batched, so it takes a list of inputs, but the selected implementation declares it to take one input.',
+    );
   });
 });
 
 describe("checkBatchedQuery", () => {
+  class Id {
+    constructor(readonly value: string) {}
+  }
   class Shelf {
     titles = new Map([
       ["a", "Alpha"],
       ["b", "Beta"],
     ]);
+    written = new Date(0);
 
-    async _good(inputs: { id: string }[]) {
+    async _good(inputs: readonly { id: string }[]) {
       return inputs.map(({ id }) => {
         const title = this.titles.get(id);
-        return title === undefined ? [] : [{ title }];
+        return title === undefined ? [] : [{ title, id: new Id(id) }];
       });
     }
 
-    async _sorted(inputs: { id: string }[]) {
+    async _sharesForEqualInputs(inputs: readonly { id: string }[]) {
+      // One date per stored row, shared by duplicates of the same input.
+      const dates = new Map(inputs.map(({ id }) => [id, new Date(0)]));
+      return inputs.map(({ id }) => ({ id, at: dates.get(id) }));
+    }
+
+    async _sorted(inputs: readonly { id: string }[]) {
       // Answers in sorted order rather than input order.
       return [...inputs]
         .sort((left, right) => left.id.localeCompare(right.id))
         .map(({ id }) => ({ id }));
     }
 
-    async _shared(inputs: { id: string }[]) {
+    async _shared(inputs: readonly { id: string }[]) {
       const row = { title: "same" };
       return inputs.map(() => row);
     }
 
-    async _deduped(inputs: { id: string }[]) {
+    async _deduped(inputs: readonly { id: string }[]) {
       return [...new Set(inputs.map(({ id }) => id))].map((id) => ({ id }));
+    }
+
+    async _holed(inputs: readonly { id: string }[]) {
+      const answers: { id: string }[] = [];
+      inputs.forEach(({ id }, index) => {
+        if (id !== "missing") answers[index] = { id };
+      });
+      answers.length = inputs.length;
+      return answers;
     }
   }
   const samples = [{ id: "a" }, { id: "b" }, { id: "missing" }];
 
-  test("a list form that keeps the law passes", async () => {
+  test("a list form that keeps the law passes, with fresh identifier objects in its rows", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_good", samples)).resolves.toBeUndefined();
+  });
+
+  test("answers to equal inputs may share objects", async () => {
+    await expect(
+      checkBatchedQuery(new Shelf(), "_sharesForEqualInputs", samples),
+    ).resolves.toBeUndefined();
   });
 
   test("answers out of input order fail", async () => {
@@ -340,15 +499,21 @@ describe("checkBatchedQuery", () => {
     );
   });
 
-  test("answers that share an object fail", async () => {
+  test("answers to different inputs that share an object fail", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_shared", samples)).rejects.toThrow(
-      "answers at positions 0 and 1 share an object",
+      'the answers for {"id":"a"} and {"id":"b"} share an object',
     );
   });
 
   test("a list form that drops duplicates fails on length", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_deduped", samples)).rejects.toThrow(
       "the samples with each repeated gave 6 inputs and got 3 answers",
+    );
+  });
+
+  test("a list form that leaves a position empty fails", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_holed", samples)).rejects.toThrow(
+      'the list [{"id":"missing"}] left answer 0 empty',
     );
   });
 });

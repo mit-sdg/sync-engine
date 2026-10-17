@@ -494,6 +494,51 @@ describe("batched queries", () => {
     ]);
   });
 
+  test("a rest parameter is not a list form, and a list of non-records is not one either", async () => {
+    const where = await concept(
+      "refresh () : returns ()\n  then\n    returns",
+      [
+        "  refresh() { return {}; }",
+        "  async _spread(...inputs: { item: number }[]): Promise<{ title: string }[]> { return []; }",
+        "  async _ids(ids: string[]): Promise<{ title: string }[]> { return []; }",
+      ].join("\n"),
+      ["_spread (item: Item) : one (title: Text)", "_ids (item: Item) : many (title: Text)"].join(
+        "\n",
+      ),
+    );
+    await writeFile(join(where, "registry.ts"), registry(`"_spread"`));
+
+    const failures = conceptFailures(where);
+    expect(failures).toContainEqual(
+      expect.stringContaining(
+        "the registration names the query `_spread` under `batched`, so it must take a list of inputs",
+      ),
+    );
+    expect(failures.some((failure) => failure.includes("`_ids` takes a list"))).toBe(false);
+  });
+
+  test("a batched list that is not literal fails clearly in the directory check", async () => {
+    const where = await concept(
+      "refresh () : returns ()\n  then\n    returns",
+      [
+        "  refresh() { return {}; }",
+        "  async _title(inputs: { item: number }[]): Promise<{ title: string }[]> { return []; }",
+      ].join("\n"),
+      "_title (item: Item) : one (title: Text)",
+    );
+    await writeFile(
+      join(where, "registry.ts"),
+      REGISTRY.replace("spec });", "spec, batched: names });").replace(
+        "export const",
+        'const names = ["_title"];\nexport const',
+      ),
+    );
+
+    expect(conceptFailures(where)).toEqual([
+      expect.stringContaining("registry.ts batched must list query names literally"),
+    ]);
+  });
+
   test("static registration discovery reads batched names and rejects computed ones", async () => {
     const where = await concept(
       "refresh () : returns ()\n  then\n    returns",

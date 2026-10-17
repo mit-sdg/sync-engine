@@ -60,7 +60,8 @@ assemblies, so actions' writes are not queued behind reads.
 
 A query a registration names under `batched` answers a list of inputs at once,
 so the reads grouped for it take one database command instead of one each.
-Grouping needs `concurrentReads` and a query cache. `groupBatchedQueries: false`
+Grouping needs a query cache and `concurrentReads` with `rowsAtOnce` above 1.
+`groupBatchedQueries: false`
 turns grouping off for the whole assembly without changing any class: every
 read then calls the batched method with a list of one.
 

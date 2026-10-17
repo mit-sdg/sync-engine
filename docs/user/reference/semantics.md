@@ -406,32 +406,40 @@ How such a fault is delivered depends on where the read occurs. See
 A registration may name queries under `batched`. Such a query's method takes a
 list of inputs and returns a list with one answer per input, in the same order;
 each answer is what the query answers for that input alone. Readers do not
-change: a reaction, view, former, or direct caller still asks with one input and
-gets one answer, and promises, cardinality checks, and row limits apply to each
-answer as to an ordinary query's. Only reads the query cache cannot answer reach
-the method. Inside the class, the method is an ordinary method that takes a
-list.
+change: a reaction, view, former, or direct caller of an assembled concept still
+asks with one input and gets one answer, and promises, cardinality checks, and
+row limits apply to each answer as to an ordinary query's. Only reads the query
+cache cannot answer reach the method. Inside the class, and on an instance
+instrumented without a concept set or vocabulary, the method is an ordinary
+method that takes a list.
 
-With a query cache and `concurrentReads`, the engine groups the reads pending
-for one batched query on one concept instance until the current turn of the
-event loop ends, then calls the method once with their inputs. It never delays
-a read to collect more. Equal inputs share one position and one answer, as a
-cache hit would. Without `concurrentReads`, under `queryCache: "none"`, or with
-`groupBatchedQueries: false`, every read calls the method with a list of one.
-A grouped read begins when it is asked, so `since-dispatch` reuse is decided
-as for an ordinary read begun at that moment.
+With a query cache and `concurrentReads` reading more than one row at once, the
+engine groups the reads pending for one batched query on one concept instance
+until the current turn of the event loop ends, then calls the method once with
+their inputs, in the order they were asked. It never waits on a timer to
+collect more. Each read keeps its own position, so equal inputs can appear more
+than once. Each input is copied as it is asked, and the list the method
+receives is frozen. Without `concurrentReads`, with `rowsAtOnce: 1`, under
+`queryCache: "none"`, or with `groupBatchedQueries: false`, every read calls
+the method with a list of one. A grouped read's reuse under `since-dispatch` is
+counted from when it was asked, though the method runs when the group is sent,
+so a read can only be reused less than an ordinary read begun at that moment.
 
-If the method throws for a group, the engine logs a warning and reads each of
-the group's inputs again with a list of one, so a bad input fails only its own
-read. If the method returns something other than a list of the right length,
-every read in the group faults with an error naming the query and both lengths.
+If the method throws for a group of more than one, the engine logs a warning
+and reads the group's inputs again one at a time, each with a list of one, so a
+bad input fails only its own read. If it throws for a list of one, that read
+fails. If the method returns something other than a list of the right length,
+or a list with an empty position, every read in the group faults with an error
+naming the query.
 
 The method must keep the batched law: whatever else shares the list, in any
 order and with duplicates, each input gets the answer it gets alone, an empty
-list gets an empty list, and answers at different positions share no objects.
-The engine cannot check this as it runs; `checkBatchedQuery` checks it on
-sample inputs. The method is still a query, so it must be side-effect-free, and
-its answer for an input may depend only on stored state and that input.
+list gets an empty list, and answers to different inputs share no objects. The
+engine cannot check this as it runs; `checkBatchedQuery` checks it on sample
+inputs. The method is still a query, so it must be side-effect-free, and its
+answer for an input may depend only on stored state and that input. Every
+selected implementation, whether from a floor or `instances`, must take the
+list form; assembly rejects one that destructures a single input.
 
 ## Views and formers
 

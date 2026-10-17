@@ -18,6 +18,7 @@ import {
   vocabularyMetadata,
 } from "@engine/reactions/authoring/refs";
 import type {
+  BatchedQueryNames,
   ConceptClass,
   ConceptClassesOf,
   ConceptEntry,
@@ -26,8 +27,16 @@ import type {
 import { declarationsOf } from "@engine/reactions/authoring/partitions";
 import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
-import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
-import { actionNameOf, conceptNameOf, rolesOf } from "@engine/reactions/concepts/introspect";
+import {
+  attachConceptMetadata,
+  callableConceptMember,
+} from "@engine/reactions/concepts/concept-metadata";
+import {
+  actionNameOf,
+  conceptNameOf,
+  rolesOf,
+  takesWholeList,
+} from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { ActionRecord } from "@engine/reactions/runtime/actions";
 import type { ConcurrentReads } from "@engine/reads/where-evaluation";
@@ -55,6 +64,7 @@ import { standardComputations, type ComputationFn } from "@engine/reads/computat
 import {
   conceptSetVocabulary,
   type AnyRegisteredConcept,
+  type BatchedQueriesOfSet,
   type ConceptClassesOfSet,
   type RegisteredConceptSet,
 } from "./concept-set.ts";
@@ -246,7 +256,8 @@ export interface AssembleBaseOptions<
   concurrentReads?: ConcurrentReads;
   /**
    * Whether a batched query groups the reads pending for it into one call of its
-   * list form. Grouping happens only with `concurrentReads` and a query cache.
+   * list form. Grouping happens only with a query cache and `concurrentReads`
+   * reading more than one row at once.
    * `false` calls the list form with a list of one for every read. Defaults to `true`.
    */
   groupBatchedQueries?: boolean;
@@ -279,11 +290,22 @@ type ConceptSetAssemblyOptions<
   vocabulary?: never;
 };
 
-export interface AssembledApp<T extends Record<string, ConceptClass>> {
+export interface AssembledApp<
+  T extends Record<string, ConceptClass>,
+  Batched extends { readonly [K in keyof T]?: PropertyKey } = Record<never, never>,
+> {
   engine: Reacting;
   invoker: Invoker<ContractShape>;
-  /** The instrumented concepts, by vocabulary name — the canonical class types them. */
-  concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
+  /**
+   * The instrumented concepts, by vocabulary name — the canonical class types
+   * them, and each registration's batched queries are asked with one input.
+   */
+  concepts: {
+    [K in keyof T]: InstrumentedConcept<
+      InstanceType<T[K]>,
+      K extends keyof Batched ? Extract<Batched[K], PropertyKey> : never
+    >;
+  };
   /** Portable facts for every installed standard and vocabulary computation. */
   computations: readonly ComputationInventoryIR[];
   /** Portable canonical/selected implementation facts, including the request boundary. */
@@ -432,13 +454,15 @@ function assertConcurrentReads(reads: unknown): void {
 export function assemble<
   S extends Record<string, AnyRegisteredConcept>,
   TComputations extends Record<string, ComputationFn>,
->(options: ConceptSetAssemblyOptions<S, TComputations>): AssembledApp<ConceptClassesOfSet<S>>;
+>(
+  options: ConceptSetAssemblyOptions<S, TComputations>,
+): AssembledApp<ConceptClassesOfSet<S>, BatchedQueriesOfSet<S>>;
 export function assemble<
   TEntries extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 >(
   options: VocabularyAssemblyOptions<TEntries, TComputations>,
-): AssembledApp<ConceptClassesOf<TEntries>>;
+): AssembledApp<ConceptClassesOf<TEntries>, BatchedQueryNames<TEntries>>;
 export function assemble<T extends Record<string, ConceptClass>>(
   options: AssembleOptions<T> & {
     conceptSet?: RegisteredConceptSet<
@@ -596,6 +620,16 @@ export function assemble<T extends Record<string, ConceptClass>>(
       },
       selected,
     });
+    for (const query of metadata?.batched ?? []) {
+      // Every selected implementation must honour the registration's list form.
+      const member = callableConceptMember(instance, query);
+      if (member === undefined || !takesWholeList(member)) {
+        throw new Error(
+          `assemble: "${name}.${query}" is batched, so it takes a list of inputs, ` +
+            "but the selected implementation declares it to take one input.",
+        );
+      }
+    }
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
     setOwn(concepts, name, engine.instrumentConcept(instance, name));
   }

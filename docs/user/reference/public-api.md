@@ -267,13 +267,18 @@ combined.
 `batched` names queries the class implements in list form. Each such method
 takes a list of inputs and returns one answer per input, in the same order;
 compositions and direct callers still ask it with one input and get one answer.
-Registration rejects a name the specification does not declare as a query, a
-name given twice, and a method that destructures one input. Its input names come
-from the specification. `checkBatchedQuery` checks a list form's law on the raw
-instance with sample inputs: each answer equals the answer for that input
-alone, in order, reversed, and with duplicates, an empty list answers an empty
-list, and answers at different positions share no objects. It rejects with what
-differed. Execution semantics for batched queries are in
+`registerConcept` rejects a name the specification does not declare as a
+query, and TypeScript accepts only the class's query names. `conceptSet` rejects
+a name given twice and a method that destructures one input or takes a rest
+parameter, and `assemble` rejects a selected implementation whose batched
+method does so. Its input names come from the specification. Readers of the
+concept set's refs and of an assembled concept ask a batched query with one
+input; a query that takes a list without being named keeps its own types.
+`checkBatchedQuery` checks a list form's law on the raw instance with sample
+inputs: each answer equals the answer for that input alone, in order, reversed,
+and with duplicates, no position is left empty, an empty list answers an empty
+list, and answers to different inputs share no objects. It passes the list
+frozen, as the engine does, and rejects with what differed. Execution semantics for batched queries are in
 [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied

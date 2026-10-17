@@ -11,7 +11,7 @@ import type { ActionContract } from "../concepts/outcomes.ts";
 import { isRefuse, refusalMapping } from "../concepts/refuse.ts";
 import { actionId, actionSettlement, byReaction, flow } from "../context.ts";
 import type { ActionSettlement } from "../context.ts";
-import type { ActionOutcome, AnyAction, InstrumentedAction, SingleQuery } from "../types.ts";
+import type { ActionOutcome, AnyAction, InstrumentedAction, QueryAsAsked } from "../types.ts";
 import { batchedQuery } from "./batching.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
 import { registerEvaluationQuery } from "@engine/reads/queries";
@@ -44,7 +44,8 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
 };
 
 /**
- * The runtime surface of an instrumented concept.
+ * The runtime surface of an instrumented concept. `Batched` names the queries
+ * its registration declares in list form, which are asked with one input.
  *
  * Concept classes stay ordinary: an action may return synchronously and may
  * throw its declared refusal. Once instrumented, every action is asynchronous
@@ -53,12 +54,14 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
  * faults reject. Queries are asynchronous roots so admission, limits, drain,
  * and idle observation include their complete evaluation.
  */
-export type InstrumentedConcept<T extends object> = {
+export type InstrumentedConcept<T extends object, Batched extends PropertyKey = never> = {
   [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result
     ? Key extends `_${string}`
-      ? SingleQuery<T[Key]> extends (...args: infer QueryArgs) => infer Answer
-        ? (...args: QueryArgs) => Promise<Awaited<Answer>>
-        : never
+      ? Key extends Batched
+        ? QueryAsAsked<T[Key]> extends (...args: infer QueryArgs) => infer Answer
+          ? (...args: QueryArgs) => Promise<Awaited<Answer>>
+          : never
+        : (...args: Args) => Promise<Awaited<Result>>
       : (...args: Args) => Promise<Awaited<Result> | ActionRefusal>
     : T[Key];
 };
@@ -183,7 +186,7 @@ export function instrumentConcept<T extends object>(
         const displayName = `${conceptNameOf(concept)}.${String(property)}`;
         const query = isBatchedQuery(concept, String(property))
           ? batchedQuery(
-              value.bind(concept) as (inputs: unknown[]) => unknown,
+              value.bind(concept) as (inputs: readonly unknown[]) => unknown,
               displayName,
               state.groupBatchedQueries === true,
             )

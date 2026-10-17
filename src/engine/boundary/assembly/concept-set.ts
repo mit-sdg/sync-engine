@@ -3,6 +3,7 @@ import {
   vocabularyClasses,
   type ConceptClass,
   type ConceptClassesOf,
+  type BatchedQueryNames,
   type ConceptEntry,
   type DeclaredVocabulary,
 } from "@engine/reactions/authoring/refs";
@@ -117,9 +118,13 @@ type FloorFactory<C extends ConceptClass = ConceptClass> = (
   name: string,
 ) => ConceptImplementation<C>;
 
+/** The names of a concept class's queries. */
+type QueryNameOf<C extends ConceptClass> = Extract<keyof InstanceType<C>, `_${string}`>;
+
 export interface ConceptRegistration<
   C extends ConceptClass,
   F extends Record<string, FloorFactory<C>> = Record<never, never>,
+  B extends readonly string[] = readonly string[],
 > {
   class: C;
   /** Markdown containing the concept's parsed authored contract. */
@@ -131,7 +136,7 @@ export interface ConceptRegistration<
    * returns one answer per input, in the same order. Readers still ask them
    * with one input; the engine groups reads that are pending together.
    */
-  batched?: readonly string[];
+  batched?: B;
   floors?: F;
 }
 
@@ -140,7 +145,8 @@ declare const RegistrationBrand: unique symbol;
 export type RegisteredConcept<
   C extends ConceptClass,
   F extends Record<string, FloorFactory<C>> = Record<never, never>,
-> = ConceptRegistration<C, F> & {
+  B extends readonly string[] = readonly string[],
+> = ConceptRegistration<C, F, B> & {
   readonly [RegistrationBrand]: true;
   /** The machine-readable authored contract extracted from the registration's specification. */
   readonly specification: ConceptSpec;
@@ -254,7 +260,8 @@ function checkRefusals(
 export function registerConcept<
   C extends ConceptClass,
   const F extends Record<string, FloorFactory<C>> = Record<never, never>,
->(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F> {
+  const B extends readonly QueryNameOf<C>[] = readonly [],
+>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B> {
   if (typeof registration.class !== "function" || registration.class.prototype === undefined) {
     throw new Error("registerConcept: class must be a constructable concept class.");
   }
@@ -284,12 +291,17 @@ export function registerConcept<
       throw new Error(`registerConcept: floor "${name}" needs an implementation factory.`);
     }
   }
-  return { ...registration, specification } as RegisteredConcept<C, F>;
+  return { ...registration, specification } as RegisteredConcept<C, F, B>;
 }
 
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
 export type AnyRegisteredConcept = AnyRegistration;
 type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
+type BatchedOfRegistration<R> = R extends { readonly batched?: infer B } ? B : readonly [];
+/** The queries each registration of a set names under `batched`. */
+export type BatchedQueriesOfSet<S extends Record<string, AnyRegistration>> = BatchedQueryNames<
+  EntriesOf<S>
+>;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
   [Name in keyof S]: {
     class: ClassOfRegistration<S[Name]>;
@@ -297,7 +309,7 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
     principle?: string;
     queries?: QueryPromises;
     refusals?: RefusalContracts;
-    batched?: readonly string[];
+    batched: BatchedOfRegistration<S[Name]>;
     specification?: ConceptSpec;
   };
 };
