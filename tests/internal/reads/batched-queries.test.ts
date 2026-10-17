@@ -574,6 +574,18 @@ describe("checkBatchedQuery", () => {
       });
     }
 
+    async _bytes(inputs: readonly { id: string }[]) {
+      // Binary answers, empty for an input with nothing stored.
+      return inputs.map(({ id }) => ({
+        data: new Uint8Array((this.tags.get(id) ?? []).map((tag) => tag.charCodeAt(0))),
+      }));
+    }
+
+    async _bytesOfAll(inputs: readonly { id: string }[]) {
+      // Every input answered with the bytes of the whole list.
+      return inputs.map(() => ({ data: new Uint8Array(inputs.length) }));
+    }
+
     async _tagsOfAll(inputs: readonly { id: string }[]) {
       // Every input answered with the tags of the whole list.
       const all = inputs.flatMap(({ id }) => this.tags.get(id) ?? []);
@@ -652,6 +664,11 @@ describe("checkBatchedQuery", () => {
 
   test("maps and sets compare by their entries, in any order", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_tagSets", samples)).resolves.toBeUndefined();
+  });
+
+  test("binary answers compare by their bytes, empty ones included", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_bytes", samples)).resolves.toBeUndefined();
+    await expect(checkBatchedQuery(new Shelf(), "_bytesOfAll", samples)).rejects.toThrow("alone");
   });
 
   test("a list form that answers from the whole list through sets or maps fails", async () => {

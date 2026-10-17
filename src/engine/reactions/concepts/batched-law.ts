@@ -25,6 +25,18 @@ function className(value: object): string {
   return typeof name === "string" && name !== "" ? name : "(anonymous)";
 }
 
+/** The bytes of a typed array, a `DataView`, a `Buffer`, or an `ArrayBuffer`. */
+function bytesOf(value: ArrayBufferView | ArrayBuffer): Uint8Array {
+  return ArrayBuffer.isView(value)
+    ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+    : new Uint8Array(value);
+}
+
+function sameBytes(left: ArrayBufferView | ArrayBuffer, right: ArrayBufferView | ArrayBuffer) {
+  const [ours, theirs] = [bytesOf(left), bytesOf(right)];
+  return ours.length === theirs.length && ours.every((byte, index) => byte === theirs[index]);
+}
+
 /**
  * Whether two maps, or two sets, hold the same entries in any order. A
  * primitive key is looked up; an object key pairs with a key of the other that
@@ -56,7 +68,8 @@ function sameEntries(left: Keyed, right: Keyed, seen: Map<object, object>): bool
 
 /**
  * Whether two answers carry the same data. Records and arrays compare by
- * content, dates by time, maps and sets by entries, and other objects by their
+ * content, dates by time, maps and sets by entries, binary data by its bytes,
+ * and other objects by their
  * prototype and own properties, so a fresh identifier object equals another
  * with the same value. An object of a class that keeps no own properties, such
  * as a promise or one with only private fields, cannot be compared, so the
@@ -71,6 +84,9 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, object>(
   if (seen.get(left) === right) return true;
   seen.set(left, right);
   if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;
+  if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
+    return sameBytes(left, right as ArrayBufferView | ArrayBuffer);
+  }
   if (Array.isArray(left)) {
     const other = right as unknown[];
     if (left.length !== other.length) return false;

@@ -128,8 +128,8 @@ flow limits and can outlive its transport request.
 Shutdown must account for that continued work. Stop public admission, call
 `beginDrain()`, and wait for the returned promise or `whenIdle()` until accepted
 causal flows settle. With `concurrentReads`, the wait also covers every row
-read ahead, including rows abandoned after a fault, so no read is still running
-when the floors close. A gateway drains its own roots before the downstream
+read ahead, including rows abandoned after a fault, so no row started ahead is
+still reading when the floors close. A gateway drains its own roots before the downstream
 assembly. Do not expose the downstream invoker as another public admission path
 during this interval.
 
