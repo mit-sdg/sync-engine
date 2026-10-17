@@ -80,7 +80,7 @@ export class RowsAhead {
   }
 }
 
-/** The `concurrentReads` assembly option. */
+/** The `concurrentReads` assembly option. Experimental: it may change or be removed in any minor release. */
 export interface ConcurrentReads {
   /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
   readonly rowsAtOnce: number;
