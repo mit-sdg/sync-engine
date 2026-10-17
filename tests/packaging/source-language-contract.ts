@@ -1,6 +1,6 @@
 import { vocabulary } from "@sync-engine/advanced";
 import { conceptSet, registerConcept } from "@sync-engine/assembly";
-import type { RegisteredConcept } from "@sync-engine/assembly";
+import type { ConceptRegistration, RegisteredConcept } from "@sync-engine/assembly";
 import {
   compute,
   count,
@@ -354,6 +354,17 @@ function registeredBatchedContract(spec: string): void {
   registerConcept({ class: BatchedShelf, spec, batched: ["_missing"] });
 }
 void registeredBatchedContract;
+
+function annotatedRegistrationContract(spec: string): void {
+  // A registration typed with the public descriptor registers as it did before `batched`.
+  const annotated: ConceptRegistration<typeof ListTakingShelf> = { class: ListTakingShelf, spec };
+  const registered = registerConcept(annotated);
+  conceptSet({ Listed: registered }).concepts.Listed._byRecords([{ id: "a" }]);
+  const wrap = <C extends new () => object>(registration: ConceptRegistration<C>) =>
+    registerConcept(registration);
+  void wrap;
+}
+void annotatedRegistrationContract;
 
 const batchedWords = vocabulary({
   concepts: { Shelf: { class: BatchedShelf, batched: ["_title", "_book"] } },
