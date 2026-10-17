@@ -457,7 +457,9 @@ export type RegisteredConcept<C extends ConceptClass, F extends Record<string, F
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
-export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly QueryNameOf<C>[] = readonly []>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B>;
+export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly string[] = readonly []>(registration: ConceptRegistration<C, F, B> & (string extends B[number] ? unknown : {
+    batched?: readonly QueryNameOf<C>[];
+})): RegisteredConcept<C, F, B>;
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
 export type AnyRegisteredConcept = AnyRegistration;
 type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
@@ -2636,7 +2638,7 @@ import type { AuthoredDeclarationIdentity } from "../../reads/declaration-identi
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
-import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
+import type { ConcurrentReads, RowsAhead } from "../../reads/where-evaluation.ts";
 import type { RelationView } from "../../reads/lines.ts";
 import type { ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
@@ -2656,6 +2658,8 @@ export declare class Reacting {
     private readonly firingPipeline;
     private readonly execution?;
     private readonly invocationReads?;
+    /** Rows started ahead under `concurrentReads`; undefined when rows are read one after another. */
+    readonly rowsAhead?: RowsAhead;
     constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads, readHoldMs?: number, groupBatchedQueries?: boolean);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
@@ -4818,13 +4822,16 @@ export interface ReadAhead {
 export declare class RowsAhead {
     readonly capacity: number;
     private started;
+    private readonly settledWaiters;
     constructor(capacity: number);
     /** Rows started ahead that have not settled yet. */
     get inUse(): number;
     take(): boolean;
     give(): void;
+    /** Resolves once no row started ahead is still running, abandoned rows included. */
+    whenSettled(): Promise<void>;
 }
-/** The `concurrentReads` assembly option. */
+/** The `concurrentReads` assembly option. Experimental: it may change or be removed in any minor release. */
 export interface ConcurrentReads {
     /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
     readonly rowsAtOnce: number;
