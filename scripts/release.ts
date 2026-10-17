@@ -156,6 +156,7 @@ const publishVerificationGates = [
   "bun run release:check",
   "bun run check",
   "bun run test",
+  "bun run test:read-ahead",
   "bun run coverage",
   "bun run declarations:check",
   "bun run examples:check",

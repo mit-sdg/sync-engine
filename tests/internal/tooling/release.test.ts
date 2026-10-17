@@ -558,6 +558,50 @@ describe("release source facts", () => {
     },
   );
 
+  test("runs the same gates in release:verify and the publish verify job", () => {
+    const verifyRelease = validSources.get("scripts/verify-release.ts") ?? "";
+    const gateList = /const gates = \[([\s\S]*?)\] as const;/.exec(verifyRelease)?.[1] ?? "";
+    const localGates = [...gateList.matchAll(/\[([^\]]+)\]/g)].map(
+      (match) => `bun ${[...match[1].matchAll(/"([^"]+)"/g)].map((arg) => arg[1]).join(" ")}`,
+    );
+    const publish = validSources.get(".github/workflows/publish.yml") ?? "";
+    const verifyJob = publish.slice(
+      publish.indexOf("\n  verify:"),
+      publish.indexOf("\n  publish:"),
+    );
+    const workflowGates = [
+      ...verifyJob.matchAll(/^ {6}- run: (bun .+)$|^ {8}run: (bun .+)$/gm),
+    ].map((match) => match[1] ?? match[2]);
+    expect(localGates).toContain("bun run test:read-ahead");
+    expect(workflowGates).toEqual(localGates);
+  });
+
+  test("rejects a publish verify job without test:read-ahead", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "      - run: bun run test:read-ahead\n",
+      "",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: verify job must run bun run test:read-ahead",
+    );
+  });
+
+  test("rejects a publish verify job that runs test:read-ahead before test", () => {
+    const sources = fixture();
+    replaceSource(
+      sources,
+      ".github/workflows/publish.yml",
+      "      - run: bun run test\n      - run: bun run test:read-ahead\n",
+      "      - run: bun run test:read-ahead\n      - run: bun run test\n",
+    );
+    expect(checkRelease(sources)).toContain(
+      ".github/workflows/publish.yml: verify gates must remain in reviewed order",
+    );
+  });
+
   test("rejects a privileged publish verification job", () => {
     const sources = fixture();
     replaceSource(

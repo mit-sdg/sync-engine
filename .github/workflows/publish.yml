@@ -33,6 +33,7 @@ jobs:
       - run: bun run release:check
       - run: bun run check
       - run: bun run test
+      - run: bun run test:read-ahead
       - run: bun run coverage
       - run: bun run declarations:check
       - run: bun run examples:check
