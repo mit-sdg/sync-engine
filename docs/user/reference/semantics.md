@@ -43,10 +43,11 @@ original input object, so later mutation cannot rewrite the occurrence that
 reactions match. A reaction matches each record, through a trigger or through
 `earlier`, on its own copy of these values and binds from that copy, so changing
 a bound array, record, or `Date` cannot rewrite the occurrence for any other
-match; other object kinds are shared. One match, or one evaluation of a
-reaction's `where`, shares one copy of each repeated reference across its frames,
-so a consequence that changes a bound value in place changes it for sibling
-frames' consequences too.
+match; other object kinds are shared. The engine may read a getter on an
+action's output any number of times, or not at all when no reaction can match
+the record, so such getters must be pure. One match, or one evaluation of a reaction's `where`, shares one copy of
+each repeated reference across its bindings, so a consequence that changes a
+bound value in place changes it for sibling bindings' consequences too.
 
 The action then settles in one of two outcome postures:
 
@@ -282,6 +283,13 @@ Applications must not use evaluation order as semantic priority. No engine-wide
 lock serializes all concepts or all flows, and the guarantee does not extend
 across processes.
 
+Without [`concurrentReads`](#ordering-and-state-read-timing), a line's rows are
+still read one after another. Separate root flows that overlap may interleave
+their reads and actions in any order, and that order may differ between
+releases, so a read in one flow can see or miss another flow's write. Order
+within one flow is unchanged. Keep a decision that must not race inside one
+concept action ([Decisions that must not race](#decisions-that-must-not-race)).
+
 ## Reading: declarations govern
 
 A reaction or former `where` block is an orderless conjunction of lines.
@@ -355,8 +363,9 @@ actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
 without clearing: until an outside invocation settles (its cascade has finished
-or the assembly's request deadline, `executionLimits.maxRequestDurationMs`, has
-passed, even for a call given a longer `timeoutMs`), reads done for its flow
+or the assembly's request deadline, `executionLimits.maxRequestDurationMs` or
+30 seconds without `executionLimits`, has passed, even for a call given a longer
+`timeoutMs`), reads done for its flow
 reuse only answers whose
 query began at or after it was dispatched, so invocations already running keep
 the answers they read. A direct `form` and a direct query root read the same
@@ -367,9 +376,9 @@ deadline has passed. Action invalidation is unchanged. `queryCache: "none"`
 disables memoization; repeated reads execute the query implementation
 independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
-So must the computations, conditions, and custom ops that reads use: evaluation
-may run them in another order than the rows', and for rows whose answers it
-never uses.
+So must the computations, conditions, and custom ops that reads use: with
+[`concurrentReads`](#ordering-and-state-read-timing), they may run out of row
+order, and for rows whose answers are never used.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including
@@ -409,28 +418,33 @@ each answer is what the query answers for that input alone. Readers do not
 change: a reaction, view, former, or direct caller of an assembled concept still
 asks with one input and gets one answer, and promises, cardinality checks, and
 row limits apply to each answer as to an ordinary query's. Only reads the query
-cache cannot answer reach the method. Inside the class, and on an instance
-instrumented without a concept set or vocabulary, the method is an ordinary
-method that takes a list.
+cache cannot answer reach the method. Inside the class, the method is an
+ordinary method that takes a list. `batched` takes effect only in `assemble`: a
+`createEngine` engine instruments the method as an ordinary query, even when a
+vocabulary names it batched, so a read there passes it one input, not a list.
 
-With a query cache and `concurrentReads` reading more than one row at once, the
-engine groups the reads pending for one batched query on one concept instance
-until the current turn of the event loop ends, then calls the method once with
-their inputs, in the order they were asked. It never waits on a timer to
-collect more. Each read keeps its own position, so equal inputs can appear more
-than once. Each input is copied as it is asked, and the list the method
-receives is frozen. Without `concurrentReads`, with `rowsAtOnce: 1`, under
+Grouping needs a query cache and `concurrentReads.rowsAtOnce` above 1. With
+both, the engine groups the reads pending for one batched query on one concept
+instance until the current turn of the event loop ends, then calls the method
+once with their inputs, in the order they were asked. It never waits on a timer
+to collect more. Each read keeps its own position, so equal inputs can appear
+more than once. Each input of a grouped read is copied as plain data when it is
+asked: records, arrays, and `Date` values are copied deeply, and class
+instances, maps, and sets are kept by identity, so a later change by the caller
+does not reach the list. The list the method receives is frozen. Without
+`concurrentReads`, with `rowsAtOnce: 1`, under
 `queryCache: "none"`, or with `groupBatchedQueries: false`, every read calls
 the method with a list of one. A grouped read's reuse under `since-dispatch` is
 counted from when it was asked, though the method runs when the group is sent,
 so a read can only be reused less than an ordinary read begun at that moment.
 
 If the method throws for a group of more than one, the engine logs a warning
-and reads the group's inputs again one at a time, each with a list of one, so a
-bad input fails only its own read. If it throws for a list of one, that read
-fails. If the method returns something other than a list of the right length,
-or a list with an empty position, every read in the group faults with an error
-naming the query.
+that names the query and reads each input again alone, in a list of one, all at
+once, as it would without grouping. An input whose read throws or never settles
+then fails or delays only its own read. If the method throws for a list of one,
+that read fails. If the method returns something other than a list of the right
+length, or a list with a missing element, every read in the group faults with
+an error naming the query; an empty list is still a valid answer for one input.
 
 The method must keep the batched law: whatever else shares the list, in any
 order and with duplicates, each input gets the answer it gets alone, an empty
@@ -440,7 +454,9 @@ engine cannot check this as it runs; `checkBatchedQuery` checks it on sample
 inputs. The method is still a query, so it must be side-effect-free, and its
 answer for an input may depend only on stored state and that input. Every
 selected implementation, whether from a floor or `instances`, must take the
-list form; assembly rejects one that destructures a single input.
+list form. Assembly rejects one that destructures a single input or takes a
+`_` placeholder; only `sync-engine check` verifies from the types that the
+method takes a list.
 
 ## Views and formers
 
@@ -805,10 +821,10 @@ Automatic occurrence retention bounds settled-flow inspection, and
 engine-owned expansion during reaction matching, where evaluation, direct reads, and former
 evaluation. A query implementation still owns the memory needed to construct its
 answer. With `concurrentReads` (below), rows read together check the row limit
-without recording a breach; a breach is recorded only when evaluation consumes
+without recording a breach; a breach is recorded only when evaluation uses
 the row that reached it. Up to `rowsAtOnce - 1` rows of a line or selection may
 already be under way past that row, and nested lines in them may have read
-too; they stop at their next row check once the evaluation has failed.
+too; once the evaluation has failed, they stop before reading another row.
 These limits do not replace host limits for connections, request rate, DDoS
 protection, exporter queues, or autoscaling.
 
@@ -861,25 +877,27 @@ transactional snapshot of concept state. Query implementations must avoid side
 effects; concept storage must provide any isolation required between reads and
 writes.
 
-A line applied to many frames reads each frame's answer as if one after
+A line applied to many bindings reads each binding's answer as if one after
 another, and a selection forms its rows as if one after another. An assembly
-given the `concurrentReads` option reads them together and consumes the
-answers in row order:
+given the `concurrentReads` option (experimental: `rowsAtOnce` and
+`maxRowsAhead` may change or be removed in any minor release) reads them
+together and uses the answers in row order:
 
 - `rowsAtOnce` rows of one line or selection are evaluated at once, the row
-  being consumed included; `1` reads them one after another.
+  being used included; `1` reads them one after another.
 - At most `maxRowsAhead` rows (64 when unset) are started ahead at once across
-  the engine. An evaluation that finds that count spent reads its next row when
-  it reaches it, and never waits for it.
+  the assembly. An evaluation that finds that count spent reads its next row
+  when it reaches it, and never waits for it.
 - Answers, their order, the reported fault, and recorded row-limit breaches
   are those of reading the rows one after another, given side-effect-free reads
   ([Queries](#queries)) and no action changing the state being read meanwhile.
   Reads may interleave with a concurrent action differently than when read one
   after another.
-- A fault is reported as soon as its row is consumed. Rows started ahead are
-  then abandoned: a read already sent runs to completion and keeps its place in
-  the count of rows ahead until it settles, and the row stops at its next row
-  check.
+- A fault is reported as soon as its row is used. Rows started ahead are then
+  abandoned: a read already sent runs to completion and keeps its place in the
+  count of rows ahead until it settles, and the row stops before reading
+  another. `whenIdle()` and `beginDrain()` wait for every row started ahead to
+  settle, abandoned rows included.
 
 Lines of one `where` block still run in order.
 

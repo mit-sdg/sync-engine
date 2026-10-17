@@ -49,18 +49,21 @@ assembly creates a separate queue; the engine does not serialize those assemblie
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query
 implementations must be side-effect-free, and storage must provide required
-read/write isolation. With the `concurrentReads` assembly option, the rows of
-one line or selection are also read together: at most `rowsAtOnce` rows of one
-line at once, and at most `maxRowsAhead` rows started ahead across the
-assembly. Each evaluation also reads its own next row, so the rows being read
-at once are at most `maxRowsAhead` plus one per evaluation under way. The count
+read/write isolation. With the `concurrentReads` assembly option (experimental:
+`rowsAtOnce` and `maxRowsAhead` may change or be removed in any minor release),
+the rows of one line or selection are also read together: at most `rowsAtOnce`
+rows of one line at once, and at most `maxRowsAhead` rows (64 when unset)
+started ahead across the assembly. Each evaluation also reads its own next row,
+so the rows being read at once are at most `maxRowsAhead` plus one per
+evaluation under way. The count
 belongs to one assembly, while a database client's connection pool is usually
 shared by the whole process: size the pool above the sum over the process's
 assemblies, so actions' writes are not queued behind reads.
 
 A query a registration names under `batched` answers a list of inputs at once,
 so the reads grouped for it take one database command instead of one each.
-Grouping needs a query cache and `concurrentReads` with `rowsAtOnce` above 1.
+Grouping needs a query cache and `concurrentReads.rowsAtOnce` above 1, and
+only `assemble` groups.
 `groupBatchedQueries: false`
 turns grouping off for the whole assembly without changing any class: every
 read then calls the batched method with a list of one.
@@ -72,7 +75,8 @@ holds at most one answer per query and argument, kept while some invocation,
 direct `form`, or direct query root still open began before it; older answers
 are dropped when the next one opens. A direct query stops holding answers once
 its read has begun, and nothing holds them past the request deadline
-(`executionLimits.maxRequestDurationMs`, 30 seconds by default): a `form` still
+(`executionLimits.maxRequestDurationMs`, or 30 seconds without
+`executionLimits`): a `form` still
 running then reads only answers begun since the latest start, so a read that
 never settles cannot keep every later answer.
 
@@ -123,7 +127,9 @@ flow limits and can outlive its transport request.
 
 Shutdown must account for that continued work. Stop public admission, call
 `beginDrain()`, and wait for the returned promise or `whenIdle()` until accepted
-causal flows settle. A gateway drains its own roots before the downstream
+causal flows settle. With `concurrentReads`, the wait also covers every row
+read ahead, including rows abandoned after a fault, so no read is still running
+when the floors close. A gateway drains its own roots before the downstream
 assembly. Do not expose the downstream invoker as another public admission path
 during this interval.
 
