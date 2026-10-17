@@ -112,7 +112,7 @@ describe("grouped reads", () => {
     expect(app.concepts.Library.lists).toEqual([[1, 99, 2]]);
   });
 
-  test("a group that fails is read again one input at a time, so only the bad input fails", async () => {
+  test("a group that fails is read again as lists of one, so only the bad input fails", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     try {
       const { words } = library(4, { failOn: 2 });
@@ -267,7 +267,28 @@ describe("the grouping adapter", () => {
     ]);
   });
 
-  test("the list is frozen, so a list form that sorts its inputs in place is read one at a time", async () => {
+  test.each([true, false])(
+    "with grouping %s, a nested change by the caller after asking does not reach the list form",
+    async (grouped) => {
+      const lists: unknown[][] = [];
+      const read = batchedQuery(echo(lists), "Echo._echo", grouped);
+      const tags = new Set(["kept"]);
+      const input = { book: 1, shelf: { row: 1 }, authors: ["a"], at: new Date(0), tags };
+
+      const answer = read(input);
+      input.shelf.row = 2;
+      input.authors.push("b");
+      input.at.setTime(1);
+
+      const asked = { book: 1, shelf: { row: 1 }, authors: ["a"], at: new Date(0), tags };
+      expect(await answer).toEqual({ echo: asked });
+      expect(lists).toEqual([[asked]]);
+      // Data is copied; other objects, such as a set, are passed as they are.
+      expect((lists[0]?.[0] as typeof input).tags).toBe(tags);
+    },
+  );
+
+  test("the list is frozen, so a list form that sorts its inputs in place is read again as lists of one", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     try {
       const read = batchedQuery(
@@ -304,7 +325,7 @@ describe("the grouping adapter", () => {
     }
   });
 
-  test("a failed group is retried one input at a time, in order", async () => {
+  test("a failed group is read again as lists of one, all at once, as it would be ungrouped", async () => {
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     try {
       const lists: unknown[][] = [];
@@ -326,7 +347,31 @@ describe("the grouping adapter", () => {
 
       expect(await Promise.all([read(1), read(2), read(3)])).toEqual([1, 2, 3]);
       expect(lists).toEqual([[1, 2, 3], [1], [2], [3]]);
-      expect(mostActive).toBe(1);
+      expect(mostActive).toBe(3);
+      expect(warn).toHaveBeenCalledOnce();
+      expect(String(warn.mock.calls[0]?.[0])).toContain("Echo._echo failed for 3 inputs");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("after a failed group, an input whose read never settles delays no other input", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const read = batchedQuery(
+        async (inputs) => {
+          if (inputs.length > 1) throw new Error("lists of one only");
+          return inputs[0] === 1 ? new Promise<never>(() => {}) : inputs;
+        },
+        "Echo._echo",
+        true,
+      );
+
+      const hung = read(1);
+      expect(await Promise.all([read(2), read(3)])).toEqual([2, 3]);
+      expect(await Promise.race([hung, turn().then(() => "still waiting")])).toBe(
+        "still waiting",
+      );
     } finally {
       warn.mockRestore();
     }
@@ -372,6 +417,23 @@ describe("the grouping adapter", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("where the host has no setImmediate, the module loads and reads are not grouped", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "setImmediate");
+    vi.resetModules();
+    Reflect.deleteProperty(globalThis, "setImmediate");
+    let loaded: typeof import("@sync-engine/internal/reactions/runtime/batching");
+    try {
+      loaded = await import("@sync-engine/internal/reactions/runtime/batching");
+    } finally {
+      if (descriptor !== undefined) Object.defineProperty(globalThis, "setImmediate", descriptor);
+    }
+    const lists: unknown[][] = [];
+    const read = loaded.batchedQuery(echo(lists), "Echo._echo", true);
+
+    expect(await Promise.all([read(1), read(2)])).toEqual([{ echo: 1 }, { echo: 2 }]);
+    expect(lists).toEqual([[1], [2]]);
   });
 });
 
@@ -456,12 +518,25 @@ describe("checkBatchedQuery", () => {
   class Id {
     constructor(readonly value: string) {}
   }
+  class Secret {
+    readonly #title: string;
+    constructor(title: string) {
+      this.#title = title;
+    }
+    get title() {
+      return this.#title;
+    }
+  }
   class Shelf {
     titles = new Map([
       ["a", "Alpha"],
       ["b", "Beta"],
     ]);
     written = new Date(0);
+    tags = new Map([
+      ["a", ["x", "y"]],
+      ["b", ["z"]],
+    ]);
 
     async _good(inputs: readonly { id: string }[]) {
       return inputs.map(({ id }) => {
@@ -490,6 +565,46 @@ describe("checkBatchedQuery", () => {
 
     async _deduped(inputs: readonly { id: string }[]) {
       return [...new Set(inputs.map(({ id }) => id))].map((id) => ({ id }));
+    }
+
+    async _tagSets(inputs: readonly { id: string }[]) {
+      // The same entries in a different order when the list is longer.
+      return inputs.map(({ id }) => {
+        const tags = this.tags.get(id) ?? [];
+        const ordered = inputs.length > 1 ? [...tags].reverse() : tags;
+        return { tags: new Set(ordered), rows: new Map(ordered.map((tag) => [tag, { id }])) };
+      });
+    }
+
+    async _tagsOfAll(inputs: readonly { id: string }[]) {
+      // Every input answered with the tags of the whole list.
+      const all = inputs.flatMap(({ id }) => this.tags.get(id) ?? []);
+      return inputs.map(() => ({ tags: new Set(all) }));
+    }
+
+    async _titlesOfAll(inputs: readonly { id: string }[]) {
+      const all = inputs.flatMap(({ id }) => {
+        const title = this.titles.get(id);
+        return title === undefined ? [] : [[id, title] as const];
+      });
+      return inputs.map(() => new Map(all));
+    }
+
+    async _sharedInSets(inputs: readonly { id: string }[]) {
+      const row = { title: "same" };
+      return inputs.map(() => new Set([row]));
+    }
+
+    async _secrets(inputs: readonly { id: string }[]) {
+      return inputs.map(({ id }) => [new Secret(this.titles.get(id) ?? "")]);
+    }
+
+    _promises(inputs: readonly { id: string }[]) {
+      // The slip: a promise for each input rather than the answers.
+      return inputs.map(async ({ id }) => {
+        if (id === "missing") throw new Error("no such shelf");
+        return { id };
+      });
     }
 
     async _holed(inputs: readonly { id: string }[]) {
@@ -534,6 +649,40 @@ describe("checkBatchedQuery", () => {
   test("a list form that leaves a position empty fails", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_holed", samples)).rejects.toThrow(
       'the list [{"id":"missing"}] left answer 0 empty',
+    );
+  });
+
+  test("maps and sets compare by their entries, in any order", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_tagSets", samples)).resolves.toBeUndefined();
+  });
+
+  test("a list form that answers from the whole list through sets or maps fails", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_tagsOfAll", samples)).rejects.toThrow(
+      'in the samples in order, {"id":"a"} answered {"tags":["x","y","z"]} but answers {"tags":["x","y"]} alone',
+    );
+    await expect(checkBatchedQuery(new Shelf(), "_titlesOfAll", samples)).rejects.toThrow(
+      'in the samples in order, {"id":"a"} answered [["a","Alpha"],["b","Beta"]] but answers [["a","Alpha"]] alone',
+    );
+  });
+
+  test("answers to different inputs that share an object inside a set fail", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_sharedInSets", samples)).rejects.toThrow(
+      'the answers for {"id":"a"} and {"id":"b"} share an object',
+    );
+  });
+
+  test("answers it cannot compare fail, naming their class", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_secrets", samples)).rejects.toThrow(
+      "checkBatchedQuery: cannot compare answers of class Secret",
+    );
+  });
+
+  test("a list form that returns a promise for each input is reported", async () => {
+    await expect(
+      checkBatchedQuery(new Shelf(), "_promises", [{ id: "missing" }, ...samples]),
+    ).rejects.toThrow(
+      'checkBatchedQuery: _promises gave a promise as answer 0 for the list [{"id":"missing"}]; ' +
+        "a list form returns its answers, so await them first",
     );
   });
 });
