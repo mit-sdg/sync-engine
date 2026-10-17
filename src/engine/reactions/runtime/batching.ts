@@ -9,11 +9,13 @@
  * Grouped, it collects the reads pending for the query until the current turn
  * of the event loop ends, then calls the list form once for all of them; it
  * never waits on a timer to collect more. Ungrouped, every read calls the list
- * form with a list of one. The list passed is frozen, so a method that sorts
- * its inputs in place fails instead of answering the wrong reader.
+ * form with a list of one. Each input is copied as plain data when it is asked.
+ * The list passed is frozen, so a method that sorts its inputs in place fails
+ * instead of answering the wrong reader.
  */
 import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
+import { snapshotValue } from "@engine/utils/snapshot";
 
 type ListForm = (inputs: readonly unknown[]) => unknown;
 
@@ -24,7 +26,9 @@ interface PendingRead {
 }
 
 // Kept from module load, so a test that fakes timers cannot stall grouped reads.
-const nextTurn = setImmediate;
+// Where the host has none, reads are not grouped.
+const nextTurn: ((callback: () => void) => unknown) | undefined =
+  typeof setImmediate === "function" ? setImmediate : undefined;
 
 function describe(value: unknown): string {
   if (Array.isArray(value)) return `${value.length} answer${value.length === 1 ? "" : "s"}`;
@@ -50,13 +54,6 @@ function answersFor(answers: unknown, count: number, label: string): unknown[] {
   return answers;
 }
 
-/** An input as it was when asked, so a caller changing its object later changes nothing. */
-function asAsked(input: unknown): unknown {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) return input;
-  const prototype = Object.getPrototypeOf(input);
-  return prototype === Object.prototype || prototype === null ? { ...input } : input;
-}
-
 /** Answer one input at a time through a batched query's list form. */
 export function batchedQuery(
   list: ListForm,
@@ -67,20 +64,11 @@ export function batchedQuery(
     Promise.resolve().then(() => list(Object.freeze(inputs)));
   const alone = async (input: unknown): Promise<unknown> =>
     answersFor(await call([input]), 1, label)[0];
-  if (!grouped) return (input) => alone(asAsked(input));
+  // Each input is kept as it was asked, so a caller changing its object later
+  // changes nothing: records, arrays and dates are copied, other objects kept.
+  if (!grouped || nextTurn === undefined) return (input) => alone(snapshotValue(input));
 
   let pending: PendingRead[] | undefined;
-
-  const retry = async (group: readonly PendingRead[]): Promise<void> => {
-    // One at a time, so a failing store is not sent the whole group at once.
-    for (const read of group) {
-      try {
-        read.resolve(await alone(read.input));
-      } catch (error) {
-        read.reject(error);
-      }
-    }
-  };
 
   const flush = (group: PendingRead[]): void => {
     call(group.map((read) => read.input)).then(
@@ -99,13 +87,14 @@ export function batchedQuery(
           group[0].reject(error);
           return;
         }
-        // A failed group is read again one input at a time, so a bad input
-        // fails only its own read.
+        // A failed group is read again as lists of one, all at once, as the
+        // reads would have gone ungrouped, so a bad input fails only its own
+        // read and a slow one delays only its own.
         logger.warn(
-          `Batched query ${label} failed for ${group.length} inputs; reading them one at a time.`,
+          `Batched query ${label} failed for ${group.length} inputs; reading each alone.`,
           { error: serializeError(error) },
         );
-        void retry(group);
+        for (const read of group) alone(read.input).then(read.resolve, read.reject);
       },
     );
   };
@@ -120,6 +109,6 @@ export function batchedQuery(
           flush(group);
         });
       }
-      pending.push({ input: asAsked(input), resolve, reject });
+      pending.push({ input: snapshotValue(input), resolve, reject });
     });
 }
