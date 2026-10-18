@@ -130,23 +130,23 @@ formers](semantics.md#views-and-formers).
 assemble(options: ConceptSetAssemblyOptions): Assembly
 ```
 
-| `ConceptSetAssemblyOptions` field | Required    | Default / effect                                                                                             |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `conceptSet`                      | yes         | Registered application concept set                                                                           |
-| `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                         |
-| `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
-| `instances`                       | no          | Ready implementations by instance name; each overrides `initialize`; object identities must be distinct      |
-| `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
-| `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
-| `queryCache`                      | no          | `"memoize"`; `"since-dispatch"` keeps running invocations' answers across later ones; `"none"` disables it   |
-| `concurrentReads`                 | no          | Rows read one after another; `{ rowsAtOnce, maxRowsAhead? }` reads a line's rows together, in row order      |
-| `groupBatchedQueries`             | no          | `true`; groups pending batched reads with a query cache and `rowsAtOnce` above 1; `false` sends lists of one |
-| `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`     |
-| `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
-| `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
-| `observers`                       | no          | No operational observers                                                                                     |
-| `rawFaultReporter`                | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
-| `redaction`                       | no          | Universal sensitive-field patterns only                                                                      |
+| `ConceptSetAssemblyOptions` field | Required    | Default / effect                                                                                                       |
+| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `conceptSet`                      | yes         | Registered application concept set                                                                                     |
+| `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                                   |
+| `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them                |
+| `instances`                       | no          | Ready implementations by instance name; each overrides `initialize`; object identities must be distinct                |
+| `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                                  |
+| `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                               |
+| `queryCache`                      | no          | `"memoize"`; `"since-dispatch"` keeps running invocations' answers across later ones; `"none"` disables it             |
+| `concurrentReads`                 | no          | (experimental) Rows read one after another; `{ rowsAtOnce, maxRowsAhead? }` reads a line's rows together, in row order |
+| `groupBatchedQueries`             | no          | `true`; groups pending batched reads with a query cache and `rowsAtOnce` above 1; `false` sends lists of one           |
+| `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`               |
+| `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously           |
+| `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                                |
+| `observers`                       | no          | No operational observers                                                                                               |
+| `rawFaultReporter`                | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                           |
+| `redaction`                       | no          | Universal sensitive-field patterns only                                                                                |
 
 `RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
 be a finite, non-negative integer. Window enforcement runs automatically only
@@ -158,12 +158,14 @@ nor restricts `retention`.
 
 `ConcurrentReads` is `{ rowsAtOnce, maxRowsAhead? }`, both positive integers:
 at most `rowsAtOnce` rows of one line or selection are read at once, and at
-most `maxRowsAhead` rows (64 when unset) are started ahead across the assembly.
-Both fields are experimental: they may change or be removed in any minor
-release, and the changelog lists the change. A batched query's pending reads
-are grouped only with a query cache and `rowsAtOnce` above 1; otherwise, and
-with `groupBatchedQueries: false`, each read calls the list form with a list of
-one. See [ordering and state-read timing](semantics.md#ordering-and-state-read-timing)
+most `maxRowsAhead` rows (64 when unset) are started ahead across the assembly
+(`concurrentReads` is experimental; see the
+[support policy](../../../SUPPORT.md#stable-compatibility)). Each call of a
+batched query receives a frozen list of inputs, copied as plain data. The engine
+may group reads issued together into one call; it currently does so only with a
+query cache and `concurrentReads.rowsAtOnce` above 1. With
+`groupBatchedQueries: false`, each read calls the list form with a list of one.
+See [ordering and state-read timing](semantics.md#ordering-and-state-read-timing)
 and [batched queries](semantics.md#batched-queries).
 
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
@@ -293,20 +295,19 @@ names come from the specification. The same holds for `Assembly<T, Batched>`:
 its second parameter maps each concept-set key to the query names batched for
 it, and `concepts` types those queries as taking one input. It defaults to no
 names, so a written-out `Assembly<T>` types a batched query in its class's list
-form; keep the inferred type of `assemble(...)`. Readers of the concept set's
+form; keep the inferred type of `assemble(...)`. A registration written out as
+`ConceptRegistration<C>` names no batched queries, so write the names in the
+`registerConcept(...)` call. Readers of the concept set's
 refs and of an assembled concept ask a batched query with one input; a query
 that takes a list without being named keeps its own types.
-When reads are grouped, each input is copied as plain data when it is asked.
-If a grouped call throws, each of its inputs is read again alone, all at once,
-as without grouping.
 `checkBatchedQuery` checks a list form's law on the raw instance with sample
 inputs: each answer equals the answer for that input alone, in order, reversed,
 and with duplicates, no answer is missing, an empty list answers an empty
 list, and answers to different inputs share no objects. It passes the list
-frozen, as the engine does, and rejects with what differed. It fails on an
-answer it cannot compare, such as a promise or an object that keeps its data in
-private fields. Execution semantics for batched queries are in
-[semantics](semantics.md#batched-queries).
+frozen, as the engine does, and rejects with what differed. It compares
+records, arrays, dates, maps, sets, and binary data, and fails on any other
+object, such as a class instance or a promise. Execution semantics for batched
+queries are in [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`

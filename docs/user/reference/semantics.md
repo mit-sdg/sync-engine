@@ -423,18 +423,19 @@ ordinary method that takes a list. `batched` takes effect only in `assemble`: a
 `createEngine` engine instruments the method as an ordinary query, even when a
 vocabulary names it batched, so a read there passes it one input, not a list.
 
-Reads are grouped only with a query cache and `concurrentReads.rowsAtOnce`
-above 1. Then the engine groups the reads pending for one batched query on one concept
-instance until the current turn of the event loop ends, then calls the method
-once with their inputs, in the order they were asked. It never waits on a timer
-to collect more. Each read keeps its own position, so equal inputs can appear
-more than once. Each input of a grouped read is copied as plain data when it is
-asked: records, arrays, and `Date` values are copied deeply, and class
+Each call receives a frozen list of inputs, copied as plain data. The engine
+may group reads issued together into one call; it currently does so only with a
+query cache and `concurrentReads.rowsAtOnce` above 1. Each input is copied when
+it is asked: records, arrays, and `Date` values are copied deeply, and class
 instances, maps, and sets are kept by identity. A later change to a copied
-record, array, or `Date` does not reach the list. The list the method receives is frozen. Without
-`concurrentReads`, with `rowsAtOnce: 1`, under
-`queryCache: "none"`, or with `groupBatchedQueries: false`, every read calls
-the method with a list of one. A grouped read's reuse under `since-dispatch` is
+record, array, or `Date` does not reach the list. Without `concurrentReads`,
+with `rowsAtOnce: 1`, under `queryCache: "none"`, or with
+`groupBatchedQueries: false`, every read calls the method with a list of one.
+Otherwise the engine groups the reads pending for one batched query on one
+concept instance until the current turn of the event loop ends, then calls the
+method once with their inputs, in the order they were asked. It never waits on
+a timer to collect more. Each read keeps its own position, so equal inputs can
+appear more than once. A grouped read's reuse under `since-dispatch` is
 counted from when it was asked, though the method runs when the group is sent,
 so a read can only be reused less than an ordinary read begun at that moment.
 
@@ -879,9 +880,9 @@ writes.
 
 A line applied to many bindings reads each binding's answer as if one after
 another, and a selection forms its rows as if one after another. An assembly
-given the `concurrentReads` option (experimental: `rowsAtOnce` and
-`maxRowsAhead` may change or be removed in any minor release) reads them
-together and uses the answers in row order:
+given the `concurrentReads` option (`concurrentReads` is experimental; see the
+[support policy](../../../SUPPORT.md#stable-compatibility)) reads them together
+and uses the answers in row order:
 
 - `rowsAtOnce` rows of one line or selection are evaluated at once, the row
   being used included; `1` reads them one after another.
@@ -896,8 +897,9 @@ together and uses the answers in row order:
 - A fault is reported as soon as its row is used. Rows started ahead are then
   abandoned: a read already sent runs to completion and keeps its place in the
   count of rows ahead until it settles, and the row stops before reading
-  another. `whenIdle()` and `beginDrain()` wait for every row started ahead to
-  settle, abandoned rows included.
+  another. `whenIdle()`, `beginDrain()`, and the `drain-state` event with
+  `state: "idle"` wait for every row started ahead to settle, abandoned rows
+  included.
 
 Lines of one `where` block still run in order.
 

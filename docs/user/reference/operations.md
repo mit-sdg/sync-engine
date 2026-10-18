@@ -49,9 +49,10 @@ assembly creates a separate queue; the engine does not serialize those assemblie
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query
 implementations must be side-effect-free, and storage must provide required
-read/write isolation. With the `concurrentReads` assembly option (experimental:
-`rowsAtOnce` and `maxRowsAhead` may change or be removed in any minor release),
-the rows of one line or selection are also read together: at most `rowsAtOnce`
+read/write isolation. With the `concurrentReads` assembly option
+(`concurrentReads` is experimental; see the
+[support policy](../../../SUPPORT.md#stable-compatibility)), the rows of one
+line or selection are also read together: at most `rowsAtOnce`
 rows of one line at once, and at most `maxRowsAhead` rows (64 when unset)
 started ahead across the assembly. Each evaluation also reads its own next row,
 so the rows being read at once are at most `maxRowsAhead` plus one per
@@ -62,11 +63,13 @@ assemblies, so actions' writes are not queued behind reads.
 
 A query a registration names under `batched` answers a list of inputs at once,
 so the reads grouped for it take one database command instead of one each.
-Reads are grouped only with a query cache and `concurrentReads.rowsAtOnce`
-above 1, and only in an assembly made by `assemble`.
-`groupBatchedQueries: false`
-turns grouping off for the whole assembly without changing any class: every
-read then calls the batched method with a list of one.
+Each call receives a frozen list of inputs, copied as plain data. The engine
+may group reads issued together into one call; it currently does so only with a
+query cache and `concurrentReads.rowsAtOnce` above 1. `batched` takes effect
+only in an assembly made by `assemble`. `groupBatchedQueries: false` turns
+grouping off for the whole assembly without changing any class: every read then
+calls the batched method with a list of one. See
+[batched queries](semantics.md#batched-queries).
 
 Under `queryCache: "memoize"`, each outside invocation clears every query cache,
 so concurrent invocations re-read what earlier ones had read, and the more so
@@ -127,11 +130,12 @@ flow limits and can outlive its transport request.
 
 Shutdown must account for that continued work. Stop public admission, call
 `beginDrain()`, and wait for the returned promise or `whenIdle()` until accepted
-causal flows settle. With `concurrentReads`, the wait also covers every row
-read ahead, including rows abandoned after a fault, so no row started ahead is
-still reading when the floors close. A gateway drains its own roots before the downstream
-assembly. Do not expose the downstream invoker as another public admission path
-during this interval.
+causal flows settle. With `concurrentReads`, the wait and the `drain-state`
+event with `state: "idle"` also cover every row read ahead, including rows
+abandoned after a fault, so no row started ahead is still reading when the
+floors close. A gateway drains its own roots before the downstream assembly. Do
+not expose the downstream invoker as another public admission path during this
+interval.
 
 `ConceptFloor.close()` is host-owned and assembly does not call it. `LogSink` has
 no lifecycle method, and `FileLogSink` has no close API. The host shutdown order

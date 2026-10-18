@@ -26,7 +26,7 @@ or accepted specification syntax incompatibly. The [changelog](CHANGELOG.md)
 records compatibility and migration effects for every release. Pin an exact
 version for reproducible coursework and review the changelog before upgrading.
 An option marked experimental may change or be removed in any minor release;
-the changelog lists the change.
+the changelog lists the change. `concurrentReads` is experimental.
 
 Published versions, tags, and tarballs are immutable. A correction receives a
 new version; maintainers do not replace an existing release.
