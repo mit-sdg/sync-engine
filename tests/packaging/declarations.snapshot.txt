@@ -842,6 +842,8 @@ export declare class RuntimeLifecycle {
     private readonly idleWaiters;
     private draining;
     private drainIdleEmitted;
+    /** Work that outlives its flow, such as a row read ahead of a fault; idle waits for it. */
+    private held;
     constructor(limits?: ExecutionLimits | undefined, events?: OperationalEvents);
     admit(flow: string, route: string, correlationId: string): AdmissionRejection | undefined;
     /** Admit a direct action root, which has active work but no boundary request wait. */
@@ -852,6 +854,9 @@ export declare class RuntimeLifecycle {
     abandon(flow: string): void;
     beginDrain(): Promise<void>;
     whenIdle(): Promise<void>;
+    hold(): void;
+    release(): void;
+    private get idle();
     validateTimeout(timeoutMs: number): string | undefined;
     action(flow: string): boolean;
     firing(flow: string): boolean;
@@ -2521,6 +2526,9 @@ export interface ExecutionControl {
     admitFlow?(flow: string, route: string, correlationId: string): unknown;
     abandon?(flow: string): void;
     flowSettled?(flow: string): void;
+    /** Count work that outlives its flow until `release`; idle and drain wait for it. */
+    hold?(): void;
+    release?(): void;
 }
 export type OperationalResultClass = "success" | "domain-error" | "framework-error" | "refusal" | "fault";
 interface EventBase {
@@ -2639,7 +2647,7 @@ import type { AuthoredDeclarationIdentity } from "../../reads/declaration-identi
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
-import type { ConcurrentReads, RowsAhead } from "../../reads/where-evaluation.ts";
+import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
 import type { RelationView } from "../../reads/lines.ts";
 import type { ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
@@ -2659,8 +2667,6 @@ export declare class Reacting {
     private readonly firingPipeline;
     private readonly execution?;
     private readonly invocationReads?;
-    /** Rows started ahead under `concurrentReads`; undefined when rows are read one after another. */
-    readonly rowsAhead?: RowsAhead;
     constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads, readHoldMs?: number, groupBatchedQueries?: boolean);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
@@ -4814,6 +4820,11 @@ export interface ReadAhead {
     /** Rows started ahead of the row being consumed, counted across the whole engine. */
     readonly ahead: RowsAhead;
 }
+/** Told of each row started ahead and of its settling, so idle and drain wait for it. */
+export interface Quiescence {
+    hold?(): void;
+    release?(): void;
+}
 /**
  * A count of rows started ahead and not yet settled, shared by every
  * evaluation one engine runs. An evaluation that finds it spent does not wait:
@@ -4822,15 +4833,13 @@ export interface ReadAhead {
  */
 export declare class RowsAhead {
     readonly capacity: number;
+    private readonly quiescence?;
     private started;
-    private readonly settledWaiters;
-    constructor(capacity: number);
+    constructor(capacity: number, quiescence?: Quiescence | undefined);
     /** Rows started ahead that have not settled yet. */
     get inUse(): number;
     take(): boolean;
     give(): void;
-    /** Resolves once no row started ahead is still running, abandoned rows included. */
-    whenSettled(): Promise<void>;
 }
 /** The `concurrentReads` assembly option. Experimental: it may change or be removed in any minor release. */
 export interface ConcurrentReads {
@@ -4841,7 +4850,7 @@ export interface ConcurrentReads {
 }
 export declare const DEFAULT_MAX_ROWS_AHEAD = 64;
 /** The engine's read-ahead for an assembly option; undefined reads rows one after another. */
-export declare function readAheadFor(options: ConcurrentReads | undefined): ReadAhead | undefined;
+export declare function readAheadFor(options: ConcurrentReads | undefined, quiescence?: Quiescence): ReadAhead | undefined;
 /**
  * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
  * `consume` takes its answer in row order. With read-ahead, up to `rowsAtOnce`

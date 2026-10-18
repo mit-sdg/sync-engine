@@ -41,6 +41,12 @@ export interface ReadAhead {
   readonly ahead: RowsAhead;
 }
 
+/** Told of each row started ahead and of its settling, so idle and drain wait for it. */
+export interface Quiescence {
+  hold?(): void;
+  release?(): void;
+}
+
 /**
  * A count of rows started ahead and not yet settled, shared by every
  * evaluation one engine runs. An evaluation that finds it spent does not wait:
@@ -49,9 +55,11 @@ export interface ReadAhead {
  */
 export class RowsAhead {
   private started = 0;
-  private readonly settledWaiters = new Set<() => void>();
 
-  constructor(readonly capacity: number) {}
+  constructor(
+    readonly capacity: number,
+    private readonly quiescence?: Quiescence,
+  ) {}
 
   /** Rows started ahead that have not settled yet. */
   get inUse(): number {
@@ -61,6 +69,7 @@ export class RowsAhead {
   take(): boolean {
     if (this.started >= this.capacity) return false;
     this.started += 1;
+    this.quiescence?.hold?.();
     return true;
   }
 
@@ -68,15 +77,7 @@ export class RowsAhead {
     if (this.started === 0)
       throw new Error("RowsAhead: a row was given back that was never taken.");
     this.started -= 1;
-    if (this.started > 0) return;
-    for (const resolve of this.settledWaiters) resolve();
-    this.settledWaiters.clear();
-  }
-
-  /** Resolves once no row started ahead is still running, abandoned rows included. */
-  whenSettled(): Promise<void> {
-    if (this.started === 0) return Promise.resolve();
-    return new Promise((resolve) => this.settledWaiters.add(resolve));
+    this.quiescence?.release?.();
   }
 }
 
@@ -91,11 +92,14 @@ export interface ConcurrentReads {
 export const DEFAULT_MAX_ROWS_AHEAD = 64;
 
 /** The engine's read-ahead for an assembly option; undefined reads rows one after another. */
-export function readAheadFor(options: ConcurrentReads | undefined): ReadAhead | undefined {
+export function readAheadFor(
+  options: ConcurrentReads | undefined,
+  quiescence?: Quiescence,
+): ReadAhead | undefined {
   if (options === undefined) return undefined;
   return {
     rowsAtOnce: options.rowsAtOnce,
-    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD),
+    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD, quiescence),
   };
 }
 

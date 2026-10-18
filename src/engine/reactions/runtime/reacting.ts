@@ -20,7 +20,7 @@ import { assertThenInputsAreData, lintReactionOpens } from "@engine/reads/reacti
 import { Registry } from "@engine/reads/definition-registry";
 import type { BoundReaction, BoundWhereOp } from "@engine/reads/definition-registry";
 import { applyWhereOps, readAheadFor } from "@engine/reads/where-evaluation";
-import type { AssertRows, ConcurrentReads, RowsAhead } from "@engine/reads/where-evaluation";
+import type { AssertRows, ConcurrentReads } from "@engine/reads/where-evaluation";
 import type { AnyWhereOp } from "@engine/reads/where-ops";
 import type { RelationView } from "@engine/reads/lines";
 import { canonicalJson } from "@engine/utils/canonical-json";
@@ -65,8 +65,6 @@ export class Reacting {
   private readonly firingPipeline: FiringPipeline;
   private readonly execution?: ExecutionControl;
   private readonly invocationReads?: InvocationReads;
-  /** Rows started ahead under `concurrentReads`; undefined when rows are read one after another. */
-  readonly rowsAhead?: RowsAhead;
 
   constructor(
     actionConcept: ActionConcept = new ActionConcept(),
@@ -126,9 +124,8 @@ export class Reacting {
       (flowToken) => this.rowGuard(flowToken),
       (flowToken) => this.consumeAction(flowToken),
     );
-    const readAhead = readAheadFor(concurrentReads);
-    this.rowsAhead = readAhead?.ahead;
-    this.registry.configureReadAhead(readAhead);
+    // A row started ahead of a fault keeps reading after its flow settles, so it holds idle.
+    this.registry.configureReadAhead(readAheadFor(concurrentReads, execution));
     this.registry.configureInvocationReads(this.invocationReads);
   }
 

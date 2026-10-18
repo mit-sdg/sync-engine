@@ -27,8 +27,15 @@ function shelf(
 ) {
   let release!: () => void;
   const hung = new Promise<void>((resolve) => (release = resolve));
+  let releaseWait!: () => void;
+  const waited = new Promise<void>((resolve) => (releaseWait = resolve));
   class ShelfConcept {
-    static readonly queries = { _items: "many", _detail: "many", _note: "many" } as const;
+    static readonly queries = {
+      _items: "many",
+      _detail: "many",
+      _note: "many",
+      _wait: "many",
+    } as const;
     inFlight = 0;
     maxInFlight = 0;
     detailReads = 0;
@@ -66,6 +73,11 @@ function shelf(
         this.inFlight -= 1;
       }
     }
+
+    async _wait(_: Empty) {
+      await waited;
+      return [{ done: true }];
+    }
   }
   const words = vocabulary({ concepts: { Shelf: ShelfConcept }, computations: {} });
   const { Shelf } = words.concepts;
@@ -82,7 +94,10 @@ function shelf(
         .form({ label, note }),
     }),
   );
-  return { words, listing, nested, release };
+  const waiting = former("the wait ()", (_input, { done }) =>
+    each(Shelf._wait({}).is({ done })).form({ done }),
+  );
+  return { words, listing, nested, waiting, release, releaseWait };
 }
 
 function application(
@@ -238,6 +253,49 @@ describe("with concurrentReads, rows are read together and consumed in row order
     expect(idle).toBe(true);
     expect(app.concepts.Shelf.inFlight).toBe(0);
     expect(rowsAhead(app)).toBe(0);
+  });
+
+  test("the drain's idle event waits for rows started ahead of a fault", async () => {
+    const events: OperationalEvent[] = [];
+    const { words, listing, release } = shelf(4, { failAt: [0], hangAt: [1] });
+    const app = application(
+      words,
+      { listing },
+      { concurrentReads: { rowsAtOnce: 4 }, observers: [(event) => events.push(event)] },
+    );
+    const drainedIdle = () =>
+      events.some((event) => event.type === "drain-state" && event.state === "idle");
+
+    await expect(app.form(listing({}))).rejects.toThrow("detail 0 failed");
+    void app.beginDrain();
+    await pause(20);
+    expect(drainedIdle()).toBe(false);
+
+    release();
+    await app.beginDrain();
+    expect(drainedIdle()).toBe(true);
+  });
+
+  test("idle waits for a flow admitted while rows started ahead of a fault settle", async () => {
+    const { words, listing, waiting, release, releaseWait } = shelf(4, {
+      failAt: [0],
+      hangAt: [1],
+    });
+    const app = application(words, { listing, waiting }, { concurrentReads: { rowsAtOnce: 4 } });
+
+    await expect(app.form(listing({}))).rejects.toThrow("detail 0 failed");
+    let idle = false;
+    void app.whenIdle().then(() => (idle = true));
+    const later = app.form(waiting({}));
+    release();
+    await vi.waitFor(() => expect(rowsAhead(app)).toBe(0));
+    await pause(20);
+    expect(idle).toBe(false);
+
+    releaseWait();
+    await later;
+    await app.whenIdle();
+    expect(idle).toBe(true);
   });
 
   test("rows started ahead of a fault stop at their next line", async () => {
