@@ -539,7 +539,7 @@ describe("checkBatchedQuery", () => {
     async _good(inputs: readonly { id: string }[]) {
       return inputs.map(({ id }) => {
         const title = this.titles.get(id);
-        return title === undefined ? [] : [{ title, id: new Id(id) }];
+        return title === undefined ? [] : [{ title, id: { value: id } }];
       });
     }
 
@@ -605,6 +605,10 @@ describe("checkBatchedQuery", () => {
       return inputs.map(() => new Set([row]));
     }
 
+    async _ids(inputs: readonly { id: string }[]) {
+      return inputs.map(({ id }) => [{ id: new Id(id) }]);
+    }
+
     async _secrets(inputs: readonly { id: string }[]) {
       return inputs.map(({ id }) => [new Secret(this.titles.get(id) ?? "")]);
     }
@@ -628,7 +632,7 @@ describe("checkBatchedQuery", () => {
   }
   const samples = [{ id: "a" }, { id: "b" }, { id: "missing" }];
 
-  test("a list form that keeps the law passes, with fresh identifier objects in its rows", async () => {
+  test("a list form that keeps the law passes, with fresh records in its rows", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_good", samples)).resolves.toBeUndefined();
   });
 
@@ -689,6 +693,9 @@ describe("checkBatchedQuery", () => {
   test("answers it cannot compare fail, naming their class", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_secrets", samples)).rejects.toThrow(
       "checkBatchedQuery: cannot compare answers of class Secret",
+    );
+    await expect(checkBatchedQuery(new Shelf(), "_ids", samples)).rejects.toThrow(
+      "checkBatchedQuery: cannot compare answers of class Id",
     );
   });
 

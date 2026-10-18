@@ -68,12 +68,10 @@ function sameEntries(left: Keyed, right: Keyed, seen: Map<object, object>): bool
 
 /**
  * Whether two answers carry the same data. Records and arrays compare by
- * content, dates by time, maps and sets by entries, binary data by its bytes,
- * and other objects by their
- * prototype and own properties, so a fresh identifier object equals another
- * with the same value. An object of a class that keeps no own properties, such
- * as a promise or one with only private fields, cannot be compared, so the
- * check fails on it rather than passing it.
+ * content, dates by time, maps and sets by entries, and binary data by its
+ * bytes. Any other object, such as a class instance, a regular expression or a
+ * promise, may keep data the comparison cannot see, so the check fails on it
+ * rather than passing it.
  */
 function sameData(left: unknown, right: unknown, seen = new Map<object, object>()): boolean {
   if (Object.is(left, right)) return true;
@@ -98,14 +96,14 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, object>(
   }
   const keyed = left instanceof Map || left instanceof Set;
   if (keyed && !sameEntries(left, right as Keyed, seen)) return false;
-  const keys = Reflect.ownKeys(left);
   const prototype = Object.getPrototypeOf(left);
-  if (!keyed && keys.length === 0 && prototype !== Object.prototype && prototype !== null) {
+  if (!keyed && prototype !== Object.prototype && prototype !== null) {
     throw new Error(
-      `checkBatchedQuery: cannot compare answers of class ${className(left)}, ` +
-        "which keeps no data in own properties; answer with records, arrays, dates, maps or sets.",
+      `checkBatchedQuery: cannot compare answers of class ${className(left)}; ` +
+        "answer with records, arrays, dates, maps, sets or binary data.",
     );
   }
+  const keys = Reflect.ownKeys(left);
   if (keys.length !== Reflect.ownKeys(right).length) return false;
   return keys.every(
     (key) =>
