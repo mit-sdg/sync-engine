@@ -124,7 +124,7 @@ type QueryNameOf<C extends ConceptClass> = Extract<keyof InstanceType<C>, `_${st
 export interface ConceptRegistration<
   C extends ConceptClass,
   F extends Record<string, FloorFactory<C>> = Record<never, never>,
-  B extends readonly string[] = readonly string[],
+  B extends readonly string[] = readonly [],
 > {
   class: C;
   /** Markdown containing the concept's parsed authored contract. */
@@ -134,7 +134,9 @@ export interface ConceptRegistration<
   /**
    * Queries the class implements in list form: each takes a list of inputs and
    * returns one answer per input, in the same order. Readers still ask them
-   * with one input; the engine groups reads that are pending together.
+   * with one input. Each call receives a frozen list of inputs, copied as plain
+   * data. The engine may group reads issued together into one call; see
+   * `groupBatchedQueries` for when it currently does.
    */
   batched?: B;
   floors?: F;
@@ -229,7 +231,7 @@ function checkAgainstClass(cls: ConceptClass, spec: ConceptSpec): void {
 function checkRefusals(
   cls: ConceptClass,
   spec: ConceptSpec,
-  registration: ConceptRegistration<ConceptClass, Record<string, FloorFactory>>,
+  registration: ConceptRegistration<ConceptClass, Record<string, FloorFactory>, readonly string[]>,
 ): void {
   const fail = (what: string): never => {
     throw new Error(`registerConcept(${cls.name}): ${what}`);
@@ -260,13 +262,8 @@ function checkRefusals(
 export function registerConcept<
   C extends ConceptClass,
   const F extends Record<string, FloorFactory<C>> = Record<never, never>,
-  const B extends readonly string[] = readonly [],
->(
-  // Literal names must be the class's queries; a registration typed with
-  // `ConceptRegistration<C>` names no batched queries to its types.
-  registration: ConceptRegistration<C, F, B> &
-    (string extends B[number] ? unknown : { batched?: readonly QueryNameOf<C>[] }),
-): RegisteredConcept<C, F, B> {
+  const B extends readonly QueryNameOf<C>[] = readonly [],
+>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B> {
   if (typeof registration.class !== "function" || registration.class.prototype === undefined) {
     throw new Error("registerConcept: class must be a constructable concept class.");
   }
@@ -281,7 +278,11 @@ export function registerConcept<
   checkRefusals(
     registration.class,
     specification,
-    registration as ConceptRegistration<ConceptClass, Record<string, FloorFactory>>,
+    registration as ConceptRegistration<
+      ConceptClass,
+      Record<string, FloorFactory>,
+      readonly string[]
+    >,
   );
   for (const query of registration.batched ?? []) {
     if (!specification.queries.some(({ name }) => name === query)) {

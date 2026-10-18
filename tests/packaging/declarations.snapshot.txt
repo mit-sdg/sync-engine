@@ -314,8 +314,8 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     concurrentReads?: ConcurrentReads;
     /**
      * Whether a batched query groups the reads pending for it into one call of its
-     * list form. Grouping happens only with a query cache and `concurrentReads`
-     * reading more than one row at once.
+     * list form. Grouping currently happens only with a query cache and
+     * `concurrentReads.rowsAtOnce` above 1.
      * `false` calls the list form with a list of one for every read. Defaults to `true`.
      */
     groupBatchedQueries?: boolean;
@@ -437,7 +437,7 @@ export declare function conceptFloor<V extends AnyConceptSelection>(selection: V
 type FloorFactory<C extends ConceptClass = ConceptClass> = (context: never, name: string) => ConceptImplementation<C>;
 /** The names of a concept class's queries. */
 type QueryNameOf<C extends ConceptClass> = Extract<keyof InstanceType<C>, `_${string}`>;
-export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly string[]> {
+export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly []> {
     class: C;
     /** Markdown containing the concept's parsed authored contract. */
     spec: string;
@@ -446,7 +446,9 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
     /**
      * Queries the class implements in list form: each takes a list of inputs and
      * returns one answer per input, in the same order. Readers still ask them
-     * with one input; the engine groups reads that are pending together.
+     * with one input. Each call receives a frozen list of inputs, copied as plain
+     * data. The engine may group reads issued together into one call; see
+     * `groupBatchedQueries` for when it currently does.
      */
     batched?: B;
     floors?: F;
@@ -458,9 +460,7 @@ export type RegisteredConcept<C extends ConceptClass, F extends Record<string, F
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
-export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly string[] = readonly []>(registration: ConceptRegistration<C, F, B> & (string extends B[number] ? unknown : {
-    batched?: readonly QueryNameOf<C>[];
-})): RegisteredConcept<C, F, B>;
+export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly QueryNameOf<C>[] = readonly []>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B>;
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
 export type AnyRegisteredConcept = AnyRegistration;
 type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;

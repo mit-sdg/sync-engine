@@ -257,8 +257,8 @@ export interface AssembleBaseOptions<
   concurrentReads?: ConcurrentReads;
   /**
    * Whether a batched query groups the reads pending for it into one call of its
-   * list form. Grouping happens only with a query cache and `concurrentReads`
-   * reading more than one row at once.
+   * list form. Grouping currently happens only with a query cache and
+   * `concurrentReads.rowsAtOnce` above 1.
    * `false` calls the list form with a list of one for every read. Defaults to `true`.
    */
   groupBatchedQueries?: boolean;

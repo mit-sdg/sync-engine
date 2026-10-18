@@ -363,6 +363,16 @@ function annotatedRegistrationContract(spec: string): void {
   const wrap = <C extends new () => object>(registration: ConceptRegistration<C>) =>
     registerConcept(registration);
   void wrap;
+  const withBatched: ConceptRegistration<typeof BatchedShelf> = {
+    class: BatchedShelf,
+    spec,
+    // @ts-expect-error A registration typed with the public descriptor names no batched queries.
+    batched: ["_title"],
+  };
+  void withBatched;
+  const names: string[] = ["_title"];
+  // @ts-expect-error Batched names are literals, so the types can follow them.
+  registerConcept({ class: BatchedShelf, spec, batched: names });
 }
 void annotatedRegistrationContract;
 
