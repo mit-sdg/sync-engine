@@ -308,8 +308,10 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
      * Read the rows of a line or selection together, consumed in row order, so
      * independent reads overlap. Answers, their order, the reported fault, and
      * row-limit breaches are those of reading one after another, provided reads
-     * are free of side effects. Unset, every line reads its rows one after another.
-     * Experimental: it may change or be removed in any minor release.
+     * are free of side effects and no action changes the state being read
+     * meanwhile. Unset, every line reads its rows one after another.
+     * `concurrentReads` is experimental: it may change or be removed in any minor
+     * release.
      */
     concurrentReads?: ConcurrentReads;
     /**
@@ -454,16 +456,16 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
     floors?: F;
 }
 declare const RegistrationBrand: unique symbol;
-export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly string[]> = ConceptRegistration<C, F, B> & {
+export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly []> = ConceptRegistration<C, F, B> & {
     readonly [RegistrationBrand]: true;
     /** The machine-readable authored contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
 export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly QueryNameOf<C>[] = readonly []>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B>;
-type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
+type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>, readonly string[]>;
 export type AnyRegisteredConcept = AnyRegistration;
-type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
+type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F, readonly string[]> ? C : never;
 type BatchedOfRegistration<R> = R extends {
     readonly batched?: infer B;
 } ? B : readonly [];
@@ -483,19 +485,19 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
 type VocabularyOf<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> = DeclaredVocabulary<EntriesOf<S>, Computations>;
 export type ConceptClassesOfSet<S extends Record<string, AnyRegistration>> = ConceptClassesOf<EntriesOf<S>>;
 type DeclaredFloorNames<S extends Record<string, AnyRegistration>> = {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? keyof F : never;
+    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F, readonly string[]> ? keyof F : never;
 }[keyof S] & string;
 type MissingRegistrations<S extends Record<string, AnyRegistration>, Floor extends string> = {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? never : Name : Name;
+    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F, readonly string[]> ? Floor extends keyof F ? never : Name : Name;
 }[keyof S];
 type CompleteFloorName<S extends Record<string, AnyRegistration>, Floor extends string> = Floor extends unknown ? [MissingRegistrations<S, Floor>] extends [never] ? Floor : never : never;
 type CompleteFloorNames<S extends Record<string, AnyRegistration>> = CompleteFloorName<S, DeclaredFloorNames<S>>;
 type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Intersection) => void ? Intersection : never;
 type FloorContext<S extends Record<string, AnyRegistration>, Floor extends CompleteFloorNames<S>> = UnionToIntersection<{
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? Parameters<F[Floor]>[0] : never : never;
+    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F, readonly string[]> ? Floor extends keyof F ? Parameters<F[Floor]>[0] : never : never;
 }[keyof S]>;
 type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> = {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F> ? [] extends ConstructorParameters<C> ? never : Name : Name;
+    [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F, readonly string[]> ? [] extends ConstructorParameters<C> ? never : Name : Name;
 }[keyof S];
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> {
     concepts: VocabularyOf<S, Computations>["concepts"];
@@ -4841,7 +4843,10 @@ export declare class RowsAhead {
     take(): boolean;
     give(): void;
 }
-/** The `concurrentReads` assembly option. Experimental: it may change or be removed in any minor release. */
+/**
+ * The `concurrentReads` assembly option. `concurrentReads` is experimental: it
+ * may change or be removed in any minor release.
+ */
 export interface ConcurrentReads {
     /** Rows of one line or selection evaluated at once, the row being used included; 1 reads them one after another. */
     readonly rowsAtOnce: number;

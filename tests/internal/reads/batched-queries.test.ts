@@ -516,6 +516,7 @@ describe("checkBatchedQuery", () => {
   class Id {
     constructor(readonly value: string) {}
   }
+  class Tally extends Map<string, number> {}
   class Secret {
     readonly #title: string;
     constructor(title: string) {
@@ -603,6 +604,10 @@ describe("checkBatchedQuery", () => {
     async _sharedInSets(inputs: readonly { id: string }[]) {
       const row = { title: "same" };
       return inputs.map(() => new Set([row]));
+    }
+
+    async _tally(inputs: readonly { id: string }[]) {
+      return inputs.map(({ id }) => new Tally([[id, 1]]));
     }
 
     async _ids(inputs: readonly { id: string }[]) {
@@ -696,6 +701,9 @@ describe("checkBatchedQuery", () => {
     );
     await expect(checkBatchedQuery(new Shelf(), "_ids", samples)).rejects.toThrow(
       "checkBatchedQuery: cannot compare answers of class Id",
+    );
+    await expect(checkBatchedQuery(new Shelf(), "_tally", samples)).rejects.toThrow(
+      "checkBatchedQuery: cannot compare answers of class Tally",
     );
   });
 

@@ -251,8 +251,10 @@ export interface AssembleBaseOptions<
    * Read the rows of a line or selection together, consumed in row order, so
    * independent reads overlap. Answers, their order, the reported fault, and
    * row-limit breaches are those of reading one after another, provided reads
-   * are free of side effects. Unset, every line reads its rows one after another.
-   * Experimental: it may change or be removed in any minor release.
+   * are free of side effects and no action changes the state being read
+   * meanwhile. Unset, every line reads its rows one after another.
+   * `concurrentReads` is experimental: it may change or be removed in any minor
+   * release.
    */
   concurrentReads?: ConcurrentReads;
   /**

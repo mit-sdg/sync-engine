@@ -370,6 +370,13 @@ function annotatedRegistrationContract(spec: string): void {
     batched: ["_title"],
   };
   void withBatched;
+  // @ts-expect-error A registration written out as RegisteredConcept<C> names no batched queries.
+  const widened: RegisteredConcept<typeof BatchedShelf> = registerConcept({
+    class: BatchedShelf,
+    spec,
+    batched: ["_title"],
+  });
+  void widened;
   const names: string[] = ["_title"];
   // @ts-expect-error Batched names are literals, so the types can follow them.
   registerConcept({ class: BatchedShelf, spec, batched: names });

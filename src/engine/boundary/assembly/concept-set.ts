@@ -147,7 +147,7 @@ declare const RegistrationBrand: unique symbol;
 export type RegisteredConcept<
   C extends ConceptClass,
   F extends Record<string, FloorFactory<C>> = Record<never, never>,
-  B extends readonly string[] = readonly string[],
+  B extends readonly string[] = readonly [],
 > = ConceptRegistration<C, F, B> & {
   readonly [RegistrationBrand]: true;
   /** The machine-readable authored contract extracted from the registration's specification. */
@@ -300,9 +300,14 @@ export function registerConcept<
   return { ...registration, specification } as RegisteredConcept<C, F, B>;
 }
 
-type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
+type AnyRegistration = RegisteredConcept<
+  ConceptClass,
+  Record<string, FloorFactory>,
+  readonly string[]
+>;
 export type AnyRegisteredConcept = AnyRegistration;
-type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
+type ClassOfRegistration<R> =
+  R extends RegisteredConcept<infer C, infer _F, readonly string[]> ? C : never;
 type BatchedOfRegistration<R> = R extends { readonly batched?: infer B } ? B : readonly [];
 /** The queries each registration of a set names under `batched`. */
 export type BatchedQueriesOfSet<S extends Record<string, AnyRegistration>> = BatchedQueryNames<
@@ -328,11 +333,13 @@ export type ConceptClassesOfSet<S extends Record<string, AnyRegistration>> = Con
   EntriesOf<S>
 >;
 type DeclaredFloorNames<S extends Record<string, AnyRegistration>> = {
-  [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? keyof F : never;
+  [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F, readonly string[]>
+    ? keyof F
+    : never;
 }[keyof S] &
   string;
 type MissingRegistrations<S extends Record<string, AnyRegistration>, Floor extends string> = {
-  [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F>
+  [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F, readonly string[]>
     ? Floor extends keyof F
       ? never
       : Name
@@ -360,7 +367,7 @@ type FloorContext<
   Floor extends CompleteFloorNames<S>,
 > = UnionToIntersection<
   {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F>
+    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F, readonly string[]>
       ? Floor extends keyof F
         ? Parameters<F[Floor]>[0]
         : never
@@ -369,7 +376,7 @@ type FloorContext<
 >;
 
 type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> = {
-  [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F>
+  [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F, readonly string[]>
     ? [] extends ConstructorParameters<C>
       ? never
       : Name

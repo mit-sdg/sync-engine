@@ -142,15 +142,16 @@ one answer. Each call receives a frozen list of inputs, copied as plain data.
 The engine may group reads issued together into one call; it currently does so
 only with a query cache and `concurrentReads.rowsAtOnce` above 1
 (`concurrentReads` is experimental; see the
-[support policy](../../../SUPPORT.md#stable-compatibility)). See
-[batched queries](../reference/semantics.md#batched-queries) for the details.
-If a grouped call throws, each of its inputs is read again alone, all at once,
+[support policy](../../../SUPPORT.md#stable-compatibility)). If a grouped call
+throws, each of its inputs is read again alone, all at once,
 as without grouping. Return exactly one answer per input, in input order, even
 for duplicates and for inputs with nothing stored; a query that answers many
 rows answers each input with its own list. Build fresh objects for every input
 instead of handing two inputs one object. Copy the list before sorting it. Code
 that holds the raw class instance, such as your own tests, calls the method with
 a list. A stub or spy that replaces a batched method receives the list too.
+See [batched queries](../reference/semantics.md#batched-queries) for the
+details.
 
 Write the `batched` names literally, as a list of strings in the
 `registerConcept` call, because `sync-engine check` reads them from the source.

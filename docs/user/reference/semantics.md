@@ -897,9 +897,9 @@ and uses the answers in row order:
 - A fault is reported as soon as its row is used. Rows started ahead are then
   abandoned: a read already sent runs to completion and keeps its place in the
   count of rows ahead until it settles, and the row stops before reading
-  another. `whenIdle()`, `beginDrain()`, and the `drain-state` event with
-  `state: "idle"` wait for every row started ahead to settle, abandoned rows
-  included.
+  another. `whenIdle()` and `beginDrain()` resolve, and the `drain-state`
+  event with `state: "idle"` is emitted, only after every row started ahead
+  settles, abandoned rows included.
 
 Lines of one `where` block still run in order.
 

@@ -85,7 +85,8 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, object>(
   if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
     return sameBytes(left, right as ArrayBufferView | ArrayBuffer);
   }
-  if (Array.isArray(left)) {
+  const prototype = Object.getPrototypeOf(left);
+  if (Array.isArray(left) && prototype === Array.prototype) {
     const other = right as unknown[];
     if (left.length !== other.length) return false;
     for (let index = 0; index < left.length; index += 1) {
@@ -94,9 +95,8 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, object>(
     }
     return true;
   }
-  const keyed = left instanceof Map || left instanceof Set;
-  if (keyed && !sameEntries(left, right as Keyed, seen)) return false;
-  const prototype = Object.getPrototypeOf(left);
+  const keyed = prototype === Map.prototype || prototype === Set.prototype;
+  if (keyed && !sameEntries(left as Keyed, right as Keyed, seen)) return false;
   if (!keyed && prototype !== Object.prototype && prototype !== null) {
     throw new Error(
       `checkBatchedQuery: cannot compare answers of class ${className(left)}; ` +
