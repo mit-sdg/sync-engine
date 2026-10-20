@@ -87,15 +87,31 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, Set<obje
   );
 }
 
-/** Every object an answer reaches, including the buffer behind binary data. */
+/** Every object an answer reaches. */
 function objectsIn(value: unknown, found = new Set<object>()): Set<object> {
   if (value === null || typeof value !== "object" || found.has(value)) return found;
   found.add(value);
-  if (ArrayBuffer.isView(value)) objectsIn(value.buffer, found);
   for (const key of Reflect.ownKeys(value)) {
     objectsIn((value as Record<PropertyKey, unknown>)[key], found);
   }
   return found;
+}
+
+/**
+ * The bytes a binary object can reach, as a buffer and a range in it. Views
+ * that share a buffer without overlapping, as small Node `Buffer`s from one
+ * pool do, reach different bytes.
+ */
+function bytesReached(value: object): { buffer: object; start: number; end: number } | undefined {
+  if (ArrayBuffer.isView(value)) {
+    return {
+      buffer: value.buffer,
+      start: value.byteOffset,
+      end: value.byteOffset + value.byteLength,
+    };
+  }
+  if (value instanceof ArrayBuffer) return { buffer: value, start: 0, end: value.byteLength };
+  return undefined;
 }
 
 function show(value: unknown): string {
@@ -175,6 +191,11 @@ export async function checkBatchedQuery(
     // Answers to equal inputs may share objects, as a cache hit would; answers
     // to different inputs may not.
     const owner = new Map<object, number>();
+    const ranges = new Map<object, { start: number; end: number; index: number }[]>();
+    const shared = (other: number, index: number) =>
+      fail(
+        `in ${label}, the answers for ${show(inputs[other])} and ${show(inputs[index])} share an object`,
+      );
     for (let position = 0; position < answers.length; position += 1) {
       const index = order[position];
       if (!sameData(answers[position], alone[index])) {
@@ -186,11 +207,20 @@ export async function checkBatchedQuery(
       for (const object of objectsIn(answers[position])) {
         const other = owner.get(object);
         if (other !== undefined && !structurallyEqual(inputs[other], inputs[index])) {
-          fail(
-            `in ${label}, the answers for ${show(inputs[other])} and ${show(inputs[index])} share an object`,
-          );
+          shared(other, index);
         }
         owner.set(object, index);
+        const reached = bytesReached(object);
+        if (reached === undefined) continue;
+        const known = ranges.get(reached.buffer) ?? [];
+        for (const range of known) {
+          const overlaps = range.start < reached.end && reached.start < range.end;
+          if (overlaps && !structurallyEqual(inputs[range.index], inputs[index])) {
+            shared(range.index, index);
+          }
+        }
+        known.push({ start: reached.start, end: reached.end, index });
+        ranges.set(reached.buffer, known);
       }
     }
   }

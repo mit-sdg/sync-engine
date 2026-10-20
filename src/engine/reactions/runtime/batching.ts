@@ -120,8 +120,14 @@ export function batchedQuery(
   const flush = (group: PendingRead[]): void => {
     // A group of more than one is called with copies, kept apart from the
     // inputs a read again alone would pass.
-    const inputs =
-      group.length === 1 ? [group[0].input] : group.map(({ input }) => snapshotValue(input));
+    let inputs: unknown[];
+    try {
+      inputs =
+        group.length === 1 ? [group[0].input] : group.map(({ input }) => snapshotValue(input));
+    } catch (error) {
+      readEachAlone(group, error);
+      return;
+    }
     call(inputs, group.length).then(
       (answers) => group.forEach((read, index) => read.resolve(answers[index])),
       (error: unknown) => {

@@ -498,6 +498,34 @@ describe("the grouping adapter", () => {
     }
   });
 
+  test("an input whose second copy throws is read again alone, not thrown from the flush", async () => {
+    // A class instance is kept, not copied, so each copy asks for its prototype again.
+    class Key {
+      constructor(readonly id: string) {}
+    }
+    let asks = 0;
+    const odd = new Proxy(new Key("b"), {
+      getPrototypeOf(target) {
+        asks += 1;
+        if (asks === 2) throw new Error("the prototype cannot be read twice");
+        return Reflect.getPrototypeOf(target);
+      },
+    });
+    const echo = async (inputs: readonly unknown[]) =>
+      inputs.map((input) => ({ id: (input as Key).id }));
+    const read = batchedQuery(echo, "Echo._echo", true);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    try {
+      const answers = await Promise.all([read(new Key("a")), read(odd)]);
+
+      expect(answers).toEqual([{ id: "a" }, { id: "b" }]);
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   test("a group's call that changes its inputs before failing leaves the reads again unchanged", async () => {
     const seen: unknown[] = [];
     let calls = 0;
@@ -574,7 +602,7 @@ describe("registration", () => {
     }
     const declare = (batched: unknown) =>
       vocabulary({
-        concepts: { Plain: { class: Plain, batched: batched as string[] } },
+        concepts: { Plain: { class: Plain, batched: batched as never } },
         computations: {},
       });
 
@@ -796,8 +824,15 @@ describe("checkBatchedQuery", () => {
     }
 
     async _sharedBuffer(inputs: readonly { id: string }[]) {
-      const buffer = new ArrayBuffer(inputs.length * 2);
-      return inputs.map((_, index) => ({ data: new Uint8Array(buffer, index * 2, 2) }));
+      // Separate views of the same bytes.
+      const buffer = new ArrayBuffer(2);
+      return inputs.map(() => ({ data: new Uint8Array(buffer, 0, 2) }));
+    }
+
+    async _pooled(inputs: readonly { id: string }[]) {
+      // Separate views of one buffer, as small Node Buffers from one pool are.
+      const buffer = new ArrayBuffer(inputs.length * 2 + 2);
+      return inputs.map((_, index) => ({ data: new Uint8Array(buffer, index * 2 + 2, 2) }));
     }
 
     async _tally(inputs: readonly { id: string }[]) {
@@ -851,10 +886,14 @@ describe("checkBatchedQuery", () => {
     await expect(checkBatchedQuery(new Shelf(), "_cycles", samples)).resolves.toBeUndefined();
   });
 
-  test("binary answers for different inputs that share one buffer fail", async () => {
+  test("binary answers for different inputs that share bytes fail", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_sharedBuffer", samples)).rejects.toThrow(
       "share an object",
     );
+  });
+
+  test("binary answers that share a buffer without sharing bytes pass", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_pooled", samples)).resolves.toBeUndefined();
   });
 
   test("a sample that cannot be shown as JSON still has its law checked", async () => {
