@@ -385,9 +385,29 @@ export interface WhenBuilderWithFunctionWhere {
  * names under `batched` are read this way.
  */
 export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A
-  ? [P] extends [readonly (infer I)[]]
-    ? Awaited<A> extends readonly (infer Each)[]
-      ? (input: I) => Promise<Each>
+  ? [ListInput<Exclude<P, undefined>>] extends [never]
+    ? F
+    : Awaited<A> extends readonly (infer Each)[]
+      ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each>
       : F
-    : F
   : F;
+
+/**
+ * The input of a list parameter, as `sync-engine check` reads one: an array,
+ * optional or with a default included, but not a tuple or a union of arrays.
+ */
+type ListInput<P> = [P] extends [infer List extends readonly unknown[]]
+  ? number extends List["length"]
+    ? [List] extends [readonly (infer I)[]]
+      ? IsOneArray<List, I>
+      : never
+    : never
+  : never;
+
+type IsOneArray<List, I> = [List] extends [readonly I[]]
+  ? [readonly I[]] extends [List]
+    ? I
+    : [I[]] extends [List]
+      ? I
+      : never
+  : never;

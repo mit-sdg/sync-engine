@@ -383,6 +383,29 @@ function annotatedRegistrationContract(spec: string): void {
 }
 void annotatedRegistrationContract;
 
+class DefaultedShelf {
+  async _title(inputs: readonly { id: string }[] = []): Promise<{ title: string }[]> {
+    return inputs.map(({ id }) => ({ title: id }));
+  }
+
+  async _book(inputs?: { id: string }[]): Promise<{ title: string }[]> {
+    return (inputs ?? []).map(({ id }) => ({ title: id }));
+  }
+}
+
+function defaultedBatchedContract(): void {
+  const shelf = vocabulary({
+    concepts: { Shelf: { class: DefaultedShelf, batched: ["_title", "_book"] } },
+    computations: {},
+  }).concepts.Shelf;
+  // A list parameter with a default, or optional, is still asked with one input.
+  shelf._title({ id: "a" }).is({ title: "a" });
+  shelf._book({ id: "a" }).is({ title: "a" });
+  // @ts-expect-error A batched query with a defaulted list is never asked with a list.
+  shelf._title([{ id: "a" }]);
+}
+void defaultedBatchedContract;
+
 function wideBatchedContract(
   names: ("_title" | "_book")[],
   either: ["_title"] | ["_book"],
