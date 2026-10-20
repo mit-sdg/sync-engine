@@ -15,7 +15,8 @@ follow the [support policy](SUPPORT.md), and review the
   consumes them in row order. `rowsAtOnce` rows are evaluated at once, the
   consumed row included; at most `maxRowsAhead` rows (64 when unset) are started
   ahead at once across the assembly, and an evaluation that finds that count
-  spent reads its next row when it reaches it. Answers, their order, the
+  spent reads its next row when it reaches it; when every slot is held, slots
+  held past the request deadline are taken back. Answers, their order, the
   reported fault, and recorded row-limit breaches are those of reading one
   after another, given side-effect-free reads and no action changing the state
   being read meanwhile. A fault is reported as soon as its row is consumed;
