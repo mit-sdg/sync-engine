@@ -4,6 +4,7 @@
  * the engine groups the reads pending together into one call of the list form.
  */
 import { describe, expect, test, vi } from "vite-plus/test";
+import type { EventEmitter } from "node:events";
 import { vocabulary } from "@sync-engine/advanced";
 import { vocabularyClasses } from "@sync-engine/internal/reactions/authoring/refs";
 import { each, former } from "@sync-engine/language";
@@ -158,24 +159,33 @@ describe("grouped reads", () => {
     },
   );
 
-  test("an answer list of the wrong length fails every read in the group, naming the query", async () => {
+  test("an answer list of the wrong length is read again alone, naming the query", async () => {
     const { words } = library(4, { shortBy: 1 });
     const app = application(words, {}, { concurrentReads: { rowsAtOnce: 16 } });
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-    const reads = await Promise.allSettled([
-      app.concepts.Library._book({ book: 1 }),
-      app.concepts.Library._book({ book: 2 }),
-    ]);
+    try {
+      const reads = await Promise.allSettled([
+        app.concepts.Library._book({ book: 1 }),
+        app.concepts.Library._book({ book: 2 }),
+      ]);
 
-    for (const read of reads) {
-      expect(read).toMatchObject({
-        status: "rejected",
-        reason: {
-          message: expect.stringContaining(
-            "Batched query Library._book returned 1 answer for 2 inputs",
-          ),
-        },
-      });
+      for (const read of reads) {
+        expect(read).toMatchObject({
+          status: "rejected",
+          reason: {
+            message: expect.stringContaining(
+              "Batched query Library._book returned 0 answers for 1 input",
+            ),
+          },
+        });
+      }
+      expect(warn).toHaveBeenCalledWith(
+        "Batched query Library._book failed for 2 inputs; reading each alone.",
+        expect.anything(),
+      );
+    } finally {
+      warn.mockRestore();
     }
   });
 });
@@ -383,23 +393,134 @@ describe("the grouping adapter", () => {
     );
   });
 
-  test("an answer list with an empty position fails every read in the group", async () => {
-    const holed = async () => {
-      // Positions 1 and 3 answered; position 2 never set.
+  test("a list form that drops an input fails only that input's read", async () => {
+    const dropping = async (inputs: readonly unknown[]) =>
+      inputs.filter((input) => input !== 2).map((input) => ({ title: `title ${String(input)}` }));
+    const read = batchedQuery(dropping, "Echo._echo", true);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    try {
+      const reads = await Promise.allSettled([read(1), read(2), read(3)]);
+
+      expect(reads).toEqual([
+        { status: "fulfilled", value: { title: "title 1" } },
+        {
+          status: "rejected",
+          reason: expect.objectContaining({
+            message: expect.stringContaining("returned 0 answers for 1 input"),
+          }),
+        },
+        { status: "fulfilled", value: { title: "title 3" } },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("an answer list with an empty position is read again alone", async () => {
+    const holed = async (inputs: readonly unknown[]) => {
       const answers: unknown[] = [];
-      answers[0] = { title: "one" };
-      answers[2] = { title: "three" };
+      inputs.forEach((input, index) => {
+        if (input !== 2) answers[index] = { title: `title ${String(input)}` };
+      });
+      answers.length = inputs.length;
       return answers;
     };
     const read = batchedQuery(holed, "Echo._echo", true);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-    const reads = await Promise.allSettled([read(1), read(2), read(3)]);
+    try {
+      const reads = await Promise.allSettled([read(1), read(2), read(3)]);
 
-    for (const settled of reads) {
-      expect(settled).toMatchObject({
-        status: "rejected",
-        reason: { message: expect.stringContaining("left answer 2 of 3 inputs empty") },
+      expect(reads.map(({ status }) => status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
+      expect(reads[1]).toMatchObject({
+        reason: { message: expect.stringContaining("left answer 1 of 1 input empty") },
       });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("a malformed answer list's promises never reject unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    const processEvents: EventEmitter = process;
+    processEvents.on("unhandledRejection", record);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const dropping = (inputs: readonly unknown[]) =>
+        inputs
+          .filter((input) => input !== 2)
+          .map(async (input) => {
+            if (input === 3) throw new Error("element 3 fails");
+            return { title: `title ${String(input)}` };
+          });
+      const read = batchedQuery(dropping, "Echo._echo", true);
+
+      const reads = await Promise.allSettled([read(1), read(2), read(3)]);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(reads.map(({ status }) => status)).toEqual(["fulfilled", "rejected", "rejected"]);
+      expect(unhandled).toEqual([]);
+    } finally {
+      processEvents.off("unhandledRejection", record);
+      warn.mockRestore();
+    }
+  });
+
+  test("an answer that throws as it is read fails only its own read", async () => {
+    const proxied = async (inputs: readonly unknown[]) =>
+      new Proxy(
+        inputs.map((input) => ({ title: `title ${String(input)}` })),
+        {
+          get(target, key, receiver) {
+            if (key === String(inputs.indexOf(2))) throw new Error("answer 2 cannot be read");
+            return Reflect.get(target, key, receiver);
+          },
+        },
+      );
+    const read = batchedQuery(proxied, "Echo._echo", true);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    try {
+      const reads = await Promise.allSettled([read(1), read(2), read(3)]);
+
+      expect(reads).toEqual([
+        { status: "fulfilled", value: { title: "title 1" } },
+        {
+          status: "rejected",
+          reason: expect.objectContaining({ message: "answer 2 cannot be read" }),
+        },
+        { status: "fulfilled", value: { title: "title 3" } },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("a group's call that changes its inputs before failing leaves the reads again unchanged", async () => {
+    const seen: unknown[] = [];
+    let calls = 0;
+    const tidying = async (inputs: readonly { tags: string[] }[]) => {
+      calls += 1;
+      for (const input of inputs) input.tags.push("default");
+      if (calls === 1) throw new Error("the group fails");
+      seen.push(...inputs.map(({ tags }) => [...tags]));
+      return inputs.map(({ tags }) => ({ tags: tags.join(",") }));
+    };
+    const read = batchedQuery(
+      tidying as (inputs: readonly unknown[]) => unknown,
+      "Echo._echo",
+      true,
+    );
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    try {
+      const answers = await Promise.all([read({ tags: ["a"] }), read({ tags: ["b"] })]);
+
+      expect(answers).toEqual([{ tags: "a,default" }, { tags: "b,default" }]);
+    } finally {
+      warn.mockRestore();
     }
   });
 
@@ -488,6 +609,68 @@ describe("registration", () => {
 
     expect(await app.form(listing({}))).toEqual(titles(4));
     expect(spy).toHaveBeenCalledOnce();
+  });
+
+  test("one method serving a batched and an unbatched name is called in each name's form", async () => {
+    class SharedConcept {
+      static readonly queries = { _plain: "one", _batch: "one" } as const;
+      _plain({ id }: { id: string }) {
+        return { id };
+      }
+      _batch(inputs: readonly { id: string }[]) {
+        return inputs.map(({ id }) => ({ id }));
+      }
+    }
+    const words = vocabulary({
+      concepts: { Shared: { class: SharedConcept, batched: ["_batch"] } },
+      computations: {},
+    });
+    for (const first of ["_plain", "_batch"] as const) {
+      const received: unknown[] = [];
+      const handler = (input: unknown) => {
+        received.push(input);
+        return Array.isArray(input) ? input.map(({ id }) => ({ id })) : input;
+      };
+      const app = assemble({
+        vocabulary: words,
+        composition: {},
+        retention: { window: 0 },
+        instances: { Shared: { _plain: handler, _batch: handler } as never },
+      });
+      const ask = (name: "_plain" | "_batch") => app.concepts.Shared[name]({ id: name });
+      if (first === "_plain") {
+        await ask("_plain");
+        await ask("_batch");
+      } else {
+        await ask("_batch");
+        await ask("_plain");
+      }
+      expect(received).toContainEqual({ id: "_plain" });
+      expect(received).toContainEqual([{ id: "_batch" }]);
+    }
+  });
+
+  test("assembly accepts an arrow list form whose body builds a record", async () => {
+    const { words, listing } = library(2);
+    const echo = (value: { inputs: readonly { book: number }[] }) =>
+      value.inputs.map(({ book }) => [{ title: `title ${book}` }]);
+    const arrow = {
+      lists: [] as number[][],
+      _shelf: () => [{ book: 0 }, { book: 1 }],
+      // Built from source, since the formatter would wrap a lone arrow parameter in parentheses.
+      _book: new Function("echo", "return async inputs => echo({ inputs })")(echo) as (
+        inputs: readonly { book: number }[],
+      ) => Promise<{ title: string }[][]>,
+      count: () => ({ found: 0 }),
+    };
+    const app = assemble({
+      vocabulary: words,
+      composition: { listing },
+      instances: { Library: arrow as never },
+      retention: { window: 0 },
+    });
+
+    expect(await app.form(listing({}))).toEqual(titles(2));
   });
 
   test("assembly rejects a selected implementation whose batched query takes one input", () => {

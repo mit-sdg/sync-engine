@@ -20,6 +20,7 @@ describe("concept instrumentation", () => {
     const state: InstrumentationState = {
       actions,
       boundActionsByConcept: new WeakMap(),
+      boundQueriesByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
       scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),
@@ -45,6 +46,7 @@ describe("concept instrumentation", () => {
     const state: InstrumentationState = {
       actions,
       boundActionsByConcept: new WeakMap(),
+      boundQueriesByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
       scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),
@@ -97,6 +99,7 @@ describe("concept instrumentation", () => {
     const state: InstrumentationState = {
       actions,
       boundActionsByConcept: new WeakMap(),
+      boundQueriesByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
       scheduler: new ActionScheduler(),
       rawConceptsByInstrumented: new WeakMap(),

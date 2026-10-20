@@ -69,6 +69,11 @@ export type InstrumentedConcept<T extends object, Batched extends PropertyKey = 
 export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
+  /**
+   * Each query's wrapper, by name and then method: whether a query is batched
+   * goes by its name, so one method serving two names gets a wrapper for each.
+   */
+  boundQueriesByConcept: WeakMap<object, Map<string, Map<AnyAction, InstrumentedAction>>>;
   queryCaches: WeakMap<object, Array<{ invalidate(): void; prune(oldest: number): void }>>;
   scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
@@ -173,6 +178,11 @@ export function instrumentConcept<T extends object>(
     boundActions = new Map();
     state.boundActionsByConcept.set(concept, boundActions);
   }
+  let boundQueries = state.boundQueriesByConcept.get(concept);
+  if (boundQueries === undefined) {
+    boundQueries = new Map();
+    state.boundQueriesByConcept.set(concept, boundQueries);
+  }
 
   const instrumentedConcept = new Proxy(concept, {
     get(target, property, receiver) {
@@ -181,7 +191,12 @@ export function instrumentConcept<T extends object>(
       const actionKey = value as AnyAction;
 
       if (String(property).startsWith("_")) {
-        const memoized = boundActions.get(actionKey);
+        let named = boundQueries.get(String(property));
+        if (named === undefined) {
+          named = new Map();
+          boundQueries.set(String(property), named);
+        }
+        const memoized = named.get(actionKey);
         if (memoized !== undefined) return memoized;
         const displayName = `${conceptNameOf(concept)}.${String(property)}`;
         const query = isBatchedQuery(concept, String(property))
@@ -236,7 +251,7 @@ export function instrumentConcept<T extends object>(
           instrumentedQuery as import("../types.ts").InstrumentedQuery,
           withCache as import("../types.ts").InstrumentedQuery,
         );
-        boundActions.set(actionKey, instrumentedQuery as unknown as InstrumentedAction);
+        named.set(actionKey, instrumentedQuery as unknown as InstrumentedAction);
         const caches = state.queryCaches.get(concept) ?? [];
         if (!state.queryCaches.has(concept)) state.queryCaches.set(concept, caches);
         caches.push(withCache);
@@ -455,12 +470,17 @@ export class ConceptInstrumentation {
   constructor(
     dependencies: Omit<
       InstrumentationState,
-      "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts"
+      | "boundActionsByConcept"
+      | "boundQueriesByConcept"
+      | "queryCaches"
+      | "rawConceptsByInstrumented"
+      | "concepts"
     >,
   ) {
     this.state = {
       ...dependencies,
       boundActionsByConcept: new WeakMap(),
+      boundQueriesByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
       rawConceptsByInstrumented: new WeakMap(),
       concepts: new Set(),

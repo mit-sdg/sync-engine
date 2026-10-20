@@ -69,8 +69,10 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
  */
 export function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined {
   const source = String(fn);
-  if (/^[^(]*\(\s*_\d*\s*[,)]/.test(source)) return [];
-  const destructured = /^[^(]*\(\s*\{([^{}]*)\}/.exec(source);
+  // Only a parenthesized parameter list is read: `[^(=]` stops at an arrow's
+  // `=>`, so `input => echo({ input })` does not read its body as a parameter.
+  if (/^[^(=]*\(\s*_\d*\s*[,)]/.test(source)) return [];
+  const destructured = /^[^(=]*\(\s*\{([^{}]*)\}/.exec(source);
   if (destructured === null) return undefined;
   const roles: string[] = [];
   const body = destructured[1].trim();
