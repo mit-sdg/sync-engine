@@ -160,9 +160,9 @@ export function memoizeQuery<T extends AnyFn>(
     cache.delete(key);
     cache.set(key, entry);
     if (promise !== undefined) {
-      const kept = cache;
+      // Read the live cache, so a query that never settles holds no invalidated generation.
       void promise.catch(() => {
-        if (kept.get(key) === entry) kept.delete(key);
+        if (cache.get(key) === entry) cache.delete(key);
       });
     }
     return entry.value as ReturnType<T>;
