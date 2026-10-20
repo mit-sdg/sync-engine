@@ -770,12 +770,6 @@ describe("checkBatchedQuery", () => {
       return inputs.map(() => ({ data: new Uint8Array(inputs.length) }));
     }
 
-    async _tagsOfAll(inputs: readonly { id: string }[]) {
-      // Every input answered with the tags of the whole list.
-      const all = inputs.flatMap(({ id }) => this.tags.get(id) ?? []);
-      return inputs.map(() => ({ tags: new Set(all) }));
-    }
-
     async _titlesOfAll(inputs: readonly { id: string }[]) {
       const all = inputs.flatMap(({ id }) => {
         const title = this.titles.get(id);
@@ -784,9 +778,24 @@ describe("checkBatchedQuery", () => {
       return inputs.map(() => new Map(all));
     }
 
-    async _sharedInSets(inputs: readonly { id: string }[]) {
-      const row = { title: "same" };
-      return inputs.map(() => new Set([row]));
+    async _cycles(inputs: readonly { id: string }[]) {
+      // In a longer list, a one-node cycle; alone, the same cycle unrolled to two nodes.
+      return inputs.map(({ id }) => {
+        if (inputs.length > 1) {
+          const node: Record<string, unknown> = { id };
+          node.next = node;
+          return node;
+        }
+        const first: Record<string, unknown> = { id };
+        const second: Record<string, unknown> = { id, next: first };
+        first.next = second;
+        return first;
+      });
+    }
+
+    async _sharedBuffer(inputs: readonly { id: string }[]) {
+      const buffer = new ArrayBuffer(inputs.length * 2);
+      return inputs.map((_, index) => ({ data: new Uint8Array(buffer, index * 2, 2) }));
     }
 
     async _tally(inputs: readonly { id: string }[]) {
@@ -836,6 +845,23 @@ describe("checkBatchedQuery", () => {
     );
   });
 
+  test("equivalent cycles of different lengths compare equal", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_cycles", samples)).resolves.toBeUndefined();
+  });
+
+  test("binary answers for different inputs that share one buffer fail", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_sharedBuffer", samples)).rejects.toThrow(
+      "share an object",
+    );
+  });
+
+  test("a sample that cannot be shown as JSON still has its law checked", async () => {
+    const odd = Object.assign(Object.create(null) as Record<string, unknown>, { id: "a", n: 1n });
+    await expect(
+      checkBatchedQuery(new Shelf(), "_cycles", [odd as Record<string, unknown>]),
+    ).resolves.toBeUndefined();
+  });
+
   test("answers to different inputs that share an object fail", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_shared", samples)).rejects.toThrow(
       'the answers for {"id":"a"} and {"id":"b"} share an object',
@@ -854,28 +880,18 @@ describe("checkBatchedQuery", () => {
     );
   });
 
-  test("maps and sets compare by their entries, in any order", async () => {
-    await expect(checkBatchedQuery(new Shelf(), "_tagSets", samples)).resolves.toBeUndefined();
+  test("maps and sets fail, since the engine matches them by identity", async () => {
+    await expect(checkBatchedQuery(new Shelf(), "_tagSets", samples)).rejects.toThrow(
+      "cannot compare answers of class Set",
+    );
+    await expect(checkBatchedQuery(new Shelf(), "_titlesOfAll", samples)).rejects.toThrow(
+      "cannot compare answers of class Map",
+    );
   });
 
   test("binary answers compare by their bytes, empty ones included", async () => {
     await expect(checkBatchedQuery(new Shelf(), "_bytes", samples)).resolves.toBeUndefined();
     await expect(checkBatchedQuery(new Shelf(), "_bytesOfAll", samples)).rejects.toThrow("alone");
-  });
-
-  test("a list form that answers from the whole list through sets or maps fails", async () => {
-    await expect(checkBatchedQuery(new Shelf(), "_tagsOfAll", samples)).rejects.toThrow(
-      'in the samples in order, {"id":"a"} answered {"tags":["x","y","z"]} but answers {"tags":["x","y"]} alone',
-    );
-    await expect(checkBatchedQuery(new Shelf(), "_titlesOfAll", samples)).rejects.toThrow(
-      'in the samples in order, {"id":"a"} answered [["a","Alpha"],["b","Beta"]] but answers [["a","Alpha"]] alone',
-    );
-  });
-
-  test("answers to different inputs that share an object inside a set fail", async () => {
-    await expect(checkBatchedQuery(new Shelf(), "_sharedInSets", samples)).rejects.toThrow(
-      'the answers for {"id":"a"} and {"id":"b"} share an object',
-    );
   });
 
   test("answers it cannot compare fail, naming their class", async () => {

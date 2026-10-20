@@ -10,7 +10,6 @@
 import { structurallyEqual } from "@engine/reads/value-equality";
 
 type ListForm = (inputs: readonly unknown[]) => unknown;
-type Keyed = ReadonlyMap<unknown, unknown> | ReadonlySet<unknown>;
 
 const isObject = (value: unknown): value is object =>
   (typeof value === "object" && value !== null) || typeof value === "function";
@@ -38,49 +37,23 @@ function sameBytes(left: ArrayBufferView | ArrayBuffer, right: ArrayBufferView |
 }
 
 /**
- * Whether two maps, or two sets, hold the same entries in any order. A
- * primitive key is looked up; an object key pairs with a key of the other that
- * carries the same data, each key used once.
- */
-function sameEntries(left: Keyed, right: Keyed, seen: Map<object, object>): boolean {
-  if (left.size !== right.size) return false;
-  const entry = (keyed: Keyed, key: unknown) => (keyed instanceof Map ? keyed.get(key) : undefined);
-  const unmatched = [...right.keys()].filter(isObject);
-  for (const key of left.keys()) {
-    if (!isObject(key)) {
-      if (!right.has(key) || !sameData(entry(left, key), entry(right, key), seen)) return false;
-      continue;
-    }
-    const index = unmatched.findIndex((other) => {
-      // A trial that fails must leave no pairs behind.
-      const trial = new Map(seen);
-      if (!sameData(key, other, trial) || !sameData(entry(left, key), entry(right, other), trial)) {
-        return false;
-      }
-      for (const [from, to] of trial) seen.set(from, to);
-      return true;
-    });
-    if (index === -1) return false;
-    unmatched.splice(index, 1);
-  }
-  return true;
-}
-
-/**
  * Whether two answers carry the same data. Records and arrays compare by
- * content, dates by time, maps and sets by entries, and binary data by its
- * bytes. Any other object, such as a class instance, a regular expression or a
- * promise, may keep data the comparison cannot see, so the check fails on it
- * rather than passing it.
+ * content, dates by time, and binary data by its bytes. Any other object, such
+ * as a map, a class instance, a regular expression or a promise, compares by
+ * identity when the engine matches it, or may keep data the comparison cannot
+ * see, so the check fails on it rather than passing it. `seen` holds the pairs
+ * under comparison, so equivalent cycles of different lengths compare equal.
  */
-function sameData(left: unknown, right: unknown, seen = new Map<object, object>()): boolean {
+function sameData(left: unknown, right: unknown, seen = new Map<object, Set<object>>()): boolean {
   if (Object.is(left, right)) return true;
   if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
   }
   if (left instanceof Date || right instanceof Date) return structurallyEqual(left, right);
-  if (seen.get(left) === right) return true;
-  seen.set(left, right);
+  const partners = seen.get(left);
+  if (partners?.has(right) === true) return true;
+  if (partners === undefined) seen.set(left, new Set([right]));
+  else partners.add(right);
   if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;
   if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
     return sameBytes(left, right as ArrayBufferView | ArrayBuffer);
@@ -95,12 +68,10 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, object>(
     }
     return true;
   }
-  const keyed = prototype === Map.prototype || prototype === Set.prototype;
-  if (keyed && !sameEntries(left as Keyed, right as Keyed, seen)) return false;
-  if (!keyed && prototype !== Object.prototype && prototype !== null) {
+  if (prototype !== Object.prototype && prototype !== null) {
     throw new Error(
       `checkBatchedQuery: cannot compare answers of class ${className(left)}; ` +
-        "answer with records, arrays, dates, maps, sets or binary data.",
+        "answer with records, arrays, dates or binary data.",
     );
   }
   const keys = Reflect.ownKeys(left);
@@ -116,15 +87,11 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, object>(
   );
 }
 
+/** Every object an answer reaches, including the buffer behind binary data. */
 function objectsIn(value: unknown, found = new Set<object>()): Set<object> {
   if (value === null || typeof value !== "object" || found.has(value)) return found;
   found.add(value);
-  if (value instanceof Map || value instanceof Set) {
-    for (const [key, entry] of value.entries()) {
-      objectsIn(key, found);
-      objectsIn(entry, found);
-    }
-  }
+  if (ArrayBuffer.isView(value)) objectsIn(value.buffer, found);
   for (const key of Reflect.ownKeys(value)) {
     objectsIn((value as Record<PropertyKey, unknown>)[key], found);
   }
@@ -132,12 +99,15 @@ function objectsIn(value: unknown, found = new Set<object>()): Set<object> {
 }
 
 function show(value: unknown): string {
+  const plain = (_key: string, entry: unknown) => (typeof entry === "bigint" ? `${entry}n` : entry);
   try {
-    const entries = (_key: string, entry: unknown) =>
-      entry instanceof Map || entry instanceof Set ? [...entry] : entry;
-    return JSON.stringify(value, entries) ?? String(value);
+    return JSON.stringify(value, plain) ?? String(value);
   } catch {
-    return String(value);
+    try {
+      return String(value);
+    } catch {
+      return "(a value that cannot be shown)";
+    }
   }
 }
 
