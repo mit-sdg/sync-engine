@@ -125,7 +125,7 @@ export class Reacting {
       (flowToken) => this.consumeAction(flowToken),
     );
     // A row started ahead of a fault keeps reading after its flow settles, so it holds idle.
-    this.registry.configureReadAhead(readAheadFor(concurrentReads, execution));
+    this.registry.configureReadAhead(readAheadFor(concurrentReads, readHoldMs, execution));
     this.registry.configureInvocationReads(this.invocationReads);
   }
 

@@ -2,7 +2,7 @@
  * `inRowOrder` with rows the test settles by hand, so every bound is checked
  * at the moment it matters rather than by timing.
  */
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { inRowOrder, RowsAhead } from "@sync-engine/internal/reads/where-evaluation";
 import type { AssertRows, ReadAhead } from "@sync-engine/internal/reads/where-evaluation";
 
@@ -205,13 +205,59 @@ describe("inRowOrder", () => {
     await inner;
   });
 
-  test("the count of rows ahead refuses to be given back more than it was taken", () => {
+  test("a slot of the rows ahead is given back once, however often its row settles", () => {
     const ahead = new RowsAhead(1);
-    expect(ahead.take()).toBe(true);
-    expect(ahead.take()).toBe(false);
-    ahead.give();
-    expect(() => ahead.give()).toThrow("never taken");
+    const giveBack = ahead.take();
+    expect(giveBack).toBeDefined();
+    expect(ahead.take()).toBeUndefined();
+    giveBack?.();
+    giveBack?.();
     expect(ahead.inUse).toBe(0);
+    const again = ahead.take();
+    expect(ahead.inUse).toBe(1);
+    giveBack?.();
+    expect(ahead.inUse).toBe(1);
+    again?.();
+    expect(ahead.inUse).toBe(0);
+  });
+
+  test("slots held past the request deadline are taken back when none is free", () => {
+    let now = 1_000;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      const ahead = new RowsAhead(2, 30_000);
+      const hung = ahead.take();
+      now += 10_000;
+      const later = ahead.take();
+      expect(ahead.take()).toBeUndefined();
+      // The first slot is past the deadline; the second is not.
+      now += 25_000;
+      const fresh = ahead.take();
+      expect(fresh).toBeDefined();
+      expect(ahead.take()).toBeUndefined();
+      expect(ahead.inUse).toBe(2);
+      // The hung row settling late gives back nothing it no longer holds.
+      hung?.();
+      expect(ahead.inUse).toBe(2);
+      later?.();
+      fresh?.();
+      expect(ahead.inUse).toBe(0);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("without a deadline a held slot is never taken back", () => {
+    let now = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      const ahead = new RowsAhead(1);
+      ahead.take();
+      now += 1e9;
+      expect(ahead.take()).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
   });
 });
 

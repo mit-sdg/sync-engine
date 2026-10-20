@@ -48,36 +48,52 @@ export interface Quiescence {
 }
 
 /**
- * A count of rows started ahead and not yet settled, shared by every
- * evaluation one engine runs. An evaluation that finds it spent does not wait:
- * it reads its next row when it reaches it, as it would without read-ahead, so
- * nesting cannot deadlock.
+ * The rows started ahead and not yet settled, shared by every evaluation one
+ * engine runs. An evaluation that finds every slot held does not wait: it reads
+ * its next row when it reaches it, as it would without read-ahead, so nesting
+ * cannot deadlock. When every slot is held, slots held longer than `holdMs`,
+ * the request deadline, are taken back, so rows that never settle cannot keep
+ * later requests reading one row at a time. `quiescence` hears of each row
+ * until it settles, whether or not its slot was taken back.
  */
 export class RowsAhead {
-  private started = 0;
+  /** When each held slot was taken, oldest first. */
+  private readonly held = new Map<object, number>();
 
   constructor(
     readonly capacity: number,
+    private readonly holdMs?: number,
     private readonly quiescence?: Quiescence,
   ) {}
 
-  /** Rows started ahead that have not settled yet. */
+  /** Rows started ahead whose slots are still held. */
   get inUse(): number {
-    return this.started;
+    return this.held.size;
   }
 
-  take(): boolean {
-    if (this.started >= this.capacity) return false;
-    this.started += 1;
+  /** A slot for a row started ahead: the call that gives it back once the row settles, or undefined when none is free. */
+  take(): (() => void) | undefined {
+    if (this.held.size >= this.capacity) this.reclaim();
+    if (this.held.size >= this.capacity) return undefined;
+    const slot = {};
+    this.held.set(slot, performance.now());
     this.quiescence?.hold?.();
-    return true;
+    let settled = false;
+    return () => {
+      if (settled) return;
+      settled = true;
+      this.held.delete(slot);
+      this.quiescence?.release?.();
+    };
   }
 
-  give(): void {
-    if (this.started === 0)
-      throw new Error("RowsAhead: a row was given back that was never taken.");
-    this.started -= 1;
-    this.quiescence?.release?.();
+  private reclaim(): void {
+    if (this.holdMs === undefined) return;
+    const oldest = performance.now() - this.holdMs;
+    for (const [slot, taken] of this.held) {
+      if (taken > oldest) return;
+      this.held.delete(slot);
+    }
   }
 }
 
@@ -94,15 +110,19 @@ export interface ConcurrentReads {
 
 export const DEFAULT_MAX_ROWS_AHEAD = 64;
 
-/** The engine's read-ahead for an assembly option; undefined reads rows one after another. */
+/**
+ * The engine's read-ahead for an assembly option; undefined reads rows one after another.
+ * `holdMs`, the request deadline, bounds how long a row that never settles holds its slot.
+ */
 export function readAheadFor(
   options: ConcurrentReads | undefined,
+  holdMs?: number,
   quiescence?: Quiescence,
 ): ReadAhead | undefined {
   if (options === undefined) return undefined;
   return {
     rowsAtOnce: options.rowsAtOnce,
-    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD, quiescence),
+    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD, holdMs, quiescence),
   };
 }
 
@@ -178,8 +198,10 @@ export async function inRowOrder<T>(
       const current = startedAhead[index] ?? start(index);
       startedAhead[index] = undefined;
       next = Math.max(next, index + 1);
-      while (next < count && next < index + readAhead.rowsAtOnce && readAhead.ahead.take()) {
-        const pending = start(next).finally(() => readAhead.ahead.give());
+      while (next < count && next < index + readAhead.rowsAtOnce) {
+        const giveBack = readAhead.ahead.take();
+        if (giveBack === undefined) break;
+        const pending = start(next).finally(giveBack);
         pending.catch(() => {});
         startedAhead[next] = pending;
         next += 1;
@@ -234,12 +256,14 @@ function expandDistinctRows(
  * equal primitives at the same names, so a fill is compared, in the order the pairwise test
  * used, only with earlier kept fills that agree on those. Strings, numbers, and booleans enter
  * the key; every other value shares one placeholder and is left to the comparison, so building
- * the key never runs user code.
+ * the key never runs user code. Fills that differ only in records, as `.is({ post })` binds,
+ * share a key and are still compared pairwise.
  */
 function firstDistinct(): (fill: Frame, names: readonly (string | symbol)[]) => boolean {
   const kept = new Map<string, Frame[]>();
   return (fill, names) => {
-    const key = JSON.stringify(names.map((name) => primitivePart(fill[name])));
+    // Each part alone, since JSON.stringify on an array would call an app's Array.prototype.toJSON.
+    const key = names.map((name) => JSON.stringify(primitivePart(fill[name]))).join(",");
     const same = kept.get(key);
     if (same === undefined) {
       kept.set(key, [fill]);

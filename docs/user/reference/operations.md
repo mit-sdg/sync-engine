@@ -56,7 +56,10 @@ line or selection are also read together: at most `rowsAtOnce`
 rows of one line at once, and at most `maxRowsAhead` rows (64 when unset)
 started ahead across the assembly. Each evaluation also reads its own next row,
 so the rows being read at once are at most `maxRowsAhead` plus one per
-evaluation under way. The count
+evaluation under way, not counting rows started ahead more than the request
+deadline ago: once the count is spent, those give their places back, so reads
+that never settle cannot keep later requests reading one row at a time. Set the
+database client's own timeouts so such reads end. The count
 belongs to one assembly, while a database client's connection pool is usually
 shared by the whole process: size the pool above the sum over the process's
 assemblies, so actions' writes are not queued behind reads.

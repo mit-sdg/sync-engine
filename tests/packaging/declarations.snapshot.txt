@@ -4828,20 +4828,26 @@ export interface Quiescence {
     release?(): void;
 }
 /**
- * A count of rows started ahead and not yet settled, shared by every
- * evaluation one engine runs. An evaluation that finds it spent does not wait:
- * it reads its next row when it reaches it, as it would without read-ahead, so
- * nesting cannot deadlock.
+ * The rows started ahead and not yet settled, shared by every evaluation one
+ * engine runs. An evaluation that finds every slot held does not wait: it reads
+ * its next row when it reaches it, as it would without read-ahead, so nesting
+ * cannot deadlock. When every slot is held, slots held longer than `holdMs`,
+ * the request deadline, are taken back, so rows that never settle cannot keep
+ * later requests reading one row at a time. `quiescence` hears of each row
+ * until it settles, whether or not its slot was taken back.
  */
 export declare class RowsAhead {
     readonly capacity: number;
+    private readonly holdMs?;
     private readonly quiescence?;
-    private started;
-    constructor(capacity: number, quiescence?: Quiescence | undefined);
-    /** Rows started ahead that have not settled yet. */
+    /** When each held slot was taken, oldest first. */
+    private readonly held;
+    constructor(capacity: number, holdMs?: number | undefined, quiescence?: Quiescence | undefined);
+    /** Rows started ahead whose slots are still held. */
     get inUse(): number;
-    take(): boolean;
-    give(): void;
+    /** A slot for a row started ahead: the call that gives it back once the row settles, or undefined when none is free. */
+    take(): (() => void) | undefined;
+    private reclaim;
 }
 /**
  * The `concurrentReads` assembly option. `concurrentReads` is experimental: it
@@ -4854,8 +4860,11 @@ export interface ConcurrentReads {
     readonly maxRowsAhead?: number;
 }
 export declare const DEFAULT_MAX_ROWS_AHEAD = 64;
-/** The engine's read-ahead for an assembly option; undefined reads rows one after another. */
-export declare function readAheadFor(options: ConcurrentReads | undefined, quiescence?: Quiescence): ReadAhead | undefined;
+/**
+ * The engine's read-ahead for an assembly option; undefined reads rows one after another.
+ * `holdMs`, the request deadline, bounds how long a row that never settles holds its slot.
+ */
+export declare function readAheadFor(options: ConcurrentReads | undefined, holdMs?: number, quiescence?: Quiescence): ReadAhead | undefined;
 /**
  * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
  * `consume` takes its answer in row order. With read-ahead, up to `rowsAtOnce`

@@ -47,7 +47,10 @@ match; other object kinds are shared. The engine may read a getter on an
 action's output any number of times, or not at all when no reaction can match
 the record, so such getters must be pure. One match, or one evaluation of a reaction's `where`, shares one copy of
 each repeated reference across its bindings, so a consequence that changes a
-bound value in place changes it for sibling bindings' consequences too.
+bound value in place changes it for sibling bindings' consequences too. A
+query a `where` line asks receives that same copy: a query that changes a bound
+value changes it for the later lines, and whether it does can depend on whether
+its answer came from the query cache.
 
 The action then settles in one of two outcome postures:
 
@@ -378,7 +381,9 @@ independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
 So must the computations, conditions, and custom ops that reads use: with
 [`concurrentReads`](#ordering-and-state-read-timing), they may run out of row
-order, and for rows whose answers are never used.
+order, and for rows whose answers are never used. So must getters on the rows
+a query returns: matching reads them against the bindings as they stand, so a
+getter that changes a bound value can drop its row.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including
@@ -888,7 +893,9 @@ and uses the answers in row order:
   being used included; `1` reads them one after another.
 - At most `maxRowsAhead` rows (64 when unset) are started ahead at once across
   the assembly. When that count is spent, an evaluation reads its next row only
-  when it reaches it, without waiting.
+  when it reaches it, without waiting. Once the count is spent, a row started
+  ahead more than the request deadline ago gives its place back, though its
+  read may still be running.
 - Answers, their order, the reported fault, and recorded row-limit breaches
   are those of reading the rows one after another, given side-effect-free reads
   ([Queries](#queries)) and no action changing the state being read meanwhile.
@@ -896,7 +903,7 @@ and uses the answers in row order:
   after another.
 - A fault is reported as soon as its row is used. Rows started ahead are then
   abandoned: a read already sent runs to completion and keeps its place in the
-  count of rows ahead until it settles, and the row stops before reading
+  count of rows ahead until it settles or gives it back, and the row stops before reading
   another. `whenIdle()` and `beginDrain()` resolve, and the `drain-state`
   event with `state: "idle"` is emitted, only after every row started ahead
   settles, abandoned rows included.

@@ -45,10 +45,13 @@ Compatibility.
 - Reaction matching and `earlier(...)` test each record's action, provenance,
   posture, and input before copying the rest, with the same matches in the same
   order. A getter on a raw action output is read when a record that passes
-  that test is copied. Triggers read such a getter fewer times than in 1.1.0;
-  `earlier` can read one that 1.1.0 skipped, because it copies the whole output
-  where it used to read only the keys its pattern named. Keep getters on action
-  outputs pure: they may be read any number of times.
+  that test is copied. A trigger that fails the test no longer reads such a
+  getter, and one that passes reads it as often as in 1.1.0; `earlier` can read
+  one that 1.1.0 skipped, because it copies the whole output where it used to
+  read only the keys its pattern named. Keep getters on action outputs pure:
+  they may be read any number of times. A `Date` subclass in an action input has
+  its `getTime` called a different number of times, so one whose `getTime`
+  throws can fail a trigger it used to match.
 - `QueryCacheMode` gains `"since-dispatch"`. Code that switches over it
   exhaustively must handle the new member.
 - The [support policy](SUPPORT.md) says that an option marked experimental may
@@ -69,7 +72,8 @@ Compatibility.
   the rows of one `where` line, and the rows of one selection, together and
   consumes them in row order. `rowsAtOnce` rows are evaluated at once; at most
   `maxRowsAhead` rows (64 when unset) are started ahead at once across the
-  assembly. Answers, their order, the reported fault, and recorded row-limit
+  assembly; once that count is spent, rows started ahead more than the request
+  deadline ago give their places back. Answers, their order, the reported fault, and recorded row-limit
   breaches are those of reading one row after another, provided the queries,
   computations, conditions, and custom ops that reads use have no side effects
   and no action changes the state being read meanwhile. With it, those can run

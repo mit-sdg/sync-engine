@@ -581,6 +581,26 @@ describe("where ops: distinct fills", () => {
     expect(calls).toBe(0);
   });
 
+  test("never runs an app's Array.prototype.toJSON while removing duplicates", async () => {
+    let calls = 0;
+    Object.defineProperty(Array.prototype, "toJSON", {
+      value: () => ++calls,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      const { out } = await fills([
+        { a: "x", b: 1 },
+        { a: "x", b: 1 },
+        { a: "y", b: 1 },
+      ]);
+      expect(out).toHaveLength(2);
+    } finally {
+      delete (Array.prototype as { toJSON?: unknown }).toJSON;
+    }
+    expect(calls).toBe(0);
+  });
+
   test("keeps the fills a pairwise comparison keeps, over generated rows", async () => {
     let seed = 7;
     const next = () => (seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648;
