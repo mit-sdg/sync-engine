@@ -139,7 +139,8 @@ async _isTrashed(inputs: { item: string }[]) {
 The specification and every reader stay as they were: compositions and callers
 of the assembled concept still write `Trashing._isTrashed({ item })` and get
 one answer. Each call receives a frozen list of copied inputs: records, arrays,
-and plain dates are copied; maps, sets, and class instances are your own. The engine may group reads issued together into one call; it currently does so
+and plain dates are copied; other objects, such as maps, sets, class instances,
+and `Date` subclasses, are passed as they are. The engine may group reads issued together into one call; it currently does so
 only with a query cache and `concurrentReads.rowsAtOnce` above 1
 (`concurrentReads` is experimental; see the
 [support policy](../../../SUPPORT.md#stable-compatibility)). If a grouped call
@@ -160,7 +161,8 @@ Assembly rejects a batched method whose parameter destructures one flat record,
 as `({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
 verifies from the types that the method takes a list. Test each batched query with
 `await checkBatchedQuery(new TrashingConcept(...), "_isTrashed", samples)`,
-giving samples that cover missing keys, several rows, and no rows. Only queries
+giving samples that cover an input with nothing stored, one that answers several
+rows, and one that answers none. Only queries
 can be batched; leave a query in its single form unless its storage really pays
 per call.
 

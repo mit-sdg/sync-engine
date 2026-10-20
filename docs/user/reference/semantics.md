@@ -364,20 +364,20 @@ An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
 actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
-caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
-without clearing: until an outside invocation returns to its caller or the
-assembly's request deadline passes, whichever comes first
-(`executionLimits.maxRequestDurationMs`, or 30 seconds without
-`executionLimits`, even for a call given a longer `timeoutMs`), reads done for
-its flow reuse only answers whose query began at or after it was dispatched.
-So invocations already running can reuse the answers they read, unless a later
-read of the same query and argument has replaced one; they then get the newer
-answer. An answer still being read is reused too, so a read that never settles
-holds every reader that reuses it until that reader's point closes. A direct `form` and a direct query root read the same
-way from their own start. Any other read, such as a reaction in a flow begun by
-a direct action, reuses only answers begun since the latest of those starts,
-decided at each read, and so does a flow still reading after the request
-deadline has passed. Action invalidation is unchanged. `queryCache: "none"`
+caches before dispatch. `queryCache: "since-dispatch"` gives the same
+freshness without clearing. Each outside invocation, direct `form`, and direct
+query records when it started. Until it returns, or until the request deadline
+passes, its reads reuse only answers whose query began at or after that start.
+(The deadline is `executionLimits.maxRequestDurationMs`, or 30 seconds without
+`executionLimits`, even for a call given a longer `timeoutMs`.) So a running
+invocation can reuse the answers it read; if a later read of the same query and
+argument replaced one, it gets the newer answer. An answer still being read is
+reused too, so a read that never settles holds every reader that reuses it,
+until that reader's invocation returns or the deadline passes. Every other read
+reuses only answers begun since the most recent start of any outside
+invocation, direct `form`, or direct query, decided at each read. That covers a
+reaction in a flow begun by a direct action, and the rest of a flow once its
+invocation has returned or its deadline has passed. Action invalidation is unchanged. `queryCache: "none"`
 disables memoization; repeated reads execute the query implementation
 independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
@@ -434,10 +434,11 @@ unless the same instance was already assembled with `batched`.
 Each call receives a frozen list of copied inputs. The engine may group reads
 issued together into one call; it currently does so only with a query cache and
 `concurrentReads.rowsAtOnce` above 1. Each input is copied when it is asked:
-records, arrays, and plain `Date` values are copied deeply, keeping only their
-enumerable own properties, and class instances, `Date` subclasses, maps, and
-sets are kept by identity. A later change to a copied record, array, or `Date`
-does not reach the list. The list is frozen, but the copies in it are not. Without `concurrentReads`,
+records, arrays, and plain dates are copied deeply, keeping only their
+enumerable own properties; other objects, such as maps, sets, class instances,
+and `Date` subclasses, are passed as they are. A later change to a copied
+record, array, or date does not reach the list. The list is frozen, but the
+copies in it are not. Without `concurrentReads`,
 with `rowsAtOnce: 1`, under `queryCache: "none"`, or with
 `groupBatchedQueries: false`, every read calls the method with a list of one.
 Otherwise the engine groups the reads pending for one batched query on one
@@ -454,11 +455,13 @@ returns an answer that throws as it is read, the engine logs a warning that
 names the query and reads each input again alone, in a list of one, all at
 once, as it would without grouping. Each read again receives the copy taken
 when it was asked, not the one the failed call received. An input whose read
-throws then fails only its own read. For a list of one, any of these faults
-that read with an error naming the query; an empty list is still a valid answer
-for one input. Until the group's call settles, every read in it waits: a call
-that never settles, or settles slowly because of one input, holds every read
-grouped with it, so give the database client timeouts that end a stuck call.
+throws then fails only its own read. For a list of one, any of these makes that
+read fail with an error that names the query; an empty list is still a valid
+answer for one input. Until the group's call settles, every read in it waits,
+including reads for other requests: a call that never settles, or settles
+slowly because of one input, holds them all, so give the database client
+timeouts that end a stuck call. The warning goes to the process log (`console.warn`,
+filtered by `LOG_LEVEL`), not to the `logSink` or to observers.
 
 The method must keep the batched law: whatever else shares the list, in any
 order and with duplicates, each input gets the answer it gets alone, an empty
@@ -897,22 +900,21 @@ given the `concurrentReads` option (`concurrentReads` is experimental; see the
 [support policy](../../../SUPPORT.md#stable-compatibility)) reads them together
 and uses the answers in row order:
 
-- `rowsAtOnce` rows of one line or selection are evaluated at once, the row
-  being used included; `1` reads them one after another.
-- At most `maxRowsAhead` rows (64 when unset) are started ahead at once across
-  the assembly. When that count is spent, an evaluation reads its next row only
-  when it reaches it, without waiting. Once the count is spent, a row started
-  ahead more than the request deadline ago gives its place back, though its
-  read may still be running.
+- Up to `rowsAtOnce` rows of one line or selection are evaluated at once, the
+  row being used included; `1` reads them one after another.
+- A row read before the row being used is _started ahead_, and takes a slot.
+  At most `maxRowsAhead` slots (64 when unset) are shared across the assembly.
+  When no slot is free, an evaluation reads its next row when it reaches it,
+  without waiting, and slots held longer than the request deadline are taken
+  back; their reads may still be running.
 - Answers, their order, the reported fault, and recorded row-limit breaches
   are those of reading the rows one after another, given side-effect-free reads
   ([Queries](#queries)) and no action changing the state being read meanwhile.
   Reads may interleave with a concurrent action differently than when read one
   after another.
 - A fault is reported as soon as its row is used. Rows started ahead are then
-  abandoned: a read already sent runs to completion and keeps its place in the
-  count of rows ahead until it settles or gives it back, and the row stops before reading
-  another. `whenIdle()` and `beginDrain()` resolve, and the `drain-state`
+  abandoned: a read already sent runs to completion and holds its slot until it
+  settles or its slot is taken back, and the row reads nothing more. `whenIdle()` and `beginDrain()` resolve, and the `drain-state`
   event with `state: "idle"` is emitted, only after every row started ahead
   settles, abandoned rows included.
 

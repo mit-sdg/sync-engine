@@ -462,7 +462,7 @@ export type RegisteredConcept<C extends ConceptClass, F extends Record<string, F
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
-export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly QueryNameOf<C>[] = readonly []>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B>;
+export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>, const B extends readonly [] | readonly [QueryNameOf<C>, ...QueryNameOf<C>[]] = readonly []>(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B>;
 type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>, readonly string[]>;
 export type AnyRegisteredConcept = AnyRegistration;
 type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F, readonly string[]> ? C : never;
@@ -1456,8 +1456,17 @@ type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry
     [K in QueryKeys<I>]: (K extends BatchedNames<Entry> ? QueryAsAsked<I[K]> : I[K]) extends (...args: never[]) => infer Answer ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true ? never : K : K;
 }[QueryKeys<I>];
 type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass ? InvalidQueryKeys<E> extends never ? E : never : E extends ConceptDeclaration<infer C> ? E & {
-    readonly class: InvalidQueryKeys<E> extends never ? C : never;
+    readonly class: InvalidQueryKeys<E> extends never ? WideBatched<E> extends true ? never : C : never;
 } : never;
+/**
+ * Whether an entry names its batched queries in a list of literal names wider
+ * than one tuple, such as `("_a" | "_b")[]`, which the types cannot follow while
+ * the runtime still batches every name in it, so such an entry is refused where
+ * it is written. A plain `string[]` names nothing the types could follow.
+ */
+type WideBatched<Entry> = Entry extends {
+    readonly batched?: infer List;
+} ? [Exclude<List, undefined>] extends [readonly unknown[]] ? [LiteralNames<Exclude<List, undefined>>] extends [never] ? [Exclude<List, undefined>[number]] extends [never] ? false : string extends Exclude<List, undefined>[number] ? false : true : false : false : false;
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
     [K in keyof T]: CheckedConceptEntry<T[K]>;
 };
@@ -1543,7 +1552,8 @@ export declare function where(...conditions: Array<Condition | CountOp>): Author
 /**
  * Check a batched query's law on the raw concept instance with sample inputs.
  * Resolves when the law holds and rejects with an error naming what differed.
- * Give distinct inputs that cover missing keys, several rows, and no rows.
+ * Give distinct inputs that cover an input with nothing stored, one that answers
+ * several rows, and one that answers none.
  */
 export declare function checkBatchedQuery(concept: object, query: string, inputs: readonly Record<string, unknown>[]): Promise<void>;
 

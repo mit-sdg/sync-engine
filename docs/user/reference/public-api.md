@@ -162,7 +162,8 @@ most `maxRowsAhead` rows (64 when unset) are started ahead across the assembly
 (`concurrentReads` is experimental; see the
 [support policy](../../../SUPPORT.md#stable-compatibility)). Each call of a
 batched query receives a frozen list of copied inputs: records, arrays, and plain
-dates are copied, other objects kept. The engine
+dates are copied; other objects, such as maps, sets, class instances, and `Date`
+subclasses, are passed as they are. The engine
 may group reads issued together into one call; it currently does so only with a
 query cache and `concurrentReads.rowsAtOnce` above 1. With
 `groupBatchedQueries: false`, each read calls the list form with a list of one.

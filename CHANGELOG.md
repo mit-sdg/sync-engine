@@ -66,11 +66,11 @@ Compatibility.
   at or after its own outside invocation was dispatched, the freshness
   `"memoize"` gives by clearing every cache at dispatch. A direct `form` or a
   direct query reads the same way from its own start. Actions invalidate
-  answers as before, and no answer is held past the request deadline
+  answers as before, and no answer is reused past the request deadline
   (`executionLimits.maxRequestDurationMs`, 30 seconds by default).
 - The `concurrentReads: { rowsAtOnce, maxRowsAhead? }` assembly option reads
   the rows of one `where` line, and the rows of one selection, together and
-  consumes them in row order. `rowsAtOnce` rows are evaluated at once; at most
+  consumes them in row order. Up to `rowsAtOnce` rows are evaluated at once; at most
   `maxRowsAhead` rows (64 when unset) are started ahead at once across the
   assembly; once that count is spent, rows started ahead more than the request
   deadline ago give their places back. Answers, their order, the reported fault, and recorded row-limit
@@ -88,19 +88,28 @@ Compatibility.
   assembled concept still ask with one input and get one answer, and the
   vocabulary's types show such a query taking one input. Each call receives a
   frozen list of copied inputs: records, arrays, and plain dates are copied;
-  maps, sets, and class instances are the caller's own. The engine may group reads issued
-  together into one call; it currently does so only with a query cache and
-  `concurrentReads.rowsAtOnce` above 1, collecting the reads pending when the
-  event-loop turn ends. A group whose call throws, or whose answers are not one
-  per input, is read again with each input alone, as without grouping, with a
-  warning in the log; every read in a group waits until its call settles. A stub or
-  spy that replaces a batched method receives the list too. Assembly rejects a
-  selected implementation whose batched method's parameter destructures one
+  other objects, such as maps, sets, class instances, and `Date` subclasses,
+  are passed as they are. The engine groups reads of one batched query on one
+  concept instance, across requests, into one call; it currently does so only
+  when `concurrentReads.rowsAtOnce` is above 1 and `queryCache` is not
+  `"none"`, collecting the reads pending when the event-loop turn ends, so
+  `batched` alone groups nothing. A group whose call throws, or whose answers
+  are not one per input, is read again with each input alone, as without
+  grouping, with a warning on the process log; every read in a group waits
+  until its call settles. A stub or
+  spy that replaces a batched method receives the list too. `conceptSet` and
+  `assemble` reject a selected implementation whose batched method's parameter destructures one
   flat record or is a `_` placeholder; only `sync-engine check` reliably
-  verifies from the types that it takes a list. Batched names are written in the `registerConcept(...)` call,
-  and `ConceptRegistration<C>` and `RegisteredConcept<C>` written out name
+  verifies from the types that it takes a list. Batched names are written as
+  one literal list in the `registerConcept(...)` call, and a wider list is
+  refused; `ConceptRegistration<C>` and `RegisteredConcept<C>` written out name
   none. A registration that names no query under `batched` behaves as before,
   types included.
+- `vocabulary` concept entries accept `batched`, with the same rules; it takes
+  effect through `assemble`.
+- `Assembly<T, Batched>` gains a second type parameter naming each concept's
+  batched queries. A written-out `Assembly<T>` types a batched query in its
+  list form, so keep the inferred type of `assemble(...)`.
 - The `groupBatchedQueries` assembly option, `true` by default, turns grouping
   off when set to `false`: every read then calls a batched method with a list
   of one.
@@ -119,14 +128,28 @@ Compatibility.
 - Pin core, HTTP, analysis, catalog, and skill to `1.2.0` when used together.
 - Run `sync-engine artifacts pin` (`bun run generate` in an app made with
   `sync-engine setup`). Generated files change only their version stamps, and
-  `check` fails on those stamps until it runs.
+  `sync-engine artifacts check` fails on those stamps until it runs.
 - No source changes are required, except in code that switches exhaustively
   over `QueryCacheMode`. Check an application that compares arrays
   with holes, changes values bound through `earlier` in place, reads getters
   with side effects on action outputs, or relies on the order in which
   overlapping requests read and write, against the items under Compatibility.
 - The new options are opt-in, and an application that reads fast enough needs
-  none of them.
+  none of them. To read faster, try them in this order:
+  1. Requests overlap and re-read the same data: set
+     `queryCache: "since-dispatch"`. Answers read within the last request
+     deadline stay in memory.
+  2. A page reads many rows one after another, as an `each` or a many-row line
+     does: also set `concurrentReads: { rowsAtOnce: 16 }`. It is experimental,
+     it starts up to `maxRowsAhead` extra reads, some for rows never used, so
+     size the database pool for them and keep reads free of side effects.
+  3. Those rows each ask one query whose storage can answer many inputs in one
+     command: name it under `batched` and write its list form. It groups only
+     with step 2. Give the database client timeouts, since a group waits for
+     its slowest input.
+
+  For example, `assemble({ ...options, queryCache: "since-dispatch",
+concurrentReads: { rowsAtOnce: 16 } })`.
 
 ### Generated formats
 

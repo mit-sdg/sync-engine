@@ -130,7 +130,8 @@ function show(value: unknown): string {
 /**
  * Check a batched query's law on the raw concept instance with sample inputs.
  * Resolves when the law holds and rejects with an error naming what differed.
- * Give distinct inputs that cover missing keys, several rows, and no rows.
+ * Give distinct inputs that cover an input with nothing stored, one that answers
+ * several rows, and one that answers none.
  */
 export async function checkBatchedQuery(
   concept: object,
