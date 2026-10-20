@@ -154,12 +154,27 @@ type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = 
     : ActionLineFn<I[K]>;
 };
 
-/** The queries a concept entry names under `batched`, when it names them literally. */
-type BatchedNames<Entry> = Entry extends { readonly batched?: readonly (infer Name)[] }
-  ? string extends Name
-    ? never
-    : Name
+/**
+ * The queries a concept entry names under `batched`, when it names them in one
+ * literal tuple. A wider list, such as `("_a" | "_b")[]` or a union of tuples,
+ * names none, so a call the runtime would answer in another form fails to
+ * compile instead of failing when it runs.
+ */
+type BatchedNames<Entry> = Entry extends { readonly batched?: infer List }
+  ? LiteralNames<Exclude<List, undefined>>
   : never;
+
+type LiteralNames<List> = [List] extends [readonly unknown[]]
+  ? IsUnion<List> extends true
+    ? never
+    : number extends List["length"]
+      ? never
+      : string extends List[number]
+        ? never
+        : List[number]
+  : never;
+
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : false;
 
 /** The batched query names of each vocabulary entry. */
 export type BatchedQueryNames<T extends Record<string, ConceptEntry>> = {

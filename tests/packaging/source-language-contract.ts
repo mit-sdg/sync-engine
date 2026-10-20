@@ -383,6 +383,30 @@ function annotatedRegistrationContract(spec: string): void {
 }
 void annotatedRegistrationContract;
 
+function wideBatchedContract(
+  names: ("_title" | "_book")[],
+  either: ["_title"] | ["_book"],
+  records: ("_byIds" | "_byRecords")[],
+): void {
+  vocabulary({
+    // @ts-expect-error A batched list wider than a literal tuple names no query, so list forms fail to type.
+    concepts: { Shelf: { class: BatchedShelf, batched: names } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A union of tuples names no query either.
+    concepts: { Shelf: { class: BatchedShelf, batched: either } },
+    computations: {},
+  });
+  const listed = vocabulary({
+    concepts: { Listed: { class: ListTakingShelf, batched: records } },
+    computations: {},
+  }).concepts.Listed;
+  // @ts-expect-error A query a wide list may name keeps its list form in the types.
+  listed._byRecords({ id: "a" });
+}
+void wideBatchedContract;
+
 const batchedWords = vocabulary({
   concepts: { Shelf: { class: BatchedShelf, batched: ["_title", "_book"] } },
   computations: {},
