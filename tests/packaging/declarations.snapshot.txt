@@ -298,7 +298,7 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
     retention?: RetentionPolicy;
-    /** Query evaluation policy; defaults to flow-local memoization. */
+    /** Query evaluation policy; defaults to `"memoize"`, memoization shared by all flows and cleared at each outside dispatch and around each action. */
     queryCache?: QueryCacheMode;
     /** Synchronous application-owned destination for already-redacted occurrence entries. */
     logSink?: LogSink;

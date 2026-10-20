@@ -66,8 +66,10 @@ Compatibility.
   at or after its own outside invocation was dispatched, the freshness
   `"memoize"` gives by clearing every cache at dispatch. A direct `form` or a
   direct query reads the same way from its own start. Actions invalidate
-  answers as before, and no answer is reused past the request deadline
-  (`executionLimits.maxRequestDurationMs`, 30 seconds by default).
+  answers as before, and no invocation keeps its older answers past the
+  request deadline (`executionLimits.maxRequestDurationMs`, 30 seconds by
+  default): after it, its reads reuse only answers begun since the latest
+  start.
 - The `concurrentReads: { rowsAtOnce, maxRowsAhead? }` assembly option reads
   the rows of one `where` line, and the rows of one selection, together and
   consumes them in row order. Up to `rowsAtOnce` rows are evaluated at once; at most
