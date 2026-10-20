@@ -657,10 +657,12 @@ describe("registration", () => {
     const arrow = {
       lists: [] as number[][],
       _shelf: () => [{ book: 0 }, { book: 1 }],
-      // Built from source, since the formatter would wrap a lone arrow parameter in parentheses.
-      _book: new Function("echo", "return async inputs => echo({ inputs })")(echo) as (
-        inputs: readonly { book: number }[],
-      ) => Promise<{ title: string }[][]>,
+      // Read as written without parentheses, which the formatter would add.
+      _book: Object.defineProperty(
+        async (inputs: readonly { book: number }[]) => echo({ inputs }),
+        "toString",
+        { value: () => "async inputs => echo({ inputs })" },
+      ),
       count: () => ({ found: 0 }),
     };
     const app = assemble({

@@ -480,6 +480,13 @@ export function vocabulary(
         spec === undefined
           ? { ...declaredContracts, ...contracts }
           : { ...declaredContracts, ...specifiedContracts(spec), ...contracts };
+      // A copy, so a name pushed onto the app's list after validation batches nothing.
+      if (Array.isArray(contracts.batched)) {
+        declaredContracts = {
+          ...declaredContracts,
+          batched: Object.freeze([...contracts.batched]),
+        };
+      }
     }
     const protocol = conceptProtocolOf(cls.prototype as object);
     const actionRoles: Record<string, readonly string[] | undefined> = {};

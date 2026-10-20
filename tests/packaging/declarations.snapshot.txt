@@ -1416,10 +1416,17 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A ? {
 type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
     readonly [K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never]: K extends `_${string}` ? QueryLineFn<K extends BatchedNames<Entry> ? QueryAsAsked<I[K]> : I[K]> : ActionLineFn<I[K]>;
 };
-/** The queries a concept entry names under `batched`, when it names them literally. */
+/**
+ * The queries a concept entry names under `batched`, when it names them in one
+ * literal tuple. A wider list, such as `("_a" | "_b")[]` or a union of tuples,
+ * names none, so a call the runtime would answer in another form fails to
+ * compile instead of failing when it runs.
+ */
 type BatchedNames<Entry> = Entry extends {
-    readonly batched?: readonly (infer Name)[];
-} ? string extends Name ? never : Name : never;
+    readonly batched?: infer List;
+} ? LiteralNames<Exclude<List, undefined>> : never;
+type LiteralNames<List> = [List] extends [readonly unknown[]] ? IsUnion<List> extends true ? never : number extends List["length"] ? never : string extends List[number] ? never : List[number] : never;
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : false;
 /** The batched query names of each vocabulary entry. */
 export type BatchedQueryNames<T extends Record<string, ConceptEntry>> = {
     readonly [K in keyof T]: BatchedNames<T[K]>;
@@ -2151,6 +2158,11 @@ export type InstrumentedConcept<T extends object, Batched extends PropertyKey = 
 export interface InstrumentationState {
     actions: ActionConcept;
     boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
+    /**
+     * Each query's wrapper, by name and then method: whether a query is batched
+     * goes by its name, so one method serving two names gets a wrapper for each.
+     */
+    boundQueriesByConcept: WeakMap<object, Map<string, Map<AnyAction, InstrumentedAction>>>;
     queryCaches: WeakMap<object, Array<{
         invalidate(): void;
         prune(oldest: number): void;
@@ -2186,7 +2198,7 @@ export declare function instrumentConcept<T extends object>(state: Instrumentati
 /** Owns the mutable proxy identities and query caches for one engine. */
 export declare class ConceptInstrumentation {
     private readonly state;
-    constructor(dependencies: Omit<InstrumentationState, "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts">);
+    constructor(dependencies: Omit<InstrumentationState, "boundActionsByConcept" | "boundQueriesByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts">);
     instrumentConcept<T extends object>(concept: T, name?: string): T;
     instrument<T extends Record<string, object>>(concepts: T): T;
     instrument<T extends object>(concept: T): T;
@@ -3078,7 +3090,13 @@ export interface WhenBuilderWithFunctionWhere {
  * the engine calls the method on their behalf. Only queries a registration
  * names under `batched` are read this way.
  */
-export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A ? [P] extends [readonly (infer I)[]] ? Awaited<A> extends readonly (infer Each)[] ? (input: I) => Promise<Each> : F : F : F;
+export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? F : Awaited<A> extends readonly (infer Each)[] ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each> : F : F;
+/**
+ * The input of a list parameter, as `sync-engine check` reads one: an array,
+ * optional or with a default included, but not a tuple or a union of arrays.
+ */
+type ListInput<P> = [P] extends [infer List extends readonly unknown[]] ? number extends List["length"] ? [List] extends [readonly (infer I)[]] ? IsOneArray<List, I> : never : never : never;
+type IsOneArray<List, I> = [List] extends [readonly I[]] ? [readonly I[]] extends [List] ? I : [I[]] extends [List] ? I : never : never;
 export {};
 
 === dist/engine/reads/authored-reference-resolution.d.ts ===
