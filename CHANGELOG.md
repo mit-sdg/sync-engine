@@ -15,7 +15,8 @@ follow the [support policy](SUPPORT.md), and review the
   consumes them in row order. `rowsAtOnce` rows are evaluated at once, the
   consumed row included; at most `maxRowsAhead` rows (64 when unset) are started
   ahead at once across the assembly, and an evaluation that finds that count
-  spent reads its next row when it reaches it. Answers, their order, the
+  spent reads its next row when it reaches it; when every slot is held, slots
+  held past the request deadline are taken back. Answers, their order, the
   reported fault, and recorded row-limit breaches are those of reading one
   after another, given side-effect-free reads and no action changing the state
   being read meanwhile. A fault is reported as soon as its row is consumed;
@@ -69,6 +70,11 @@ follow the [support policy](SUPPORT.md), and review the
   sets still bind by identity. `earlier` now reads a record as triggers do, so
   a non-enumerable key on an action's output no longer takes part in `earlier`
   matching, and a getter on it is read when the record is copied.
+- Rows of a `where` line pass through one path with or without
+  `concurrentReads`, which takes a few more promise turns. Invocations that
+  overlap can interleave differently, so a read can see another invocation's
+  write it used to miss, or miss one it used to see. Order within one flow is
+  unchanged.
 
 ## [1.1.0] - 2026-10-05
 

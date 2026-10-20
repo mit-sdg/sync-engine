@@ -828,7 +828,9 @@ answers in row order:
   being consumed included; `1` reads them one after another.
 - At most `maxRowsAhead` rows (64 when unset) are started ahead at once across
   the engine. An evaluation that finds that count spent reads its next row when
-  it reaches it, and never waits for it.
+  it reaches it, and never waits for it. Once the count is spent, a row started
+  ahead more than the request deadline ago gives its place back, though its
+  read may still be running.
 - Answers, their order, the reported fault, and recorded row-limit breaches
   are those of reading the rows one after another, given side-effect-free reads
   ([Queries](#queries)) and no action changing the state being read meanwhile.
@@ -836,7 +838,7 @@ answers in row order:
   after another.
 - A fault is reported as soon as its row is consumed. Rows started ahead are
   then abandoned: a read already sent runs to completion and keeps its place in
-  the count of rows ahead until it settles, and the row stops at its next row
+  the count of rows ahead until it settles or gives it back, and the row stops at its next row
   check.
 
 Lines of one `where` block still run in order.

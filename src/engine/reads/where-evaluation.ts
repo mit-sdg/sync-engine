@@ -42,31 +42,45 @@ export interface ReadAhead {
 }
 
 /**
- * A count of rows started ahead and not yet settled, shared by every
- * evaluation one engine runs. An evaluation that finds it spent does not wait:
- * it reads its next row when it reaches it, as it would without read-ahead, so
- * nesting cannot deadlock.
+ * The rows started ahead and not yet settled, shared by every evaluation one
+ * engine runs. An evaluation that finds every slot held does not wait: it reads
+ * its next row when it reaches it, as it would without read-ahead, so nesting
+ * cannot deadlock. When every slot is held, slots held longer than `holdMs`,
+ * the request deadline, are taken back, so rows that never settle cannot keep
+ * later requests reading one row at a time.
  */
 export class RowsAhead {
-  private started = 0;
+  /** When each held slot was taken, oldest first. */
+  private readonly held = new Map<object, number>();
 
-  constructor(readonly capacity: number) {}
+  constructor(
+    readonly capacity: number,
+    private readonly holdMs?: number,
+  ) {}
 
-  /** Rows started ahead that have not settled yet. */
+  /** Rows started ahead whose slots are still held. */
   get inUse(): number {
-    return this.started;
+    return this.held.size;
   }
 
-  take(): boolean {
-    if (this.started >= this.capacity) return false;
-    this.started += 1;
-    return true;
+  /** A slot for a row started ahead: the call that gives it back, or undefined when none is free. */
+  take(): (() => void) | undefined {
+    if (this.held.size >= this.capacity) this.reclaim();
+    if (this.held.size >= this.capacity) return undefined;
+    const slot = {};
+    this.held.set(slot, performance.now());
+    return () => {
+      this.held.delete(slot);
+    };
   }
 
-  give(): void {
-    if (this.started === 0)
-      throw new Error("RowsAhead: a row was given back that was never taken.");
-    this.started -= 1;
+  private reclaim(): void {
+    if (this.holdMs === undefined) return;
+    const oldest = performance.now() - this.holdMs;
+    for (const [slot, taken] of this.held) {
+      if (taken > oldest) return;
+      this.held.delete(slot);
+    }
   }
 }
 
@@ -80,12 +94,18 @@ export interface ConcurrentReads {
 
 export const DEFAULT_MAX_ROWS_AHEAD = 64;
 
-/** The engine's read-ahead for an assembly option; undefined reads rows one after another. */
-export function readAheadFor(options: ConcurrentReads | undefined): ReadAhead | undefined {
+/**
+ * The engine's read-ahead for an assembly option; undefined reads rows one after another.
+ * `holdMs`, the request deadline, bounds how long a row that never settles holds its slot.
+ */
+export function readAheadFor(
+  options: ConcurrentReads | undefined,
+  holdMs?: number,
+): ReadAhead | undefined {
   if (options === undefined) return undefined;
   return {
     rowsAtOnce: options.rowsAtOnce,
-    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD),
+    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD, holdMs),
   };
 }
 
@@ -161,8 +181,10 @@ export async function inRowOrder<T>(
       const current = startedAhead[index] ?? start(index);
       startedAhead[index] = undefined;
       next = Math.max(next, index + 1);
-      while (next < count && next < index + readAhead.rowsAtOnce && readAhead.ahead.take()) {
-        const pending = start(next).finally(() => readAhead.ahead.give());
+      while (next < count && next < index + readAhead.rowsAtOnce) {
+        const giveBack = readAhead.ahead.take();
+        if (giveBack === undefined) break;
+        const pending = start(next).finally(giveBack);
         pending.catch(() => {});
         startedAhead[next] = pending;
         next += 1;

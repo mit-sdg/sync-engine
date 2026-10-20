@@ -120,7 +120,7 @@ export class Reacting {
       (flowToken) => this.rowGuard(flowToken),
       (flowToken) => this.consumeAction(flowToken),
     );
-    this.registry.configureReadAhead(readAheadFor(concurrentReads));
+    this.registry.configureReadAhead(readAheadFor(concurrentReads, readHoldMs));
     this.registry.configureInvocationReads(this.invocationReads);
   }
 
