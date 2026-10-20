@@ -239,12 +239,14 @@ function expandDistinctRows(
  * equal primitives at the same names, so a fill is compared, in the order the pairwise test
  * used, only with earlier kept fills that agree on those. Strings, numbers, and booleans enter
  * the key; every other value shares one placeholder and is left to the comparison, so building
- * the key never runs user code.
+ * the key never runs user code. Fills that differ only in records, as `.is({ post })` binds,
+ * share a key and are still compared pairwise.
  */
 function firstDistinct(): (fill: Frame, names: readonly (string | symbol)[]) => boolean {
   const kept = new Map<string, Frame[]>();
   return (fill, names) => {
-    const key = JSON.stringify(names.map((name) => primitivePart(fill[name])));
+    // Each part alone, since JSON.stringify on an array would call an app's Array.prototype.toJSON.
+    const key = names.map((name) => JSON.stringify(primitivePart(fill[name]))).join(",");
     const same = kept.get(key);
     if (same === undefined) {
       kept.set(key, [fill]);
