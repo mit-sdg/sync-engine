@@ -135,6 +135,18 @@ function inputsOfMethod(method: ts.MethodDeclaration, context: CheckerContext): 
   return unsupportedParameter(method, "an untyped parameter must destructure an object");
 }
 
+/** The type an untyped parameter's default asserts, as `inputs = [] as Input[]` does. */
+function assertedType(initializer: ts.Expression | undefined): ts.TypeNode | undefined {
+  let expression = initializer;
+  while (expression !== undefined && ts.isParenthesizedExpression(expression)) {
+    expression = expression.expression;
+  }
+  return expression !== undefined &&
+    (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression))
+    ? expression.type
+    : undefined;
+}
+
 interface Member {
   name: string;
   inputs: Inputs;
@@ -159,13 +171,19 @@ function sourceMember(method: ts.MethodDeclaration, context: CheckerContext): Me
     };
     return { name, inputs: unsupported, result: unsupported, listForm: false };
   }
-  const [parameter] = method.parameters;
+  // A `this` parameter is erased when the method compiles, so it is not an input.
+  const parameters = method.parameters.filter(
+    (candidate) => !(ts.isIdentifier(candidate.name) && candidate.name.text === "this"),
+  );
+  const [parameter] = parameters;
+  const listType =
+    parameter === undefined ? undefined : (parameter.type ?? assertedType(parameter.initializer));
   const listInputs =
     name.startsWith("_") &&
-    method.parameters.length === 1 &&
+    parameters.length === 1 &&
     parameter.dotDotDotToken === undefined &&
-    parameter.type !== undefined
-      ? shapeOfListElement(parameter.type, parameter, context)
+    listType !== undefined
+      ? shapeOfListElement(listType, parameter, context)
       : undefined;
   if (listInputs !== undefined) {
     return {
@@ -237,7 +255,13 @@ function registeredClass(
         }
         if (property.name.text === "batched") {
           let list: ts.Expression = property.initializer;
-          while (ts.isAsExpression(list) || ts.isSatisfiesExpression(list)) list = list.expression;
+          while (
+            ts.isAsExpression(list) ||
+            ts.isSatisfiesExpression(list) ||
+            ts.isParenthesizedExpression(list)
+          ) {
+            list = list.expression;
+          }
           const names = ts.isArrayLiteralExpression(list) ? list.elements : undefined;
           if (names === undefined || !names.every(ts.isStringLiteralLike)) batched = undefined;
           else for (const element of names) batched?.add(element.text);

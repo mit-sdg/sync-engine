@@ -494,6 +494,27 @@ describe("batched queries", () => {
     ]);
   });
 
+  test("a list form may take a this parameter or an asserted default, and batched may be parenthesized", async () => {
+    const where = await concept(
+      "refresh () : returns ()\n  then\n    returns",
+      [
+        "  refresh() { return {}; }",
+        "  async _owned(this: unknown, inputs: readonly { item: number }[]): Promise<{ title: string }[]> { return inputs.map(() => ({ title: '' })); }",
+        "  async _defaulted(inputs = [] as { item: number }[]): Promise<{ title: string }[]> { return inputs.map(() => ({ title: '' })); }",
+      ].join("\n"),
+      [
+        "_owned (item: Item) : one (title: Text)",
+        "_defaulted (item: Item) : one (title: Text)",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(where, "registry.ts"),
+      REGISTRY.replace("spec });", `spec, batched: (["_owned", "_defaulted"] as const) });`),
+    );
+
+    expect(conceptFailures(where)).toEqual([]);
+  });
+
   test("a rest parameter is not a list form, and a list of non-records is not one either", async () => {
     const where = await concept(
       "refresh () : returns ()\n  then\n    returns",
