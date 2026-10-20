@@ -45,7 +45,9 @@ a bound array, record, or `Date` cannot rewrite the occurrence for any other
 match; other object kinds are shared. One match, or one evaluation of a
 reaction's `where`, shares one copy of each repeated reference across its frames,
 so a consequence that changes a bound value in place changes it for sibling
-frames' consequences too.
+frames' consequences too. A query a `where` line asks receives that same copy:
+a query that changes a bound value changes it for the later lines, and whether
+it does can depend on whether its answer came from the query cache.
 
 The action then settles in one of two outcome postures:
 
@@ -368,7 +370,9 @@ independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
 So must the computations, conditions, and custom ops that reads use: evaluation
 may run them in another order than the rows', and for rows whose answers it
-never uses.
+never uses. So must getters on the rows a query returns: matching reads them
+against the frame as it stands, so a getter that changes a bound value can drop
+its row.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including

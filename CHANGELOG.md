@@ -46,7 +46,9 @@ follow the [support policy](SUPPORT.md), and review the
   provenance, posture, and input on the stored record before copying it, so a
   record that fails that test is not copied. Matches, their order, and their
   isolation are unchanged; a getter on a raw action output is now read only when
-  a record passes the test.
+  a record passes the test. An input's `Date` subclass has its `getTime` called
+  a different number of times, so one whose `getTime` throws now fails the
+  trigger where it used to match.
 - Read and action-pattern equality compare arrays by length and every index, a
   hole comparing as `undefined`. It used to skip holes on the left only, so
   `[, 1]` equalled `[5, 1]` but not the reverse, and an answer could depend on
