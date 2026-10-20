@@ -42,6 +42,11 @@ follow the [support policy](SUPPORT.md), and review the
   taking no argument still works.
 - The reference now states that computations, conditions, and custom ops used
   by reads must be free of side effects, as queries already had to be.
+- Rows of a `where` line pass through one path with or without
+  `concurrentReads`, which takes a few more promise turns. Invocations that
+  overlap can interleave differently, so a read can see another invocation's
+  write it used to miss, or miss one it used to see. Order within one flow is
+  unchanged.
 
 ## [1.1.0] - 2026-10-05
 
