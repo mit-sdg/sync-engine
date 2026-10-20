@@ -250,8 +250,32 @@ type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass
     ? E
     : never
   : E extends ConceptDeclaration<infer C>
-    ? E & { readonly class: InvalidQueryKeys<E> extends never ? C : never }
+    ? E & {
+        readonly class: InvalidQueryKeys<E> extends never
+          ? WideBatched<E> extends true
+            ? never
+            : C
+          : never;
+      }
     : never;
+
+/**
+ * Whether an entry names its batched queries in a list of literal names wider
+ * than one tuple, such as `("_a" | "_b")[]`, which the types cannot follow while
+ * the runtime still batches every name in it, so such an entry is refused where
+ * it is written. A plain `string[]` names nothing the types could follow.
+ */
+type WideBatched<Entry> = Entry extends { readonly batched?: infer List }
+  ? [Exclude<List, undefined>] extends [readonly unknown[]]
+    ? [LiteralNames<Exclude<List, undefined>>] extends [never]
+      ? [Exclude<List, undefined>[number]] extends [never]
+        ? false
+        : string extends Exclude<List, undefined>[number]
+          ? false
+          : true
+      : false
+    : false
+  : false;
 
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
   [K in keyof T]: CheckedConceptEntry<T[K]>;

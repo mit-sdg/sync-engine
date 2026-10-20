@@ -262,7 +262,8 @@ function checkRefusals(
 export function registerConcept<
   C extends ConceptClass,
   const F extends Record<string, FloorFactory<C>> = Record<never, never>,
-  const B extends readonly QueryNameOf<C>[] = readonly [],
+  // A literal tuple, so the types follow every name the runtime batches.
+  const B extends readonly [] | readonly [QueryNameOf<C>, ...QueryNameOf<C>[]] = readonly [],
 >(registration: ConceptRegistration<C, F, B>): RegisteredConcept<C, F, B> {
   if (typeof registration.class !== "function" || registration.class.prototype === undefined) {
     throw new Error("registerConcept: class must be a constructable concept class.");

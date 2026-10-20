@@ -421,13 +421,19 @@ function wideBatchedContract(
     concepts: { Shelf: { class: BatchedShelf, batched: either } },
     computations: {},
   });
-  const listed = vocabulary({
+  vocabulary({
+    // @ts-expect-error A wide list is refused even when every list form would type as unbatched.
     concepts: { Listed: { class: ListTakingShelf, batched: records } },
     computations: {},
-  }).concepts.Listed;
-  // @ts-expect-error A query a wide list may name keeps its list form in the types.
-  listed._byRecords({ id: "a" });
+  });
 }
+
+function wideRegistrationContract(spec: string, names: ("_title" | "_book")[]): void {
+  // @ts-expect-error registerConcept refuses a batched list wider than a literal tuple.
+  registerConcept({ class: BatchedShelf, spec, batched: names });
+  registerConcept({ class: BatchedShelf, spec, batched: ["_title"] });
+}
+void wideRegistrationContract;
 void wideBatchedContract;
 
 const batchedWords = vocabulary({
