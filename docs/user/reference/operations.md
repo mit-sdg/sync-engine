@@ -66,10 +66,13 @@ assemblies, so actions' writes are not queued behind reads.
 
 A query a registration names under `batched` answers a list of inputs at once,
 so the reads grouped for it take one database command instead of one each.
-Each call receives a frozen list of inputs, copied as plain data. The engine
-may group reads issued together into one call; it currently does so only with a
-query cache and `concurrentReads.rowsAtOnce` above 1. `batched` takes effect
-only in an assembly made by `assemble`. `groupBatchedQueries: false` turns
+Each call receives a frozen list of copied inputs. The engine may group reads
+issued together into one call; it currently does so only with a query cache and
+`concurrentReads.rowsAtOnce` above 1. Every read in a group waits until its
+call settles, so one stuck or slow command holds every read grouped with it:
+give the database client timeouts that end such a command, after which each
+input is read again alone. `batched` takes effect in an assembly made by
+`assemble`. `groupBatchedQueries: false` turns
 grouping off for the whole assembly without changing any class: every read then
 calls the batched method with a list of one. See
 [batched queries](semantics.md#batched-queries).

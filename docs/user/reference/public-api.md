@@ -161,7 +161,8 @@ at most `rowsAtOnce` rows of one line or selection are read at once, and at
 most `maxRowsAhead` rows (64 when unset) are started ahead across the assembly
 (`concurrentReads` is experimental; see the
 [support policy](../../../SUPPORT.md#stable-compatibility)). Each call of a
-batched query receives a frozen list of inputs, copied as plain data. The engine
+batched query receives a frozen list of copied inputs: records, arrays, and plain
+dates are copied, other objects kept. The engine
 may group reads issued together into one call; it currently does so only with a
 query cache and `concurrentReads.rowsAtOnce` above 1. With
 `groupBatchedQueries: false`, each read calls the list form with a list of one.
@@ -284,11 +285,12 @@ takes a list of inputs and returns one answer per input, in the same order;
 compositions and callers of an assembled concept still ask it with one input
 and get one answer, while code holding the raw class instance calls the list
 form. `registerConcept` rejects a name the specification does not declare as a
-query, and TypeScript accepts only the class's query names. `conceptSet`
-rejects a name given twice and a batched method that destructures one input or
-takes a `_` placeholder, and `assemble` rejects a selected implementation whose
-batched method does so. Only `sync-engine check` verifies from the types that
-the method takes a list; it also rejects a rest parameter. Batched names are
+query, and TypeScript accepts only the class's `_` members. `conceptSet`
+rejects a name given twice and a batched method whose parameter destructures
+one flat record or is a `_` placeholder, and `assemble` rejects a selected
+implementation whose batched method does so. Only `sync-engine check` reliably
+verifies from the types that the method takes a list; it also rejects a rest
+parameter. The types follow `batched` only when it is one literal tuple. Batched names are
 written in the `registerConcept(...)` call and carried by its inferred type;
 input names come from the specification. `ConceptRegistration<C>` and
 `RegisteredConcept<C>` written out name no batched queries, so a registration
@@ -304,8 +306,9 @@ inputs: each answer equals the answer for that input alone, in order, reversed,
 and with duplicates, no answer is missing, an empty list answers an empty
 list, and answers to different inputs share no objects. It passes the list
 frozen, as the engine does, and rejects with what differed. It compares
-records, arrays, dates, maps, sets, and binary data, and fails on any other
-object, such as a class instance or a promise. Execution semantics for batched
+records, arrays, dates, and binary data, and fails on any other kind of object,
+such as a map, a set, a class instance, or a promise, unless both answers hold
+the very same object. Execution semantics for batched
 queries are in [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied
@@ -805,9 +808,10 @@ either a concept class or `{ class, spec?, purpose?, principle?, queries?,
 outcomes?, refusals?, batched? }`. Ordinary config-based applications use `conceptSet`
 from `/assembly`, which creates the executable declaration internally. A direct
 vocabulary can still be passed to `assemble` through the advanced
-`VocabularyAssemblyOptions` alternative. `batched` takes effect only in
-`assemble`: an engine from `createEngine` calls a batched query's method with the one input as
-asked, not with a list, so instrument a batched class only through `assemble`.
+`VocabularyAssemblyOptions` alternative. `batched` takes effect in `assemble`:
+an engine from `createEngine` calls a batched query's method with the one input
+as asked, not with a list, unless the same instance was already assembled with
+`batched`, so instrument a batched class only through `assemble`.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

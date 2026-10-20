@@ -448,8 +448,8 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
     /**
      * Queries the class implements in list form: each takes a list of inputs and
      * returns one answer per input, in the same order. Readers still ask them
-     * with one input. Each call receives a frozen list of inputs, copied as plain
-     * data. The engine may group reads issued together into one call; see
+     * with one input. Each call receives a frozen list of copied inputs:
+     * records, arrays, and plain dates are copied, other objects kept. The engine may group reads issued together into one call; see
      * `groupBatchedQueries` for when it currently does.
      */
     batched?: B;
@@ -3629,11 +3629,13 @@ export declare class ImportedIrBinder {
  * `queryCache: "since-dispatch"`.
  *
  * Every outside invocation, direct `form` and direct query root opens a new
- * dispatch point. Until it settles, reads done for its flow reuse only answers
+ * dispatch point. Until it returns, reads done for its flow reuse only answers
  * whose query began at or after that point, so it sees every change that
  * landed before it began, as when every cache is cleared at dispatch. Unlike
- * clearing, invocations already running keep the answers they read. Any other
- * read uses the current point, which is what clearing at each dispatch gives.
+ * clearing, invocations already running can reuse the answers they read,
+ * unless a later read of the same key replaced one with a newer answer. Any
+ * other read uses the current point, which is what clearing at each dispatch
+ * gives.
  *
  * A point stays open at most `holdMs`, the request deadline. After that its
  * flow reads at the latest point, which only reuses less, so a read that never

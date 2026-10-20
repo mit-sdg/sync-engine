@@ -134,8 +134,8 @@ export interface ConceptRegistration<
   /**
    * Queries the class implements in list form: each takes a list of inputs and
    * returns one answer per input, in the same order. Readers still ask them
-   * with one input. Each call receives a frozen list of inputs, copied as plain
-   * data. The engine may group reads issued together into one call; see
+   * with one input. Each call receives a frozen list of copied inputs:
+   * records, arrays, and plain dates are copied, other objects kept. The engine may group reads issued together into one call; see
    * `groupBatchedQueries` for when it currently does.
    */
   batched?: B;

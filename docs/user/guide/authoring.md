@@ -138,13 +138,14 @@ async _isTrashed(inputs: { item: string }[]) {
 
 The specification and every reader stay as they were: compositions and callers
 of the assembled concept still write `Trashing._isTrashed({ item })` and get
-one answer. Each call receives a frozen list of inputs, copied as plain data.
-The engine may group reads issued together into one call; it currently does so
+one answer. Each call receives a frozen list of copied inputs: records, arrays,
+and plain dates are copied; maps, sets, and class instances are your own. The engine may group reads issued together into one call; it currently does so
 only with a query cache and `concurrentReads.rowsAtOnce` above 1
 (`concurrentReads` is experimental; see the
 [support policy](../../../SUPPORT.md#stable-compatibility)). If a grouped call
-throws, each of its inputs is read again alone, all at once,
-as without grouping. Return exactly one answer per input, in input order, even
+throws or does not answer one per input, each of its inputs is read again
+alone, all at once, as without grouping. Every read in a group waits for its
+call, so give your database client timeouts that end a stuck call. Return exactly one answer per input, in input order, even
 for duplicates and for inputs with nothing stored; a query that answers many
 rows answers each input with its own list. Build fresh objects for every input
 instead of handing two inputs one object. Copy the list before sorting it. Code
@@ -155,9 +156,9 @@ details.
 
 Write the `batched` names literally, as a list of strings in the
 `registerConcept` call, because `sync-engine check` reads them from the source.
-Assembly rejects a batched method that destructures one input or takes a `_`
-placeholder; only `sync-engine check` verifies from the types that the method
-takes a list. Test each batched query with
+Assembly rejects a batched method whose parameter destructures one flat record,
+as `({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
+verifies from the types that the method takes a list. Test each batched query with
 `await checkBatchedQuery(new TrashingConcept(...), "_isTrashed", samples)`,
 giving samples that cover missing keys, several rows, and no rows. Only queries
 can be batched; leave a query in its single form unless its storage really pays

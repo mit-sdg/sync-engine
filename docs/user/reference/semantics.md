@@ -43,9 +43,9 @@ original input object, so later mutation cannot rewrite the occurrence that
 reactions match. A reaction matches each record, through a trigger or through
 `earlier`, on its own copy of these values and binds from that copy, so changing
 a bound array, record, or `Date` cannot rewrite the occurrence for any other
-match; other object kinds are shared. The engine may read a getter on an
-action's output any number of times, or not at all when no reaction can match
-the record, so such getters must be pure. One match, or one evaluation of a reaction's `where`, shares one copy of
+match; other object kinds are shared. The engine reads a getter on an action's
+output when it records the output, and may read it again any number of times,
+so such getters must be pure. One match, or one evaluation of a reaction's `where`, shares one copy of
 each repeated reference across its bindings, so a consequence that changes a
 bound value in place changes it for sibling bindings' consequences too. A
 query a `where` line asks receives that same copy: a query that changes a bound
@@ -365,13 +365,15 @@ by concept instance and argument between invalidation points. Instrumented
 actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
 caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
-without clearing: until an outside invocation settles (its cascade has finished
-or the assembly's request deadline, `executionLimits.maxRequestDurationMs` or
-30 seconds without `executionLimits`, has passed, even for a call given a longer
-`timeoutMs`), reads done for its flow
-reuse only answers whose
-query began at or after it was dispatched, so invocations already running keep
-the answers they read. A direct `form` and a direct query root read the same
+without clearing: until an outside invocation returns to its caller or the
+assembly's request deadline passes, whichever comes first
+(`executionLimits.maxRequestDurationMs`, or 30 seconds without
+`executionLimits`, even for a call given a longer `timeoutMs`), reads done for
+its flow reuse only answers whose query began at or after it was dispatched.
+So invocations already running can reuse the answers they read, unless a later
+read of the same query and argument has replaced one; they then get the newer
+answer. An answer still being read is reused too, so a read that never settles
+holds every reader that reuses it until that reader's point closes. A direct `form` and a direct query root read the same
 way from their own start. Any other read, such as a reaction in a flow begun by
 a direct action, reuses only answers begun since the latest of those starts,
 decided at each read, and so does a flow still reading after the request
@@ -424,16 +426,18 @@ change: a reaction, view, former, or direct caller of an assembled concept still
 asks with one input and gets one answer, and promises, cardinality checks, and
 row limits apply to each answer as to an ordinary query's. Only reads the query
 cache cannot answer reach the method. Inside the class, the method is an
-ordinary method that takes a list. `batched` takes effect only in `assemble`: a
+ordinary method that takes a list. `batched` takes effect in `assemble`: a
 `createEngine` engine instruments the method as an ordinary query, even when a
-vocabulary names it batched, so a read there passes it one input, not a list.
+vocabulary names it batched, so a read there passes it one input, not a list,
+unless the same instance was already assembled with `batched`.
 
-Each call receives a frozen list of inputs, copied as plain data. The engine
-may group reads issued together into one call; it currently does so only with a
-query cache and `concurrentReads.rowsAtOnce` above 1. Each input is copied when
-it is asked: records, arrays, and `Date` values are copied deeply, and class
-instances, maps, and sets are kept by identity. A later change to a copied
-record, array, or `Date` does not reach the list. Without `concurrentReads`,
+Each call receives a frozen list of copied inputs. The engine may group reads
+issued together into one call; it currently does so only with a query cache and
+`concurrentReads.rowsAtOnce` above 1. Each input is copied when it is asked:
+records, arrays, and plain `Date` values are copied deeply, keeping only their
+enumerable own properties, and class instances, `Date` subclasses, maps, and
+sets are kept by identity. A later change to a copied record, array, or `Date`
+does not reach the list. The list is frozen, but the copies in it are not. Without `concurrentReads`,
 with `rowsAtOnce: 1`, under `queryCache: "none"`, or with
 `groupBatchedQueries: false`, every read calls the method with a list of one.
 Otherwise the engine groups the reads pending for one batched query on one
@@ -444,13 +448,17 @@ appear more than once. A grouped read's reuse under `since-dispatch` is
 counted from when it was asked, though the method runs when the group is sent,
 so a read can only be reused less than an ordinary read begun at that moment.
 
-If the method throws for a group of more than one, the engine logs a warning
-that names the query and reads each input again alone, in a list of one, all at
-once, as it would without grouping. An input whose read throws or never settles
-then fails or delays only its own read. If the method throws for a list of one,
-that read fails. If the method returns something other than a list of the right
-length, or a list with a missing element, every read in the group faults with
-an error naming the query; an empty list is still a valid answer for one input.
+If the method throws for a group of more than one, returns something other
+than a list of the right length, returns a list with a missing element, or
+returns an answer that throws as it is read, the engine logs a warning that
+names the query and reads each input again alone, in a list of one, all at
+once, as it would without grouping. Each read again receives the copy taken
+when it was asked, not the one the failed call received. An input whose read
+throws then fails only its own read. For a list of one, any of these faults
+that read with an error naming the query; an empty list is still a valid answer
+for one input. Until the group's call settles, every read in it waits: a call
+that never settles, or settles slowly because of one input, holds every read
+grouped with it, so give the database client timeouts that end a stuck call.
 
 The method must keep the batched law: whatever else shares the list, in any
 order and with duplicates, each input gets the answer it gets alone, an empty
@@ -460,9 +468,9 @@ engine cannot check this as it runs; `checkBatchedQuery` checks it on sample
 inputs. The method is still a query, so it must be side-effect-free, and its
 answer for an input may depend only on stored state and that input. Every
 selected implementation, whether from a floor or `instances`, must take the
-list form. Assembly rejects one that destructures a single input or takes a
-`_` placeholder; only `sync-engine check` verifies from the types that the
-method takes a list.
+list form. Assembly rejects one whose parameter destructures one flat record,
+as `({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
+verifies from the types that the method takes a list.
 
 ## Views and formers
 

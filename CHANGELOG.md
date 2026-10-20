@@ -86,17 +86,18 @@ Compatibility.
   implements in list form: each such method takes a list of inputs and returns
   one answer per input, in order. Reactions, formers, and callers of an
   assembled concept still ask with one input and get one answer, and the
-  vocabulary's types show such a query taking one input. Each call receives a frozen
-  list of inputs, copied as plain data. The engine may group reads issued
+  vocabulary's types show such a query taking one input. Each call receives a
+  frozen list of copied inputs: records, arrays, and plain dates are copied;
+  maps, sets, and class instances are the caller's own. The engine may group reads issued
   together into one call; it currently does so only with a query cache and
   `concurrentReads.rowsAtOnce` above 1, collecting the reads pending when the
-  event-loop turn ends. A group whose call throws is read again with each input
-  alone, as without grouping, with a warning in the log. An answer list of the
-  wrong length or with a missing element faults the group's reads. A stub or
+  event-loop turn ends. A group whose call throws, or whose answers are not one
+  per input, is read again with each input alone, as without grouping, with a
+  warning in the log; every read in a group waits until its call settles. A stub or
   spy that replaces a batched method receives the list too. Assembly rejects a
-  selected implementation whose batched method destructures one input or takes
-  a `_` placeholder; only `sync-engine check` verifies from the types that it
-  takes a list. Batched names are written in the `registerConcept(...)` call,
+  selected implementation whose batched method's parameter destructures one
+  flat record or is a `_` placeholder; only `sync-engine check` reliably
+  verifies from the types that it takes a list. Batched names are written in the `registerConcept(...)` call,
   and `ConceptRegistration<C>` and `RegisteredConcept<C>` written out name
   none. A registration that names no query under `batched` behaves as before,
   types included.
@@ -105,8 +106,9 @@ Compatibility.
   of one.
 - `@mit-sdg/sync-engine/assembly` exports `checkBatchedQuery`, which checks on
   sample inputs that a list form answers each input as a list of one does. It
-  compares records, arrays, dates, maps, sets, and binary data, and fails on
-  any other object, such as a class instance or a promise.
+  compares records, arrays, dates, and binary data, and fails on any other
+  kind of object, such as a map, a set, a class instance, or a promise, unless
+  both answers hold the very same object.
 - `sync-engine check` reads a batched query's input and row shapes from its
   list form. It fails when a query takes a list of records without being named
   under `batched`, when a named query does not take a list, and when `batched`
