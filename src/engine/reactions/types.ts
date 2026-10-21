@@ -392,6 +392,15 @@ export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A
       : F
   : F;
 
+/** Whether a method has the list form a batched query needs: one list of inputs in, a list out. */
+export type IsListForm<F> = F extends (inputs: infer P) => infer A
+  ? [ListInput<Exclude<P, undefined>>] extends [never]
+    ? false
+    : Awaited<A> extends readonly unknown[]
+      ? true
+      : false
+  : false;
+
 /**
  * The input of a list parameter, as `sync-engine check` reads one: an array,
  * optional or with a default included, but not a tuple or a union of arrays.

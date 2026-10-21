@@ -436,6 +436,158 @@ function wideRegistrationContract(spec: string, names: ("_title" | "_book")[]): 
 void wideRegistrationContract;
 void wideBatchedContract;
 
+// The types follow `batched` only when its type names one list of queries for
+// every value it admits; every other form is refused where it is written.
+function batchedFormsContract(spec: string, on: boolean, anyNames: any): void {
+  const names = ["_book"];
+  vocabulary({
+    // @ts-expect-error A list in a variable is a string[], which names no query the types can follow.
+    concepts: { Shelf: { class: BatchedShelf, batched: names } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A list that may be left out names queries only sometimes.
+    concepts: { Shelf: { class: BatchedShelf, batched: on ? (["_book"] as const) : undefined } },
+    computations: {},
+  });
+  vocabulary({
+    concepts: {
+      // @ts-expect-error A conditional spread may leave the list out.
+      Shelf: { class: BatchedShelf, ...(on ? { batched: ["_book"] as const } : {}) },
+    },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A name chosen by a condition names one query or another.
+    concepts: { Shelf: { class: BatchedShelf, batched: [on ? "_title" : "_book"] as const } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A name may appear once.
+    concepts: { Shelf: { class: BatchedShelf, batched: ["_book", "_book"] } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A list typed any names nothing the types can read.
+    concepts: { Shelf: { class: BatchedShelf, batched: anyNames } },
+    computations: {},
+  });
+
+  // @ts-expect-error A registration that may leave batched out says nothing sure.
+  registerConcept({ class: BatchedShelf, spec, batched: on ? ["_book"] : undefined });
+  // @ts-expect-error One list or an empty one is one of several lists.
+  registerConcept({ class: BatchedShelf, spec, batched: on ? ["_book"] : [] });
+  conceptSet({
+    // @ts-expect-error One list or another is one of several lists.
+    Shelf: registerConcept({ class: BatchedShelf, spec, batched: on ? ["_title"] : ["_book"] }),
+  });
+  conceptSet({
+    // @ts-expect-error A name chosen by a condition names one query or another.
+    Shelf: registerConcept({ class: BatchedShelf, spec, batched: [on ? "_title" : "_book"] }),
+  });
+  const rest: readonly ["_book", ..."_title"[]] = ["_book"];
+  conceptSet({
+    // @ts-expect-error A rest element leaves the list's names open.
+    Shelf: registerConcept({ class: BatchedShelf, spec, batched: rest }),
+  });
+  const batchedShelf = registerConcept({ class: BatchedShelf, spec, batched: ["_book"] });
+  const plainShelf = registerConcept({ class: ListTakingShelf, spec });
+  // @ts-expect-error Choosing between registrations chooses between lists.
+  conceptSet({ Shelf: on ? batchedShelf : plainShelf });
+  const annotatedWide: RegisteredConcept<
+    typeof BatchedShelf,
+    Record<never, never>,
+    readonly ("_title" | "_book")[]
+  > = registerConcept({ class: BatchedShelf, spec, batched: ["_book"] });
+  // @ts-expect-error An annotation wider than the list given hides its names.
+  conceptSet({ Shelf: annotatedWide });
+  const leftOut = { class: BatchedShelf, spec } as ConceptRegistration<
+    typeof BatchedShelf,
+    Record<never, never>,
+    readonly ["_book"]
+  >;
+  // @ts-expect-error A registration whose type names batched queries must give them.
+  registerConcept(leftOut);
+
+  // These name their queries surely, so the types follow them.
+  const FIRST = ["_title"] as const;
+  const SECOND = ["_book"] as const;
+  const surely = conceptSet({
+    Constant: registerConcept({ class: BatchedShelf, spec, batched: FIRST }),
+    Spread: registerConcept({ class: BatchedShelf, spec, batched: [...FIRST, ...SECOND] }),
+    Empty: registerConcept({ class: ListTakingShelf, spec, batched: [] }),
+    None: registerConcept({ class: ListTakingShelf, spec }),
+  }).concepts;
+  surely.Constant._title({ id: "a" });
+  surely.Spread._book({ id: "a" });
+  surely.Empty._byIds(["a"]);
+  surely.None._byIds(["a"]);
+  const forward = <
+    C extends new () => object,
+    const B extends readonly [
+      Extract<keyof InstanceType<C>, `_${string}`>,
+      ...Extract<keyof InstanceType<C>, `_${string}`>[],
+    ],
+  >(
+    cls: C,
+    batched: B,
+  ) => registerConcept({ class: cls, spec, batched });
+  conceptSet({ Forwarded: forward(BatchedShelf, ["_title"]) }).concepts.Forwarded._title({
+    id: "a",
+  });
+  conceptSet({
+    // @ts-expect-error A wrapper that forwards a choice of lists is refused where the set meets it.
+    Forwarded: forward(BatchedShelf, on ? ["_title"] : ["_book"]),
+  });
+}
+void batchedFormsContract;
+
+class HalfConvertedShelf {
+  async _title(inputs: readonly { id: string }[]): Promise<{ title: string }[]> {
+    return inputs.map(({ id }) => ({ title: id }));
+  }
+
+  async _paged({ id }: { id: string; page?: number }): Promise<{ title: string }[]> {
+    return [{ title: id }];
+  }
+}
+
+function singleFormContract(spec: string): void {
+  vocabulary({
+    // @ts-expect-error A query whose method takes one input cannot be batched.
+    concepts: { Shelf: { class: HalfConvertedShelf, batched: ["_paged"] } },
+    computations: {},
+  });
+  conceptSet({
+    // @ts-expect-error The same holds for a registration.
+    Shelf: registerConcept({ class: HalfConvertedShelf, spec, batched: ["_paged"] }),
+  });
+  const optionalSecond = ["_title", "_book"] as ["_title", "_book"?];
+  vocabulary({
+    // @ts-expect-error A name that may be left out of the list is refused.
+    concepts: { Shelf: { class: BatchedShelf, batched: optionalSecond } },
+    computations: {},
+  });
+  conceptSet({
+    Shelf: registerConcept({ class: HalfConvertedShelf, spec, batched: ["_title"] }),
+  }).concepts.Shelf._title({ id: "a" });
+  vocabulary({
+    // @ts-expect-error batched names only the class's queries, in vocabulary as in registerConcept.
+    concepts: { Shelf: { class: BatchedShelf, batched: ["_missing"] } },
+    computations: {},
+  });
+}
+void singleFormContract;
+
+class StaticallyBatchedShelf extends ListTakingShelf {
+  static batched = ["_byIds"] as const;
+}
+// The runtime reads batched only from a declaration, so a class's own static is not followed.
+vocabulary({
+  concepts: { Listed: StaticallyBatchedShelf },
+  computations: {},
+}).concepts.Listed._byIds(["a"]);
+
 const batchedWords = vocabulary({
   concepts: { Shelf: { class: BatchedShelf, batched: ["_title", "_book"] } },
   computations: {},

@@ -52,6 +52,7 @@ import type {
   InstrumentedAction,
   Mapping,
   Reaction,
+  IsListForm,
   QueryAsAsked,
   TriggerActionLine,
 } from "../types.ts";
@@ -155,26 +156,96 @@ type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = 
 };
 
 /**
- * The queries a concept entry names under `batched`, when it names them in one
- * literal tuple. A wider list, such as `("_a" | "_b")[]` or a union of tuples,
- * names none, so a call the runtime would answer in another form fails to
- * compile instead of failing when it runs.
+ * The type of an entry's `batched` value, `undefined` where it has none. The
+ * runtime reads `batched` only from a declaration, never from a class.
  */
-type BatchedNames<Entry> = Entry extends { readonly batched?: infer List }
-  ? LiteralNames<Exclude<List, undefined>>
+type BatchedValue<Entry> = Entry extends ConceptClass
+  ? undefined
+  : Entry extends unknown
+    ? "batched" extends keyof Entry
+      ? Entry["batched" & keyof Entry]
+      : undefined
+    : never;
+
+/**
+ * The queries a concept entry names under `batched`. The types follow `batched`
+ * only when its type names one list of queries for every value it admits; see
+ * `BatchedProblem`. Any other entry is refused where it is written.
+ */
+type BatchedNames<Entry> = [BatchedProblem<BatchedValue<Entry>>] extends [never]
+  ? NamesIn<Exclude<BatchedValue<Entry>, undefined>>
   : never;
 
-type LiteralNames<List> = [List] extends [readonly unknown[]]
-  ? IsUnion<List> extends true
-    ? never
-    : number extends List["length"]
-      ? never
-      : string extends List[number]
-        ? never
-        : List[number]
-  : never;
+type NamesIn<List> = List extends readonly unknown[] ? List[number] : never;
 
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : false;
+
+type ElementProblem<List extends readonly unknown[], Seen = never> = List extends readonly [
+  infer Head,
+  ...infer Tail,
+]
+  ? 0 extends 1 & Head
+    ? "names a query by a value typed any"
+    : string extends Head
+      ? "names a query by a string, not a literal name"
+      : IsUnion<Head> extends true
+        ? "names one query or another"
+        : [Head] extends [Seen]
+          ? "names a query twice"
+          : ElementProblem<Tail, Seen | Head>
+  : never;
+
+/**
+ * Why the types cannot tell which queries a `batched` value names, or never
+ * when they can. They can when the value is surely present or surely absent,
+ * is one list rather than one of several, has a fixed length, and names each
+ * query once by one literal name. For any other value, the runtime would batch
+ * names the types do not follow, or none they do, and a call that compiles
+ * would answer wrongly.
+ */
+export type BatchedProblem<List> = 0 extends 1 & List
+  ? "is typed any"
+  : [List] extends [undefined]
+    ? never
+    : undefined extends List
+      ? [NamesIn<Exclude<List, undefined>>] extends [never]
+        ? never
+        : "may be left out"
+      : IsUnion<List> extends true
+        ? "is one of several lists"
+        : List extends readonly unknown[]
+          ? number extends List["length"]
+            ? "is not a fixed list of names"
+            : IsUnion<List["length"]> extends true
+              ? "has a name that may be left out"
+              : ElementProblem<List>
+          : "is not a list";
+
+/**
+ * The names under `batched` that are not queries of the class taking a list of
+ * inputs. The runtime refuses a name that is not a query, and calls a query
+ * that takes one input with a list, so it would answer wrongly.
+ */
+export type SingleFormBatched<C extends ConceptClass, Names> = Names extends string
+  ? Names extends Extract<keyof InstanceType<C>, `_${string}`>
+    ? IsListForm<InstanceType<C>[Names]> extends true
+      ? never
+      : Names
+    : Names
+  : never;
+
+/** The compile error for a batched name that is not a query taking a list of inputs. */
+export type SingleFormRefusal<Name> = Name extends string
+  ? `batched names ${Name}, which is not a query taking a list of inputs: give the query one parameter typed Input[] and return one answer per input.`
+  : never;
+
+/**
+ * The compile error for a `batched` value the types cannot follow. A value typed
+ * `any` would satisfy any message, so it meets `never` instead.
+ */
+export type BatchedRefusal<Problem extends string> = Problem extends "is typed any"
+  ? never
+  : `batched ${Problem}, so the types cannot tell which queries it batches: write the query names inline, as string literals. To stop grouping reads, set groupBatchedQueries: false.`;
 
 /** The batched query names of each vocabulary entry. */
 export type BatchedQueryNames<T extends Record<string, ConceptEntry>> = {
@@ -245,37 +316,19 @@ type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry
     : K;
 }[QueryKeys<I>];
 
-type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass
+type CheckedConceptEntry<E extends ConceptEntry> = [BatchedProblem<BatchedValue<E>>] extends [never]
+  ? [SingleFormBatched<ClassOf<E>, BatchedNames<E>>] extends [never]
+    ? CheckedQueries<E>
+    : E & { readonly batched: SingleFormRefusal<SingleFormBatched<ClassOf<E>, BatchedNames<E>>> }
+  : E & { readonly batched: BatchedRefusal<BatchedProblem<BatchedValue<E>> & string> };
+
+type CheckedQueries<E extends ConceptEntry> = E extends ConceptClass
   ? InvalidQueryKeys<E> extends never
     ? E
     : never
   : E extends ConceptDeclaration<infer C>
-    ? E & {
-        readonly class: InvalidQueryKeys<E> extends never
-          ? WideBatched<E> extends true
-            ? never
-            : C
-          : never;
-      }
+    ? E & { readonly class: InvalidQueryKeys<E> extends never ? C : never }
     : never;
-
-/**
- * Whether an entry names its batched queries in a list of literal names wider
- * than one tuple, such as `("_a" | "_b")[]`, which the types cannot follow while
- * the runtime still batches every name in it, so such an entry is refused where
- * it is written. A plain `string[]` names nothing the types could follow.
- */
-type WideBatched<Entry> = Entry extends { readonly batched?: infer List }
-  ? [Exclude<List, undefined>] extends [readonly unknown[]]
-    ? [LiteralNames<Exclude<List, undefined>>] extends [never]
-      ? [Exclude<List, undefined>[number]] extends [never]
-        ? false
-        : string extends Exclude<List, undefined>[number]
-          ? false
-          : true
-      : false
-    : false
-  : false;
 
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
   [K in keyof T]: CheckedConceptEntry<T[K]>;
