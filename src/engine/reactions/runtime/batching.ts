@@ -15,7 +15,9 @@
  * the wrong reader. A group whose call throws, or whose answers are not one per
  * input, is read again with each input alone.
  */
+import { setImmediate as hostSetImmediate } from "node:timers";
 import { logger } from "@engine/utils/logger";
+import { quiet } from "@engine/utils/quiet";
 import { serializeError } from "@engine/utils/redaction";
 import { snapshotValue } from "@engine/utils/snapshot";
 
@@ -27,31 +29,11 @@ interface PendingRead {
   reject(error: unknown): void;
 }
 
-// Kept from module load, so a test that fakes timers cannot stall grouped reads.
-// Where the host has none, reads are not grouped.
+// Taken from `node:timers`, which test runners leave alone when they fake the
+// global timers, so faked timers cannot stall grouped reads. Where the host has
+// none, reads are not grouped.
 const nextTurn: ((callback: () => void) => unknown) | undefined =
-  typeof setImmediate === "function" ? setImmediate : undefined;
-
-function describe(value: unknown): string {
-  if (Array.isArray(value)) return `${value.length} answer${value.length === 1 ? "" : "s"}`;
-  return value === null ? "null" : typeof value;
-}
-
-/** Handle every thenable in an answer list no reader will take, so none rejects unhandled. */
-function quiet(answers: unknown): void {
-  try {
-    if (!Array.isArray(answers)) return;
-    for (let index = 0; index < answers.length; index += 1) {
-      const answer: unknown = answers[index];
-      if (answer === null || (typeof answer !== "object" && typeof answer !== "function")) continue;
-      if (typeof (answer as { then?: unknown }).then === "function") {
-        Promise.resolve(answer).catch(() => {});
-      }
-    }
-  } catch {
-    // A list that throws as it is read has nothing more to handle.
-  }
-}
+  typeof hostSetImmediate === "function" ? hostSetImmediate : undefined;
 
 /**
  * The answers as a plain list, each read once, or a throw when the list does
@@ -61,26 +43,35 @@ function quiet(answers: unknown): void {
  */
 function answersFor(answers: unknown, count: number, label: string): unknown[] {
   const inputs = `${count} input${count === 1 ? "" : "s"}`;
+  const values: unknown[] = [];
   try {
-    if (!Array.isArray(answers) || answers.length !== count) {
+    // The length is read once, so a list cannot answer two lengths.
+    const length = Array.isArray(answers) ? answers.length : undefined;
+    if (length !== count) {
+      const returned =
+        length !== undefined
+          ? `${length} answer${length === 1 ? "" : "s"}`
+          : answers === null
+            ? "null"
+            : typeof answers;
       throw new Error(
-        `Batched query ${label} returned ${describe(answers)} for ${inputs}; ` +
+        `Batched query ${label} returned ${returned} for ${inputs}; ` +
           "it must return one answer per input, in the same order.",
       );
     }
-    const values: unknown[] = [];
+    const list = answers as unknown[];
     for (let index = 0; index < count; index += 1) {
-      if (!(index in answers)) {
+      if (!(index in list)) {
         throw new Error(
           `Batched query ${label} left answer ${index + 1} of ${inputs} empty; ` +
             "it must return one answer per input, in the same order.",
         );
       }
-      values.push(answers[index]);
+      values.push(list[index]);
     }
     return values;
   } catch (error) {
-    quiet(answers);
+    quiet(answers, values);
     throw error;
   }
 }
@@ -108,12 +99,18 @@ export function batchedQuery(
   // slow one delays only its own. Each read keeps the copy taken when it was
   // asked, and the group's call got copies of those, so a call that changed
   // its inputs before failing leaves the reads again unchanged.
+  // Every read is under way before the warning, so a warning that throws, as in
+  // a test that fails on warnings, cannot leave a read unsettled.
   const readEachAlone = (group: PendingRead[], error: unknown): void => {
-    logger.warn(`Batched query ${label} failed for ${group.length} inputs; reading each alone.`, {
-      error: serializeError(error),
-    });
     for (const read of group) {
       call([read.input], 1).then(([answer]) => read.resolve(answer), read.reject);
+    }
+    try {
+      logger.warn(`Batched query ${label} failed for ${group.length} inputs; reading each alone.`, {
+        error: serializeError(error),
+      });
+    } catch {
+      // The reads go on without the warning.
     }
   };
 

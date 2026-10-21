@@ -468,6 +468,67 @@ describe("the grouping adapter", () => {
     }
   });
 
+  test("a malformed list that throws as it is read still has every promise handled", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    const processEvents: EventEmitter = process;
+    processEvents.on("unhandledRejection", record);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const late = (label: string) =>
+      new Promise((_, reject) => setTimeout(() => reject(new Error(label)), 1));
+    try {
+      const hostile = (inputs: readonly unknown[]) => {
+        if (inputs.length === 1) return [{ title: "alone" }];
+        // One too many answers: a getter that makes a new promise on each read,
+        // an entry that throws as it is read, and a rejection after it.
+        const answers: unknown[] = [];
+        Object.defineProperty(answers, 0, { get: () => late("fresh"), enumerable: true });
+        Object.defineProperty(answers, 1, {
+          get: () => {
+            throw new Error("entry 1");
+          },
+          enumerable: true,
+        });
+        answers[2] = late("after");
+        answers[3] = late("extra");
+        return answers;
+      };
+      const read = batchedQuery(hostile, "Echo._echo", true);
+
+      const reads = await Promise.all([read(1), read(2), read(3)]);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(reads).toEqual([{ title: "alone" }, { title: "alone" }, { title: "alone" }]);
+      expect(unhandled).toEqual([]);
+    } finally {
+      processEvents.off("unhandledRejection", record);
+      warn.mockRestore();
+    }
+  });
+
+  test("a warning that throws leaves no read of a failed group unsettled", async () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {
+      throw new Error("warnings fail this test run");
+    });
+    try {
+      let calls = 0;
+      const failsGrouped = async (inputs: readonly unknown[]) => {
+        calls += 1;
+        if (inputs.length > 1) throw new Error("group fails");
+        return inputs;
+      };
+      const read = batchedQuery(failsGrouped, "Echo._echo", true);
+
+      expect(await Promise.all([read({ id: "a" }), read({ id: "b" })])).toEqual([
+        { id: "a" },
+        { id: "b" },
+      ]);
+      expect(calls).toBe(3);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   test("an answer that throws as it is read fails only its own read", async () => {
     const proxied = async (inputs: readonly unknown[]) =>
       new Proxy(
@@ -567,20 +628,35 @@ describe("the grouping adapter", () => {
   });
 
   test("where the host has no setImmediate, the module loads and reads are not grouped", async () => {
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "setImmediate");
     vi.resetModules();
-    Reflect.deleteProperty(globalThis, "setImmediate");
+    vi.doMock("node:timers", () => ({ setImmediate: undefined }));
     let loaded: typeof import("@sync-engine/internal/reactions/runtime/batching");
     try {
       loaded = await import("@sync-engine/internal/reactions/runtime/batching");
     } finally {
-      if (descriptor !== undefined) Object.defineProperty(globalThis, "setImmediate", descriptor);
+      vi.doUnmock("node:timers");
     }
     const lists: unknown[][] = [];
     const read = loaded.batchedQuery(echo(lists), "Echo._echo", true);
 
     expect(await Promise.all([read(1), read(2)])).toEqual([{ echo: 1 }, { echo: 2 }]);
     expect(lists).toEqual([[1], [2]]);
+  });
+
+  test("timers faked before the module loads do not stall grouped reads", async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    let loaded: typeof import("@sync-engine/internal/reactions/runtime/batching");
+    try {
+      loaded = await import("@sync-engine/internal/reactions/runtime/batching");
+    } finally {
+      vi.useRealTimers();
+    }
+    const lists: unknown[][] = [];
+    const read = loaded.batchedQuery(echo(lists), "Echo._echo", true);
+
+    expect(await Promise.all([read(1), read(2)])).toEqual([{ echo: 1 }, { echo: 2 }]);
+    expect(lists).toEqual([[1, 2]]);
   });
 });
 
@@ -595,6 +671,12 @@ describe("registration", () => {
       }
       async _spread(...inputs: { id: string }[]) {
         return inputs.map(({ id }) => ({ id }));
+      }
+      async _paged({ id, page = { size: 20 } }: { id: string; page?: { size: number } }) {
+        return [{ id, size: page.size }];
+      }
+      async _nested({ id, filter: { tag } }: { id: string; filter: { tag: string } }) {
+        return [{ id, tag }];
       }
       act(_: Empty) {
         return {};
@@ -617,6 +699,9 @@ describe("registration", () => {
     expect(() => declare(["_one"])).toThrow(
       'Vocabulary: "Plain._one" is batched, so it takes a list of inputs, but Plain declares it to take one input.',
     );
+    // A record destructured with a default or a nested pattern is still one input.
+    expect(() => declare(["_paged"])).toThrow('"Plain._paged" is batched, so it takes a list');
+    expect(() => declare(["_nested"])).toThrow('"Plain._nested" is batched, so it takes a list');
     // A rest parameter looks like a wrapper at runtime; `sync-engine check` rejects it.
     expect(() => declare(["_spread"])).not.toThrow();
     expect(() => declare(5)).toThrow('Vocabulary: "Plain": batched must list query names.');

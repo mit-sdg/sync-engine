@@ -1707,10 +1707,10 @@ export declare function actionNameOf(action: InstrumentedAction): string;
 export declare function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined;
 /**
  * Whether a method may take its whole input list, as a batched query's list
- * form does: it does not destructure one input or take a placeholder, which is
- * the single form. Wrappers such as spies take `(...args)` and pass the list
- * on, so only `sync-engine check`, which sees declared types, rejects a rest
- * parameter.
+ * form does: it does not destructure one input as a record, however deeply, or
+ * take a placeholder, which is the single form. Wrappers such as spies take
+ * `(...args)` and pass the list on, so only `sync-engine check`, which sees
+ * declared types, rejects a rest parameter.
  */
 export declare function takesWholeList(fn: (...args: never[]) => unknown): boolean;
 /**
@@ -6454,6 +6454,16 @@ export declare function assertCompatibleGenerator(identity: unknown, owner: stri
 === dist/engine/utils/promise-like.d.ts ===
 /** Normalize a structural thenable without adding a microtask for synchronous values. */
 export declare function normalizePromiseLike<T>(value: T): Promise<Awaited<T>> | undefined;
+
+=== dist/engine/utils/quiet.d.ts ===
+/**
+ * Handle every answer in a list no reader will take, so none rejects unhandled:
+ * first the answers already read, since a getter may make a new one each time,
+ * then the list's other entries, each on its own, so one that throws as it is
+ * read does not stop the rest. The entries are listed once, so a list that grows
+ * as it is read cannot keep this going.
+ */
+export declare function quiet(answers: unknown, taken?: readonly unknown[]): void;
 
 === dist/engine/utils/redaction.d.ts ===
 /**
