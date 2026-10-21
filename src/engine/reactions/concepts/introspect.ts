@@ -69,8 +69,10 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
  */
 export function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined {
   const source = String(fn);
-  if (/^[^(]*\(\s*_\d*\s*[,)]/.test(source)) return [];
-  const destructured = /^[^(]*\(\s*\{([^{}]*)\}/.exec(source);
+  // Only a parenthesized parameter list is read: `[^(=]` stops at an arrow's
+  // `=>`, so `input => echo({ input })` does not read its body as a parameter.
+  if (/^[^(=]*\(\s*_\d*\s*[,)]/.test(source)) return [];
+  const destructured = /^[^(=]*\(\s*\{([^{}]*)\}/.exec(source);
   if (destructured === null) return undefined;
   const roles: string[] = [];
   const body = destructured[1].trim();
@@ -81,6 +83,18 @@ export function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined
     roles.push(role);
   }
   return roles;
+}
+
+/**
+ * Whether a method may take its whole input list, as a batched query's list
+ * form does: it does not destructure one input as a record, however deeply, or
+ * take a placeholder, which is the single form. Wrappers such as spies take
+ * `(...args)` and pass the list on, so only `sync-engine check`, which sees
+ * declared types, rejects a rest parameter.
+ */
+export function takesWholeList(fn: (...args: never[]) => unknown): boolean {
+  if (/^[^(=]*\(\s*\{/.test(String(fn))) return false;
+  return rolesOf(fn) === undefined;
 }
 
 /**

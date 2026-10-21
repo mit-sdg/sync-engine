@@ -326,6 +326,7 @@ const register = {
     "RegisteredConceptSet",
     "RetentionPolicy",
     "assemble",
+    "checkBatchedQuery",
     "conceptFloor",
     "conceptSet",
     "registerConcept",

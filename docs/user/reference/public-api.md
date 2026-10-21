@@ -120,7 +120,7 @@ formers](semantics.md#views-and-formers).
 
 <!-- register:assembly:start -->
 
-`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ConcurrentReads`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `conceptFloor`, `conceptSet`, `registerConcept`
+`ActionRefusal`, `Assembly`, `ConceptFloor`, `ConceptImplementation`, `ConceptRegistration`, `ConceptSetAssemblyOptions`, `ConcurrentReads`, `ExecutionLimits`, `FileLogSink`, `FiringRecord`, `ImplementationOverrides`, `Implementations`, `IntegrityFailureRecord`, `LogEntry`, `LogSink`, `Logging`, `OperationalEvent`, `OperationalObserver`, `OperationalResultClass`, `QueryCacheMode`, `ReactionFailureRecord`, `RawFaultReport`, `RawFaultReporter`, `RegisteredConcept`, `RegisteredConceptSet`, `RetentionPolicy`, `assemble`, `checkBatchedQuery`, `conceptFloor`, `conceptSet`, `registerConcept`
 
 <!-- register:assembly:end -->
 
@@ -130,22 +130,23 @@ formers](semantics.md#views-and-formers).
 assemble(options: ConceptSetAssemblyOptions): Assembly
 ```
 
-| `ConceptSetAssemblyOptions` field | Required    | Default / effect                                                                                             |
-| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `conceptSet`                      | yes         | Registered application concept set                                                                           |
-| `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                         |
-| `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them      |
-| `instances`                       | no          | Ready implementations by instance name; each overrides `initialize`; object identities must be distinct      |
-| `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                        |
-| `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                     |
-| `queryCache`                      | no          | `"memoize"`; `"since-dispatch"` keeps running invocations' answers across later ones; `"none"` disables it   |
-| `concurrentReads`                 | no          | Rows read one after another; `{ rowsAtOnce, maxRowsAhead? }` reads a line's rows together, in row order      |
-| `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`     |
-| `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously |
-| `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                      |
-| `observers`                       | no          | No operational observers                                                                                     |
-| `rawFaultReporter`                | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                 |
-| `redaction`                       | no          | Universal sensitive-field patterns only                                                                      |
+| `ConceptSetAssemblyOptions` field | Required    | Default / effect                                                                                                       |
+| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `conceptSet`                      | yes         | Registered application concept set                                                                                     |
+| `composition`                     | yes         | Reactions, endpoints, views, and formers to register                                                                   |
+| `initialize`                      | conditional | Constructor tuples; required when canonical classes need arguments and `instances` does not supply them                |
+| `instances`                       | no          | Ready implementations by instance name; each overrides `initialize`; object identities must be distinct                |
+| `logging`                         | no          | `Logging.OFF`; alternatives are `TRACE` and `VERBOSE`                                                                  |
+| `retention`                       | no          | `{ window: 100 }`; accepts any valid `{ window: number }` or `"keepAll"`                                               |
+| `queryCache`                      | no          | `"memoize"`; `"since-dispatch"` keeps running invocations' answers across later ones; `"none"` disables it             |
+| `concurrentReads`                 | no          | (experimental) Rows read one after another; `{ rowsAtOnce, maxRowsAhead? }` reads a line's rows together, in row order |
+| `groupBatchedQueries`             | no          | `true`; currently groups only with a query cache and `rowsAtOnce` above 1; `false` sends lists of one                  |
+| `clock`                           | no          | System clock; called once when each causal flow opens to stamp its outermost occurrence and supply `now`               |
+| `logSink`                         | no          | No external sink; `append` receives each validated, redacted entry and must return `undefined` synchronously           |
+| `executionLimits`                 | no          | Unbounded profile; validates and enforces every `ExecutionLimits` field                                                |
+| `observers`                       | no          | No operational observers                                                                                               |
+| `rawFaultReporter`                | no          | No privileged raw action, interpreter, or endpoint-validator failure handoff                                           |
+| `redaction`                       | no          | Universal sensitive-field patterns only                                                                                |
 
 `RetentionPolicy` is `"keepAll" | { window: number }`. A retention window must
 be a finite, non-negative integer. Window enforcement runs automatically only
@@ -155,11 +156,28 @@ manual prune operation.
 Every assembly owns an internal occurrence index; `logSink` neither replaces it
 nor restricts `retention`.
 
+`ConcurrentReads` is `{ rowsAtOnce, maxRowsAhead? }`, both positive integers:
+at most `rowsAtOnce` rows of one line or selection are read at once, and at
+most `maxRowsAhead` slots (64 when unset) for rows started ahead are shared
+across the assembly
+(`concurrentReads` is experimental; see the
+[support policy](../../../SUPPORT.md#stable-compatibility)). Each call of a
+batched query receives a frozen list of copied inputs: records, arrays, and plain
+dates are copied; other objects, such as maps, sets, class instances, and `Date`
+subclasses, are passed as they are. The engine
+may group reads issued together into one call; it currently does so only with a
+query cache and `concurrentReads.rowsAtOnce` above 1. With
+`groupBatchedQueries: false`, each read calls the list form with a list of one.
+See [ordering and state-read timing](semantics.md#ordering-and-state-read-timing)
+and [batched queries](semantics.md#batched-queries).
+
 `Assembly` exposes `concepts`, `invoker`, `publicInterface`, `beginDrain()`,
 `whenIdle()`, and `form(fusedFormer)`. Drain closes root admission immediately;
 both lifecycle promises resolve when accepted action, query, and former work
-actually settles. `form(...)` resolves to the formed runtime value; an optional
-record former contributes `null` to that result.
+actually settles. With `concurrentReads`, they also wait for rows started ahead
+to settle, including rows abandoned after a fault. `form(...)` resolves to the
+formed runtime value; an optional record former contributes `null` to that
+result.
 `ActionRefusal` is the direct-action refusal result.
 For a registered exception, it contains the specification code and sentence as
 `detail`. The standard boundary refusal funnel exposes the code without that
@@ -221,11 +239,12 @@ the named computation references supplied to `conceptSet`. The complete
 `applicationConceptSet` retains all three facets and the internal declaration
 needed by assembly and tooling.
 
-| API               | Compact signature                                                 |
-| ----------------- | ----------------------------------------------------------------- |
-| `registerConcept` | `registerConcept({ class, spec, refusals?, floors? })`            |
-| `conceptSet`      | `conceptSet({ ...registeredConcepts }, computations?)`            |
-| `conceptFloor`    | `conceptFloor(conceptSet, { name, instances, resources, close })` |
+| API                 | Compact signature                                                 |
+| ------------------- | ----------------------------------------------------------------- |
+| `registerConcept`   | `registerConcept({ class, spec, refusals?, batched?, floors? })`  |
+| `conceptSet`        | `conceptSet({ ...registeredConcepts }, computations?)`            |
+| `conceptFloor`      | `conceptFloor(conceptSet, { name, instances, resources, close })` |
+| `checkBatchedQuery` | `checkBatchedQuery(instance, query, sampleInputs)`                |
 
 `ConceptRegistration`, `RegisteredConcept`, `RegisteredConceptSet`, and
 `ConceptFloor` name those descriptors. Floor names must be non-empty, and each
@@ -262,6 +281,52 @@ The optional second `conceptSet` argument supplies named pure computations.
 The set exposes inferred references under `set.computations`. Compose raw
 records before constructing one set; refs from separate concept sets cannot be
 combined.
+
+`batched` names queries the class implements in list form. Each such method
+takes a list of inputs and returns one answer per input, in the same order;
+compositions and callers of an assembled concept still ask it with one input
+and get one answer, while code holding the raw class instance calls the list
+form. `registerConcept` rejects a name the specification does not declare as a
+query, and TypeScript accepts only the class's `_` members. `conceptSet`
+rejects a name given twice and a batched method whose parameter destructures
+one record or is a `_` placeholder, and `assemble` rejects a selected
+implementation whose batched method does so. Only `sync-engine check` reliably
+verifies from the types that the method takes a list; it also rejects a rest
+parameter. Batched names are written inline in the `registerConcept(...)` call
+and carried by its inferred type; input names come from the specification. The
+types follow `batched` only when its type names one list of queries for every
+value it admits: surely present or surely absent, one list rather than one of
+several, of fixed length, each query named once by one literal name, and each
+a query whose one parameter is an array, `Input[]` or `readonly Input[]`, and
+that returns a list. `vocabulary` and `registerConcept` refuse any other
+`batched` where it is written, such as a list held in a `string[]` variable, a
+list that may be `undefined`, or a name chosen by a condition. An overloaded
+list form must have its list overload last, since TypeScript reads the last
+one. To give a registration a type, use `satisfies` rather than an annotation,
+which makes `batched` optional; a helper that wraps `registerConcept` must take
+`batched` as a required literal list, or leave it out. The types cannot see a
+choice between two registrations of one class, as in `on ? batchedRegistration
+: plainRegistration`. To switch
+grouping off, set `groupBatchedQueries: false` rather than leaving `batched`
+out. `ConceptRegistration<C>` and
+`RegisteredConcept<C>` written out name no batched queries, so a registration
+that names some does not compile against them. `Assembly<T, Batched>` works the
+same way: its second parameter maps each concept-set key to the query names
+batched for it, and `concepts` types those queries as taking one input. It
+defaults to no names, so a written-out `Assembly<T>` types a batched query in
+its class's list form; keep the inferred type of `assemble(...)`. Readers of the
+concept set's refs and of an assembled concept ask a batched query with one
+input; a query that takes a list without being named keeps its own types.
+`checkBatchedQuery` checks a list form's law on the raw instance with sample
+inputs: each answer equals the answer for that input alone, in order, reversed,
+and with duplicates, no answer is missing, an empty list answers an empty
+list, and answers to different inputs share no objects a reader could
+change; frozen records and arrays may be shared. It passes a frozen list of
+copies of your samples, as the engine passes copies, and rejects with what
+differed. It compares records, arrays, and dates. It fails on an answer that is
+a promise, and on any other kind of object, such as binary data, a map, a set,
+or a class instance, unless both answers hold the very same object. Execution semantics for batched
+queries are in [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied
 descriptor. Assembly does not install, own, or call the floor's `close()`
@@ -757,10 +822,13 @@ It follows the same stable compatibility policy as other public subpaths.
 `vocabulary` is the low-level declaration API for callers that deliberately do
 not use registered specifications or implementation floors. Concept entries are
 either a concept class or `{ class, spec?, purpose?, principle?, queries?,
-outcomes?, refusals? }`. Ordinary config-based applications use `conceptSet`
+outcomes?, refusals?, batched? }`. Ordinary config-based applications use `conceptSet`
 from `/assembly`, which creates the executable declaration internally. A direct
 vocabulary can still be passed to `assemble` through the advanced
-`VocabularyAssemblyOptions` alternative.
+`VocabularyAssemblyOptions` alternative. `batched` takes effect in `assemble`:
+an engine from `createEngine` calls a batched query's method with the one input
+as asked, not with a list, unless the same instance was already assembled with
+`batched`, so instrument a batched class only through `assemble`.
 
 `Engine`, `EngineObserver`, and `LogEvent` name manual interpreter and
 observation contracts. `Refuse` is the low-level refusal marker. Its `message`

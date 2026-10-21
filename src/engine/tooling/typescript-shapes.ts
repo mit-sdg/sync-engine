@@ -434,10 +434,43 @@ export function shapeOfTypeNode(
   );
 }
 
-/** Resolve an action result object or a query row from a method's return type. */
+/**
+ * Resolve the input shape of a batched query's list parameter, or answer
+ * `undefined` when the declared parameter is not a list.
+ */
+export function shapeOfListElement(
+  typeNode: ts.TypeNode,
+  sourceNode: ts.Node,
+  context: TypeScriptCheckerContext,
+): ShapeResolution | undefined {
+  const type = context.checker.getTypeFromTypeNode(typeNode);
+  const element = arrayElement(type, context.checker);
+  // A query's input is a record, so only a list of records is a list form.
+  const recordLike = ts.TypeFlags.Object | ts.TypeFlags.Intersection | ts.TypeFlags.Union;
+  if (element === undefined || (element.flags & recordLike) === 0) return undefined;
+  const alternatives = resolveObjectAlternatives(
+    element,
+    element,
+    typeNode,
+    context.checker,
+    new Set(),
+    0,
+  );
+  return withCompilerDiagnostic(
+    singleShape(alternatives, element, typeNode, context),
+    context,
+    sourceNode,
+  );
+}
+
+/**
+ * Resolve an action result object or a query row from a method's return type.
+ * A batched query's list form answers a list with one answer per input, so its
+ * rows are those of one element.
+ */
 export function resultShapeOfMethod(
   method: ts.MethodDeclaration,
-  kind: "action" | "query",
+  kind: "action" | "query" | "batched query",
   context: TypeScriptCheckerContext,
 ): ShapeResolution {
   const signature = context.checker.getSignatureFromDeclaration(method);
@@ -451,11 +484,24 @@ export function resultShapeOfMethod(
     };
   }
   const declared = context.checker.getReturnTypeOfSignature(signature);
-  const awaited = context.checker.getAwaitedType(declared) ?? declared;
+  let awaited = context.checker.getAwaitedType(declared) ?? declared;
+  if (kind === "batched query") {
+    const element = arrayElement(awaited, context.checker);
+    if (element === undefined) {
+      return failure(
+        context.checker,
+        declared,
+        "batched answer",
+        "a batched query returns a list with one answer per input",
+        method,
+      );
+    }
+    awaited = element;
+  }
   const alternatives =
-    kind === "query"
-      ? resolveQueryAlternatives(awaited, declared, method, context.checker, 0)
-      : resolveObjectAlternatives(awaited, declared, method, context.checker, new Set(), 0);
+    kind === "action"
+      ? resolveObjectAlternatives(awaited, declared, method, context.checker, new Set(), 0)
+      : resolveQueryAlternatives(awaited, declared, method, context.checker, 0);
   return withCompilerDiagnostic(
     singleShape(alternatives, declared, method, context),
     context,

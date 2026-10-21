@@ -26,6 +26,7 @@ import {
   type ShapeResolution,
   type TypeScriptCheckerContext,
   resultShapeOfMethod,
+  shapeOfListElement,
   shapeOfTypeNode,
   shapesEqual,
 } from "@engine/tooling/typescript-shapes";
@@ -134,10 +135,24 @@ function inputsOfMethod(method: ts.MethodDeclaration, context: CheckerContext): 
   return unsupportedParameter(method, "an untyped parameter must destructure an object");
 }
 
+/** The type an untyped parameter's default asserts, as `inputs = [] as Input[]` does. */
+function assertedType(initializer: ts.Expression | undefined): ts.TypeNode | undefined {
+  let expression = initializer;
+  while (expression !== undefined && ts.isParenthesizedExpression(expression)) {
+    expression = expression.expression;
+  }
+  return expression !== undefined &&
+    (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression))
+    ? expression.type
+    : undefined;
+}
+
 interface Member {
   name: string;
   inputs: Inputs;
   result: ShapeResolution;
+  /** A query whose parameter is a list: the list form of a batched query. */
+  listForm: boolean;
 }
 
 function sourceMember(method: ts.MethodDeclaration, context: CheckerContext): Member {
@@ -154,12 +169,35 @@ function sourceMember(method: ts.MethodDeclaration, context: CheckerContext): Me
       detail: "overloaded concept members do not expose one implementation shape",
       site: method,
     };
-    return { name, inputs: unsupported, result: unsupported };
+    return { name, inputs: unsupported, result: unsupported, listForm: false };
+  }
+  // A `this` parameter is erased when the method compiles, so it is not an input.
+  const parameters = method.parameters.filter(
+    (candidate) => !(ts.isIdentifier(candidate.name) && candidate.name.text === "this"),
+  );
+  const [parameter] = parameters;
+  const listType =
+    parameter === undefined ? undefined : (parameter.type ?? assertedType(parameter.initializer));
+  const listInputs =
+    name.startsWith("_") &&
+    parameters.length === 1 &&
+    parameter.dotDotDotToken === undefined &&
+    listType !== undefined
+      ? shapeOfListElement(listType, parameter, context)
+      : undefined;
+  if (listInputs !== undefined) {
+    return {
+      name,
+      inputs: listInputs,
+      result: resultShapeOfMethod(method, "batched query", context),
+      listForm: true,
+    };
   }
   return {
     name,
     inputs: inputsOfMethod(method, context),
     result: resultShapeOfMethod(method, name.startsWith("_") ? "query" : "action", context),
+    listForm: false,
   };
 }
 
@@ -198,8 +236,11 @@ function classIn(source: ts.SourceFile, name: string): ts.ClassDeclaration | und
   return undefined;
 }
 
-function registeredClass(registry: ts.SourceFile): { name: string; from: string } | undefined {
+function registeredClass(
+  registry: ts.SourceFile,
+): { name: string; from: string; batched: ReadonlySet<string> | undefined } | undefined {
   let name: string | undefined;
+  let batched: Set<string> | undefined = new Set<string>();
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -211,6 +252,19 @@ function registeredClass(registry: ts.SourceFile): { name: string; from: string 
         if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
         if (property.name.text === "class" && ts.isIdentifier(property.initializer)) {
           name = property.initializer.text;
+        }
+        if (property.name.text === "batched") {
+          let list: ts.Expression = property.initializer;
+          while (
+            ts.isAsExpression(list) ||
+            ts.isSatisfiesExpression(list) ||
+            ts.isParenthesizedExpression(list)
+          ) {
+            list = list.expression;
+          }
+          const names = ts.isArrayLiteralExpression(list) ? list.elements : undefined;
+          if (names === undefined || !names.every(ts.isStringLiteralLike)) batched = undefined;
+          else for (const element of names) batched?.add(element.text);
         }
       }
     }
@@ -226,7 +280,7 @@ function registeredClass(registry: ts.SourceFile): { name: string; from: string 
     const bindings = statement.importClause?.namedBindings;
     if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
     if (bindings.elements.some((element) => element.name.text === name)) {
-      return { name, from: statement.moduleSpecifier.text };
+      return { name, from: statement.moduleSpecifier.text, batched };
     }
   }
   return undefined;
@@ -253,7 +307,11 @@ function compare(
   members: readonly Member[],
   locationBase: string,
   report: (what: string) => void,
-  options: { checkMembership: boolean; sourceInputMembers?: ReadonlySet<string> } = {
+  options: {
+    checkMembership: boolean;
+    sourceInputMembers?: ReadonlySet<string>;
+    batched?: ReadonlySet<string>;
+  } = {
     checkMembership: true,
   },
 ): void {
@@ -281,6 +339,17 @@ function compare(
         report(`the ${kind} \`${declaration.name}\` source declaration could not be located`);
       }
       continue;
+    }
+
+    const batched = options.batched?.has(declaration.name) === true;
+    if (member.listForm && !batched) {
+      report(
+        `the ${kind} \`${declaration.name}\` takes a list of inputs, so its registration must name it under \`batched\``,
+      );
+    } else if (!member.listForm && batched) {
+      report(
+        `the registration names the ${kind} \`${declaration.name}\` under \`batched\`, so it must take a list of inputs`,
+      );
     }
 
     if (!member.inputs.ok) {
@@ -318,6 +387,7 @@ function sourceFailures(
   locationBase: string,
   sourceInputMembers?: ReadonlySet<string>,
   suppliedContext?: CheckerContext,
+  batched: ReadonlySet<string> = new Set(),
 ): string[] {
   const findings: string[] = [];
   const report = (what: string): void => void findings.push(`${label}: ${what}.`);
@@ -341,7 +411,7 @@ function sourceFailures(
 
   const runtimeSelected = sourceInputMembers !== undefined;
   const members = membersOfClass(declaration, context, runtimeSelected);
-  const options = { checkMembership: !runtimeSelected, sourceInputMembers };
+  const options = { checkMembership: !runtimeSelected, sourceInputMembers, batched };
   compare(
     "action",
     spec.actions,
@@ -383,12 +453,18 @@ export function conceptFailures(directory: string, projectRoot = ""): string[] {
   if (registered === undefined) {
     return [`${label}: registry.ts does not register a class imported by name.`];
   }
+  if (registered.batched === undefined) {
+    return [`${label}: registry.ts batched must list query names literally.`];
+  }
   return sourceFailures(
     resolve(dirname(registryPath), registered.from),
     registered.name,
     spec,
     label,
     projectRoot === "" ? directory : projectRoot,
+    undefined,
+    undefined,
+    registered.batched,
   );
 }
 
@@ -448,6 +524,7 @@ function conceptSourceFailures(
         root,
         concept.sourceInputMembers,
         sourceAnalysis.context,
+        new Set(source.batched ?? []),
       ),
     );
   }

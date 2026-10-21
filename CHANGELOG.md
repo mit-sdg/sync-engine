@@ -6,77 +6,188 @@ incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## [Unreleased]
+## [1.2.0] - 2026-10-17
+
+This release adds three opt-in ways to read faster: concurrent reads, the
+`"since-dispatch"` query cache, and batched queries. An application that sets
+none of them runs as it did in 1.1.0, except for the changes listed under
+Compatibility.
+
+### Compatibility
+
+- Read and action-pattern equality compare arrays by length and every index,
+  with a hole compared as `undefined`. In 1.1.0 holes were skipped on the left
+  side only, so `[, 1]` equalled `[5, 1]` but not the reverse. Now they are
+  unequal both ways for bound variables, `$oneOf`, `$lit`, `.is.not`, and
+  trigger literals, and many-row reads keep both such rows, so a view or former
+  promising at most one row can fault where it answered before. Cyclic arrays
+  compare as cyclic records do, where they used to overflow the stack. Values
+  parsed from JSON have no holes or cycles and are unaffected.
+- `earlier(...)` matches and binds each earlier record on the reaction's own
+  copy, as action triggers already did. In 1.1.0 it bound the engine's stored
+  values, so an action that changed a bound value in place, as tidying an input
+  does, changed the stored record: a later `earlier` could stop matching it,
+  and one concept's action could rewrite state another concept had returned.
+  Within one evaluation of a reaction's `where` clause, its lines share one
+  copy of each repeated reference. Class instances, maps, and sets still bind
+  by identity. A non-enumerable key on an action's output no longer takes part
+  in `earlier` matching.
+- Requests that run at the same time can interleave in a different order.
+  Without `concurrentReads`, rows are still read one after another, but each
+  passes through the path concurrent reads use, which takes a few more promise
+  turns. Within one flow the order of reads, actions, and answers is unchanged,
+  and requests that never overlap run exactly as before. When two requests
+  overlap, a read in one can see a write from the other that it used to miss,
+  or miss one it used to see. Overlapping root flows have never had a fixed
+  order, and reads have never had a snapshot ([ordering and state-read timing](docs/user/reference/semantics.md#ordering-and-state-read-timing)),
+  so keep a [decision that must not race](docs/user/reference/semantics.md#decisions-that-must-not-race)
+  inside one concept action.
+- Reaction matching and `earlier(...)` test each record's action, provenance,
+  posture, and input before copying the rest, with the same matches in the same
+  order. A getter on a raw action output is read when a record that passes
+  that test is copied. A trigger that fails the test no longer reads such a
+  getter, and one that passes reads it as often as in 1.1.0; `earlier` can read
+  one that 1.1.0 skipped, because it copies the whole output where it used to
+  read only the keys its pattern named. Keep getters on action outputs pure:
+  they may be read any number of times. An action clause of a trigger, and an
+  `earlier` line, now compare a matching record's input twice, as stored and on
+  its copy, so a `Date` subclass compared there has its `getTime` called twice
+  where 1.1.0 called it once; in `earlier`, only the first time a record is
+  tested in one evaluation. A `returned(...)` or `refused(...)` clause compares
+  it once, as before. A `getTime` that throws or answers differently on that extra call
+  can stop a trigger or `earlier` line from matching, or fail the reaction.
+  Query inputs and cache keys call it as often as before.
+- `QueryCacheMode` gains `"since-dispatch"`. Code that switches over it
+  exhaustively must handle the new member.
+- The [support policy](SUPPORT.md) says that an option marked experimental may
+  change or be removed in any minor release, and that the changelog lists the
+  change.
 
 ### Added
 
+- The `queryCache` mode `"since-dispatch"` keeps a running invocation's
+  answers when another invocation arrives, so overlapping requests stop
+  re-reading what they had read. A read reuses only answers whose query began
+  at or after its own outside invocation was dispatched, the freshness
+  `"memoize"` gives by clearing every cache at dispatch. A direct `form` or a
+  direct query reads the same way from its own start. Actions invalidate
+  answers as before, and no invocation keeps its older answers past the
+  request deadline (`executionLimits.maxRequestDurationMs`, 30 seconds by
+  default): after it, its reads reuse only answers begun since the latest
+  start.
 - The `concurrentReads: { rowsAtOnce, maxRowsAhead? }` assembly option reads
   the rows of one `where` line, and the rows of one selection, together and
-  consumes them in row order. `rowsAtOnce` rows are evaluated at once, the
-  consumed row included; at most `maxRowsAhead` rows (64 when unset) are started
-  ahead at once across the assembly, and an evaluation that finds that count
-  spent reads its next row when it reaches it; when every slot is held, slots
-  held past the request deadline are taken back. Answers, their order, the
-  reported fault, and recorded row-limit breaches are those of reading one
-  after another, given side-effect-free reads and no action changing the state
-  being read meanwhile. A fault is reported as soon as its row is consumed;
-  rows started ahead then stop at their next row check. Without the option,
-  rows are read one after another as before.
-- `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads` type.
-- The `queryCache` mode `"since-dispatch"` keeps a running invocation's answers
-  when another invocation arrives, so concurrent invocations stop re-reading
-  what they had read. Until an outside invocation settles, reads done for its
-  flow reuse only memoized answers whose query began at or after it was
-  dispatched, the freshness `"memoize"` gives by clearing every cache at
-  dispatch. A direct `form` and a direct query root read the same way from their
-  own start; any other read reuses only answers begun since the latest of those
-  starts. Action invalidation is unchanged. A direct query stops holding answers
-  once its read has begun, and no read holds them past the request deadline
-  (`executionLimits.maxRequestDurationMs`, 30 seconds by default).
+  consumes them in row order. Up to `rowsAtOnce` rows are evaluated at once,
+  and at most `maxRowsAhead` slots (64 when unset) for rows started ahead are
+  shared across the assembly. Once every slot is taken, rows started ahead more
+  than the request deadline ago give theirs back, though their reads keep
+  running, until `maxRowsAhead` such reads are unsettled; the process log says
+  so once each time that happens. Answers, their order, the reported fault, and recorded row-limit
+  breaches are those of reading one row after another, provided the queries,
+  computations, conditions, and custom ops that reads use have no side effects
+  and no action changes the state being read meanwhile. With it, those can run
+  out of row order and for rows whose answers are never used. `whenIdle()` and
+  `beginDrain()` resolve, and the drain's idle event is emitted, only after
+  rows started ahead settle, including rows abandoned after a fault.
+  **`concurrentReads` is experimental.** `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads`
+  type.
+- `registerConcept` takes `batched`, a literal list of query names the class
+  implements in list form: each such method takes one list of inputs, typed
+  `Input[]` or `readonly Input[]`, and returns the answers themselves, one per input, in order. Reactions, formers, and callers of an
+  assembled concept still ask with one input and get one answer, and the
+  vocabulary's types show such a query taking one input. Each call receives a
+  frozen list of copied inputs: records, arrays, and plain dates are copied;
+  other objects, such as maps, sets, class instances, and `Date` subclasses,
+  are passed as they are. The engine groups reads of one batched query on one
+  concept instance, across requests, into one call; it currently does so only
+  when `concurrentReads.rowsAtOnce` is above 1 and `queryCache` is not
+  `"none"`, collecting the reads pending when the event-loop turn ends, so
+  `batched` alone groups nothing. One call can serve several requests. It runs
+  in the async context of the first read in its group, and so do the reads
+  again alone after it fails, so a batched method must not read request
+  context. A group whose call throws, or whose answers
+  are not one per input, is read again with each input alone, as without
+  grouping, with a warning on the process log; every read in a group waits
+  until its call settles. A stub or
+  spy that replaces a batched method receives the list too. `conceptSet`
+  rejects a registered class, and `assemble` a selected implementation, whose
+  batched method's parameter destructures one record or is a `_` placeholder;
+  only `sync-engine check` reliably verifies from the types that it takes a
+  list. Batched names are written inline in the `registerConcept(...)` call.
+  The types follow them only when the type of `batched` names one list of
+  queries for every value it admits, each a query that takes a list, and
+  `registerConcept` refuses any other `batched`, such as a list held in a
+  `string[]` variable, a list that may be `undefined`, a name chosen by a
+  condition, or one list or another. A `RegisteredConcept` annotation wider
+  than its list is refused too. The types cannot see a choice between two
+  registrations of one class, as in `on ? batchedRegistration :
+  plainRegistration`; switch grouping with `groupBatchedQueries` instead. `ConceptRegistration<C>` and `RegisteredConcept<C>`
+  written out name none. A registration that names no query under `batched`
+  behaves as before, types included.
+- `vocabulary` concept entries accept `batched`, with the same rules, refused
+  where the entry is written; it takes effect through `assemble`.
+- `Assembly<T, Batched>` gains a second type parameter naming each concept's
+  batched queries. A written-out `Assembly<T>` types a batched query in its
+  list form, so keep the inferred type of `assemble(...)`.
+- The `groupBatchedQueries` assembly option, `true` by default, turns grouping
+  off when set to `false`: every read then calls a batched method with a list
+  of one.
+- `@mit-sdg/sync-engine/assembly` exports `checkBatchedQuery`, which checks on
+  sample inputs that a list form answers each input as a list of one does. It
+  passes copies of the samples, as the engine passes copies. It compares
+  records, arrays, and dates. It fails on an answer that is a promise, and on
+  any other kind of object, such as binary data, a map, a set, or a class
+  instance, unless both answers hold the very same object.
+- `sync-engine check` reads a batched query's input and row shapes from its
+  list form. It fails when a query takes a list of records without being named
+  under `batched`, when a named query does not take a list, and when `batched`
+  is not a list of query names written inline.
 
-### Changed
+### Migration
 
-- `createInvoker`'s `refresh` receives the flow the ask's request runs in once
-  admitted, and a function it returns is called once the ask has settled,
-  admitted or not. It still runs before input validation, and a `refresh`
-  taking no argument still works.
-- The reference now states that computations, conditions, and custom ops used
-  by reads must be free of side effects, as queries already had to be.
-- Reaction matching and `earlier(...)` test each action pattern's action,
-  provenance, posture, and input on the stored record before copying it, so a
-  record that fails that test is not copied. Matches, their order, and their
-  isolation are unchanged; a getter on a raw action output is now read only when
-  a record passes the test. An input's `Date` subclass has its `getTime` called
-  a different number of times, so one whose `getTime` throws now fails the
-  trigger where it used to match.
-- Read and action-pattern equality compare arrays by length and every index, a
-  hole comparing as `undefined`. It used to skip holes on the left only, so
-  `[, 1]` equalled `[5, 1]` but not the reverse, and an answer could depend on
-  row order. Many-row read matching and view answers now keep both such rows,
-  so a view or former promising at most one row can fault where it answered
-  before. A bound variable, a `$oneOf`, `$lit` or `.is.not` value, or a
-  trigger literal now tells `[, 1]` from `[5, 1]` in both directions, and a hole
-  in a line's `.is` pattern matches only `undefined`. Arrays now join records in
-  the guard against cycles, so cyclic arrays compare by their unfolding where
-  they used to overflow the stack, or compare unequal inside a record. Values
-  from JSON have no holes or cycles and are unaffected.
-- `earlier(...)` matches each earlier record on the reaction's own copy and
-  binds from it, as action triggers already did. It used to bind the engine's
-  stored values, so an action that changed a value bound through `earlier` in
-  place, as tidying an input does, changed the record itself: a later `earlier`
-  stopped matching it, a later stage of an endpoint could wait out its deadline,
-  and one concept's action could rewrite state another concept had returned.
-  Values bound through `earlier` are now distinct from the objects another
-  reaction binds; within one evaluation of a reaction's `where`, its lines and
-  frames share one copy of each repeated reference. Class instances, maps, and
-  sets still bind by identity. `earlier` now reads a record as triggers do, so
-  a non-enumerable key on an action's output no longer takes part in `earlier`
-  matching, and a getter on it is read when the record is copied.
-- Rows of a `where` line pass through one path with or without
-  `concurrentReads`, which takes a few more promise turns. Invocations that
-  overlap can interleave differently, so a read can see another invocation's
-  write it used to miss, or miss one it used to see. Order within one flow is
-  unchanged.
+- Pin core, HTTP, analysis, catalog, and skill to `1.2.0` when used together.
+- Run `sync-engine artifacts pin` (`bun run generate` in an app made with
+  `sync-engine setup`). Generated files change only their version stamps, and
+  `sync-engine artifacts check` fails on those stamps until it runs.
+- No source changes are required, except in code that switches exhaustively
+  over `QueryCacheMode`. Check an application that compares arrays
+  with holes, changes values bound through `earlier` in place, reads getters
+  with side effects on action outputs, or relies on the order in which
+  overlapping requests read and write, against the items under Compatibility.
+- The new options are opt-in, and an application that reads fast enough needs
+  none of them. To read faster, try them in this order:
+  1. Requests overlap and re-read the same data: set
+     `queryCache: "since-dispatch"`. Each answer stays in memory while an older
+     request is still running, for up to the request deadline, so memory can
+     hold up to a deadline's worth of answers, one per query and argument.
+  2. A page reads many rows one after another, as an `each` or a many-row line
+     does: also set `concurrentReads: { rowsAtOnce: 16 }`. It is experimental.
+     It starts reads ahead, some for rows never used: up to `maxRowsAhead` at
+     once, and up to twice that while reads hang, so size the database pool
+     for them and keep reads free of side effects.
+  3. Those rows each ask one query whose storage can answer many inputs in one
+     command: name it under `batched` and write its list form. It groups only
+     with step 2. Give the database client timeouts, since a group waits for
+     its slowest input. On a stuck database, a read grouped with others fails
+     after about twice as long as the client takes to give up, retries
+     included, so choose a timeout that fits twice within the request
+     deadline.
+
+  For example, `assemble({ ...options, queryCache: "since-dispatch",
+  concurrentReads: { rowsAtOnce: 16 } })`.
+
+### Generated formats
+
+- Concept specification and application manifest formats remain at version 1.
+- Generated declarations and example artifacts are regenerated for `1.2.0`.
+
+### Runtime and security support
+
+- `1.2.0` is the newest stable release and the only one that receives fixes;
+  `1.1.0` users must upgrade.
+- Supported runtime and toolchain ranges are unchanged.
+
+[Release][1.2.0] | [Changes since 1.1.0][1.2.0-compare]
 
 ## [1.1.0] - 2026-10-05
 
@@ -1608,6 +1719,8 @@ correction does not alter those already-published tarballs.
 
 [Release][0.1.0]
 
+[1.2.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.2.0
+[1.2.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.1.0
 [1.1.0-compare]: https://github.com/mit-sdg/sync-engine/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mit-sdg/sync-engine/releases/tag/v1.0.0

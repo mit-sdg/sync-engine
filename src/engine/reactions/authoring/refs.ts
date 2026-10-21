@@ -46,12 +46,14 @@ import {
   conceptProtocolOf,
   type ConceptMetadata,
 } from "../concepts/concept-metadata.ts";
-import { rolesOf } from "../concepts/introspect.ts";
+import { rolesOf, takesWholeList } from "../concepts/introspect.ts";
 import type {
   ActionCall,
   InstrumentedAction,
   Mapping,
   Reaction,
+  IsListForm,
+  QueryAsAsked,
   TriggerActionLine,
 } from "../types.ts";
 import { validateQueryContractMap } from "@engine/reads/query-contracts";
@@ -148,7 +150,106 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A
 type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
   readonly [
     K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never
-  ]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
+  ]: K extends `_${string}`
+    ? QueryLineFn<K extends BatchedNames<Entry> ? QueryAsAsked<I[K]> : I[K]>
+    : ActionLineFn<I[K]>;
+};
+
+/**
+ * The type of an entry's `batched` value, `undefined` where it has none. The
+ * runtime reads `batched` only from a declaration, never from a class.
+ */
+type BatchedValue<Entry> = Entry extends ConceptClass
+  ? undefined
+  : Entry extends unknown
+    ? "batched" extends keyof Entry
+      ? Entry["batched" & keyof Entry]
+      : undefined
+    : never;
+
+/**
+ * The queries a concept entry names under `batched`. The types follow `batched`
+ * only when its type names one list of queries for every value it admits; see
+ * `BatchedProblem`. Any other entry is refused where it is written.
+ */
+type BatchedNames<Entry> = [BatchedProblem<BatchedValue<Entry>>] extends [never]
+  ? NamesIn<Exclude<BatchedValue<Entry>, undefined>>
+  : never;
+
+type NamesIn<List> = List extends readonly unknown[] ? List[number] : never;
+
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : false;
+
+type ElementProblem<List extends readonly unknown[], Seen = never> = List extends readonly [
+  infer Head,
+  ...infer Tail,
+]
+  ? 0 extends 1 & Head
+    ? "names a query by a value typed any"
+    : string extends Head
+      ? "names a query by a string, not a literal name"
+      : IsUnion<Head> extends true
+        ? "names one query or another"
+        : [Head] extends [Seen]
+          ? "names a query twice"
+          : ElementProblem<Tail, Seen | Head>
+  : never;
+
+/**
+ * Why the types cannot tell which queries a `batched` value names, or never
+ * when they can. They can when the value is surely present or surely absent,
+ * is one list rather than one of several, has a fixed length, and names each
+ * query once by one literal name. For any other value, the runtime would batch
+ * names the types do not follow, or none they do, and a call that compiles
+ * would answer wrongly.
+ */
+export type BatchedProblem<List> = 0 extends 1 & List
+  ? "is typed any"
+  : [List] extends [undefined]
+    ? never
+    : undefined extends List
+      ? [NamesIn<Exclude<List, undefined>>] extends [never]
+        ? never
+        : "may be left out"
+      : IsUnion<List> extends true
+        ? "is one of several lists"
+        : List extends readonly unknown[]
+          ? number extends List["length"]
+            ? "is not a fixed list of names"
+            : IsUnion<List["length"]> extends true
+              ? "has a name that may be left out"
+              : ElementProblem<List>
+          : "is not a list";
+
+/**
+ * The names under `batched` that are not queries of the class taking a list of
+ * inputs. The runtime refuses a name that is not a query, and calls a query
+ * that takes one input with a list, so it would answer wrongly.
+ */
+export type SingleFormBatched<C extends ConceptClass, Names> = Names extends string
+  ? Names extends Extract<keyof InstanceType<C>, `_${string}`>
+    ? IsListForm<InstanceType<C>[Names]> extends true
+      ? never
+      : Names
+    : Names
+  : never;
+
+/** The compile error for a batched name that is not a query taking a list of inputs. */
+export type SingleFormRefusal<Name> = Name extends string
+  ? `batched names ${Name}, which is not a query taking a list of inputs: give the query one parameter typed Input[] and return one answer per input.`
+  : never;
+
+/**
+ * The compile error for a `batched` value the types cannot follow. A value typed
+ * `any` would satisfy any message, so it meets `never` instead.
+ */
+export type BatchedRefusal<Problem extends string> = Problem extends "is typed any"
+  ? never
+  : `batched ${Problem}, so the types cannot tell which queries it batches: write the query names inline, as string literals. To stop grouping reads, set groupBatchedQueries: false.`;
+
+/** The batched query names of each vocabulary entry. */
+export type BatchedQueryNames<T extends Record<string, ConceptEntry>> = {
+  readonly [K in keyof T]: BatchedNames<T[K]>;
 };
 
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
@@ -206,14 +307,22 @@ type DeclaredQueryPromise<Entry, Key extends PropertyKey> = Entry extends {
     : never;
 
 type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
-  [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer
+  [K in QueryKeys<I>]: (K extends BatchedNames<Entry> ? QueryAsAsked<I[K]> : I[K]) extends (
+    ...args: never[]
+  ) => infer Answer
     ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true
       ? never
       : K
     : K;
 }[QueryKeys<I>];
 
-type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass
+type CheckedConceptEntry<E extends ConceptEntry> = [BatchedProblem<BatchedValue<E>>] extends [never]
+  ? [SingleFormBatched<ClassOf<E>, BatchedNames<E>>] extends [never]
+    ? CheckedQueries<E>
+    : E & { readonly batched: SingleFormRefusal<SingleFormBatched<ClassOf<E>, BatchedNames<E>>> }
+  : E & { readonly batched: BatchedRefusal<BatchedProblem<BatchedValue<E>> & string> };
+
+type CheckedQueries<E extends ConceptEntry> = E extends ConceptClass
   ? InvalidQueryKeys<E> extends never
     ? E
     : never
@@ -294,6 +403,36 @@ function classContracts(cls: ConceptClass): ConceptMetadata {
   };
 }
 
+function validateBatchedQueries(conceptName: string, cls: ConceptClass, batched: unknown): void {
+  if (batched === undefined) return;
+  if (!Array.isArray(batched)) {
+    throw new Error(`Vocabulary: "${conceptName}": batched must list query names.`);
+  }
+  const seen = new Set<string>();
+  for (const name of batched) {
+    const member =
+      typeof name === "string" && name.startsWith("_")
+        ? callableConceptMember(cls.prototype as object, name)
+        : undefined;
+    if (member === undefined) {
+      throw new Error(
+        `Vocabulary: "${conceptName}": batched names ${JSON.stringify(name)}, which is not a query ` +
+          `(a \`_\`-prefixed method) of ${cls.name}.`,
+      );
+    }
+    if (seen.has(name)) {
+      throw new Error(`Vocabulary: "${conceptName}": batched names "${name}" twice.`);
+    }
+    seen.add(name);
+    if (!takesWholeList(member)) {
+      throw new Error(
+        `Vocabulary: "${conceptName}.${name}" is batched, so it takes a list of inputs, ` +
+          `but ${cls.name} declares it to take one input.`,
+      );
+    }
+  }
+}
+
 function validateConceptMetadata(
   conceptName: string,
   cls: ConceptClass,
@@ -301,6 +440,7 @@ function validateConceptMetadata(
 ): void {
   const prototype = cls.prototype as Record<string, unknown>;
   validateQueryContractMap(metadata.queries, prototype, `Vocabulary: "${conceptName}"`, cls.name);
+  validateBatchedQueries(conceptName, cls, metadata.batched);
   for (const action of new Set([
     ...Object.keys(metadata.outcomes ?? {}),
     ...Object.keys(metadata.refusals ?? {}),
@@ -417,6 +557,13 @@ export function vocabulary(
         spec === undefined
           ? { ...declaredContracts, ...contracts }
           : { ...declaredContracts, ...specifiedContracts(spec), ...contracts };
+      // A copy, so a name pushed onto the app's list after validation batches nothing.
+      if (Array.isArray(contracts.batched)) {
+        declaredContracts = {
+          ...declaredContracts,
+          batched: Object.freeze([...contracts.batched]),
+        };
+      }
     }
     const protocol = conceptProtocolOf(cls.prototype as object);
     const actionRoles: Record<string, readonly string[] | undefined> = {};
@@ -427,7 +574,20 @@ export function vocabulary(
     ] as const) {
       for (const memberName of names) {
         const member = callableConceptMember(cls.prototype as object, memberName);
-        setOwn(roles, memberName, member === undefined ? undefined : rolesOf(member));
+        // A batched query's list parameter names no roles; its specification does.
+        const batched = Array.isArray(declaredContracts.batched) ? declaredContracts.batched : [];
+        const specified = batched.includes(memberName)
+          ? declaredContracts.specification?.queries.find(({ name }) => name === memberName)?.inputs
+          : undefined;
+        setOwn(
+          roles,
+          memberName,
+          specified !== undefined
+            ? [...specified]
+            : member === undefined || batched.includes(memberName)
+              ? undefined
+              : rolesOf(member),
+        );
       }
     }
     const declaredMetadata: ConceptMetadata = {

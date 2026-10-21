@@ -377,3 +377,50 @@ export interface WhenBuilderWithFunctionWhere {
   then(node: ConsequenceNode): ReactionPartition;
   then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
+
+/**
+ * A batched query as its readers ask it. Its method takes a list of inputs and
+ * answers one per input; readers ask it with one input and get one answer, as
+ * the engine calls the method on their behalf. Only queries a registration
+ * names under `batched` are read this way.
+ */
+export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A
+  ? [ListInput<Exclude<P, undefined>>] extends [never]
+    ? F
+    : 0 extends 1 & Awaited<A>
+      ? (input: ListInput<Exclude<P, undefined>>) => Promise<any>
+      : Awaited<A> extends readonly (infer Each)[]
+        ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each>
+        : F
+  : F;
+
+/** Whether a method has the list form a batched query needs: one list of inputs in, a list out. */
+export type IsListForm<F> = F extends (inputs: infer P) => infer A
+  ? [ListInput<Exclude<P, undefined>>] extends [never]
+    ? false
+    : 0 extends 1 & Awaited<A>
+      ? true
+      : Awaited<A> extends readonly unknown[]
+        ? true
+        : false
+  : false;
+
+/**
+ * The input of a list parameter, as `sync-engine check` reads one: an array,
+ * optional or with a default included, but not a tuple or a union of arrays.
+ */
+type ListInput<P> = [P] extends [infer List extends readonly unknown[]]
+  ? number extends List["length"]
+    ? [List] extends [readonly (infer I)[]]
+      ? IsOneArray<List, I>
+      : never
+    : never
+  : never;
+
+type IsOneArray<List, I> = [List] extends [readonly I[]]
+  ? [readonly I[]] extends [List]
+    ? I
+    : [I[]] extends [List]
+      ? I
+      : never
+  : never;

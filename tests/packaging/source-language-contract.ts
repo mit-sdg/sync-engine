@@ -1,6 +1,6 @@
 import { vocabulary } from "@sync-engine/advanced";
-import { conceptSet } from "@sync-engine/assembly";
-import type { RegisteredConcept } from "@sync-engine/assembly";
+import { conceptSet, registerConcept } from "@sync-engine/assembly";
+import type { ConceptRegistration, RegisteredConcept } from "@sync-engine/assembly";
 import {
   compute,
   count,
@@ -316,3 +316,298 @@ vocabulary({
 
 // @ts-expect-error A many query returns an array, including when the method is asynchronous.
 vocabulary({ concepts: { Invalid: AsyncRecordPromisedAsMany } });
+
+class BatchedShelf {
+  async _title(inputs: readonly { id: string }[]): Promise<{ title: string }[][]> {
+    return inputs.map(({ id }) => [{ title: id }]);
+  }
+
+  async _book(inputs: { id: string }[]): Promise<{ title: string }[]> {
+    return inputs.map(({ id }) => ({ title: id }));
+  }
+}
+
+class ListTakingShelf {
+  async _byIds(ids: string[]): Promise<{ title: string }[]> {
+    return ids.map((title) => ({ title }));
+  }
+
+  async _byRecords(records: { id: string }[]): Promise<{ title: string }[]> {
+    return records.map(({ id }) => ({ title: id }));
+  }
+}
+
+// A query that takes a list but is not named under `batched` keeps its own types.
+const unbatchedWords = vocabulary({ concepts: { Listed: ListTakingShelf }, computations: {} });
+unbatchedWords.concepts.Listed._byIds(["a"]);
+unbatchedWords.concepts.Listed._byRecords([{ id: "a" }]);
+// @ts-expect-error An unbatched list-taking query is not asked with one input.
+unbatchedWords.concepts.Listed._byRecords({ id: "a" });
+
+function registeredBatchedContract(spec: string): void {
+  const registration = registerConcept({ class: BatchedShelf, spec, batched: ["_title"] });
+  const set = conceptSet({ Shelf: registration });
+  set.concepts.Shelf._title({ id: "a" }).is({ title: "a" });
+  // @ts-expect-error A query the registration does not name keeps its list form.
+  set.concepts.Shelf._book({ id: "a" });
+  // @ts-expect-error batched names only the class's queries.
+  registerConcept({ class: BatchedShelf, spec, batched: ["_missing"] });
+}
+void registeredBatchedContract;
+
+function annotatedRegistrationContract(spec: string): void {
+  // A registration typed with the public descriptor registers as it did before `batched`.
+  const annotated: ConceptRegistration<typeof ListTakingShelf> = { class: ListTakingShelf, spec };
+  const registered = registerConcept(annotated);
+  conceptSet({ Listed: registered }).concepts.Listed._byRecords([{ id: "a" }]);
+  const wrap = <C extends new () => object>(registration: ConceptRegistration<C>) =>
+    registerConcept(registration);
+  void wrap;
+  const withBatched: ConceptRegistration<typeof BatchedShelf> = {
+    class: BatchedShelf,
+    spec,
+    // @ts-expect-error A registration typed with the public descriptor names no batched queries.
+    batched: ["_title"],
+  };
+  void withBatched;
+  // @ts-expect-error A registration written out as RegisteredConcept<C> names no batched queries.
+  const widened: RegisteredConcept<typeof BatchedShelf> = registerConcept({
+    class: BatchedShelf,
+    spec,
+    batched: ["_title"],
+  });
+  void widened;
+  const names: string[] = ["_title"];
+  // @ts-expect-error Batched names are literals, so the types can follow them.
+  registerConcept({ class: BatchedShelf, spec, batched: names });
+}
+void annotatedRegistrationContract;
+
+class DefaultedShelf {
+  async _title(inputs: readonly { id: string }[] = []): Promise<{ title: string }[]> {
+    return inputs.map(({ id }) => ({ title: id }));
+  }
+
+  async _book(inputs?: { id: string }[]): Promise<{ title: string }[]> {
+    return (inputs ?? []).map(({ id }) => ({ title: id }));
+  }
+}
+
+function defaultedBatchedContract(): void {
+  const shelf = vocabulary({
+    concepts: { Shelf: { class: DefaultedShelf, batched: ["_title", "_book"] } },
+    computations: {},
+  }).concepts.Shelf;
+  // A list parameter with a default, or optional, is still asked with one input.
+  shelf._title({ id: "a" }).is({ title: "a" });
+  shelf._book({ id: "a" }).is({ title: "a" });
+  // @ts-expect-error A batched query with a defaulted list is never asked with a list.
+  shelf._title([{ id: "a" }]);
+}
+void defaultedBatchedContract;
+
+function wideBatchedContract(
+  names: ("_title" | "_book")[],
+  either: ["_title"] | ["_book"],
+  records: ("_byIds" | "_byRecords")[],
+): void {
+  vocabulary({
+    // @ts-expect-error A batched list wider than a literal tuple names no query, so list forms fail to type.
+    concepts: { Shelf: { class: BatchedShelf, batched: names } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A union of tuples names no query either.
+    concepts: { Shelf: { class: BatchedShelf, batched: either } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A wide list is refused even when every list form would type as unbatched.
+    concepts: { Listed: { class: ListTakingShelf, batched: records } },
+    computations: {},
+  });
+}
+
+function wideRegistrationContract(spec: string, names: ("_title" | "_book")[]): void {
+  // @ts-expect-error registerConcept refuses a batched list wider than a literal tuple.
+  registerConcept({ class: BatchedShelf, spec, batched: names });
+  registerConcept({ class: BatchedShelf, spec, batched: ["_title"] });
+}
+void wideRegistrationContract;
+void wideBatchedContract;
+
+// The types follow `batched` only when its type names one list of queries for
+// every value it admits; every other form is refused where it is written.
+function batchedFormsContract(spec: string, on: boolean, anyNames: any): void {
+  const names = ["_book"];
+  vocabulary({
+    // @ts-expect-error A list in a variable is a string[], which names no query the types can follow.
+    concepts: { Shelf: { class: BatchedShelf, batched: names } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A list that may be left out names queries only sometimes.
+    concepts: { Shelf: { class: BatchedShelf, batched: on ? (["_book"] as const) : undefined } },
+    computations: {},
+  });
+  vocabulary({
+    concepts: {
+      // @ts-expect-error A conditional spread may leave the list out.
+      Shelf: { class: BatchedShelf, ...(on ? { batched: ["_book"] as const } : {}) },
+    },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A name chosen by a condition names one query or another.
+    concepts: { Shelf: { class: BatchedShelf, batched: [on ? "_title" : "_book"] as const } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A name may appear once.
+    concepts: { Shelf: { class: BatchedShelf, batched: ["_book", "_book"] } },
+    computations: {},
+  });
+  vocabulary({
+    // @ts-expect-error A list typed any names nothing the types can read.
+    concepts: { Shelf: { class: BatchedShelf, batched: anyNames } },
+    computations: {},
+  });
+
+  // @ts-expect-error A registration that may leave batched out says nothing sure.
+  registerConcept({ class: BatchedShelf, spec, batched: on ? ["_book"] : undefined });
+  // @ts-expect-error One list or an empty one is one of several lists.
+  registerConcept({ class: BatchedShelf, spec, batched: on ? ["_book"] : [] });
+  conceptSet({
+    // @ts-expect-error One list or another is one of several lists.
+    Shelf: registerConcept({ class: BatchedShelf, spec, batched: on ? ["_title"] : ["_book"] }),
+  });
+  conceptSet({
+    // @ts-expect-error A name chosen by a condition names one query or another.
+    Shelf: registerConcept({ class: BatchedShelf, spec, batched: [on ? "_title" : "_book"] }),
+  });
+  const rest: readonly ["_book", ..."_title"[]] = ["_book"];
+  conceptSet({
+    // @ts-expect-error A rest element leaves the list's names open.
+    Shelf: registerConcept({ class: BatchedShelf, spec, batched: rest }),
+  });
+  // @ts-expect-error An annotation wider than the list given hides its names.
+  const annotatedWide: RegisteredConcept<
+    typeof BatchedShelf,
+    Record<never, never>,
+    readonly ("_title" | "_book")[]
+  > = registerConcept({ class: BatchedShelf, spec, batched: ["_book"] });
+  void annotatedWide;
+  const leftOut = { class: BatchedShelf, spec } as ConceptRegistration<
+    typeof BatchedShelf,
+    Record<never, never>,
+    readonly ["_book"]
+  >;
+  // @ts-expect-error A registration whose type names batched queries must give them.
+  registerConcept(leftOut);
+
+  // These name their queries surely, so the types follow them.
+  const FIRST = ["_title"] as const;
+  const SECOND = ["_book"] as const;
+  const surely = conceptSet({
+    Constant: registerConcept({ class: BatchedShelf, spec, batched: FIRST }),
+    Spread: registerConcept({ class: BatchedShelf, spec, batched: [...FIRST, ...SECOND] }),
+    Empty: registerConcept({ class: ListTakingShelf, spec, batched: [] }),
+    None: registerConcept({ class: ListTakingShelf, spec }),
+  }).concepts;
+  surely.Constant._title({ id: "a" });
+  surely.Spread._book({ id: "a" });
+  surely.Empty._byIds(["a"]);
+  surely.None._byIds(["a"]);
+
+  // Code written for 1.1 that never batches compiles as before.
+  const setOf = <const S extends Record<string, RegisteredConcept<any>>>(registrations: S) =>
+    conceptSet(registrations);
+  setOf({ Listed: registerConcept({ class: ListTakingShelf, spec }) }).concepts.Listed._byIds([
+    "a",
+  ]);
+  const loose: Record<string, RegisteredConcept<any, any, any>> = {
+    Listed: registerConcept({ class: ListTakingShelf, spec }),
+  };
+  conceptSet(loose);
+  const logged = (registration: Parameters<typeof registerConcept>[0]) =>
+    registerConcept(registration);
+  logged({ class: ListTakingShelf, spec });
+}
+void batchedFormsContract;
+
+class HalfConvertedShelf {
+  async _title(inputs: readonly { id: string }[]): Promise<{ title: string }[]> {
+    return inputs.map(({ id }) => ({ title: id }));
+  }
+
+  async _paged({ id }: { id: string; page?: number }): Promise<{ title: string }[]> {
+    return [{ title: id }];
+  }
+}
+
+function singleFormContract(spec: string): void {
+  vocabulary({
+    // @ts-expect-error A query whose method takes one input cannot be batched.
+    concepts: { Shelf: { class: HalfConvertedShelf, batched: ["_paged"] } },
+    computations: {},
+  });
+  conceptSet({
+    // @ts-expect-error The same holds for a registration.
+    Shelf: registerConcept({ class: HalfConvertedShelf, spec, batched: ["_paged"] }),
+  });
+  const optionalSecond = ["_title", "_book"] as ["_title", "_book"?];
+  vocabulary({
+    // @ts-expect-error A name that may be left out of the list is refused.
+    concepts: { Shelf: { class: BatchedShelf, batched: optionalSecond } },
+    computations: {},
+  });
+  conceptSet({
+    Shelf: registerConcept({ class: HalfConvertedShelf, spec, batched: ["_title"] }),
+  }).concepts.Shelf._title({ id: "a" });
+  vocabulary({
+    // @ts-expect-error batched names only the class's queries, in vocabulary as in registerConcept.
+    concepts: { Shelf: { class: BatchedShelf, batched: ["_missing"] } },
+    computations: {},
+  });
+}
+void singleFormContract;
+
+class UntypedShelf {
+  async _rows(inputs: readonly { id: string }[]): Promise<any> {
+    return inputs.map(({ id }) => [{ id }]);
+  }
+}
+
+function untypedListFormContract(spec: string): void {
+  // A list form whose answers are typed any is still a list form, asked with one input.
+  conceptSet({
+    Shelf: registerConcept({ class: UntypedShelf, spec, batched: ["_rows"] }),
+  }).concepts.Shelf._rows({ id: "a" });
+}
+void untypedListFormContract;
+
+class StaticallyBatchedShelf extends ListTakingShelf {
+  static batched = ["_byIds"] as const;
+}
+// The runtime reads batched only from a declaration, so a class's own static is not followed.
+vocabulary({
+  concepts: { Listed: StaticallyBatchedShelf },
+  computations: {},
+}).concepts.Listed._byIds(["a"]);
+
+const batchedWords = vocabulary({
+  concepts: { Shelf: { class: BatchedShelf, batched: ["_title", "_book"] } },
+  computations: {},
+});
+const { Shelf: Shelving } = batchedWords.concepts;
+// A batched query reads like its single form: one input, one answer's rows.
+Shelving._title({ id: "a" }).is({ title: "a" });
+Shelving._book({ id: "a" }).is({ title: "a" });
+// @ts-expect-error A batched query is still asked with one input, never a list.
+Shelving._title([{ id: "a" }]);
+// @ts-expect-error A batched query's rows keep their declared field types.
+Shelving._title({ id: "a" }).is({ title: 1 });
+// @ts-expect-error A batched query's input keeps its declared field types.
+Shelving._book({ id: 1 });
+const batchedAnswer: ReturnType<typeof Shelving._title> = Promise.resolve([{ title: "a" }]);
+void batchedAnswer;

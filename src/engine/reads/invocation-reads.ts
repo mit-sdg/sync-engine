@@ -3,11 +3,13 @@
  * `queryCache: "since-dispatch"`.
  *
  * Every outside invocation, direct `form` and direct query root opens a new
- * dispatch point. Until it settles, reads done for its flow reuse only answers
+ * dispatch point. Until it returns, reads done for its flow reuse only answers
  * whose query began at or after that point, so it sees every change that
  * landed before it began, as when every cache is cleared at dispatch. Unlike
- * clearing, invocations already running keep the answers they read. Any other
- * read uses the current point, which is what clearing at each dispatch gives.
+ * clearing, invocations already running can reuse the answers they read,
+ * unless a later read of the same key replaced one with a newer answer. Any
+ * other read uses the current point, which is what clearing at each dispatch
+ * gives.
  *
  * A point stays open at most `holdMs`, the request deadline. After that its
  * flow reads at the latest point, which only reuses less, so a read that never

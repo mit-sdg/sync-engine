@@ -16,6 +16,7 @@ export type { EngineObserver, LogEvent } from "../engine/reactions/runtime/loggi
 export { assemble } from "../engine/boundary/assembly/assembly-facade.ts";
 export type { Assembly, ConceptSetAssemblyOptions, } from "../engine/boundary/assembly/assembly-facade.ts";
 export { conceptFloor, conceptSet, registerConcept } from "../engine/boundary/assembly/concept-set.ts";
+export { checkBatchedQuery } from "../engine/reactions/concepts/batched-law.ts";
 export type { ConceptImplementation, ConceptFloor, ConceptRegistration, ImplementationOverrides, Implementations, RegisteredConcept, RegisteredConceptSet, } from "../engine/boundary/assembly/concept-set.ts";
 export { FileLogSink } from "../engine/hosting/file-store.ts";
 export { Logging } from "../engine/reactions/runtime/logging.ts";
@@ -221,7 +222,7 @@ export declare function verifyCommand(args: readonly string[]): Promise<Verifica
  * priority. If two reactions answer one request, the boundary accepts the first,
  * refuses the second with `NOT_PENDING`, and logs both reaction names.
  */
-import type { ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
+import type { BatchedQueryNames, ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
 import type { InstrumentedConcept, QueryCacheMode } from "../../reactions/runtime/instrumenting.ts";
 import { type LogSink, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
@@ -230,7 +231,7 @@ import type { OperationalObserver, RawFaultReporter } from "../../reactions/runt
 import { Reacting } from "../../reactions/runtime/reacting.ts";
 import type { Mapping, ReactionDeclaration, ReactionPartition, ReactionResult, Vars, WhenBuilder } from "../../reactions/types.ts";
 import { type ComputationFn } from "../../reads/computations.ts";
-import { type AnyRegisteredConcept, type ConceptClassesOfSet, type RegisteredConceptSet } from "./concept-set.ts";
+import { type AnyRegisteredConcept, type BatchedQueriesOfSet, type ConceptClassesOfSet, type RegisteredConceptSet } from "./concept-set.ts";
 import { type AuthoredDeclarationIdentity } from "../../reads/declaration-identity.ts";
 import type { FusedFormer } from "../../reads/former-nodes.ts";
 import type { ComputationInventoryIR, ConceptImplementationProvenanceIR } from "../../reads/ir.ts";
@@ -297,7 +298,7 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
     retention?: RetentionPolicy;
-    /** Query evaluation policy; defaults to flow-local memoization. */
+    /** Query evaluation policy; defaults to `"memoize"`: answers are shared by all flows, every cache is cleared at each outside dispatch, and a concept's caches are cleared around each of its actions. */
     queryCache?: QueryCacheMode;
     /** Synchronous application-owned destination for already-redacted occurrence entries. */
     logSink?: LogSink;
@@ -307,9 +308,19 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
      * Read the rows of a line or selection together, consumed in row order, so
      * independent reads overlap. Answers, their order, the reported fault, and
      * row-limit breaches are those of reading one after another, provided reads
-     * are free of side effects. Unset, every line reads its rows one after another.
+     * are free of side effects and no action changes the state being read
+     * meanwhile. Unset, every line reads its rows one after another.
+     * `concurrentReads` is experimental: it may change or be removed in any minor
+     * release.
      */
     concurrentReads?: ConcurrentReads;
+    /**
+     * Whether a batched query groups the reads pending for it into one call of its
+     * list form. Grouping currently happens only with a query cache and
+     * `concurrentReads.rowsAtOnce` above 1.
+     * `false` calls the list form with a list of one for every read. Defaults to `true`.
+     */
+    groupBatchedQueries?: boolean;
     /** Bounded synchronous handoff for stable operational events. */
     observers?: readonly OperationalObserver[];
     /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -328,12 +339,17 @@ type ConceptSetAssemblyOptions<S extends Record<string, AnyRegisteredConcept>, T
     conceptSet: RegisteredConceptSet<S, TComputations>;
     vocabulary?: never;
 };
-export interface AssembledApp<T extends Record<string, ConceptClass>> {
+export interface AssembledApp<T extends Record<string, ConceptClass>, Batched extends {
+    readonly [K in keyof T]?: PropertyKey;
+} = Record<never, never>> {
     engine: Reacting;
     invoker: Invoker<ContractShape>;
-    /** The instrumented concepts, by vocabulary name — the canonical class types them. */
+    /**
+     * The instrumented concepts, by vocabulary name — the canonical class types
+     * them, and each registration's batched queries are asked with one input.
+     */
     concepts: {
-        [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>>;
+        [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>, K extends keyof Batched ? Extract<Batched[K], PropertyKey> : never>;
     };
     /** Portable facts for every installed standard and vocabulary computation. */
     computations: readonly ComputationInventoryIR[];
@@ -359,17 +375,19 @@ export interface AssembledApp<T extends Record<string, ConceptClass>> {
  * contracts (declared first, then derived from the reactions themselves), attach
  * the refusal funnel, and return the engine with its invoker.
  */
-export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): AssembledApp<ConceptClassesOfSet<S>>;
-export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: VocabularyAssemblyOptions<TEntries, TComputations>): AssembledApp<ConceptClassesOf<TEntries>>;
+export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): AssembledApp<ConceptClassesOfSet<S>, BatchedQueriesOfSet<S>>;
+export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: VocabularyAssemblyOptions<TEntries, TComputations>): AssembledApp<ConceptClassesOf<TEntries>, BatchedQueryNames<TEntries>>;
 export {};
 
 === dist/engine/boundary/assembly/assembly-facade.d.ts ===
 import type { ComputationFn } from "../../reads/computations.ts";
-import type { ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
+import type { BatchedQueryNames, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { AssembleBaseOptions, AssembledApp, RequiredConstructionSources } from "./assemble.ts";
-import type { AnyRegisteredConcept, ConceptClassesOfSet, ConceptImplementation, RegisteredConceptSet } from "./concept-set.ts";
+import type { AnyRegisteredConcept, BatchedQueriesOfSet, ConceptClassesOfSet, ConceptImplementation, RegisteredConceptSet } from "./concept-set.ts";
 /** The application as its host consumes it — the engine and boundary internals stay behind. */
-export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>> = Pick<AssembledApp<TConcepts>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
+export type Assembly<TConcepts extends Record<string, new (...args: never[]) => object>, Batched extends {
+    readonly [K in keyof TConcepts]?: PropertyKey;
+} = Record<never, never>> = Pick<AssembledApp<TConcepts, Batched>, "invoker" | "concepts" | "publicInterface" | "beginDrain" | "whenIdle" | "form">;
 type BaseAssemblyOptions<T extends Record<string, new (...args: never[]) => object>> = AssembleBaseOptions<T, {
     [Name in keyof T]?: ConceptImplementation<T[Name]>;
 }> & RequiredConstructionSources<T>;
@@ -381,8 +399,8 @@ export type ConceptSetAssemblyOptions<S extends Record<string, AnyRegisteredConc
     conceptSet: RegisteredConceptSet<S, TComputations>;
     vocabulary?: never;
 };
-export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): Assembly<ConceptClassesOfSet<S>>;
-export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: VocabularyAssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>>;
+export declare function assemble<S extends Record<string, AnyRegisteredConcept>, TComputations extends Record<string, ComputationFn>>(options: ConceptSetAssemblyOptions<S, TComputations>): Assembly<ConceptClassesOfSet<S>, BatchedQueriesOfSet<S>>;
+export declare function assemble<TEntries extends Record<string, ConceptEntry>, TComputations extends Record<string, ComputationFn>>(options: VocabularyAssemblyOptions<TEntries, TComputations>): Assembly<ConceptClassesOf<TEntries>, BatchedQueryNames<TEntries>>;
 export {};
 
 === dist/engine/boundary/assembly/assembly-registry.d.ts ===
@@ -391,7 +409,7 @@ export declare function rememberAssembly(facade: object, assembled: AssembledApp
 export declare function assemblyBehind(facade: object): AssembledApp<Record<string, new (...args: never[]) => object>>;
 
 === dist/engine/boundary/assembly/concept-set.d.ts ===
-import { type ConceptClass, type ConceptClassesOf, type ConceptEntry, type DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
+import { type ConceptClass, type ConceptClassesOf, type BatchedProblem, type BatchedQueryNames, type BatchedRefusal, type SingleFormBatched, type SingleFormRefusal, type ConceptEntry, type DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
 import type { ErrorConstructor, RefusalContracts } from "../../reactions/concepts/concept-metadata.ts";
 import { type ConceptSpec } from "../../reactions/concepts/concept-spec.ts";
 import type { CheckedComputationFns, ComputationFn } from "../../reads/computations.ts";
@@ -419,25 +437,63 @@ export declare function conceptFloor<V extends AnyConceptSelection>(selection: V
  * application name.
  */
 type FloorFactory<C extends ConceptClass = ConceptClass> = (context: never, name: string) => ConceptImplementation<C>;
-export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>> {
+/** The names of a concept class's queries. */
+type QueryNameOf<C extends ConceptClass> = Extract<keyof InstanceType<C>, `_${string}`>;
+export interface ConceptRegistration<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly []> {
     class: C;
     /** Markdown containing the concept's parsed authored contract. */
     spec: string;
     /** The Error class that signals each refusal code the specification declares. */
     refusals?: Readonly<Record<string, ErrorConstructor>>;
+    /**
+     * Queries the class implements in list form: each takes a list of inputs and
+     * returns one answer per input, in the same order. Readers still ask them
+     * with one input. Each call receives a frozen list of copied inputs:
+     * records, arrays, and plain dates are copied, other objects kept. The engine may group reads issued together into one call; see
+     * `groupBatchedQueries` for when it currently does.
+     */
+    batched?: B;
     floors?: F;
 }
 declare const RegistrationBrand: unique symbol;
-export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>> = ConceptRegistration<C, F> & {
+export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly []> = ConceptRegistration<C, F, B> & (0 extends 1 & B ? unknown : [BatchedProblem<B>] extends [never] ? B extends readonly [] ? unknown : {
+    readonly batched: B;
+} : {
+    readonly batched: BatchedRefusal<BatchedProblem<B> & string>;
+}) & {
     readonly [RegistrationBrand]: true;
     /** The machine-readable authored contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
-export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F>): RegisteredConcept<C, F>;
-type AnyRegistration = RegisteredConcept<ConceptClass, Record<string, FloorFactory>>;
+/** Nothing when the types can follow a registration's `batched`, or a refusal saying why not. */
+type BatchedCheck<C extends ConceptClass, B> = [BatchedProblem<B>] extends [never] ? [SingleFormBatched<C, B extends readonly (infer Name)[] ? Name : never>] extends [never] ? unknown : {
+    readonly batched: SingleFormRefusal<SingleFormBatched<C, B extends readonly (infer Name)[] ? Name : never>>;
+} : {
+    readonly batched: BatchedRefusal<BatchedProblem<B> & string>;
+};
+/**
+ * Register a concept class with its specification. A registration that names
+ * batched queries must name them surely: one fixed list of the class's
+ * list-form queries, each named once by one literal name. Any other `batched`
+ * fails to compile here, so the types and the runtime read the same list.
+ */
+export declare function registerConcept<C extends ConceptClass, const B extends readonly [QueryNameOf<C>, ...QueryNameOf<C>[]], const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F, B> & {
+    readonly batched: B;
+} & BatchedCheck<C, B>): RegisteredConcept<C, F, B>;
+export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F, readonly []>): RegisteredConcept<C, F, readonly []>;
+type AnyRegistration = ConceptRegistration<ConceptClass, Record<string, FloorFactory>, readonly string[]> & {
+    readonly [RegistrationBrand]: true;
+    readonly specification: ConceptSpec;
+};
 export type AnyRegisteredConcept = AnyRegistration;
-type ClassOfRegistration<R> = R extends RegisteredConcept<infer C, infer _F> ? C : never;
+type ClassOfRegistration<R> = R extends {
+    readonly class: infer C extends ConceptClass;
+} ? C : never;
+/** The type of a registration's `batched` value, `undefined` where it has none. */
+type BatchedOfRegistration<R> = R extends unknown ? "batched" extends keyof R ? R["batched" & keyof R] : undefined : never;
+/** The queries each registration of a set names under `batched`. */
+export type BatchedQueriesOfSet<S extends Record<string, AnyRegistration>> = BatchedQueryNames<EntriesOf<S>>;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
     [Name in keyof S]: {
         class: ClassOfRegistration<S[Name]>;
@@ -445,25 +501,26 @@ type EntriesOf<S extends Record<string, AnyRegistration>> = {
         principle?: string;
         queries?: QueryPromises;
         refusals?: RefusalContracts;
+        batched: BatchedOfRegistration<S[Name]>;
         specification?: ConceptSpec;
     };
 };
 type VocabularyOf<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> = DeclaredVocabulary<EntriesOf<S>, Computations>;
 export type ConceptClassesOfSet<S extends Record<string, AnyRegistration>> = ConceptClassesOf<EntriesOf<S>>;
 type DeclaredFloorNames<S extends Record<string, AnyRegistration>> = {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? keyof F : never;
+    [Name in keyof S]: S[Name] extends ConceptRegistration<ConceptClass, infer F, readonly string[]> ? keyof F : never;
 }[keyof S] & string;
 type MissingRegistrations<S extends Record<string, AnyRegistration>, Floor extends string> = {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? never : Name : Name;
+    [Name in keyof S]: S[Name] extends ConceptRegistration<ConceptClass, infer F, readonly string[]> ? Floor extends keyof F ? never : Name : Name;
 }[keyof S];
 type CompleteFloorName<S extends Record<string, AnyRegistration>, Floor extends string> = Floor extends unknown ? [MissingRegistrations<S, Floor>] extends [never] ? Floor : never : never;
 type CompleteFloorNames<S extends Record<string, AnyRegistration>> = CompleteFloorName<S, DeclaredFloorNames<S>>;
 type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Intersection) => void ? Intersection : never;
 type FloorContext<S extends Record<string, AnyRegistration>, Floor extends CompleteFloorNames<S>> = UnionToIntersection<{
-    [Name in keyof S]: S[Name] extends RegisteredConcept<ConceptClass, infer F> ? Floor extends keyof F ? Parameters<F[Floor]>[0] : never : never;
+    [Name in keyof S]: S[Name] extends ConceptRegistration<ConceptClass, infer F, readonly string[]> ? Floor extends keyof F ? Parameters<F[Floor]>[0] : never : never;
 }[keyof S]>;
 type RequiredConstructorRegistration<S extends Record<string, AnyRegistration>> = {
-    [Name in keyof S]: S[Name] extends RegisteredConcept<infer C, infer _F> ? [] extends ConstructorParameters<C> ? never : Name : Name;
+    [Name in keyof S]: S[Name] extends ConceptRegistration<infer C, infer _F, readonly string[]> ? [] extends ConstructorParameters<C> ? never : Name : Name;
 }[keyof S];
 export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn> = Record<never, never>> {
     concepts: VocabularyOf<S, Computations>["concepts"];
@@ -810,6 +867,8 @@ export declare class RuntimeLifecycle {
     private readonly idleWaiters;
     private draining;
     private drainIdleEmitted;
+    /** Work that outlives its flow, such as a row read ahead of a fault; idle waits for it. */
+    private held;
     constructor(limits?: ExecutionLimits | undefined, events?: OperationalEvents);
     admit(flow: string, route: string, correlationId: string): AdmissionRejection | undefined;
     /** Admit a direct action root, which has active work but no boundary request wait. */
@@ -820,6 +879,9 @@ export declare class RuntimeLifecycle {
     abandon(flow: string): void;
     beginDrain(): Promise<void>;
     whenIdle(): Promise<void>;
+    hold(): void;
+    release(): void;
+    private get idle();
     validateTimeout(timeoutMs: number): string | undefined;
     action(flow: string): boolean;
     firing(flow: string): boolean;
@@ -1331,7 +1393,7 @@ import type { QueryReadLine, SlotPattern } from "../../reads/lines.ts";
 import type { ExactPattern } from "../../reads/type-inference.ts";
 import type { CheckedComputationFns, ComputationFn, ComputationRef } from "../../reads/computations.ts";
 import { type ConceptMetadata } from "../concepts/concept-metadata.ts";
-import type { ActionCall, InstrumentedAction, Reaction, TriggerActionLine } from "../types.ts";
+import type { ActionCall, InstrumentedAction, Reaction, IsListForm, QueryAsAsked, TriggerActionLine } from "../types.ts";
 import type { QueryPromise } from "../../reads/query-metadata.ts";
 export { isActionRef, isQueryRef } from "./references.ts";
 export type { ActionRef, QueryRef } from "./references.ts";
@@ -1375,7 +1437,50 @@ type ActionLineFn<F> = F extends (input: infer I) => infer A ? {
  * queries become typed line builders — the callable vocabulary proxy.
  */
 type ConceptRef<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
-    readonly [K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never]: K extends `_${string}` ? QueryLineFn<I[K]> : ActionLineFn<I[K]>;
+    readonly [K in keyof I as I[K] extends (...args: never[]) => unknown ? K : never]: K extends `_${string}` ? QueryLineFn<K extends BatchedNames<Entry> ? QueryAsAsked<I[K]> : I[K]> : ActionLineFn<I[K]>;
+};
+/**
+ * The type of an entry's `batched` value, `undefined` where it has none. The
+ * runtime reads `batched` only from a declaration, never from a class.
+ */
+type BatchedValue<Entry> = Entry extends ConceptClass ? undefined : Entry extends unknown ? "batched" extends keyof Entry ? Entry["batched" & keyof Entry] : undefined : never;
+/**
+ * The queries a concept entry names under `batched`. The types follow `batched`
+ * only when its type names one list of queries for every value it admits; see
+ * `BatchedProblem`. Any other entry is refused where it is written.
+ */
+type BatchedNames<Entry> = [BatchedProblem<BatchedValue<Entry>>] extends [never] ? NamesIn<Exclude<BatchedValue<Entry>, undefined>> : never;
+type NamesIn<List> = List extends readonly unknown[] ? List[number] : never;
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : false;
+type ElementProblem<List extends readonly unknown[], Seen = never> = List extends readonly [
+    infer Head,
+    ...infer Tail
+] ? 0 extends 1 & Head ? "names a query by a value typed any" : string extends Head ? "names a query by a string, not a literal name" : IsUnion<Head> extends true ? "names one query or another" : [Head] extends [Seen] ? "names a query twice" : ElementProblem<Tail, Seen | Head> : never;
+/**
+ * Why the types cannot tell which queries a `batched` value names, or never
+ * when they can. They can when the value is surely present or surely absent,
+ * is one list rather than one of several, has a fixed length, and names each
+ * query once by one literal name. For any other value, the runtime would batch
+ * names the types do not follow, or none they do, and a call that compiles
+ * would answer wrongly.
+ */
+export type BatchedProblem<List> = 0 extends 1 & List ? "is typed any" : [List] extends [undefined] ? never : undefined extends List ? [NamesIn<Exclude<List, undefined>>] extends [never] ? never : "may be left out" : IsUnion<List> extends true ? "is one of several lists" : List extends readonly unknown[] ? number extends List["length"] ? "is not a fixed list of names" : IsUnion<List["length"]> extends true ? "has a name that may be left out" : ElementProblem<List> : "is not a list";
+/**
+ * The names under `batched` that are not queries of the class taking a list of
+ * inputs. The runtime refuses a name that is not a query, and calls a query
+ * that takes one input with a list, so it would answer wrongly.
+ */
+export type SingleFormBatched<C extends ConceptClass, Names> = Names extends string ? Names extends Extract<keyof InstanceType<C>, `_${string}`> ? IsListForm<InstanceType<C>[Names]> extends true ? never : Names : Names : never;
+/** The compile error for a batched name that is not a query taking a list of inputs. */
+export type SingleFormRefusal<Name> = Name extends string ? `batched names ${Name}, which is not a query taking a list of inputs: give the query one parameter typed Input[] and return one answer per input.` : never;
+/**
+ * The compile error for a `batched` value the types cannot follow. A value typed
+ * `any` would satisfy any message, so it meets `never` instead.
+ */
+export type BatchedRefusal<Problem extends string> = Problem extends "is typed any" ? never : `batched ${Problem}, so the types cannot tell which queries it batches: write the query names inline, as string literals. To stop grouping reads, set groupBatchedQueries: false.`;
+/** The batched query names of each vocabulary entry. */
+export type BatchedQueryNames<T extends Record<string, ConceptEntry>> = {
+    readonly [K in keyof T]: BatchedNames<T[K]>;
 };
 /** The vocabulary's refs: one `ConceptRef` per declared name. */
 type VocabularyRefs<T extends Record<string, ConceptEntry>> = {
@@ -1399,9 +1504,14 @@ type DeclaredQueryPromise<Entry, Key extends PropertyKey> = Entry extends {
     readonly queries: infer Queries;
 } ? Key extends keyof Queries ? Queries[Key] : never : never : never;
 type InvalidQueryKeys<Entry extends ConceptEntry, I = InstanceType<ClassOf<Entry>>> = {
-    [K in QueryKeys<I>]: I[K] extends (...args: never[]) => infer Answer ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true ? never : K : K;
+    [K in QueryKeys<I>]: (K extends BatchedNames<Entry> ? QueryAsAsked<I[K]> : I[K]) extends (...args: never[]) => infer Answer ? QueryAnswerMatchesPromise<Answer, DeclaredQueryPromise<Entry, K>> extends true ? never : K : K;
 }[QueryKeys<I>];
-type CheckedConceptEntry<E extends ConceptEntry> = E extends ConceptClass ? InvalidQueryKeys<E> extends never ? E : never : E extends ConceptDeclaration<infer C> ? E & {
+type CheckedConceptEntry<E extends ConceptEntry> = [BatchedProblem<BatchedValue<E>>] extends [never] ? [SingleFormBatched<ClassOf<E>, BatchedNames<E>>] extends [never] ? CheckedQueries<E> : E & {
+    readonly batched: SingleFormRefusal<SingleFormBatched<ClassOf<E>, BatchedNames<E>>>;
+} : E & {
+    readonly batched: BatchedRefusal<BatchedProblem<BatchedValue<E>> & string>;
+};
+type CheckedQueries<E extends ConceptEntry> = E extends ConceptClass ? InvalidQueryKeys<E> extends never ? E : never : E extends ConceptDeclaration<infer C> ? E & {
     readonly class: InvalidQueryKeys<E> extends never ? C : never;
 } : never;
 type CheckedConceptEntries<T extends Record<string, ConceptEntry>> = {
@@ -1485,6 +1595,15 @@ interface AuthoredWhereBlock extends ViewBlock {
 /** State a read conjunction, optionally qualifying one reaction branch with it. */
 export declare function where(...conditions: Array<Condition | CountOp>): AuthoredWhereBlock;
 
+=== dist/engine/reactions/concepts/batched-law.d.ts ===
+/**
+ * Check a batched query's law on the raw concept instance with sample inputs.
+ * Resolves when the law holds and rejects with an error naming what differed.
+ * Give distinct inputs that cover an input with nothing stored, one that answers
+ * several rows, and one that answers none.
+ */
+export declare function checkBatchedQuery(concept: object, query: string, inputs: readonly Record<string, unknown>[]): Promise<void>;
+
 === dist/engine/reactions/concepts/concept-metadata.d.ts ===
 import type { OutcomeContracts } from "./outcomes.ts";
 import type { ConceptSpecificationIR } from "../../reads/ir.ts";
@@ -1524,11 +1643,15 @@ export interface ConceptMetadata {
     queries?: Readonly<Record<string, QueryPromise>>;
     outcomes?: OutcomeContracts;
     refusals?: RefusalContracts;
+    /** Queries the class implements in list form: a list of inputs in, one answer per input out. */
+    batched?: readonly string[];
     /** Parsed authored contract; registration semantics use only selected fields. */
     specification?: ConceptSpecificationIR;
 }
 export declare function attachConceptMetadata(concept: object, metadata: ConceptMetadata): void;
 export declare function conceptMetadataOf(concept: object): ConceptMetadata | undefined;
+/** Whether a concept's vocabulary declares the query in list form. */
+export declare function isBatchedQuery(concept: object, query: string): boolean;
 /**
  * What a thrown error means for the action that threw it: a refusal branch the
  * specification declares here, or one it declares only for other actions —
@@ -1629,6 +1752,14 @@ export declare function actionNameOf(action: InstrumentedAction): string;
  * guessing.
  */
 export declare function rolesOf(fn: (...args: never[]) => unknown): string[] | undefined;
+/**
+ * Whether a method may take its whole input list, as a batched query's list
+ * form does: it does not destructure one input as a record, however deeply, or
+ * take a placeholder, which is the single form. Wrappers such as spies take
+ * `(...args)` and pass the list on, so only `sync-engine check`, which sees
+ * declared types, rejects a rest parameter.
+ */
+export declare function takesWholeList(fn: (...args: never[]) => unknown): boolean;
 /**
  * Collect the registered information available for one concept instance:
  * its actions (with observed input roles and declared refusal codes), its
@@ -1932,6 +2063,12 @@ export declare class ActionConcept {
 /** Record an accepted execution-limit breach and return its caller-facing error. */
 export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecutionLimit">, flow: string, limit: "actions" | "firings" | "rows"): Error;
 
+=== dist/engine/reactions/runtime/batching.d.ts ===
+type ListForm = (inputs: readonly unknown[]) => unknown;
+/** Answer one input at a time through a batched query's list form. */
+export declare function batchedQuery(list: ListForm, label: string, grouped: boolean): (input: unknown) => Promise<unknown>;
+export {};
+
 === dist/engine/reactions/runtime/firing-pipeline.d.ts ===
 /**
  * The staged firing flow: match one landed occurrence against a reaction's
@@ -2052,7 +2189,7 @@ export declare class FiringBook {
 === dist/engine/reactions/runtime/instrumenting.d.ts ===
 import { ActionConcept } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
-import type { AnyAction, InstrumentedAction } from "../types.ts";
+import type { AnyAction, InstrumentedAction, QueryAsAsked } from "../types.ts";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
 import type { DispatchPoints } from "../../utils/memoize.ts";
@@ -2062,7 +2199,8 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
     readonly error: string;
 };
 /**
- * The runtime surface of an instrumented concept.
+ * The runtime surface of an instrumented concept. `Batched` names the queries
+ * its registration declares in list form, which are asked with one input.
  *
  * Concept classes stay ordinary: an action may return synchronously and may
  * throw its declared refusal. Once instrumented, every action is asynchronous
@@ -2071,12 +2209,17 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
  * faults reject. Queries are asynchronous roots so admission, limits, drain,
  * and idle observation include their complete evaluation.
  */
-export type InstrumentedConcept<T extends object> = {
-    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? (...args: Args) => Promise<Awaited<Result>> : (...args: Args) => Promise<Awaited<Result> | ActionRefusal> : T[Key];
+export type InstrumentedConcept<T extends object, Batched extends PropertyKey = never> = {
+    [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result ? Key extends `_${string}` ? Key extends Batched ? QueryAsAsked<T[Key]> extends (...args: infer QueryArgs) => infer Answer ? (...args: QueryArgs) => Promise<Awaited<Answer>> : never : (...args: Args) => Promise<Awaited<Result>> : (...args: Args) => Promise<Awaited<Result> | ActionRefusal> : T[Key];
 };
 export interface InstrumentationState {
     actions: ActionConcept;
     boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
+    /**
+     * Each query's wrapper, by name and then method: whether a query is batched
+     * goes by its name, so one method serving two names gets a wrapper for each.
+     */
+    boundQueriesByConcept: WeakMap<object, Map<string, Map<AnyAction, InstrumentedAction>>>;
     queryCaches: WeakMap<object, Array<{
         invalidate(): void;
         prune(oldest: number): void;
@@ -2086,6 +2229,8 @@ export interface InstrumentationState {
     concepts: Set<WeakRef<object>>;
     requireDeclaredRefusals?: boolean;
     queryCache?: QueryCacheMode;
+    /** Whether batched queries group the reads pending together; otherwise each reads alone. */
+    groupBatchedQueries?: boolean;
     /** Present under `queryCache: "since-dispatch"`: the point an answer begun now carries. */
     dispatchPoints?: DispatchPoints;
     /** Present under `queryCache: "since-dispatch"`: open a direct root's reads. */
@@ -2110,7 +2255,7 @@ export declare function instrumentConcept<T extends object>(state: Instrumentati
 /** Owns the mutable proxy identities and query caches for one engine. */
 export declare class ConceptInstrumentation {
     private readonly state;
-    constructor(dependencies: Omit<InstrumentationState, "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts">);
+    constructor(dependencies: Omit<InstrumentationState, "boundActionsByConcept" | "boundQueriesByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts">);
     instrumentConcept<T extends object>(concept: T, name?: string): T;
     instrument<T extends Record<string, object>>(concepts: T): T;
     instrument<T extends object>(concept: T): T;
@@ -2452,6 +2597,9 @@ export interface ExecutionControl {
     admitFlow?(flow: string, route: string, correlationId: string): unknown;
     abandon?(flow: string): void;
     flowSettled?(flow: string): void;
+    /** Count work that outlives its flow until `release`; idle and drain wait for it. */
+    hold?(): void;
+    release?(): void;
 }
 export type OperationalResultClass = "success" | "domain-error" | "framework-error" | "refusal" | "fault";
 interface EventBase {
@@ -2590,7 +2738,7 @@ export declare class Reacting {
     private readonly firingPipeline;
     private readonly execution?;
     private readonly invocationReads?;
-    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads, readHoldMs?: number);
+    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads, readHoldMs?: number, groupBatchedQueries?: boolean);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
@@ -2600,9 +2748,10 @@ export declare class Reacting {
     /**
      * Open an outside invocation's reads, before it is dispatched. Under
      * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
-     * begun from now on until the returned function closes them, and answers no
-     * open read may reuse any more are forgotten; otherwise every query cache is
-     * cleared and the returned function does nothing.
+     * begun from now on. Once the returned function closes them or the request
+     * deadline passes, they reuse only answers begun since the latest start.
+     * Opening forgets the answers no open read may reuse any more. Otherwise
+     * every query cache is cleared and the returned function does nothing.
      */
     openReads(flow: string): () => void;
     register(reactions: ReactionMap, authoredByBase?: Readonly<Record<string, AuthoredDeclarationIdentity>>): void;
@@ -2993,6 +3142,21 @@ export interface WhenBuilderWithFunctionWhere {
     then(node: ConsequenceNode): ReactionPartition;
     then(first: NamedThenNode, second: NamedThenNode, ...rest: NamedThenNode[]): ReactionPartition;
 }
+/**
+ * A batched query as its readers ask it. Its method takes a list of inputs and
+ * answers one per input; readers ask it with one input and get one answer, as
+ * the engine calls the method on their behalf. Only queries a registration
+ * names under `batched` are read this way.
+ */
+export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? F : 0 extends 1 & Awaited<A> ? (input: ListInput<Exclude<P, undefined>>) => Promise<any> : Awaited<A> extends readonly (infer Each)[] ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each> : F : F;
+/** Whether a method has the list form a batched query needs: one list of inputs in, a list out. */
+export type IsListForm<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? false : 0 extends 1 & Awaited<A> ? true : Awaited<A> extends readonly unknown[] ? true : false : false;
+/**
+ * The input of a list parameter, as `sync-engine check` reads one: an array,
+ * optional or with a default included, but not a tuple or a union of arrays.
+ */
+type ListInput<P> = [P] extends [infer List extends readonly unknown[]] ? number extends List["length"] ? [List] extends [readonly (infer I)[]] ? IsOneArray<List, I> : never : never : never;
+type IsOneArray<List, I> = [List] extends [readonly I[]] ? [readonly I[]] extends [List] ? I : [I[]] extends [List] ? I : never : never;
 export {};
 
 === dist/engine/reads/authored-reference-resolution.d.ts ===
@@ -3525,11 +3689,13 @@ export declare class ImportedIrBinder {
  * `queryCache: "since-dispatch"`.
  *
  * Every outside invocation, direct `form` and direct query root opens a new
- * dispatch point. Until it settles, reads done for its flow reuse only answers
+ * dispatch point. Until it returns, reads done for its flow reuse only answers
  * whose query began at or after that point, so it sees every change that
  * landed before it began, as when every cache is cleared at dispatch. Unlike
- * clearing, invocations already running keep the answers they read. Any other
- * read uses the current point, which is what clearing at each dispatch gives.
+ * clearing, invocations already running can reuse the answers they read,
+ * unless a later read of the same key replaced one with a newer answer. Any
+ * other read uses the current point, which is what clearing at each dispatch
+ * gives.
  *
  * A point stays open at most `holdMs`, the request deadline. After that its
  * flow reads at the latest point, which only reuses less, so a read that never
@@ -4733,8 +4899,13 @@ export type AssertRows = ((count: number) => void) & {
 export interface ReadAhead {
     /** Rows of one line or selection evaluated at once, the row being consumed included. */
     readonly rowsAtOnce: number;
-    /** Rows started ahead of the row being consumed, counted across the whole engine. */
+    /** Slots for rows started ahead of the row being consumed, shared across the whole engine. */
     readonly ahead: RowsAhead;
+}
+/** Told of each row started ahead and of its settling, so idle and drain wait for it. */
+export interface Quiescence {
+    hold?(): void;
+    release?(): void;
 }
 /**
  * The rows started ahead and not yet settled, shared by every evaluation one
@@ -4742,25 +4913,38 @@ export interface ReadAhead {
  * its next row when it reaches it, as it would without read-ahead, so nesting
  * cannot deadlock. When every slot is held, slots held longer than `holdMs`,
  * the request deadline, are taken back, so rows that never settle cannot keep
- * later requests reading one row at a time.
+ * later requests reading one row at a time. A taken-back row's read keeps
+ * running, so slots are taken back only while fewer than `capacity` such reads
+ * are unsettled: rows started ahead and still running are at most twice
+ * `capacity`. `quiescence` hears of each row until it settles, whether or not
+ * its slot was taken back.
  */
 export declare class RowsAhead {
     readonly capacity: number;
     private readonly holdMs?;
+    private readonly quiescence?;
     /** When each held slot was taken, oldest first. */
     private readonly held;
-    constructor(capacity: number, holdMs?: number | undefined);
+    /** Rows whose slots were taken back and whose reads have not settled. */
+    private abandoned;
+    private warned;
+    constructor(capacity: number, holdMs?: number | undefined, quiescence?: Quiescence | undefined);
     /** Rows started ahead whose slots are still held. */
     get inUse(): number;
-    /** A slot for a row started ahead: the call that gives it back, or undefined when none is free. */
+    /** A slot for a row started ahead: the call that gives it back once the row settles, or undefined when none is free. */
     take(): (() => void) | undefined;
     private reclaim;
+    /** Said once each time slots stop being taken back, since read-ahead stops until some settle. */
+    private warnStuck;
 }
-/** The `concurrentReads` assembly option. */
+/**
+ * The `concurrentReads` assembly option. `concurrentReads` is experimental: it
+ * may change or be removed in any minor release.
+ */
 export interface ConcurrentReads {
-    /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+    /** Rows of one line or selection evaluated at once, the row being used included; 1 reads them one after another. */
     readonly rowsAtOnce: number;
-    /** Rows started ahead at once across the whole engine; 64 when unset. */
+    /** Slots for rows started ahead, shared across the assembly; 64 when unset. */
     readonly maxRowsAhead?: number;
 }
 export declare const DEFAULT_MAX_ROWS_AHEAD = 64;
@@ -4768,7 +4952,7 @@ export declare const DEFAULT_MAX_ROWS_AHEAD = 64;
  * The engine's read-ahead for an assembly option; undefined reads rows one after another.
  * `holdMs`, the request deadline, bounds how long a row that never settles holds its slot.
  */
-export declare function readAheadFor(options: ConcurrentReads | undefined, holdMs?: number): ReadAhead | undefined;
+export declare function readAheadFor(options: ConcurrentReads | undefined, holdMs?: number, quiescence?: Quiescence): ReadAhead | undefined;
 /**
  * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
  * `consume` takes its answer in row order. With read-ahead, up to `rowsAtOnce`
@@ -5318,6 +5502,8 @@ export interface RegisteredConceptSource {
     specPath: string;
     /** The file contents imported by that declaration. */
     specText: string;
+    /** The queries the registration names under `batched`, when it names any. */
+    batched?: readonly string[];
 }
 /**
  * Locate the implementation and exact Markdown source for every registration selected by a
@@ -6121,8 +6307,17 @@ export type ShapeResolution = {
 export declare function shapesEqual(left: readonly ShapeField[], right: readonly ShapeField[]): boolean;
 /** Resolve one finite object shape from a declared TypeScript type. */
 export declare function shapeOfTypeNode(typeNode: ts.TypeNode, sourceNode: ts.Node, context: TypeScriptCheckerContext): ShapeResolution;
-/** Resolve an action result object or a query row from a method's return type. */
-export declare function resultShapeOfMethod(method: ts.MethodDeclaration, kind: "action" | "query", context: TypeScriptCheckerContext): ShapeResolution;
+/**
+ * Resolve the input shape of a batched query's list parameter, or answer
+ * `undefined` when the declared parameter is not a list.
+ */
+export declare function shapeOfListElement(typeNode: ts.TypeNode, sourceNode: ts.Node, context: TypeScriptCheckerContext): ShapeResolution | undefined;
+/**
+ * Resolve an action result object or a query row from a method's return type.
+ * A batched query's list form answers a list with one answer per input, so its
+ * rows are those of one element.
+ */
+export declare function resultShapeOfMethod(method: ts.MethodDeclaration, kind: "action" | "query" | "batched query", context: TypeScriptCheckerContext): ShapeResolution;
 
 === dist/engine/tooling/wire-projection.d.ts ===
 import type { WireProjectionFacts } from "../boundary/gateway/transport-binding.ts";
@@ -6317,6 +6512,16 @@ export declare function assertCompatibleGenerator(identity: unknown, owner: stri
 === dist/engine/utils/promise-like.d.ts ===
 /** Normalize a structural thenable without adding a microtask for synchronous values. */
 export declare function normalizePromiseLike<T>(value: T): Promise<Awaited<T>> | undefined;
+
+=== dist/engine/utils/quiet.d.ts ===
+/**
+ * Handle every answer in a list no reader will take, so none rejects unhandled:
+ * first the answers already read, since a getter may make a new one each time,
+ * then the list's other entries, each on its own, so one that throws as it is
+ * read does not stop the rest. The entries are listed once, so a list that grows
+ * as it is read cannot keep this going.
+ */
+export declare function quiet(answers: unknown, taken?: readonly unknown[]): void;
 
 === dist/engine/utils/redaction.d.ts ===
 /**

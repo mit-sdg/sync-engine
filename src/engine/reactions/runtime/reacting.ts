@@ -73,6 +73,7 @@ export class Reacting {
     queryCache?: QueryCacheMode,
     concurrentReads?: ConcurrentReads,
     readHoldMs?: number,
+    groupBatchedQueries = true,
   ) {
     this.Action = actionConcept;
     this.execution = execution;
@@ -93,6 +94,9 @@ export class Reacting {
       execution,
       requireDeclaredRefusals,
       queryCache: queryCache ?? "memoize",
+      // Grouping needs reads issued together, and "none" runs every read on its own.
+      groupBatchedQueries:
+        groupBatchedQueries && queryCache !== "none" && (concurrentReads?.rowsAtOnce ?? 1) > 1,
       ...(this.invocationReads === undefined
         ? {}
         : {
@@ -120,7 +124,8 @@ export class Reacting {
       (flowToken) => this.rowGuard(flowToken),
       (flowToken) => this.consumeAction(flowToken),
     );
-    this.registry.configureReadAhead(readAheadFor(concurrentReads, readHoldMs));
+    // A row started ahead of a fault keeps reading after its flow settles, so it holds idle.
+    this.registry.configureReadAhead(readAheadFor(concurrentReads, readHoldMs, execution));
     this.registry.configureInvocationReads(this.invocationReads);
   }
 
@@ -151,9 +156,10 @@ export class Reacting {
   /**
    * Open an outside invocation's reads, before it is dispatched. Under
    * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
-   * begun from now on until the returned function closes them, and answers no
-   * open read may reuse any more are forgotten; otherwise every query cache is
-   * cleared and the returned function does nothing.
+   * begun from now on. Once the returned function closes them or the request
+   * deadline passes, they reuse only answers begun since the latest start.
+   * Opening forgets the answers no open read may reuse any more. Otherwise
+   * every query cache is cleared and the returned function does nothing.
    */
   openReads(flow: string): () => void {
     if (this.invocationReads === undefined) {

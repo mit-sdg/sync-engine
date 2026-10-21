@@ -52,6 +52,8 @@ export class RuntimeLifecycle {
   private readonly idleWaiters = new Set<() => void>();
   private draining = false;
   private drainIdleEmitted = false;
+  /** Work that outlives its flow, such as a row read ahead of a fault; idle waits for it. */
+  private held = 0;
 
   constructor(
     readonly limits?: ExecutionLimits,
@@ -141,13 +143,26 @@ export class RuntimeLifecycle {
       this.draining = true;
       this.events.emit({ type: "drain-state", state: "draining", at: Date.now() });
     }
-    if (this.active.size === 0) this.emitDrainIdle();
+    if (this.idle) this.emitDrainIdle();
     return this.whenIdle();
   }
 
   whenIdle(): Promise<void> {
-    if (this.active.size === 0) return Promise.resolve();
+    if (this.idle) return Promise.resolve();
     return new Promise((resolve) => this.idleWaiters.add(resolve));
+  }
+
+  hold(): void {
+    this.held += 1;
+  }
+
+  release(): void {
+    this.held -= 1;
+    this.resolveIdle();
+  }
+
+  private get idle(): boolean {
+    return this.active.size === 0 && this.held === 0;
   }
 
   validateTimeout(timeoutMs: number): string | undefined {
@@ -182,7 +197,7 @@ export class RuntimeLifecycle {
   }
 
   private resolveIdle(): void {
-    if (this.active.size !== 0) return;
+    if (!this.idle) return;
     for (const resolve of this.idleWaiters) resolve();
     this.idleWaiters.clear();
     if (this.draining) this.emitDrainIdle();

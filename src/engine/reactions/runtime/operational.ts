@@ -11,6 +11,9 @@ export interface ExecutionControl {
   admitFlow?(flow: string, route: string, correlationId: string): unknown;
   abandon?(flow: string): void;
   flowSettled?(flow: string): void;
+  /** Count work that outlives its flow until `release`; idle and drain wait for it. */
+  hold?(): void;
+  release?(): void;
 }
 
 export type OperationalResultClass =

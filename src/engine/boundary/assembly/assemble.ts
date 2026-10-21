@@ -18,6 +18,7 @@ import {
   vocabularyMetadata,
 } from "@engine/reactions/authoring/refs";
 import type {
+  BatchedQueryNames,
   ConceptClass,
   ConceptClassesOf,
   ConceptEntry,
@@ -26,8 +27,16 @@ import type {
 import { declarationsOf } from "@engine/reactions/authoring/partitions";
 import { $vars } from "@engine/reactions/authoring/vars";
 import { when } from "@engine/reactions/authoring/words";
-import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metadata";
-import { actionNameOf, conceptNameOf, rolesOf } from "@engine/reactions/concepts/introspect";
+import {
+  attachConceptMetadata,
+  callableConceptMember,
+} from "@engine/reactions/concepts/concept-metadata";
+import {
+  actionNameOf,
+  conceptNameOf,
+  rolesOf,
+  takesWholeList,
+} from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { ActionRecord } from "@engine/reactions/runtime/actions";
 import type { ConcurrentReads } from "@engine/reads/where-evaluation";
@@ -55,6 +64,7 @@ import { standardComputations, type ComputationFn } from "@engine/reads/computat
 import {
   conceptSetVocabulary,
   type AnyRegisteredConcept,
+  type BatchedQueriesOfSet,
   type ConceptClassesOfSet,
   type RegisteredConceptSet,
 } from "./concept-set.ts";
@@ -231,7 +241,7 @@ export interface AssembleBaseOptions<
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
   retention?: RetentionPolicy;
-  /** Query evaluation policy; defaults to flow-local memoization. */
+  /** Query evaluation policy; defaults to `"memoize"`: answers are shared by all flows, every cache is cleared at each outside dispatch, and a concept's caches are cleared around each of its actions. */
   queryCache?: QueryCacheMode;
   /** Synchronous application-owned destination for already-redacted occurrence entries. */
   logSink?: LogSink;
@@ -241,9 +251,19 @@ export interface AssembleBaseOptions<
    * Read the rows of a line or selection together, consumed in row order, so
    * independent reads overlap. Answers, their order, the reported fault, and
    * row-limit breaches are those of reading one after another, provided reads
-   * are free of side effects. Unset, every line reads its rows one after another.
+   * are free of side effects and no action changes the state being read
+   * meanwhile. Unset, every line reads its rows one after another.
+   * `concurrentReads` is experimental: it may change or be removed in any minor
+   * release.
    */
   concurrentReads?: ConcurrentReads;
+  /**
+   * Whether a batched query groups the reads pending for it into one call of its
+   * list form. Grouping currently happens only with a query cache and
+   * `concurrentReads.rowsAtOnce` above 1.
+   * `false` calls the list form with a list of one for every read. Defaults to `true`.
+   */
+  groupBatchedQueries?: boolean;
   /** Bounded synchronous handoff for stable operational events. */
   observers?: readonly OperationalObserver[];
   /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -273,11 +293,22 @@ type ConceptSetAssemblyOptions<
   vocabulary?: never;
 };
 
-export interface AssembledApp<T extends Record<string, ConceptClass>> {
+export interface AssembledApp<
+  T extends Record<string, ConceptClass>,
+  Batched extends { readonly [K in keyof T]?: PropertyKey } = Record<never, never>,
+> {
   engine: Reacting;
   invoker: Invoker<ContractShape>;
-  /** The instrumented concepts, by vocabulary name — the canonical class types them. */
-  concepts: { [K in keyof T]: InstrumentedConcept<InstanceType<T[K]>> };
+  /**
+   * The instrumented concepts, by vocabulary name — the canonical class types
+   * them, and each registration's batched queries are asked with one input.
+   */
+  concepts: {
+    [K in keyof T]: InstrumentedConcept<
+      InstanceType<T[K]>,
+      K extends keyof Batched ? Extract<Batched[K], PropertyKey> : never
+    >;
+  };
   /** Portable facts for every installed standard and vocabulary computation. */
   computations: readonly ComputationInventoryIR[];
   /** Portable canonical/selected implementation facts, including the request boundary. */
@@ -426,13 +457,15 @@ function assertConcurrentReads(reads: unknown): void {
 export function assemble<
   S extends Record<string, AnyRegisteredConcept>,
   TComputations extends Record<string, ComputationFn>,
->(options: ConceptSetAssemblyOptions<S, TComputations>): AssembledApp<ConceptClassesOfSet<S>>;
+>(
+  options: ConceptSetAssemblyOptions<S, TComputations>,
+): AssembledApp<ConceptClassesOfSet<S>, BatchedQueriesOfSet<S>>;
 export function assemble<
   TEntries extends Record<string, ConceptEntry>,
   TComputations extends Record<string, ComputationFn>,
 >(
   options: VocabularyAssemblyOptions<TEntries, TComputations>,
-): AssembledApp<ConceptClassesOf<TEntries>>;
+): AssembledApp<ConceptClassesOf<TEntries>, BatchedQueryNames<TEntries>>;
 export function assemble<T extends Record<string, ConceptClass>>(
   options: AssembleOptions<T> & {
     conceptSet?: RegisteredConceptSet<
@@ -456,6 +489,12 @@ export function assemble<T extends Record<string, ConceptClass>>(
     throw new Error('assemble: queryCache must be "memoize", "since-dispatch" or "none".');
   }
   assertConcurrentReads(options.concurrentReads);
+  if (
+    options.groupBatchedQueries !== undefined &&
+    typeof options.groupBatchedQueries !== "boolean"
+  ) {
+    throw new Error("assemble: groupBatchedQueries must be true or false.");
+  }
 
   // Resolve every selected raw object before attaching metadata or instrumenting any of them.
   // The identity check is deliberately local to this assembly construction.
@@ -507,6 +546,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.queryCache,
     options.concurrentReads,
     requestTimeout(undefined, options.executionLimits),
+    options.groupBatchedQueries ?? true,
   );
   engine.logging = options.logging ?? Logging.OFF;
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);
@@ -583,6 +623,16 @@ export function assemble<T extends Record<string, ConceptClass>>(
       },
       selected,
     });
+    for (const query of metadata?.batched ?? []) {
+      // Every selected implementation must honour the registration's list form.
+      const member = callableConceptMember(instance, query);
+      if (member === undefined || !takesWholeList(member)) {
+        throw new Error(
+          `assemble: "${name}.${query}" is batched, so it takes a list of inputs, ` +
+            "but the selected implementation declares it to take one input.",
+        );
+      }
+    }
     if (metadata !== undefined) attachConceptMetadata(instance, metadata);
     setOwn(concepts, name, engine.instrumentConcept(instance, name));
   }

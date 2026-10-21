@@ -116,6 +116,66 @@ semantic design binding: it neither performs this specialization nor proves
 that source and design agree. Keep both declarations aligned; the current
 checker validates each contract independently.
 
+A query read for many rows at once, such as one row's detail inside an `each`,
+can be written in list form when its storage answers many inputs in one command.
+Name it under `batched` and write the method to take the whole list:
+
+```ts no-check
+export const trashing = registerConcept({
+  class: TrashingConcept,
+  spec,
+  batched: ["_isTrashed"],
+});
+
+// In TrashingConcept:
+async _isTrashed(inputs: { item: string }[]) {
+  const ids = [...new Set(inputs.map(({ item }) => item))];
+  const docs = await this.trashed.find({ _id: { $in: ids } }).toArray();
+  const found = new Set(docs.map((doc) => doc._id));
+  return inputs.map(({ item }) => ({ trashed: found.has(item) }));
+}
+```
+
+The specification and every reader stay as they were: compositions and callers
+of the assembled concept still write `Trashing._isTrashed({ item })` and get
+one answer. Each call receives a frozen list of copied inputs: records, arrays,
+and plain dates are copied; other objects, such as maps, sets, class instances,
+and `Date` subclasses, are passed as they are. The engine may group reads issued together into one call; it currently does so
+only with a query cache and `concurrentReads.rowsAtOnce` above 1
+(`concurrentReads` is experimental; see the
+[support policy](../../../SUPPORT.md#stable-compatibility)). If a grouped call
+throws or does not answer one per input, each of its inputs is read again
+alone, all at once, as without grouping. Every read in a group waits for its
+call, so give your database client timeouts that end a stuck call. On a stuck
+database a grouped read fails after about twice that timeout, retries included,
+so choose one that fits twice within the request deadline. Return exactly one answer per input, in input order, even
+for duplicates and for inputs with nothing stored; a query that answers many
+rows answers each input with its own list. Build fresh objects for every input
+instead of handing two inputs one object; only a frozen constant may be shared. Copy the list before sorting it. Code
+that holds the raw class instance, such as your own tests, calls the method with
+a list. A stub or spy that replaces a batched method receives the list too.
+See [batched queries](../reference/semantics.md#batched-queries) for the
+details.
+
+Write the `batched` names inline, as string literals in the `registerConcept`
+call. TypeScript and `sync-engine check` both read them there. `sync-engine
+check` refuses a list held in a variable, even with `as const`, and TypeScript
+refuses a list that may be left out or a name chosen by a condition. To switch
+grouping off, set `groupBatchedQueries: false` instead. Type the list parameter
+as an array of the input record, `Input[]` or `readonly Input[]`, not as a tuple
+or a union of arrays. Return the answers themselves, as `return inputs.map(...)`
+after awaiting what they need, not a promise for each. One call can serve
+several requests and runs in the first one's async context, so do not read
+request context, such as a session or a tenant, inside a batched query.
+Assembly rejects a batched method whose parameter destructures one record, as
+`({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
+verifies from the types that the method takes a list. Test each batched query with
+`await checkBatchedQuery(new TrashingConcept(...), "_isTrashed", samples)`,
+giving samples that cover an input with nothing stored, one that answers several
+rows, and one that answers none. Only queries
+can be batched; leave a query in its single form unless its storage really pays
+per call.
+
 Before implementation, verify the draft grammar without loading an application:
 
 ```sh

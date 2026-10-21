@@ -14,6 +14,7 @@ import { walkValueTree } from "./value-tree.ts";
 import type { ViewOp } from "./views.ts";
 import { conditionOp } from "./where-ops.ts";
 import type { Condition, CustomOp, WhereOp } from "./where-ops.ts";
+import { logger } from "@engine/utils/logger";
 import { setOwn } from "@engine/utils/own-property";
 
 /*
@@ -37,8 +38,14 @@ export type AssertRows = ((count: number) => void) & {
 export interface ReadAhead {
   /** Rows of one line or selection evaluated at once, the row being consumed included. */
   readonly rowsAtOnce: number;
-  /** Rows started ahead of the row being consumed, counted across the whole engine. */
+  /** Slots for rows started ahead of the row being consumed, shared across the whole engine. */
   readonly ahead: RowsAhead;
+}
+
+/** Told of each row started ahead and of its settling, so idle and drain wait for it. */
+export interface Quiescence {
+  hold?(): void;
+  release?(): void;
 }
 
 /**
@@ -47,15 +54,23 @@ export interface ReadAhead {
  * its next row when it reaches it, as it would without read-ahead, so nesting
  * cannot deadlock. When every slot is held, slots held longer than `holdMs`,
  * the request deadline, are taken back, so rows that never settle cannot keep
- * later requests reading one row at a time.
+ * later requests reading one row at a time. A taken-back row's read keeps
+ * running, so slots are taken back only while fewer than `capacity` such reads
+ * are unsettled: rows started ahead and still running are at most twice
+ * `capacity`. `quiescence` hears of each row until it settles, whether or not
+ * its slot was taken back.
  */
 export class RowsAhead {
   /** When each held slot was taken, oldest first. */
   private readonly held = new Map<object, number>();
+  /** Rows whose slots were taken back and whose reads have not settled. */
+  private abandoned = 0;
+  private warned = false;
 
   constructor(
     readonly capacity: number,
     private readonly holdMs?: number,
+    private readonly quiescence?: Quiescence,
   ) {}
 
   /** Rows started ahead whose slots are still held. */
@@ -63,14 +78,19 @@ export class RowsAhead {
     return this.held.size;
   }
 
-  /** A slot for a row started ahead: the call that gives it back, or undefined when none is free. */
+  /** A slot for a row started ahead: the call that gives it back once the row settles, or undefined when none is free. */
   take(): (() => void) | undefined {
     if (this.held.size >= this.capacity) this.reclaim();
     if (this.held.size >= this.capacity) return undefined;
     const slot = {};
     this.held.set(slot, performance.now());
+    this.quiescence?.hold?.();
+    let settled = false;
     return () => {
-      this.held.delete(slot);
+      if (settled) return;
+      settled = true;
+      if (!this.held.delete(slot)) this.abandoned -= 1;
+      this.quiescence?.release?.();
     };
   }
 
@@ -79,16 +99,40 @@ export class RowsAhead {
     const oldest = performance.now() - this.holdMs;
     for (const [slot, taken] of this.held) {
       if (taken > oldest) return;
+      if (this.abandoned >= this.capacity) {
+        this.warnStuck();
+        return;
+      }
       this.held.delete(slot);
+      this.abandoned += 1;
+      // Taking a slot back starts a new wait, which the warning may name again.
+      this.warned = false;
+    }
+  }
+
+  /** Said once each time slots stop being taken back, since read-ahead stops until some settle. */
+  private warnStuck(): void {
+    if (this.warned) return;
+    this.warned = true;
+    try {
+      logger.warn(
+        `Read-ahead: ${this.capacity} rows started ahead are still unsettled past the request ` +
+          "deadline, so rows are read one at a time until some settle. Give the database client a timeout.",
+      );
+    } catch {
+      // Read-ahead goes on without the warning.
     }
   }
 }
 
-/** The `concurrentReads` assembly option. */
+/**
+ * The `concurrentReads` assembly option. `concurrentReads` is experimental: it
+ * may change or be removed in any minor release.
+ */
 export interface ConcurrentReads {
-  /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+  /** Rows of one line or selection evaluated at once, the row being used included; 1 reads them one after another. */
   readonly rowsAtOnce: number;
-  /** Rows started ahead at once across the whole engine; 64 when unset. */
+  /** Slots for rows started ahead, shared across the assembly; 64 when unset. */
   readonly maxRowsAhead?: number;
 }
 
@@ -101,11 +145,12 @@ export const DEFAULT_MAX_ROWS_AHEAD = 64;
 export function readAheadFor(
   options: ConcurrentReads | undefined,
   holdMs?: number,
+  quiescence?: Quiescence,
 ): ReadAhead | undefined {
   if (options === undefined) return undefined;
   return {
     rowsAtOnce: options.rowsAtOnce,
-    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD, holdMs),
+    ahead: new RowsAhead(options.maxRowsAhead ?? DEFAULT_MAX_ROWS_AHEAD, holdMs, quiescence),
   };
 }
 

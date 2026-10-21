@@ -11,8 +11,8 @@ vi.mock("@engine/reads/where-evaluation", async (importOriginal) => {
   const original = await importOriginal<typeof import("@engine/reads/where-evaluation")>();
   return {
     ...original,
-    readAheadFor: (options: Parameters<typeof original.readAheadFor>[0]) =>
-      original.readAheadFor(options ?? { rowsAtOnce: 8, maxRowsAhead: 3 }),
+    readAheadFor: (...[options, ...rest]: Parameters<typeof original.readAheadFor>) =>
+      original.readAheadFor(options ?? { rowsAtOnce: 8, maxRowsAhead: 3 }, ...rest),
   };
 });
 

@@ -4,14 +4,15 @@ import { logger } from "@engine/utils/logger";
 import { serializeError } from "@engine/utils/redaction";
 import { ActionConcept, breachLimit } from "./actions.ts";
 import type { ActionRecord } from "./actions.ts";
-import { refusalFor } from "../concepts/concept-metadata.ts";
+import { isBatchedQuery, refusalFor } from "../concepts/concept-metadata.ts";
 import { CONCEPT_NAME, conceptNameOf } from "../concepts/introspect.ts";
 import { contractOf } from "../concepts/outcomes.ts";
 import type { ActionContract } from "../concepts/outcomes.ts";
 import { isRefuse, refusalMapping } from "../concepts/refuse.ts";
 import { actionId, actionSettlement, byReaction, flow } from "../context.ts";
 import type { ActionSettlement } from "../context.ts";
-import type { ActionOutcome, AnyAction, InstrumentedAction } from "../types.ts";
+import type { ActionOutcome, AnyAction, InstrumentedAction, QueryAsAsked } from "../types.ts";
+import { batchedQuery } from "./batching.ts";
 import { queryPromiseOf, validateQueryContracts } from "@engine/reads/query-contracts";
 import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
@@ -43,7 +44,8 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
 };
 
 /**
- * The runtime surface of an instrumented concept.
+ * The runtime surface of an instrumented concept. `Batched` names the queries
+ * its registration declares in list form, which are asked with one input.
  *
  * Concept classes stay ordinary: an action may return synchronously and may
  * throw its declared refusal. Once instrumented, every action is asynchronous
@@ -52,10 +54,14 @@ export type ActionRefusal = Readonly<Record<string, unknown>> & {
  * faults reject. Queries are asynchronous roots so admission, limits, drain,
  * and idle observation include their complete evaluation.
  */
-export type InstrumentedConcept<T extends object> = {
+export type InstrumentedConcept<T extends object, Batched extends PropertyKey = never> = {
   [Key in keyof T]: T[Key] extends (...args: infer Args) => infer Result
     ? Key extends `_${string}`
-      ? (...args: Args) => Promise<Awaited<Result>>
+      ? Key extends Batched
+        ? QueryAsAsked<T[Key]> extends (...args: infer QueryArgs) => infer Answer
+          ? (...args: QueryArgs) => Promise<Awaited<Answer>>
+          : never
+        : (...args: Args) => Promise<Awaited<Result>>
       : (...args: Args) => Promise<Awaited<Result> | ActionRefusal>
     : T[Key];
 };
@@ -63,12 +69,19 @@ export type InstrumentedConcept<T extends object> = {
 export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
+  /**
+   * Each query's wrapper, by name and then method: whether a query is batched
+   * goes by its name, so one method serving two names gets a wrapper for each.
+   */
+  boundQueriesByConcept: WeakMap<object, Map<string, Map<AnyAction, InstrumentedAction>>>;
   queryCaches: WeakMap<object, Array<{ invalidate(): void; prune(oldest: number): void }>>;
   scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   requireDeclaredRefusals?: boolean;
   queryCache?: QueryCacheMode;
+  /** Whether batched queries group the reads pending together; otherwise each reads alone. */
+  groupBatchedQueries?: boolean;
   /** Present under `queryCache: "since-dispatch"`: the point an answer begun now carries. */
   dispatchPoints?: DispatchPoints;
   /** Present under `queryCache: "since-dispatch"`: open a direct root's reads. */
@@ -165,6 +178,11 @@ export function instrumentConcept<T extends object>(
     boundActions = new Map();
     state.boundActionsByConcept.set(concept, boundActions);
   }
+  let boundQueries = state.boundQueriesByConcept.get(concept);
+  if (boundQueries === undefined) {
+    boundQueries = new Map();
+    state.boundQueriesByConcept.set(concept, boundQueries);
+  }
 
   const instrumentedConcept = new Proxy(concept, {
     get(target, property, receiver) {
@@ -173,14 +191,25 @@ export function instrumentConcept<T extends object>(
       const actionKey = value as AnyAction;
 
       if (String(property).startsWith("_")) {
-        const memoized = boundActions.get(actionKey);
+        let named = boundQueries.get(String(property));
+        if (named === undefined) {
+          named = new Map();
+          boundQueries.set(String(property), named);
+        }
+        const memoized = named.get(actionKey);
         if (memoized !== undefined) return memoized;
-        const query = value.bind(concept);
+        const displayName = `${conceptNameOf(concept)}.${String(property)}`;
+        const query = isBatchedQuery(concept, String(property))
+          ? batchedQuery(
+              value.bind(concept) as (inputs: readonly unknown[]) => unknown,
+              displayName,
+              state.groupBatchedQueries === true,
+            )
+          : value.bind(concept);
         const withCache =
           state.queryCache === "none"
             ? uncachedQuery(query)
             : memoizeQuery(query, state.dispatchPoints);
-        const displayName = `${conceptNameOf(concept)}.${String(property)}`;
         const directQuery =
           state.execution?.admitFlow === undefined
             ? withCache
@@ -222,7 +251,7 @@ export function instrumentConcept<T extends object>(
           instrumentedQuery as import("../types.ts").InstrumentedQuery,
           withCache as import("../types.ts").InstrumentedQuery,
         );
-        boundActions.set(actionKey, instrumentedQuery as unknown as InstrumentedAction);
+        named.set(actionKey, instrumentedQuery as unknown as InstrumentedAction);
         const caches = state.queryCaches.get(concept) ?? [];
         if (!state.queryCaches.has(concept)) state.queryCaches.set(concept, caches);
         caches.push(withCache);
@@ -441,12 +470,17 @@ export class ConceptInstrumentation {
   constructor(
     dependencies: Omit<
       InstrumentationState,
-      "boundActionsByConcept" | "queryCaches" | "rawConceptsByInstrumented" | "concepts"
+      | "boundActionsByConcept"
+      | "boundQueriesByConcept"
+      | "queryCaches"
+      | "rawConceptsByInstrumented"
+      | "concepts"
     >,
   ) {
     this.state = {
       ...dependencies,
       boundActionsByConcept: new WeakMap(),
+      boundQueriesByConcept: new WeakMap(),
       queryCaches: new WeakMap(),
       rawConceptsByInstrumented: new WeakMap(),
       concepts: new Set(),

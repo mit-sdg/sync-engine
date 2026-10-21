@@ -49,28 +49,63 @@ assembly creates a separate queue; the engine does not serialize those assemblie
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query
 implementations must be side-effect-free, and storage must provide required
-read/write isolation. With the `concurrentReads` assembly option, the rows of
-one line or selection are also read together: at most `rowsAtOnce` rows of one
-line at once, and at most `maxRowsAhead` rows started ahead across the
-assembly. Each evaluation also reads its own next row, so the rows being read
-at once are at most `maxRowsAhead` plus one per evaluation under way, not
-counting rows started ahead more than the request deadline ago: once the count
-is spent, those give their places back, so reads that never settle cannot keep
-later requests reading one row at a time. Set the database client's own
-timeouts so such reads end. The count belongs to one assembly, while a database client's connection pool is usually
-shared by the whole process: size the pool above the sum over the process's
-assemblies, so actions' writes are not queued behind reads.
+read/write isolation. With the `concurrentReads` assembly option
+(`concurrentReads` is experimental; see the
+[support policy](../../../SUPPORT.md#stable-compatibility)), the rows of one
+line or selection are also read together: up to `rowsAtOnce` rows of one line
+at once. A row read before the row being used is _started ahead_, and each one
+takes a slot; `maxRowsAhead` slots (64 when unset) are shared across the
+assembly. Each evaluation also reads its own next row without a slot. When
+every slot is taken, slots held longer than the request deadline are taken
+back, so hung reads cannot slow later requests to one row at a time; those reads
+still run, and still hold their database connections, until the database
+answers. Slots are taken back only while fewer than `maxRowsAhead` such reads
+are unsettled, so rows started ahead and still running are at most twice
+`maxRowsAhead`. Once that many hang, rows are read one at a time until some
+settle. The process log says so once, and again only after every taken-back
+read has settled and reads hang again. Each evaluation's own read can hang
+too, so the reads in flight while the database is stuck are at most twice
+`maxRowsAhead` plus one per evaluation under way. Set the database client's own
+timeouts so such reads end. The slots belong to one assembly, while a database
+client's connection pool is usually shared by the whole process. Size the pool
+above twice the sum of `maxRowsAhead` over the process's assemblies, with room
+left for each request's own reads and for writes, so actions' writes are not
+queued behind reads. With a smaller pool, reads and writes queue while the
+database is stuck.
+
+A query a registration names under `batched` answers a list of inputs at once,
+so the reads grouped for it take one database command instead of one each.
+Each call receives a frozen list of copied inputs. The engine groups reads of
+one batched query on one concept instance into one call, across requests; it
+currently does so only when `concurrentReads.rowsAtOnce` is above 1 and
+`queryCache` is not `"none"`, so `batched` alone groups nothing. Every read in a
+group waits until its call settles, so one stuck or slow command holds every
+read grouped with it, including reads for other requests. Give the database
+client timeouts that end such a command: each input is then read again alone,
+the rest answer, and the stuck input waits up to one more timeout. When the
+whole database is stuck, every input of the group then waits that one more
+timeout. So a read grouped with others fails after about twice as long as the
+client takes to give up on one command, retries included; an ungrouped read, or
+a group of one, fails after one. With a 10-second socket timeout and one retry,
+a grouped read fails after about 40 seconds. Choose a timeout that fits twice
+within the request deadline, retries included. `batched`
+takes effect in an assembly made by `assemble`. `groupBatchedQueries: false`
+turns grouping off for the whole assembly without changing any class: every
+read then calls the batched method with a list of one. See
+[batched queries](semantics.md#batched-queries).
 
 Under `queryCache: "memoize"`, each outside invocation clears every query cache,
-so concurrent invocations re-read what earlier ones had read, and the more so
-the faster each reads. `queryCache: "since-dispatch"` removes that loss. Memory then
-holds at most one answer per query and argument, kept while some invocation,
-direct `form`, or direct query root still open began before it; older answers
-are dropped when the next one opens. A direct query stops holding answers once
-its read has begun, and nothing holds them past the request deadline
-(`executionLimits.maxRequestDurationMs`, 30 seconds by default): a `form` still
-running then reads only answers begun since the latest start, so a read that
-never settles cannot keep every later answer.
+so overlapping requests re-read what earlier ones read, and the more they
+overlap, the more they re-read. `queryCache: "since-dispatch"` removes that
+loss. The cache keeps at most one answer per query and argument. An answer is
+kept while an open invocation, direct `form`, or direct query that began before
+it can still use it, and is dropped when the next one starts. A direct query
+stops using answers once its read has begun. No invocation keeps its older
+answers past the request deadline (`executionLimits.maxRequestDurationMs`, or 30
+seconds without `executionLimits`): after it, a `form` still running reuses only
+answers begun since the most recent start, so a read that never settles cannot
+keep every later answer in use. Answers that no read may reuse any more stay in
+memory until the next start drops them.
 
 Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions
@@ -119,9 +154,12 @@ flow limits and can outlive its transport request.
 
 Shutdown must account for that continued work. Stop public admission, call
 `beginDrain()`, and wait for the returned promise or `whenIdle()` until accepted
-causal flows settle. A gateway drains its own roots before the downstream
-assembly. Do not expose the downstream invoker as another public admission path
-during this interval.
+causal flows settle. With `concurrentReads`, the wait and the `drain-state`
+event with `state: "idle"` also cover every row read ahead, including rows
+abandoned after a fault, so no row started ahead is still reading when the
+floors close. A gateway drains its own roots before the downstream assembly. Do
+not expose the downstream invoker as another public admission path during this
+interval.
 
 `ConceptFloor.close()` is host-owned and assembly does not call it. `LogSink` has
 no lifecycle method, and `FileLogSink` has no close API. The host shutdown order
