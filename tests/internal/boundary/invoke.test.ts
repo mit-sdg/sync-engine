@@ -44,20 +44,56 @@ function setup() {
 }
 
 describe("createInvoker", () => {
-  test("refreshes standing reads before admitting each application ask", async () => {
-    const refreshes: string[] = [];
+  test("refreshes each ask's reads before validation and dispatch, and closes them once it settles", async () => {
+    const steps: string[] = [];
+    const requesting = new Requesting();
+    const reaction = new Reacting();
+    const instrumented = reaction.instrumentConcept(requesting, "RequestBoundary");
+    const invoker = createInvoker({
+      boundary: requesting,
+      instrumented: new Proxy(instrumented, {
+        get(target, property, receiver) {
+          const value = Reflect.get(target, property, receiver);
+          if (property !== "request") return value;
+          return (args: Record<string | symbol, unknown>) => {
+            steps.push("dispatch");
+            return value(args);
+          };
+        },
+      }),
+      contracts: { "/required": { required: ["value"] } },
+      refresh: (flow) => {
+        steps.push(`refresh ${flow}`);
+        return () => steps.push(`close ${flow}`);
+      },
+    });
+
+    await invoker.invoke("/required", {});
+    const refused = steps[0]?.slice("refresh ".length);
+    expect(steps).toEqual([`refresh ${refused}`, `close ${refused}`]);
+
+    steps.length = 0;
+    const result = await invoker.invoke("/required", { value: 1 }, { timeoutMs: 20 });
+    expect(result.ok).toBe(false);
+    const flow = steps[0]?.slice("refresh ".length);
+    expect(flow).not.toBe(refused);
+    expect(steps).toEqual([`refresh ${flow}`, "dispatch", `close ${flow}`]);
+  });
+
+  test("a refresh that returns nothing is still called once per ask", async () => {
+    let refreshes = 0;
     const requesting = new Requesting();
     const reaction = new Reacting();
     const invoker = createInvoker({
       boundary: requesting,
       instrumented: reaction.instrumentConcept(requesting, "RequestBoundary"),
-      contracts: { "/required": { required: ["value"] } },
-      refresh: () => refreshes.push("refreshed"),
+      refresh: () => {
+        refreshes += 1;
+      },
     });
 
-    await invoker.invoke("/required", {});
-
-    expect(refreshes).toEqual(["refreshed"]);
+    await invoker.invoke("/anything", {}, { timeoutMs: 20 });
+    expect(refreshes).toBe(1);
   });
 
   test("invokes endpoint and returns success with echoed value", async () => {

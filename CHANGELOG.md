@@ -6,6 +6,48 @@ incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
+## [Unreleased]
+
+### Added
+
+- The `concurrentReads: { rowsAtOnce, maxRowsAhead? }` assembly option reads
+  the rows of one `where` line, and the rows of one selection, together and
+  consumes them in row order. `rowsAtOnce` rows are evaluated at once, the
+  consumed row included; at most `maxRowsAhead` rows (64 when unset) are started
+  ahead at once across the assembly, and an evaluation that finds that count
+  spent reads its next row when it reaches it; when every slot is held, slots
+  held past the request deadline are taken back. Answers, their order, the
+  reported fault, and recorded row-limit breaches are those of reading one
+  after another, given side-effect-free reads and no action changing the state
+  being read meanwhile. A fault is reported as soon as its row is consumed;
+  rows started ahead then stop at their next row check. Without the option,
+  rows are read one after another as before.
+- `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads` type.
+- The `queryCache` mode `"since-dispatch"` keeps a running invocation's answers
+  when another invocation arrives, so concurrent invocations stop re-reading
+  what they had read. Until an outside invocation settles, reads done for its
+  flow reuse only memoized answers whose query began at or after it was
+  dispatched, the freshness `"memoize"` gives by clearing every cache at
+  dispatch. A direct `form` and a direct query root read the same way from their
+  own start; any other read reuses only answers begun since the latest of those
+  starts. Action invalidation is unchanged. A direct query stops holding answers
+  once its read has begun, and no read holds them past the request deadline
+  (`executionLimits.maxRequestDurationMs`, 30 seconds by default).
+
+### Changed
+
+- `createInvoker`'s `refresh` receives the flow the ask's request runs in once
+  admitted, and a function it returns is called once the ask has settled,
+  admitted or not. It still runs before input validation, and a `refresh`
+  taking no argument still works.
+- The reference now states that computations, conditions, and custom ops used
+  by reads must be free of side effects, as queries already had to be.
+- Rows of a `where` line pass through one path with or without
+  `concurrentReads`, which takes a few more promise turns. Invocations that
+  overlap can interleave differently, so a read can see another invocation's
+  write it used to miss, or miss one it used to see. Order within one flow is
+  unchanged.
+
 ## [1.1.0] - 2026-10-05
 
 This release revises concept specification syntax: SSF fields may take their

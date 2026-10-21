@@ -23,6 +23,7 @@ export type { ExecutionLimits } from "../engine/boundary/invocation/lifecycle.ts
 export type { OperationalEvent, OperationalObserver, OperationalResultClass, RawFaultReport, RawFaultReporter, } from "../engine/reactions/runtime/operational.ts";
 export type { ActionRefusal } from "../engine/reactions/runtime/instrumenting.ts";
 export type { QueryCacheMode } from "../engine/reactions/runtime/instrumenting.ts";
+export type { ConcurrentReads } from "../engine/reads/where-evaluation.ts";
 export type { FiringRecord, IntegrityFailureRecord, LogEntry, LogSink, ReactionFailureRecord, RetentionPolicy, } from "../engine/reactions/runtime/log-store.ts";
 
 === dist/boundary/index.d.ts ===
@@ -221,6 +222,7 @@ export declare function verifyCommand(args: readonly string[]): Promise<Verifica
  * refuses the second with `NOT_PENDING`, and logs both reaction names.
  */
 import type { ConceptClass, ConceptClassesOf, ConceptEntry, DeclaredVocabulary } from "../../reactions/authoring/refs.ts";
+import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
 import type { InstrumentedConcept, QueryCacheMode } from "../../reactions/runtime/instrumenting.ts";
 import { type LogSink, type RetentionPolicy } from "../../reactions/runtime/log-store.ts";
 import { Logging } from "../../reactions/runtime/logging.ts";
@@ -301,6 +303,13 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     logSink?: LogSink;
     /** Opt-in production execution limits. */
     executionLimits?: ExecutionLimits;
+    /**
+     * Read the rows of a line or selection together, consumed in row order, so
+     * independent reads overlap. Answers, their order, the reported fault, and
+     * row-limit breaches are those of reading one after another, provided reads
+     * are free of side effects. Unset, every line reads its rows one after another.
+     */
+    concurrentReads?: ConcurrentReads;
     /** Bounded synchronous handoff for stable operational events. */
     observers?: readonly OperationalObserver[];
     /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -770,8 +779,12 @@ export declare function createInvoker<C extends ContractShape = ContractShape>(o
     }) => void;
     /** Root admission, pending waits, drain state, and actual-flow quiescence. */
     lifecycle?: RuntimeLifecycle;
-    /** Refresh standing reads before a new application-interface ask. */
-    refresh?: () => void;
+    /**
+     * Refresh standing reads before a new application-interface ask, given the
+     * flow its request runs in once admitted. A returned function is called once
+     * the ask has settled, admitted or not.
+     */
+    refresh?: (flow: string) => void | (() => void);
 }): Invoker<C>;
 
 === dist/engine/boundary/invocation/lifecycle.d.ts ===
@@ -1927,6 +1940,7 @@ export declare function breachLimit(actions: Pick<ActionConcept, "_recordExecuti
  */
 import { Frames } from "../../reads/frames.ts";
 import { type FormerRef } from "../../reads/former-nodes.ts";
+import type { AssertRows } from "../../reads/where-evaluation.ts";
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { ExecutableReaction } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
@@ -1960,13 +1974,13 @@ export declare class FiringPipeline {
     private readonly definitions;
     private readonly reactionLogger;
     private readonly react;
-    private readonly assertRows;
+    private readonly rowGuard;
     private readonly consumeAction;
     private readonly settlement;
     constructor(matcher: TriggerMatcher, actions: ActionConcept, firingBook: FiringBook, definitions: {
         formerNamed(name: string): FormerRef | undefined;
-        readEnv(): ReadEnv;
-    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, assertRows: (flow: string, count: number) => void, consumeAction: (flow: string) => boolean);
+        readEnv(flow?: string): ReadEnv;
+    }, reactionLogger: ReactionLogger, react: (record: ActionRecord, durationMs?: number) => Promise<void>, rowGuard: (flow: string) => AssertRows, consumeAction: (flow: string) => boolean);
     fire(record: ActionRecord, reactions: Iterable<ExecutableReaction>): Promise<void>;
     /**
      * Open settlement frontiers for one flow until none qualifies a trigger.
@@ -2041,7 +2055,8 @@ import type { ActionRecord } from "./actions.ts";
 import type { AnyAction, InstrumentedAction } from "../types.ts";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
-export type QueryCacheMode = "memoize" | "none";
+import type { DispatchPoints } from "../../utils/memoize.ts";
+export type QueryCacheMode = "memoize" | "since-dispatch" | "none";
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
 export type ActionRefusal = Readonly<Record<string, unknown>> & {
     readonly error: string;
@@ -2063,13 +2078,18 @@ export interface InstrumentationState {
     actions: ActionConcept;
     boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
     queryCaches: WeakMap<object, Array<{
-        invalidate: () => void;
+        invalidate(): void;
+        prune(oldest: number): void;
     }>>;
     scheduler: ActionScheduling;
     rawConceptsByInstrumented: WeakMap<object, object>;
     concepts: Set<WeakRef<object>>;
     requireDeclaredRefusals?: boolean;
     queryCache?: QueryCacheMode;
+    /** Present under `queryCache: "since-dispatch"`: the point an answer begun now carries. */
+    dispatchPoints?: DispatchPoints;
+    /** Present under `queryCache: "since-dispatch"`: open a direct root's reads. */
+    openReads?: (flow: string) => () => void;
     registerConcept(name: string, instrumented: object): void;
     execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
     react(record: ActionRecord, durationMs?: number): Promise<void>;
@@ -2096,6 +2116,8 @@ export declare class ConceptInstrumentation {
     instrument<T extends object>(concept: T): T;
     private invalidate;
     invalidateAll(): void;
+    /** Forget every memoized answer begun before `oldest`, which no read may reuse any more. */
+    pruneAll(oldest: number): void;
     rawConceptOf(instrumented: object): object;
 }
 
@@ -2535,6 +2557,7 @@ import type { AuthoredDeclarationIdentity } from "../../reads/declaration-identi
 import type { ReadEnv } from "../../reads/definition-registry.ts";
 import type { FormerRef, FusedFormer } from "../../reads/former-nodes.ts";
 import type { AppIR, FormerIR, ReactionIR, ViewIR } from "../../reads/ir.ts";
+import type { ConcurrentReads } from "../../reads/where-evaluation.ts";
 import type { RelationView } from "../../reads/lines.ts";
 import type { ReactionMap } from "../types.ts";
 import { ActionConcept, type ActionRecord } from "./actions.ts";
@@ -2553,13 +2576,22 @@ export declare class Reacting {
     private readonly triggerMatcher;
     private readonly firingPipeline;
     private readonly execution?;
-    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode);
+    private readonly invocationReads?;
+    constructor(actionConcept?: ActionConcept, execution?: ExecutionControl, requireDeclaredRefusals?: boolean, queryCache?: QueryCacheMode, concurrentReads?: ConcurrentReads, readHoldMs?: number);
     addObserver(observer: EngineObserver): () => void;
     clearObservers(): void;
     get logging(): Logging;
     set logging(level: Logging);
     registerComputations(computations: Record<string, ComputationRef>): void;
     invalidateAllCaches(): void;
+    /**
+     * Open an outside invocation's reads, before it is dispatched. Under
+     * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
+     * begun from now on until the returned function closes them, and answers no
+     * open read may reuse any more are forgotten; otherwise every query cache is
+     * cleared and the returned function does nothing.
+     */
+    openReads(flow: string): () => void;
     register(reactions: ReactionMap, authoredByBase?: Readonly<Record<string, AuthoredDeclarationIdentity>>): void;
     readEnv(): ReadEnv;
     form(fused: FusedFormer): Promise<unknown>;
@@ -2583,6 +2615,8 @@ export declare class Reacting {
     private applyLoweredWhere;
     private applyNow;
     private applyEarlier;
+    /** A flow's row-limit check; rows read together ask it without recording a breach. */
+    private rowGuard;
     private assertRows;
     private consumeAction;
 }
@@ -2959,7 +2993,7 @@ export declare class AuthoredReferenceResolver {
     private readonly definitions;
     constructor(resolver: NameResolver, definitions: {
         computationNamed(name: string): ComputationRef | undefined;
-        readEnv(): ReadEnv;
+        readEnv(flow?: string): ReadEnv;
     });
     resolveDeclaration(name: string, declaration: ReactionDeclaration): void;
     /** Vocabulary references must be the definitions installed in this assembly. */
@@ -3082,7 +3116,9 @@ export declare class AuthoredDeclarationIdentities {
 
 === dist/engine/reads/definition-registry.d.ts ===
 /** Own the definitions and read environments installed in one engine. */
+import type { InvocationReads } from "./invocation-reads.ts";
 import type { InstrumentedQuery, ReactionDeclaration } from "../reactions/types.ts";
+import type { ReadAhead } from "./where-evaluation.ts";
 import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
 import type { FormerRef } from "./former-nodes.ts";
@@ -3100,6 +3136,13 @@ export interface ReadEnv {
     viewByName(name: string, site: string): RelationView;
     /** A registered former, by sentence. */
     formerByName(name: string, site: string): FormerRef;
+    /** How rows are read together; absent, every line reads its rows one after another. */
+    readonly readAhead?: ReadAhead;
+    /**
+     * Under `queryCache: "since-dispatch"`, the earliest dispatch point whose
+     * memoized answers a read may reuse, asked at each read; absent, the current.
+     */
+    readonly since?: () => number;
 }
 export declare class Registry {
     private readonly conceptsByName;
@@ -3112,6 +3155,8 @@ export declare class Registry {
     private readonly validator;
     private readonly binder;
     private env;
+    private readAhead;
+    private invocationReads;
     constructor();
     get concepts(): Map<string, object>;
     registerConcept(name: string, instrumented: object): void;
@@ -3132,7 +3177,13 @@ export declare class Registry {
     authoredIdentityOf(ref: object): AuthoredDeclarationIdentity | undefined;
     private viewNamed;
     readBackEnv(): ReadBackEnv;
-    readEnv(): ReadEnv;
+    /** Set how every later evaluation reads rows together; undefined reads them one after another. */
+    configureReadAhead(readAhead: ReadAhead | undefined): void;
+    /** Under `queryCache: "since-dispatch"`, which answers reads done for each flow may reuse. */
+    configureInvocationReads(invocationReads: InvocationReads | undefined): void;
+    /** The environment for reads; given the flow they serve, they reuse only the answers it may. */
+    readEnv(flow?: string): ReadEnv;
+    private sharedEnv;
     private conceptNamed;
     private computationNamed;
     private indexView;
@@ -3216,9 +3267,9 @@ export {};
 
 === dist/engine/reads/former-evaluation.d.ts ===
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
+import type { AssertRows } from "./where-evaluation.ts";
 import type { FusedFormer } from "./former-nodes.ts";
 import type { ReadEnv } from "./definition-registry.ts";
-type AssertRows = (count: number) => void;
 /**
  * Evaluate a fused former into its tree, at the moment of asking, resolving
  * its names through the engine's read environment. Slot values must be
@@ -3227,7 +3278,6 @@ type AssertRows = (count: number) => void;
  * When forming a consequence input, the engine records that fault on the ask.
  */
 export declare function formTree(fused: FusedFormer, env: ReadEnv, assertRows?: AssertRows): Promise<unknown>;
-export {};
 
 === dist/engine/reads/former-lowering.d.ts ===
 /** Lower authored former trees and serialize registered formers. */
@@ -3455,6 +3505,41 @@ export declare class ImportedIrBinder {
     private assertConsequenceUsable;
     private assertBindingPartitions;
 }
+
+=== dist/engine/reads/invocation-reads.d.ts ===
+/**
+ * Which memoized query answers each outside invocation may reuse, under
+ * `queryCache: "since-dispatch"`.
+ *
+ * Every outside invocation, direct `form` and direct query root opens a new
+ * dispatch point. Until it settles, reads done for its flow reuse only answers
+ * whose query began at or after that point, so it sees every change that
+ * landed before it began, as when every cache is cleared at dispatch. Unlike
+ * clearing, invocations already running keep the answers they read. Any other
+ * read uses the current point, which is what clearing at each dispatch gives.
+ *
+ * A point stays open at most `holdMs`, the request deadline. After that its
+ * flow reads at the latest point, which only reuses less, so a read that never
+ * settles cannot keep every later answer.
+ */
+export declare class InvocationReads {
+    private readonly holdMs?;
+    constructor(holdMs?: number | undefined);
+    private latest;
+    private readonly sinceByFlow;
+    /** Points of the reads still open, in the order they opened, which is ascending. */
+    private readonly open;
+    /** Open a new dispatch point for `flow`; the returned function closes it once. */
+    openFor(flow: string): () => void;
+    /** The earliest point whose answers reads for `flow` may reuse now. */
+    since(flow: string | undefined): number;
+    /** The point an answer begun now carries; every open read may reuse it. */
+    get current(): number;
+    /** Answers begun before this point can no longer be reused by any read. */
+    get oldest(): number;
+}
+/** Dispatch points for an assembly's `queryCache` mode; undefined unless it is "since-dispatch". */
+export declare function invocationReadsFor(queryCache: string | undefined, holdMs?: number): InvocationReads | undefined;
 
 === dist/engine/reads/ir.d.ts ===
 /**
@@ -4108,8 +4193,12 @@ export declare function patternVariables(...mappings: Array<Mapping | undefined>
  * array of records is any number of answers. Anything else is a query fault.
  */
 import type { Frame, InstrumentedQuery, Mapping } from "../reactions/types.ts";
+/** A cached implementation that can reuse answers begun since an earlier dispatch point. */
+type EvaluationQuery = InstrumentedQuery & {
+    readSince?: (since: number, args: [Mapping]) => unknown;
+};
 /** Give engine-owned evaluations the cached implementation behind a direct-read root. */
-export declare function registerEvaluationQuery(direct: InstrumentedQuery, evaluation: InstrumentedQuery): void;
+export declare function registerEvaluationQuery(direct: InstrumentedQuery, evaluation: EvaluationQuery): void;
 /**
  * A query returned something other than one record or an array of records.
  * This is a runtime fault, never a refusal: queries have no refusal posture, so
@@ -4129,9 +4218,11 @@ export declare function assertConceptQuery(query: unknown, op: string, hint?: st
 /**
  * Fill a query input pattern from the current frame, invoke the query, and
  * normalize its answer to rows. Each caller decides how to handle an unbound
- * input.
+ * input. Given `since`, a memoized answer is reused only if its query began at
+ * or after the dispatch point it gives at the moment of the read.
  */
-export declare function queryRows(query: InstrumentedQuery, input: Mapping, frame: Frame): Promise<unknown[]>;
+export declare function queryRows(query: InstrumentedQuery, input: Mapping, frame: Frame, since?: () => number): Promise<unknown[]>;
+export {};
 
 === dist/engine/reads/query-contracts.d.ts ===
 import type { QueryPromise } from "./query-metadata.ts";
@@ -4615,10 +4706,63 @@ import type { ReadEnv } from "./definition-registry.ts";
 import { Frames } from "./frames.ts";
 import type { ViewOpIR } from "./ir.ts";
 import type { Condition, WhereOp } from "./where-ops.ts";
-type AssertRows = (count: number) => void;
+/** Check a running row count, recording a breach when it is over the limit; `exceeds` only asks. */
+export type AssertRows = ((count: number) => void) & {
+    /** Whether `count` rows would breach the limit, asked without recording a breach. */
+    readonly exceeds: (count: number) => boolean;
+};
+/** How one engine reads rows together; set by the `concurrentReads` assembly option. */
+export interface ReadAhead {
+    /** Rows of one line or selection evaluated at once, the row being consumed included. */
+    readonly rowsAtOnce: number;
+    /** Rows started ahead of the row being consumed, counted across the whole engine. */
+    readonly ahead: RowsAhead;
+}
+/**
+ * The rows started ahead and not yet settled, shared by every evaluation one
+ * engine runs. An evaluation that finds every slot held does not wait: it reads
+ * its next row when it reaches it, as it would without read-ahead, so nesting
+ * cannot deadlock. When every slot is held, slots held longer than `holdMs`,
+ * the request deadline, are taken back, so rows that never settle cannot keep
+ * later requests reading one row at a time.
+ */
+export declare class RowsAhead {
+    readonly capacity: number;
+    private readonly holdMs?;
+    /** When each held slot was taken, oldest first. */
+    private readonly held;
+    constructor(capacity: number, holdMs?: number | undefined);
+    /** Rows started ahead whose slots are still held. */
+    get inUse(): number;
+    /** A slot for a row started ahead: the call that gives it back, or undefined when none is free. */
+    take(): (() => void) | undefined;
+    private reclaim;
+}
+/** The `concurrentReads` assembly option. */
+export interface ConcurrentReads {
+    /** Rows of one line or selection evaluated at once, the row being consumed included; 1 reads them one after another. */
+    readonly rowsAtOnce: number;
+    /** Rows started ahead at once across the whole engine; 64 when unset. */
+    readonly maxRowsAhead?: number;
+}
+export declare const DEFAULT_MAX_ROWS_AHEAD = 64;
+/**
+ * The engine's read-ahead for an assembly option; undefined reads rows one after another.
+ * `holdMs`, the request deadline, bounds how long a row that never settles holds its slot.
+ */
+export declare function readAheadFor(options: ConcurrentReads | undefined, holdMs?: number): ReadAhead | undefined;
+/**
+ * Evaluate `count` independent rows: `launch` starts row `index`'s work, and
+ * `consume` takes its answer in row order. With read-ahead, up to `rowsAtOnce`
+ * rows run at once, while the engine's count of rows ahead lasts. A row-limit
+ * breach is recorded when the row that reached it is consumed. A fault is
+ * rethrown as soon as its row is consumed; rows started ahead are then
+ * abandoned: their reads already sent run to completion, and they stop at
+ * their next row check.
+ */
+export declare function inRowOrder<T>(count: number, readAhead: ReadAhead | undefined, assertRows: AssertRows | undefined, launch: (index: number, assertRows: AssertRows | undefined) => Promise<T>, consume: (index: number, value: T) => void): Promise<void>;
 /** Evaluate a where-op list over the working set, one op at a time. */
 export declare function applyWhereOps(frames: Frames, ops: readonly (WhereOp | ViewOpIR | Condition)[], env?: ReadEnv, assertRows?: AssertRows): Promise<Frames>;
-export {};
 
 === dist/engine/reads/where-ops.d.ts ===
 /**
@@ -6103,15 +6247,34 @@ export {};
  * Query memoization between mutations.
  *
  * Instrumentation invalidates every query cache before and after an action
- * body. This module owns only cache identity and rejected-promise eviction.
+ * body. This module owns only cache identity, rejected-promise eviction, and the
+ * dispatch point each answer began at.
  */
 type AnyFn = (...args: never[]) => unknown;
 interface MemoizedQuery<T extends AnyFn> {
     (this: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T>;
+    /** Answer from an entry begun at or after `since`, or run the query and keep its answer. */
+    readSince(since: number, args: Parameters<T>): ReturnType<T>;
     invalidate(): void;
+    /** Forget every answer begun before `oldest`, which no read may reuse any more. */
+    prune(oldest: number): void;
 }
-/** Memoize a query until invalidated; a rejected promise is never retained. */
-export declare function memoizeQuery<T extends AnyFn>(fn: T): MemoizedQuery<T>;
+/** The dispatch point an answer begun now carries. */
+export interface DispatchPoints {
+    readonly current: number;
+}
+/**
+ * Memoize a query until invalidated; a rejected promise is never retained.
+ *
+ * Under `queryCache: "since-dispatch"`, `points` gives the dispatch point an
+ * answer begun now carries. A plain call reuses only answers begun at the
+ * current point, as when every cache is cleared at dispatch; `readSince`
+ * reuses any answer begun at or after an earlier point. One entry per key
+ * suffices, since a fresh answer satisfies every reader, and entries stay in
+ * the order their answers began, so pruning stops at the first one it keeps.
+ * Without `points` every answer carries point 0 and is reused until invalidated.
+ */
+export declare function memoizeQuery<T extends AnyFn>(fn: T, points?: DispatchPoints): MemoizedQuery<T>;
 export {};
 
 === dist/engine/utils/ordinal.d.ts ===

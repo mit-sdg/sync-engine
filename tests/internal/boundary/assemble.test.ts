@@ -169,7 +169,7 @@ describe("assemble", () => {
   test("rejects an unknown query cache mode", () => {
     expect(() =>
       assemble({ vocabulary: vocab, composition: { Increment }, queryCache: "ttl" as never }),
-    ).toThrow('queryCache must be "memoize" or "none"');
+    ).toThrow('queryCache must be "memoize", "since-dispatch" or "none"');
   });
 
   test("retains the newest 100 settled flows by default and accepts an override", () => {

@@ -17,17 +17,24 @@ import { registerEvaluationQuery } from "@engine/reads/queries";
 import type { ActionScheduling } from "./action-scheduler.ts";
 import type { ExecutionControl } from "./operational.ts";
 import { memoizeQuery } from "@engine/utils/memoize";
+import type { DispatchPoints } from "@engine/utils/memoize";
 
 type ActionArguments = Record<string | symbol, unknown>;
 
-export type QueryCacheMode = "memoize" | "none";
+export type QueryCacheMode = "memoize" | "since-dispatch" | "none";
 
 function uncachedQuery<T extends (...args: never[]) => unknown>(
   query: T,
 ): T & {
+  readSince(since: number, args: Parameters<T>): ReturnType<T>;
   invalidate(): void;
+  prune(oldest: number): void;
 } {
-  return Object.assign(query, { invalidate() {} });
+  return Object.assign(query, {
+    readSince: (_since: number, args: Parameters<T>) => query(...args) as ReturnType<T>,
+    invalidate() {},
+    prune() {},
+  });
 }
 
 /** A deliberate refusal returned to the direct caller of an instrumented action. */
@@ -56,12 +63,16 @@ export type InstrumentedConcept<T extends object> = {
 export interface InstrumentationState {
   actions: ActionConcept;
   boundActionsByConcept: WeakMap<object, Map<AnyAction, InstrumentedAction>>;
-  queryCaches: WeakMap<object, Array<{ invalidate: () => void }>>;
+  queryCaches: WeakMap<object, Array<{ invalidate(): void; prune(oldest: number): void }>>;
   scheduler: ActionScheduling;
   rawConceptsByInstrumented: WeakMap<object, object>;
   concepts: Set<WeakRef<object>>;
   requireDeclaredRefusals?: boolean;
   queryCache?: QueryCacheMode;
+  /** Present under `queryCache: "since-dispatch"`: the point an answer begun now carries. */
+  dispatchPoints?: DispatchPoints;
+  /** Present under `queryCache: "since-dispatch"`: open a direct root's reads. */
+  openReads?: (flow: string) => () => void;
   registerConcept(name: string, instrumented: object): void;
   execution?: Pick<ExecutionControl, "action" | "rows" | "admitFlow" | "abandon" | "flowSettled">;
   react(record: ActionRecord, durationMs?: number): Promise<void>;
@@ -165,7 +176,10 @@ export function instrumentConcept<T extends object>(
         const memoized = boundActions.get(actionKey);
         if (memoized !== undefined) return memoized;
         const query = value.bind(concept);
-        const withCache = state.queryCache === "none" ? uncachedQuery(query) : memoizeQuery(query);
+        const withCache =
+          state.queryCache === "none"
+            ? uncachedQuery(query)
+            : memoizeQuery(query, state.dispatchPoints);
         const displayName = `${conceptNameOf(concept)}.${String(property)}`;
         const directQuery =
           state.execution?.admitFlow === undefined
@@ -175,15 +189,21 @@ export function instrumentConcept<T extends object>(
                 if (state.execution?.admitFlow?.(flowToken, displayName, flowToken) !== undefined) {
                   throw new Error(`Read "${displayName}" is unavailable.`);
                 }
-                withCache.invalidate();
+                // A direct root reads only answers begun after it was asked.
+                const closeReads = state.openReads?.(flowToken);
+                if (closeReads === undefined) withCache.invalidate();
                 try {
-                  const result = await withCache(...args);
+                  const answer = withCache(...args);
+                  // Its one read has begun at its own point; nothing it does later reads by it.
+                  closeReads?.();
+                  const result = await answer;
                   const count = Array.isArray(result) ? result.length : 1;
                   if (state.execution?.rows(count) === false) {
                     throw breachLimit(state.actions, flowToken, "rows");
                   }
                   return result;
                 } finally {
+                  closeReads?.();
                   state.actions.store.flowSettled(flowToken);
                   state.execution?.flowSettled?.(flowToken);
                 }
@@ -453,6 +473,20 @@ export class ConceptInstrumentation {
       const concept = ref.deref();
       if (concept !== undefined) this.invalidate(concept);
       else this.state.concepts.delete(ref);
+    }
+  }
+
+  /** Forget every memoized answer begun before `oldest`, which no read may reuse any more. */
+  pruneAll(oldest: number): void {
+    for (const ref of this.state.concepts) {
+      const concept = ref.deref();
+      if (concept === undefined) {
+        this.state.concepts.delete(ref);
+        continue;
+      }
+      this.state.queryCaches
+        .get(this.rawConceptOf(concept))
+        ?.forEach((cache) => cache.prune(oldest));
     }
   }
 

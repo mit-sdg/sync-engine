@@ -1,10 +1,12 @@
 /** Own the definitions and read environments installed in one engine. */
 
+import type { InvocationReads } from "./invocation-reads.ts";
 import { logger } from "@engine/utils/logger";
 import { canonicallyEqual } from "@engine/utils/canonical-json";
 import { NameResolver } from "@engine/reactions/resolving";
 import type { InstrumentedQuery, ReactionDeclaration } from "@engine/reactions/types";
 import { standardComputations } from "./computations.ts";
+import type { ReadAhead } from "./where-evaluation.ts";
 import type { AuthoredDeclarationIdentity } from "./declaration-identity.ts";
 import type { ComputationRef } from "./computations.ts";
 import {
@@ -35,6 +37,13 @@ export interface ReadEnv {
   viewByName(name: string, site: string): RelationView;
   /** A registered former, by sentence. */
   formerByName(name: string, site: string): FormerRef;
+  /** How rows are read together; absent, every line reads its rows one after another. */
+  readonly readAhead?: ReadAhead;
+  /**
+   * Under `queryCache: "since-dispatch"`, the earliest dispatch point whose
+   * memoized answers a read may reuse, asked at each read; absent, the current.
+   */
+  readonly since?: () => number;
 }
 
 export class Registry {
@@ -48,6 +57,8 @@ export class Registry {
   private readonly validator: ViewFormerValidator;
   private readonly binder: ImportedIrBinder;
   private env: ReadEnv | undefined;
+  private readAhead: ReadAhead | undefined;
+  private invocationReads: InvocationReads | undefined;
 
   constructor() {
     for (const ref of standardComputations) {
@@ -59,7 +70,7 @@ export class Registry {
     });
     this.authored = new AuthoredReferenceResolver(this.resolver, {
       computationNamed: (name) => this.computationNamed(name),
-      readEnv: () => this.readEnv(),
+      readEnv: (flow) => this.readEnv(flow),
     });
     this.validator = new ViewFormerValidator({
       resolver: this.resolver,
@@ -215,8 +226,28 @@ export class Registry {
     };
   }
 
-  readEnv(): ReadEnv {
+  /** Set how every later evaluation reads rows together; undefined reads them one after another. */
+  configureReadAhead(readAhead: ReadAhead | undefined): void {
+    this.readAhead = readAhead;
+    this.env = undefined;
+  }
+
+  /** Under `queryCache: "since-dispatch"`, which answers reads done for each flow may reuse. */
+  configureInvocationReads(invocationReads: InvocationReads | undefined): void {
+    this.invocationReads = invocationReads;
+  }
+
+  /** The environment for reads; given the flow they serve, they reuse only the answers it may. */
+  readEnv(flow?: string): ReadEnv {
+    const env = this.sharedEnv();
+    const invocationReads = this.invocationReads;
+    if (invocationReads === undefined) return env;
+    return { ...env, since: () => invocationReads.since(flow) };
+  }
+
+  private sharedEnv(): ReadEnv {
     this.env ??= {
+      readAhead: this.readAhead,
       query: (ref, site) => this.resolver.query(ref.concept, ref.query, site),
       computation: (name, site) => this.resolver.computation(name, site),
       viewByName: (name, site) => {

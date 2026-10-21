@@ -346,9 +346,23 @@ An ordinary assembly defaults to `queryCache: "memoize"`, which memoizes queries
 by concept instance and argument between invalidation points. Instrumented
 actions invalidate the acted-on concept instance's query caches before and after
 their bodies, and an assembled outside invocation invalidates all concept query
-caches before dispatch. `queryCache: "none"` disables this memoization; repeated
-reads execute the query implementation independently.
+caches before dispatch. `queryCache: "since-dispatch"` keeps the same promise
+without clearing: until an outside invocation settles (its cascade has finished
+or the assembly's request deadline, `executionLimits.maxRequestDurationMs`, has
+passed, even for a call given a longer `timeoutMs`), reads done for its flow
+reuse only answers whose
+query began at or after it was dispatched, so invocations already running keep
+the answers they read. A direct `form` and a direct query root read the same
+way from their own start. Any other read, such as a reaction in a flow begun by
+a direct action, reuses only answers begun since the latest of those starts,
+decided at each read, and so does a flow still reading after the request
+deadline has passed. Action invalidation is unchanged. `queryCache: "none"`
+disables memoization; repeated reads execute the query implementation
+independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
+So must the computations, conditions, and custom ops that reads use: evaluation
+may run them in another order than the rows', and for rows whose answers it
+never uses.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including
@@ -739,7 +753,11 @@ Automatic occurrence retention bounds settled-flow inspection, and
 `ExecutionLimits` provides the engine-owned production budget. Row limits stop
 engine-owned expansion during reaction matching, where evaluation, direct reads, and former
 evaluation. A query implementation still owns the memory needed to construct its
-answer.
+answer. With `concurrentReads` (below), rows read together check the row limit
+without recording a breach; a breach is recorded only when evaluation consumes
+the row that reached it. Up to `rowsAtOnce - 1` rows of a line or selection may
+already be under way past that row, and nested lines in them may have read
+too; they stop at their next row check once the evaluation has failed.
 These limits do not replace host limits for connections, request rate, DDoS
 protection, exporter queues, or autoscaling.
 
@@ -791,6 +809,30 @@ an asynchronous action body or another query and does not receive a
 transactional snapshot of concept state. Query implementations must avoid side
 effects; concept storage must provide any isolation required between reads and
 writes.
+
+A line applied to many frames reads each frame's answer as if one after
+another, and a selection forms its rows as if one after another. An assembly
+given the `concurrentReads` option reads them together and consumes the
+answers in row order:
+
+- `rowsAtOnce` rows of one line or selection are evaluated at once, the row
+  being consumed included; `1` reads them one after another.
+- At most `maxRowsAhead` rows (64 when unset) are started ahead at once across
+  the engine. An evaluation that finds that count spent reads its next row when
+  it reaches it, and never waits for it. Once the count is spent, a row started
+  ahead more than the request deadline ago gives its place back, though its
+  read may still be running.
+- Answers, their order, the reported fault, and recorded row-limit breaches
+  are those of reading the rows one after another, given side-effect-free reads
+  ([Queries](#queries)) and no action changing the state being read meanwhile.
+  Reads may interleave with a concurrent action differently than when read one
+  after another.
+- A fault is reported as soon as its row is consumed. Rows started ahead are
+  then abandoned: a read already sent runs to completion and keeps its place in
+  the count of rows ahead until it settles or gives it back, and the row stops at its next row
+  check.
+
+Lines of one `where` block still run in order.
 
 `earlier` reads matching action records whose invocation position precedes the
 trigger in the same flow. Ordinary query reads instead read concept state when

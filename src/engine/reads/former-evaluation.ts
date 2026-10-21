@@ -1,7 +1,8 @@
 /** Evaluate a fused former into its shaped tree, at the moment of asking. */
 
 import { Frames, readPatternValue } from "./frames.ts";
-import { applyWhereOps } from "./where-evaluation.ts";
+import { applyWhereOps, inRowOrder } from "./where-evaluation.ts";
+import type { AssertRows } from "./where-evaluation.ts";
 import { varNamesInPattern } from "./operation-footprint.ts";
 import { FormerFault } from "./former-nodes.ts";
 import type { FormerRef, FusedFormer } from "./former-nodes.ts";
@@ -14,7 +15,6 @@ import { canonicalValue } from "@engine/utils/canonical-json";
 
 /** One selection's shared shape: source line and refinements. */
 type SelectionIR = Extract<FormerNodeIR, { from: object }>;
-type AssertRows = (count: number) => void;
 
 /** Whether an input pattern reads through an unbound variable — absence propagates. */
 function inputUnbound(input: PatternIR, frame: Frame): boolean {
@@ -212,12 +212,17 @@ async function evalNode(
     case "each": {
       const selected = arrange(await selectFrames(node, frame, env, assertRows), node.arranged);
       const items: unknown[] = [];
-      for (const rowFrame of selected) {
-        const item = await evalNode(formerName, node.as, rowFrame, env, assertRows);
-        if (item === DROP_ROW) continue;
-        assertRows?.(items.length + 1);
-        items.push(item);
-      }
+      await inRowOrder(
+        selected.length,
+        env.readAhead,
+        assertRows,
+        (index, guard) => evalNode(formerName, node.as, selected[index], env, guard),
+        (_index, item) => {
+          if (item === DROP_ROW) return;
+          assertRows?.(items.length + 1);
+          items.push(item);
+        },
+      );
       return items;
     }
     case "count":

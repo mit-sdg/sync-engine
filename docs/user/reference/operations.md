@@ -49,7 +49,28 @@ assembly creates a separate queue; the engine does not serialize those assemblie
 Queries and read evaluation do not enter the action queue. They may overlap an
 asynchronous action and do not receive a transactional snapshot. Query
 implementations must be side-effect-free, and storage must provide required
-read/write isolation.
+read/write isolation. With the `concurrentReads` assembly option, the rows of
+one line or selection are also read together: at most `rowsAtOnce` rows of one
+line at once, and at most `maxRowsAhead` rows started ahead across the
+assembly. Each evaluation also reads its own next row, so the rows being read
+at once are at most `maxRowsAhead` plus one per evaluation under way, not
+counting rows started ahead more than the request deadline ago: once the count
+is spent, those give their places back, so reads that never settle cannot keep
+later requests reading one row at a time. Set the database client's own
+timeouts so such reads end. The count belongs to one assembly, while a database client's connection pool is usually
+shared by the whole process: size the pool above the sum over the process's
+assemblies, so actions' writes are not queued behind reads.
+
+Under `queryCache: "memoize"`, each outside invocation clears every query cache,
+so concurrent invocations re-read what earlier ones had read, and the more so
+the faster each reads. `queryCache: "since-dispatch"` removes that loss. Memory then
+holds at most one answer per query and argument, kept while some invocation,
+direct `form`, or direct query root still open began before it; older answers
+are dropped when the next one opens. A direct query stops holding answers once
+its read has begun, and nothing holds them past the request deadline
+(`executionLimits.maxRequestDurationMs`, 30 seconds by default): a `form` still
+running then reads only answers begun since the latest start, so a read that
+never settles cannot keep every later answer.
 
 Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions

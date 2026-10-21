@@ -30,6 +30,7 @@ import { attachConceptMetadata } from "@engine/reactions/concepts/concept-metada
 import { actionNameOf, conceptNameOf, rolesOf } from "@engine/reactions/concepts/introspect";
 import { ActionConcept } from "@engine/reactions/runtime/actions";
 import type { ActionRecord } from "@engine/reactions/runtime/actions";
+import type { ConcurrentReads } from "@engine/reads/where-evaluation";
 import type { InstrumentedConcept, QueryCacheMode } from "@engine/reactions/runtime/instrumenting";
 import {
   MemoryStore,
@@ -85,7 +86,7 @@ import {
   Requesting,
   settleRequestInterpreterFailure,
 } from "../invocation/invoke.ts";
-import { RuntimeLifecycle } from "../invocation/lifecycle.ts";
+import { requestTimeout, RuntimeLifecycle } from "../invocation/lifecycle.ts";
 import type { ExecutionLimits } from "../invocation/lifecycle.ts";
 import {
   assertInputContractsMatchReceivePatterns,
@@ -236,6 +237,13 @@ export interface AssembleBaseOptions<
   logSink?: LogSink;
   /** Opt-in production execution limits. */
   executionLimits?: ExecutionLimits;
+  /**
+   * Read the rows of a line or selection together, consumed in row order, so
+   * independent reads overlap. Answers, their order, the reported fault, and
+   * row-limit breaches are those of reading one after another, provided reads
+   * are free of side effects. Unset, every line reads its rows one after another.
+   */
+  concurrentReads?: ConcurrentReads;
   /** Bounded synchronous handoff for stable operational events. */
   observers?: readonly OperationalObserver[];
   /** Privileged unsanitized failure handoff; applications must treat it as a sensitive sink. */
@@ -394,6 +402,20 @@ const respondRaceObserver: EngineObserver = {
   },
 };
 
+function assertConcurrentReads(reads: unknown): void {
+  if (reads === undefined) return;
+  if (reads === null || typeof reads !== "object") {
+    throw new Error("assemble: concurrentReads must be an object such as { rowsAtOnce: 16 }.");
+  }
+  for (const name of ["rowsAtOnce", "maxRowsAhead"] as const) {
+    const value = (reads as Record<string, unknown>)[name];
+    if (value === undefined && name === "maxRowsAhead") continue;
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+      throw new Error(`assemble: concurrentReads.${name} must be a positive finite integer.`);
+    }
+  }
+}
+
 /**
  * Assemble the application: construct and instrument the vocabulary's
  * concepts, walk the composition registering every tagged export under its
@@ -427,9 +449,13 @@ export function assemble<T extends Record<string, ConceptClass>>(
     options.conceptSet === undefined
       ? options.vocabulary!
       : conceptSetVocabulary(options.conceptSet);
-  if (options.queryCache !== undefined && !["memoize", "none"].includes(options.queryCache)) {
-    throw new Error('assemble: queryCache must be "memoize" or "none".');
+  if (
+    options.queryCache !== undefined &&
+    !["memoize", "since-dispatch", "none"].includes(options.queryCache)
+  ) {
+    throw new Error('assemble: queryCache must be "memoize", "since-dispatch" or "none".');
   }
+  assertConcurrentReads(options.concurrentReads);
 
   // Resolve every selected raw object before attaching metadata or instrumenting any of them.
   // The identity check is deliberately local to this assembly construction.
@@ -479,6 +505,8 @@ export function assemble<T extends Record<string, ConceptClass>>(
     lifecycle,
     true,
     options.queryCache,
+    options.concurrentReads,
+    requestTimeout(undefined, options.executionLimits),
   );
   engine.logging = options.logging ?? Logging.OFF;
   const declaredComputations = vocabularyComputations(vocabularyDeclaration);
@@ -716,7 +744,7 @@ export function assemble<T extends Record<string, ConceptClass>>(
         phase,
       });
     },
-    refresh: () => engine.invalidateAllCaches(),
+    refresh: (flow) => engine.openReads(flow),
   });
 
   const publicInterface: ApplicationInterface = {

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import { memoizeQuery } from "@engine/utils/memoize";
+
+setFlagsFromString("--expose-gc");
+const gc = runInNewContext("gc") as () => void;
 
 function deeplyNested(wrap: (value: unknown, depth: number) => unknown): unknown {
   let value: unknown = "leaf";
@@ -106,6 +111,27 @@ describe("query cache", () => {
     const query = memoizeQuery((input: bigint) => ({ input }));
     expect(query(42n)).toBe(query(42n));
     expect(query(43n)).not.toBe(query(42n));
+  });
+
+  test("a query that never settles keeps none of the answers an invalidation dropped", async () => {
+    const answers: WeakRef<object>[] = [];
+    // Held, as a hung database read is held by its socket.
+    const gates: Array<() => void> = [];
+    const query = memoizeQuery(async (key: string) => {
+      if (key === "stuck") await new Promise<void>((resolve) => gates.push(resolve));
+      const answer = { key };
+      answers.push(new WeakRef(answer));
+      return answer;
+    });
+    void query("stuck");
+    for (let index = 0; index < 50; index += 1) await query(`k${index}`);
+    query.invalidate();
+    // A WeakRef keeps its target until the current task ends.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    gc();
+
+    expect(answers.filter((ref) => ref.deref() !== undefined)).toHaveLength(0);
+    expect(gates).toHaveLength(1);
   });
 
   test("evicts cache entry when a memoized async function rejects", async () => {
