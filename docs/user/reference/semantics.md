@@ -457,7 +457,8 @@ If the method throws for a group of more than one, returns something other
 than a list of the right length, returns a list with a missing element, or
 returns an answer that throws as it is read, the engine logs a warning that
 names the query and reads each input again alone, in a list of one, all at
-once, as it would without grouping. Each read again receives the copy taken
+once, as it would without grouping. These reads still run in the async context
+of the group's first read. Each read again receives the copy taken
 when it was asked, not the one the failed call received. An input whose read
 throws then fails only its own read. For a list of one, the read fails: with
 the method's or the answer's own error if either throws, and with an error that
@@ -471,8 +472,9 @@ filtered by `LOG_LEVEL`), not to the `logSink` or to observers.
 
 The method must keep the batched law: whatever else shares the list, in any
 order and with duplicates, each input gets the answer it gets alone, an empty
-list gets an empty list, and answers to different inputs share no objects;
-answers to equal inputs may share them, as a cache hit's readers do. The
+list gets an empty list, and answers to different inputs share no objects a
+reader could change. Answers may share frozen records and arrays, and answers
+to equal inputs may share any object, as a cache hit's readers do. The
 engine cannot check this as it runs; `checkBatchedQuery` checks it on sample
 inputs. The method is still a query, so it must be side-effect-free, and its
 answer for an input may depend only on stored state and that input. Every

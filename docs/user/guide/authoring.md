@@ -146,10 +146,12 @@ only with a query cache and `concurrentReads.rowsAtOnce` above 1
 [support policy](../../../SUPPORT.md#stable-compatibility)). If a grouped call
 throws or does not answer one per input, each of its inputs is read again
 alone, all at once, as without grouping. Every read in a group waits for its
-call, so give your database client timeouts that end a stuck call. Return exactly one answer per input, in input order, even
+call, so give your database client timeouts that end a stuck call. On a stuck
+database a grouped read fails after about twice that timeout, retries included,
+so choose one that fits twice within the request deadline. Return exactly one answer per input, in input order, even
 for duplicates and for inputs with nothing stored; a query that answers many
 rows answers each input with its own list. Build fresh objects for every input
-instead of handing two inputs one object. Copy the list before sorting it. Code
+instead of handing two inputs one object; only a frozen constant may be shared. Copy the list before sorting it. Code
 that holds the raw class instance, such as your own tests, calls the method with
 a list. A stub or spy that replaces a batched method receives the list too.
 See [batched queries](../reference/semantics.md#batched-queries) for the

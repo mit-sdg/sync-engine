@@ -62,14 +62,16 @@ still run, and still hold their database connections, until the database
 answers. Slots are taken back only while fewer than `maxRowsAhead` such reads
 are unsettled, so rows started ahead and still running are at most twice
 `maxRowsAhead`. Once that many hang, rows are read one at a time until some
-settle, and the process log says so once. Each evaluation's own read can hang
+settle. The process log says so once, and again only after every taken-back
+read has settled and reads hang again. Each evaluation's own read can hang
 too, so the reads in flight while the database is stuck are at most twice
 `maxRowsAhead` plus one per evaluation under way. Set the database client's own
 timeouts so such reads end. The slots belong to one assembly, while a database
-client's connection pool is usually shared by the whole process: size the pool
-above twice the sum of `maxRowsAhead` over the process's assemblies, or plan for
-reads to queue while the database is stuck, with room left for each request's
-own reads and for writes, so actions' writes are not queued behind reads.
+client's connection pool is usually shared by the whole process. Size the pool
+above twice the sum of `maxRowsAhead` over the process's assemblies, with room
+left for each request's own reads and for writes, so actions' writes are not
+queued behind reads. With a smaller pool, reads and writes queue while the
+database is stuck.
 
 A query a registration names under `batched` answers a list of inputs at once,
 so the reads grouped for it take one database command instead of one each.
@@ -81,10 +83,12 @@ group waits until its call settles, so one stuck or slow command holds every
 read grouped with it, including reads for other requests. Give the database
 client timeouts that end such a command: each input is then read again alone,
 the rest answer, and the stuck input waits up to one more timeout. When the
-whole database is stuck, every input of the group waits that one more timeout,
-so a grouped read fails after about twice the timeout, counting any retry the
-client makes, where an ungrouped read fails after one. Choose a timeout that
-fits twice within the request deadline. `batched`
+whole database is stuck, every input of the group then waits that one more
+timeout. So a read grouped with others fails after about twice as long as the
+client takes to give up on one command, retries included; an ungrouped read, or
+a group of one, fails after one. With a 10-second socket timeout and one retry,
+a grouped read fails after about 40 seconds. Choose a timeout that fits twice
+within the request deadline, retries included. `batched`
 takes effect in an assembly made by `assemble`. `groupBatchedQueries: false`
 turns grouping off for the whole assembly without changing any class: every
 read then calls the batched method with a list of one. See

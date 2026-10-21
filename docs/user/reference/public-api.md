@@ -289,7 +289,7 @@ and get one answer, while code holding the raw class instance calls the list
 form. `registerConcept` rejects a name the specification does not declare as a
 query, and TypeScript accepts only the class's `_` members. `conceptSet`
 rejects a name given twice and a batched method whose parameter destructures
-one flat record or is a `_` placeholder, and `assemble` rejects a selected
+one record or is a `_` placeholder, and `assemble` rejects a selected
 implementation whose batched method does so. Only `sync-engine check` reliably
 verifies from the types that the method takes a list; it also rejects a rest
 parameter. Batched names are written inline in the `registerConcept(...)` call
@@ -297,10 +297,16 @@ and carried by its inferred type; input names come from the specification. The
 types follow `batched` only when its type names one list of queries for every
 value it admits: surely present or surely absent, one list rather than one of
 several, of fixed length, each query named once by one literal name, and each
-a query whose method takes a list. `vocabulary` refuses any other `batched`
-where it is written, and `conceptSet` refuses a registration whose `batched`
-does not, so a list held in a `string[]` variable, a list that may be
-`undefined`, and a name chosen by a condition fail to compile. To switch
+a query whose one parameter is an array, `Input[]` or `readonly Input[]`, and
+that returns a list. `vocabulary` and `registerConcept` refuse any other
+`batched` where it is written, such as a list held in a `string[]` variable, a
+list that may be `undefined`, or a name chosen by a condition. An overloaded
+list form must have its list overload last, since TypeScript reads the last
+one. To give a registration a type, use `satisfies` rather than an annotation,
+which makes `batched` optional; a helper that wraps `registerConcept` must take
+`batched` as a required literal list, or leave it out. The types cannot see a
+choice between two registrations of one class, as in `on ? batchedRegistration
+: plainRegistration`. To switch
 grouping off, set `groupBatchedQueries: false` rather than leaving `batched`
 out. `ConceptRegistration<C>` and
 `RegisteredConcept<C>` written out name no batched queries, so a registration
@@ -317,9 +323,9 @@ and with duplicates, no answer is missing, an empty list answers an empty
 list, and answers to different inputs share no objects a reader could
 change; frozen records and arrays may be shared. It passes a frozen list of
 copies of your samples, as the engine passes copies, and rejects with what
-differed. It compares records, arrays, and dates, and fails on any other kind
-of object, such as binary data, a map, a set, a class instance, or a promise,
-unless both answers hold the very same object. Execution semantics for batched
+differed. It compares records, arrays, and dates. It fails on an answer that is
+a promise, and on any other kind of object, such as binary data, a map, a set,
+or a class instance, unless both answers hold the very same object. Execution semantics for batched
 queries are in [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied

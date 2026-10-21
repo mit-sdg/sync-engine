@@ -272,7 +272,8 @@ For each selected application concept, `check`:
 - reads a batched query's input shape from its list parameter and its row
   shape from the list it returns, and fails when a query takes a list of records without being named under
   `batched`, when a named query does not take a list (a rest parameter
-  included), or when `batched` is not a literal list of query names;
+  included), or when `batched` is not a list of query names written inline,
+  as string literals, in the `registerConcept(...)` call;
 - checks successful branch return names and refusal mappings; and
 - records source provenance.
 
