@@ -8,6 +8,8 @@
  * separately may each change or compare what they got.
  */
 import { structurallyEqual } from "@engine/reads/value-equality";
+import { quiet } from "@engine/utils/quiet";
+import { snapshotValue } from "@engine/utils/snapshot";
 
 type ListForm = (inputs: readonly unknown[]) => unknown;
 
@@ -24,30 +26,28 @@ function className(value: object): string {
   return typeof name === "string" && name !== "" ? name : "(anonymous)";
 }
 
-/** The bytes of a typed array, a `DataView`, a `Buffer`, or an `ArrayBuffer`. */
-function bytesOf(value: ArrayBufferView | ArrayBuffer): Uint8Array {
-  return ArrayBuffer.isView(value)
-    ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-    : new Uint8Array(value);
-}
-
-function sameBytes(left: ArrayBufferView | ArrayBuffer, right: ArrayBufferView | ArrayBuffer) {
-  const [ours, theirs] = [bytesOf(left), bytesOf(right)];
-  return ours.length === theirs.length && ours.every((byte, index) => byte === theirs[index]);
-}
+const isInvalidDate = (value: object): boolean =>
+  value instanceof Date && Number.isNaN(Date.prototype.getTime.call(value));
 
 /**
  * Whether two answers carry the same data. Records and arrays compare by
- * content, dates by time, and binary data by its bytes. Any other object, such
- * as a map, a class instance, a regular expression or a promise, compares by
- * identity when the engine matches it, or may keep data the comparison cannot
- * see, so the check fails on it rather than passing it. `seen` holds the pairs
- * under comparison, so equivalent cycles of different lengths compare equal.
+ * content, and dates by time. Any other object, such as binary data, a map, a
+ * class instance, a regular expression or a promise, compares by identity when
+ * the engine matches it, or may keep data the comparison cannot see, so the
+ * check fails on it, unless both answers hold the very same object. `seen` holds
+ * the pairs under comparison, so equivalent cycles of different lengths compare
+ * equal.
  */
 function sameData(left: unknown, right: unknown, seen = new Map<object, Set<object>>()): boolean {
   if (Object.is(left, right)) return true;
   if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
     return false;
+  }
+  if (isInvalidDate(left) || isInvalidDate(right)) {
+    throw new Error(
+      "checkBatchedQuery: cannot compare an invalid date, which the engine matches only to " +
+        "itself; answer null for a missing date.",
+    );
   }
   if (left instanceof Date || right instanceof Date) return structurallyEqual(left, right);
   const partners = seen.get(left);
@@ -56,7 +56,10 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, Set<obje
   else partners.add(right);
   if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;
   if (ArrayBuffer.isView(left) || left instanceof ArrayBuffer) {
-    return sameBytes(left, right as ArrayBufferView | ArrayBuffer);
+    throw new Error(
+      `checkBatchedQuery: cannot compare answers of class ${className(left)}, which the engine ` +
+        "matches by identity; answer binary data as a string, such as base64 or hex.",
+    );
   }
   const prototype = Object.getPrototypeOf(left);
   if (Array.isArray(left) && prototype === Array.prototype) {
@@ -71,7 +74,7 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, Set<obje
   if (prototype !== Object.prototype && prototype !== null) {
     throw new Error(
       `checkBatchedQuery: cannot compare answers of class ${className(left)}; ` +
-        "answer with records, arrays, dates or binary data.",
+        "answer with records, arrays or dates.",
     );
   }
   const keys = Reflect.ownKeys(left);
@@ -87,12 +90,30 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, Set<obje
   );
 }
 
-/** Every object an answer reaches. */
-function objectsIn(value: unknown, found = new Set<object>()): Set<object> {
-  if (value === null || typeof value !== "object" || found.has(value)) return found;
-  found.add(value);
+/** Whether no reader can change an object: a frozen plain record or array. */
+function unchangeable(value: object): boolean {
+  if (!Object.isFrozen(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Every object an answer reaches that a reader could change. Frozen plain
+ * records and arrays are left out, as answers may share them as they share a
+ * constant, but what they hold is walked. Binary data's bytes are reached
+ * through `bytesReached`.
+ */
+function objectsIn(
+  value: unknown,
+  found = new Set<object>(),
+  walked = new Set<object>(),
+): Set<object> {
+  if (value === null || typeof value !== "object" || walked.has(value)) return found;
+  walked.add(value);
+  if (!unchangeable(value)) found.add(value);
+  if (ArrayBuffer.isView(value)) return found;
   for (const key of Reflect.ownKeys(value)) {
-    objectsIn((value as Record<PropertyKey, unknown>)[key], found);
+    objectsIn((value as Record<PropertyKey, unknown>)[key], found, walked);
   }
   return found;
 }
@@ -142,9 +163,12 @@ export async function checkBatchedQuery(
   if (typeof member !== "function") {
     throw new Error(`checkBatchedQuery: ${query} is not a method of the concept.`);
   }
-  // Frozen, as the engine passes it.
+  // A frozen list of copies, as the engine passes it, so a list form that tidies
+  // its inputs in place changes neither the samples nor a later call's inputs.
   const list = (batch: readonly unknown[]) =>
-    Promise.resolve((member as ListForm).call(concept, Object.freeze([...batch])));
+    Promise.resolve(
+      (member as ListForm).call(concept, Object.freeze(batch.map((input) => snapshotValue(input)))),
+    );
   const fail = (what: string): never => {
     throw new Error(`Batched query ${query} breaks its law: ${what}.`);
   };
@@ -163,9 +187,7 @@ export async function checkBatchedQuery(
     if (promised !== -1) {
       // Not awaited, since a list form returns answers rather than a promise
       // for each; each is still handled, so a rejection is not left unhandled.
-      for (const answer of answers as unknown[]) {
-        if (isThenable(answer)) Promise.resolve(answer).catch(() => {});
-      }
+      quiet(answers);
       throw new Error(
         `checkBatchedQuery: ${query} gave a promise as answer ${promised} for ${label}; ` +
           "a list form returns its answers, so await them first, for example with Promise.all.",

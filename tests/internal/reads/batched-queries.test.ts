@@ -971,14 +971,61 @@ describe("checkBatchedQuery", () => {
     await expect(checkBatchedQuery(new Shelf(), "_cycles", samples)).resolves.toBeUndefined();
   });
 
-  test("binary answers for different inputs that share bytes fail", async () => {
-    await expect(checkBatchedQuery(new Shelf(), "_sharedBuffer", samples)).rejects.toThrow(
-      "share an object",
-    );
+  test("binary answers fail, since the engine matches them by identity", async () => {
+    for (const query of ["_bytes", "_bytesOfAll", "_sharedBuffer", "_pooled"]) {
+      await expect(checkBatchedQuery(new Shelf(), query, samples)).rejects.toThrow(
+        "cannot compare answers of class Uint8Array, which the engine matches by identity",
+      );
+    }
   });
 
-  test("binary answers that share a buffer without sharing bytes pass", async () => {
-    await expect(checkBatchedQuery(new Shelf(), "_pooled", samples)).resolves.toBeUndefined();
+  test("one stored binary answer that both reads return passes", async () => {
+    const stored = new Map([["a", new Uint8Array([1])]]);
+    const concept = {
+      async _stored(inputs: readonly { id: string }[]) {
+        return inputs.map(({ id }) => ({ data: stored.get(id) ?? null }));
+      },
+    };
+    await expect(checkBatchedQuery(concept, "_stored", samples)).resolves.toBeUndefined();
+  });
+
+  test("a frozen constant that answers share passes, and what it holds is still checked", async () => {
+    const none = Object.freeze({ tags: Object.freeze([]) });
+    const open = Object.freeze({ tags: [] as string[] });
+    const frozen = {
+      async _none(inputs: readonly { id: string }[]) {
+        return inputs.map(() => none);
+      },
+      async _open(inputs: readonly { id: string }[]) {
+        return inputs.map(() => open);
+      },
+    };
+    await expect(checkBatchedQuery(frozen, "_none", samples)).resolves.toBeUndefined();
+    await expect(checkBatchedQuery(frozen, "_open", samples)).rejects.toThrow("share an object");
+  });
+
+  test("the list form gets copies of the samples, as the engine gives copies", async () => {
+    const sample = [{ email: "Ann@MIT.edu" }, { email: "bob@mit.edu" }];
+    const tidies = {
+      async _byEmail(inputs: readonly { email: string }[]) {
+        // Tidies an input in place only when it is asked alone.
+        if (inputs.length === 1) inputs[0].email = inputs[0].email.toLowerCase();
+        return inputs.map(({ email }) => (email === email.toLowerCase() ? [{ email }] : []));
+      },
+    };
+    await expect(checkBatchedQuery(tidies, "_byEmail", sample)).rejects.toThrow("alone");
+    expect(sample[0].email).toBe("Ann@MIT.edu");
+  });
+
+  test("an invalid date fails with a message that says why", async () => {
+    const dated = {
+      async _at(inputs: readonly { id: string }[]) {
+        return inputs.map(() => ({ at: new Date(Number.NaN) }));
+      },
+    };
+    await expect(checkBatchedQuery(dated, "_at", samples)).rejects.toThrow(
+      "cannot compare an invalid date",
+    );
   });
 
   test("a sample that cannot be shown as JSON still has its law checked", async () => {
@@ -1013,11 +1060,6 @@ describe("checkBatchedQuery", () => {
     await expect(checkBatchedQuery(new Shelf(), "_titlesOfAll", samples)).rejects.toThrow(
       "cannot compare answers of class Map",
     );
-  });
-
-  test("binary answers compare by their bytes, empty ones included", async () => {
-    await expect(checkBatchedQuery(new Shelf(), "_bytes", samples)).resolves.toBeUndefined();
-    await expect(checkBatchedQuery(new Shelf(), "_bytesOfAll", samples)).rejects.toThrow("alone");
   });
 
   test("answers it cannot compare fail, naming their class", async () => {
