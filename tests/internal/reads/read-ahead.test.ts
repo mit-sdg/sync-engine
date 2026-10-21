@@ -230,7 +230,9 @@ describe("with concurrentReads, rows are read together and consumed in row order
 
     await expect(app.form(listing({}))).rejects.toThrow("detail 0 failed");
     // The hung row keeps its place in the count of rows ahead until it settles.
-    expect(rowsAhead(app)).toBe(1);
+    // Rows 2 and 3 settle on their own, but on a slow runner one can still be in
+    // flight when the fault is reported, so wait for the count to reach the hung row.
+    await vi.waitFor(() => expect(rowsAhead(app)).toBe(1));
 
     release();
     await vi.waitFor(() => expect(rowsAhead(app)).toBe(0));

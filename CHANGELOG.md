@@ -6,7 +6,7 @@ incompatibly. Pin an exact version,
 follow the [support policy](SUPPORT.md), and review the
 [operational limits](docs/user/reference/operations.md) before deployment.
 
-## [1.2.0] - 2026-10-17
+## [1.2.0] - 2026-10-21
 
 This release adds three opt-in ways to read faster: concurrent reads, the
 `"since-dispatch"` query cache, and batched queries. An application that sets
