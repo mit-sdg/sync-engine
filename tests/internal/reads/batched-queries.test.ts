@@ -1017,6 +1017,44 @@ describe("checkBatchedQuery", () => {
     expect(sample[0].email).toBe("Ann@MIT.edu");
   });
 
+  test("a frozen record with an accessor shared across inputs fails, as a setter can reach other state", async () => {
+    let label = "start";
+    const view = Object.freeze({
+      get label() {
+        return label;
+      },
+      set label(next: string) {
+        label = next;
+      },
+    });
+    const accessor = {
+      async _view(inputs: readonly { id: string }[]) {
+        return inputs.map(() => ({ view }));
+      },
+    };
+    await expect(checkBatchedQuery(accessor, "_view", samples)).rejects.toThrow("share an object");
+  });
+
+  test("a wrong-length answer list leaves none of its promises unhandled", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    const processEvents: EventEmitter = process;
+    processEvents.on("unhandledRejection", record);
+    try {
+      const perRow = {
+        async _rows(inputs: readonly { id: string }[]) {
+          // One answer too many, and that one rejects.
+          return [...inputs.map(({ id }) => ({ id })), Promise.reject(new Error("extra answer"))];
+        },
+      };
+      await expect(checkBatchedQuery(perRow, "_rows", samples)).rejects.toThrow("answers");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      processEvents.off("unhandledRejection", record);
+    }
+  });
+
   test("an invalid date fails with a message that says why", async () => {
     const dated = {
       async _at(inputs: readonly { id: string }[]) {

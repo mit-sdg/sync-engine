@@ -30,8 +30,8 @@ interface PendingRead {
 }
 
 // Taken from `node:timers`, which test runners leave alone when they fake the
-// global timers, so faked timers cannot stall grouped reads. Where the host has
-// none, reads are not grouped.
+// global timers, so faked timers cannot stall grouped reads. Where it has no
+// `setImmediate`, reads are not grouped.
 const nextTurn: ((callback: () => void) => unknown) | undefined =
   typeof hostSetImmediate === "function" ? hostSetImmediate : undefined;
 

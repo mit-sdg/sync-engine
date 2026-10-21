@@ -90,11 +90,17 @@ function sameData(left: unknown, right: unknown, seen = new Map<object, Set<obje
   );
 }
 
-/** Whether no reader can change an object: a frozen plain record or array. */
+/**
+ * Whether no reader can change an object: a frozen plain record or array whose
+ * own properties are all data, so no setter can reach state elsewhere.
+ */
 function unchangeable(value: object): boolean {
   if (!Object.isFrozen(value)) return false;
   const prototype = Object.getPrototypeOf(value);
-  return Array.isArray(value) || prototype === Object.prototype || prototype === null;
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return false;
+  return Reflect.ownKeys(value).every(
+    (key) => "value" in (Reflect.getOwnPropertyDescriptor(value, key) ?? {}),
+  );
 }
 
 /**
@@ -175,13 +181,17 @@ export async function checkBatchedQuery(
   const answered = async (batch: readonly unknown[], label: string): Promise<unknown[]> => {
     const answers = await list(batch);
     if (!Array.isArray(answers) || answers.length !== batch.length) {
+      quiet(answers);
       fail(
         `${label} gave ${batch.length} inputs and got ` +
           `${Array.isArray(answers) ? answers.length : typeof answers} answers`,
       );
     }
     for (let position = 0; position < batch.length; position += 1) {
-      if (!(position in (answers as unknown[]))) fail(`${label} left answer ${position} empty`);
+      if (!(position in (answers as unknown[]))) {
+        quiet(answers);
+        fail(`${label} left answer ${position} empty`);
+      }
     }
     const promised = (answers as unknown[]).findIndex(isThenable);
     if (promised !== -1) {

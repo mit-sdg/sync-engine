@@ -4934,7 +4934,7 @@ export declare class RowsAhead {
     /** A slot for a row started ahead: the call that gives it back once the row settles, or undefined when none is free. */
     take(): (() => void) | undefined;
     private reclaim;
-    /** Said once until the stuck reads settle, since read-ahead stops until then. */
+    /** Said once each time slots stop being taken back, since read-ahead stops until some settle. */
     private warnStuck;
 }
 /**

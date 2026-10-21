@@ -89,10 +89,7 @@ export class RowsAhead {
     return () => {
       if (settled) return;
       settled = true;
-      if (!this.held.delete(slot)) {
-        this.abandoned -= 1;
-        if (this.abandoned === 0) this.warned = false;
-      }
+      if (!this.held.delete(slot)) this.abandoned -= 1;
       this.quiescence?.release?.();
     };
   }
@@ -108,10 +105,12 @@ export class RowsAhead {
       }
       this.held.delete(slot);
       this.abandoned += 1;
+      // Taking a slot back starts a new wait, which the warning may name again.
+      this.warned = false;
     }
   }
 
-  /** Said once until the stuck reads settle, since read-ahead stops until then. */
+  /** Said once each time slots stop being taken back, since read-ahead stops until some settle. */
   private warnStuck(): void {
     if (this.warned) return;
     this.warned = true;

@@ -264,10 +264,12 @@ describe("inRowOrder", () => {
       expect(ahead.take()).toBeUndefined();
       expect(ahead.take()).toBeUndefined();
       expect(warn).toHaveBeenCalledTimes(1);
-      // One taken-back row settling lets one more slot be taken back.
+      // One taken-back row settling lets one more slot be taken back, and the
+      // wait that follows is said again.
       hung[0]?.();
       expect(ahead.take()).toBeDefined();
       expect(ahead.take()).toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(2);
       for (const slot of hung) slot?.();
     } finally {
       warn.mockRestore();
