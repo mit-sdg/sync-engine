@@ -3,6 +3,7 @@
  * at the moment it matters rather than by timing.
  */
 import { describe, expect, test, vi } from "vite-plus/test";
+import { logger } from "@engine/utils/logger";
 import { inRowOrder, RowsAhead } from "@sync-engine/internal/reads/where-evaluation";
 import type { AssertRows, ReadAhead } from "@sync-engine/internal/reads/where-evaluation";
 
@@ -243,6 +244,33 @@ describe("inRowOrder", () => {
       fresh?.();
       expect(ahead.inUse).toBe(0);
     } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("slots stop being taken back while as many taken-back rows as slots are unsettled", () => {
+    let now = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const ahead = new RowsAhead(2, 1_000);
+      const hung = [ahead.take(), ahead.take()];
+      now += 2_000;
+      // Both hung slots are taken back for two new rows, which hang too.
+      hung.push(ahead.take(), ahead.take());
+      expect(hung.every((slot) => slot !== undefined)).toBe(true);
+      now += 2_000;
+      // Two taken-back rows are unsettled, as many as there are slots, so no more are taken back.
+      expect(ahead.take()).toBeUndefined();
+      expect(ahead.take()).toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+      // One taken-back row settling lets one more slot be taken back.
+      hung[0]?.();
+      expect(ahead.take()).toBeDefined();
+      expect(ahead.take()).toBeUndefined();
+      for (const slot of hung) slot?.();
+    } finally {
+      warn.mockRestore();
       clock.mockRestore();
     }
   });
