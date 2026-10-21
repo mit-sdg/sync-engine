@@ -170,6 +170,36 @@ describe("declared endpoint input contracts", () => {
     expect(Object.getPrototypeOf(nested)).toBe(Object.prototype);
   });
 
+  test("a body's own __proto__ key reaches an action as data", async () => {
+    class StoreConcept {
+      seen: Record<string, unknown>[] = [];
+      save({ body }: { body: Record<string, unknown> }) {
+        this.seen.push(body);
+        return {};
+      }
+    }
+    const words = vocabulary({ concepts: { Store: StoreConcept }, computations: {} });
+    const app = assemble({
+      vocabulary: words,
+      composition: {
+        Save: endpoint("/save", ({ body }: Vars) =>
+          receive({ body }).then(words.concepts.Store.save({ body })).then(respond({})),
+        ),
+      },
+    });
+    const input = JSON.parse('{"body":{"__proto__":{"admin":true},"title":"x"}}') as object;
+
+    expect(await app.invoker.invoke("/save" as never, input as never)).toEqual({
+      ok: true,
+      value: {},
+    });
+    await app.whenIdle();
+    const [body] = app.concepts.Store.seen;
+    expect(Object.hasOwn(body, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(body)).toBe(Object.prototype);
+    expect((body as { admin?: unknown }).admin).toBeUndefined();
+  });
+
   test("an undeclared endpoint derives required keys from its receive pattern", async () => {
     const { invoker } = setup();
 

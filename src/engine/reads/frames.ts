@@ -111,75 +111,68 @@ export function bindInputMapping(frame: Frame, input: Mapping): Mapping {
   return bound;
 }
 
-function unifyOutputMapping(pattern: Mapping, value: unknown, frame: Frame): boolean {
+function unifyOutputMapping(pattern: Mapping, value: unknown, frame: Frame, fresh: Frame): boolean {
   if (!isPlainMapping(value)) return false;
   return Object.entries(pattern).every(
     ([childKey, child]) =>
       Object.hasOwn(value, childKey) &&
-      unifyOutputPattern(child, (value as Mapping)[childKey], frame),
+      unifyOutputPattern(child, (value as Mapping)[childKey], frame, fresh),
   );
 }
 
-function unifyOutputPattern(pattern: unknown, value: unknown, frame: Frame): boolean {
+/** Unify one value; a name bound in `frame` or `fresh` tests equality, and any other binds in `fresh`. */
+function unifyOutputPattern(pattern: unknown, value: unknown, frame: Frame, fresh: Frame): boolean {
   const key = varKeyOf(pattern);
   if (key !== undefined) {
     if (Object.hasOwn(frame, key)) return structurallyEqual(frame[key], value);
-    setOwn(frame, key, value);
+    if (Object.hasOwn(fresh, key)) return structurallyEqual(fresh[key], value);
+    setOwn(fresh, key, value);
     return true;
   }
   if (Array.isArray(pattern)) {
-    return (
-      Array.isArray(value) &&
-      pattern.length === value.length &&
-      pattern.every((item, index) => unifyOutputPattern(item, value[index], frame))
-    );
+    if (!Array.isArray(value) || pattern.length !== value.length) return false;
+    // Every index, so a hole in the pattern matches only `undefined`, as equality compares it.
+    for (let index = 0; index < pattern.length; index += 1) {
+      if (!unifyOutputPattern(pattern[index], value[index], frame, fresh)) return false;
+    }
+    return true;
   }
   if (isPlainMapping(pattern)) {
     const marker = asMarker(pattern);
-    if (marker === null) return unifyOutputMapping(pattern, value, frame);
+    if (marker === null) return unifyOutputMapping(pattern, value, frame, fresh);
     // `$lit` escapes only this object's marker-looking key. Values beneath
     // that key remain patterns, including nested `$var` bindings.
     if (marker.tag === "$lit" && isPlainMapping(marker.payload)) {
-      return unifyOutputMapping(marker.payload, value, frame);
+      return unifyOutputMapping(marker.payload, value, frame, fresh);
     }
   }
   return structurallyEqual(readPatternValue(pattern, frame).value, value);
 }
 
 /**
- * Expand one source frame by a query's result rows into the accumulator.
+ * The frame one query result row makes of `frame`, or undefined when the row does not unify.
  *
- * Each row yields a fresh frame extending `frame` with the `output` symbol
- * bindings — and bindings **unify**: a fresh variable binds the row's value,
- * while an already-bound variable is an equality test, and a row whose value
- * differs contributes nothing. This is the binding behavior used by a line
- * ("an already-bound name tests equality instead"), and the same discipline
- * trigger patterns keep. A query that returns no unifiable rows contributes
- * nothing — the source frame is dropped, giving inner-join / fan-out
- * semantics.
+ * `output` is the query's output mapping as `Object.entries`, so a caller expanding many rows
+ * takes it once. The row yields a fresh frame extending `frame` with the `output` symbol
+ * bindings, and bindings **unify**: a fresh variable binds the row's value, while an
+ * already-bound variable is an equality test, and a row whose value differs contributes
+ * nothing. This is the binding behavior used by a line ("an already-bound name tests equality
+ * instead"), and the same discipline trigger patterns keep. New bindings are collected apart
+ * and the frame is copied only for a row that unifies.
  */
-export function expandOutputRows(
-  into: Frames,
+export function outputRow(
   frame: Frame,
-  rows: unknown[],
-  output: Mapping,
-): void {
-  for (const row of rows) {
-    const newFrame: Frame = { ...frame };
-    let unifies = true;
-    for (const [outputKey, pattern] of Object.entries(output)) {
-      if (row === null || typeof row !== "object" || !Object.hasOwn(row, outputKey)) {
-        unifies = false;
-        break;
-      }
-      const rowValue = (row as Record<string, unknown>)[outputKey];
-      if (!unifyOutputPattern(pattern, rowValue, newFrame)) {
-        unifies = false;
-        break;
-      }
+  row: unknown,
+  output: readonly (readonly [string, unknown])[],
+): Frame | undefined {
+  const fresh: Frame = {};
+  for (const [outputKey, pattern] of output) {
+    if (row === null || typeof row !== "object" || !Object.hasOwn(row, outputKey)) return undefined;
+    if (!unifyOutputPattern(pattern, (row as Record<string, unknown>)[outputKey], frame, fresh)) {
+      return undefined;
     }
-    if (unifies) into.push(newFrame);
   }
+  return { ...frame, ...fresh };
 }
 
 // biome-ignore lint/suspicious/noUnsafeDeclarationMerging: The interface overloads Array methods so fluent frame transforms keep their narrowed return types.

@@ -39,7 +39,15 @@ Matching snapshots arrays, plain records, and ordinary `Date` values when the
 ask begins, preserving cycles and repeated references. Other object kinds retain
 identity semantics. The action implementation still receives the caller's
 original input object, so later mutation cannot rewrite the occurrence that
-reactions match.
+reactions match. A reaction matches each record, through a trigger or through
+`earlier`, on its own copy of these values and binds from that copy, so changing
+a bound array, record, or `Date` cannot rewrite the occurrence for any other
+match; other object kinds are shared. One match, or one evaluation of a
+reaction's `where`, shares one copy of each repeated reference across its frames,
+so a consequence that changes a bound value in place changes it for sibling
+frames' consequences too. A query a `where` line asks receives that same copy:
+a query that changes a bound value changes it for the later lines, and whether
+it does can depend on whether its answer came from the query cache.
 
 The action then settles in one of two outcome postures:
 
@@ -362,7 +370,9 @@ independently.
 Query implementations must be side-effect-free; the engine does not enforce it.
 So must the computations, conditions, and custom ops that reads use: evaluation
 may run them in another order than the rows', and for rows whose answers it
-never uses.
+never uses. So must getters on the rows a query returns: matching reads them
+against the frame as it stands, so a getter that changes a bound value can drop
+its row.
 A structural thenable returned by a memoized query is normalized to one native
 promise before that promise is cached. Equivalent reads reuse the normalized
 promise, so the original thenable's `then` is invoked once. Rejection, including
@@ -381,7 +391,10 @@ and safe but may occupy separate entries when their graph shapes differ.
 
 Read equality and literal action-pattern equality are structural for arrays and
 plain records, timestamp-based for `Date`, and identity-based for maps, sets,
-class instances, and other objects. Reusing an already-bound variable in an
+class instances, and other objects. Arrays compare by length and every index, a
+hole comparing as `undefined`, in values and in line patterns alike; other
+array properties are ignored. Cyclic arrays and records compare equal when they
+unfold to the same value, so `a = [a]` equals `b = [[b]]`. Reusing an already-bound variable in an
 action pattern uses this same equality. Many-row read matching retains the first
 structurally distinct fill. Former `.distinct(...)`
 uses JavaScript `Set` semantics and skips `undefined`. `.first(...)` uses the

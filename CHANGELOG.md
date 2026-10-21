@@ -42,6 +42,36 @@ follow the [support policy](SUPPORT.md), and review the
   taking no argument still works.
 - The reference now states that computations, conditions, and custom ops used
   by reads must be free of side effects, as queries already had to be.
+- Reaction matching and `earlier(...)` test each action pattern's action,
+  provenance, posture, and input on the stored record before copying it, so a
+  record that fails that test is not copied. Matches, their order, and their
+  isolation are unchanged; a getter on a raw action output is now read only when
+  a record passes the test. An input's `Date` subclass has its `getTime` called
+  a different number of times, so one whose `getTime` throws now fails the
+  trigger where it used to match.
+- Read and action-pattern equality compare arrays by length and every index, a
+  hole comparing as `undefined`. It used to skip holes on the left only, so
+  `[, 1]` equalled `[5, 1]` but not the reverse, and an answer could depend on
+  row order. Many-row read matching and view answers now keep both such rows,
+  so a view or former promising at most one row can fault where it answered
+  before. A bound variable, a `$oneOf`, `$lit` or `.is.not` value, or a
+  trigger literal now tells `[, 1]` from `[5, 1]` in both directions, and a hole
+  in a line's `.is` pattern matches only `undefined`. Arrays now join records in
+  the guard against cycles, so cyclic arrays compare by their unfolding where
+  they used to overflow the stack, or compare unequal inside a record. Values
+  from JSON have no holes or cycles and are unaffected.
+- `earlier(...)` matches each earlier record on the reaction's own copy and
+  binds from it, as action triggers already did. It used to bind the engine's
+  stored values, so an action that changed a value bound through `earlier` in
+  place, as tidying an input does, changed the record itself: a later `earlier`
+  stopped matching it, a later stage of an endpoint could wait out its deadline,
+  and one concept's action could rewrite state another concept had returned.
+  Values bound through `earlier` are now distinct from the objects another
+  reaction binds; within one evaluation of a reaction's `where`, its lines and
+  frames share one copy of each repeated reference. Class instances, maps, and
+  sets still bind by identity. `earlier` now reads a record as triggers do, so
+  a non-enumerable key on an action's output no longer takes part in `earlier`
+  matching, and a getter on it is read when the record is copied.
 - Rows of a `where` line pass through one path with or without
   `concurrentReads`, which takes a few more promise turns. Invocations that
   overlap can interleave differently, so a read can see another invocation's

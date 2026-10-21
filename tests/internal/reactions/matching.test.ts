@@ -158,4 +158,52 @@ describe("reaction matching", () => {
     expect(unifyPattern({ role: value }, { role: value }, {})).toBeDefined();
     expect(unifyPattern({ role: "other" }, { role: value }, {})).toBeUndefined();
   });
+
+  test("matchArguments admits each posture by the record's outcome and fault", () => {
+    const concept = {};
+    const action = (async () => ({})) as InstrumentedAction;
+    action.concept = concept;
+    const states: Record<string, Partial<ActionRecord>> = {
+      requested: {},
+      returned: { outcome: { kind: "result", value: { error: "no" } } },
+      refused: { outcome: { kind: "error", error: { error: "no" } } },
+      faulted: { fault: { error: "no" } },
+      "returned and faulted": {
+        outcome: { kind: "result", value: { error: "no" } },
+        fault: { error: "no" },
+      },
+    };
+    const postures = [undefined, "requested", "returned", "refused", "faulted"] as const;
+    const matched = Object.entries(states).map(([state, fields]) => [
+      state,
+      postures
+        .filter((posture) => {
+          const record: ActionRecord = {
+            id: "one",
+            action,
+            concept,
+            input: {},
+            flow: "flow",
+            ...fields,
+          };
+          const pattern: ActionTriggerPattern = {
+            action,
+            concept,
+            input: {},
+            output: { error: "no" },
+            flow: Symbol("flow"),
+            ...(posture === undefined ? {} : { posture }),
+          };
+          return matchArguments(record, pattern, {}, Symbol("record")) !== undefined;
+        })
+        .map((posture) => posture ?? "any"),
+    ]);
+    expect(Object.fromEntries(matched)).toEqual({
+      requested: ["requested"],
+      returned: ["any", "returned"],
+      refused: ["any", "refused"],
+      faulted: ["faulted"],
+      "returned and faulted": ["any", "returned", "faulted"],
+    });
+  });
 });

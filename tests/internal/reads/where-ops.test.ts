@@ -11,6 +11,7 @@ import type { Vars } from "@sync-engine/internal/reactions/types";
 import { Frames } from "@sync-engine/internal/reads/frames";
 import { applyWhereOps } from "@sync-engine/internal/reads/where-evaluation";
 import { compute, custom } from "@sync-engine/internal/reads/where-ops";
+import { structurallyEqual } from "@sync-engine/internal/reads/value-equality";
 import { vocabularyComputations } from "@sync-engine/internal/reactions/authoring/refs";
 import { $vars } from "@sync-engine/internal/reactions/authoring/vars";
 import { quietReacting } from "../../utils/reacting.ts";
@@ -487,5 +488,171 @@ describe("where ops: out-bindings unify", () => {
       custom(inc, [a], [sum]),
     ]);
     expect(disagree.length).toBe(0);
+  });
+});
+
+class RowsConcept {
+  rows: unknown[] = [];
+  _rows() {
+    return this.rows;
+  }
+}
+
+describe("where ops: distinct fills", () => {
+  async function fills(rows: unknown[], frame: Frames = new Frames({})) {
+    const { reacting } = setup();
+    const raw = new RowsConcept();
+    const { Rows } = reacting.instrument({ Rows: raw });
+    raw.rows = rows;
+    const { a, b } = $vars;
+    const out = await applyWhereOps(frame, [lineOf({ query: Rows._rows }, {}).is({ a, b })]);
+    return { out, a, b };
+  }
+
+  test("keeps the first of equal fills, in row order", async () => {
+    const first = { tag: "x" };
+    const { out, a } = await fills([
+      { a: first, b: 1 },
+      { a: 2, b: 1 },
+      { a: { tag: "x" }, b: 1 },
+      { a: 3, b: 1 },
+    ]);
+    expect(out.map((frame) => frame[a])).toEqual([first, 2, 3]);
+    expect(out[0][a]).toBe(first);
+  });
+
+  test("tells apart primitives that equality tells apart", async () => {
+    const values = [0, -0, Number.NaN, Number.NaN, "1", 1, true, undefined, null, {}, 0, null];
+    const { out, a } = await fills(values.map((value) => ({ a: value, b: 0 })));
+    const kept = out.map((frame) => frame[a]);
+    const expected = [0, -0, Number.NaN, "1", 1, true, undefined, null, {}];
+    expect(kept).toHaveLength(expected.length);
+    expected.forEach((value, index) =>
+      expect(
+        typeof value === "object" && value !== null ? kept[index] : Object.is(kept[index], value),
+      ).toBeTruthy(),
+    );
+  });
+
+  test("keeps rows that differ where one has a hole, in either order", async () => {
+    const rows = [
+      // eslint-disable-next-line no-sparse-arrays -- holes are the case under test.
+      { a: [, 1], b: 0 },
+      { a: [5, 1], b: 0 },
+    ];
+    expect((await fills(rows)).out).toHaveLength(2);
+    expect((await fills(rows.toReversed())).out).toHaveLength(2);
+  });
+
+  test("matches a hole in a line pattern only to undefined, so is and is.not agree", async () => {
+    const { reacting } = setup();
+    const raw = new RowsConcept();
+    const { Rows } = reacting.instrument({ Rows: raw });
+    // eslint-disable-next-line no-sparse-arrays -- holes are the case under test.
+    const holey = [, 1];
+    const passes = async (a: unknown[]) => {
+      raw.rows = [{ a }];
+      reacting.invalidateAllCaches();
+      const line = lineOf({ query: Rows._rows }, {});
+      return [
+        (await applyWhereOps(new Frames({}), [line.is({ a: holey })])).length,
+        (await applyWhereOps(new Frames({}), [line.is.not({ a: holey })])).length,
+      ];
+    };
+    expect(await passes([5, 1])).toEqual([0, 1]);
+    expect(await passes([undefined, 1])).toEqual([1, 0]);
+  });
+
+  test("never runs a value's toJSON while removing duplicates", async () => {
+    const throwing = Object.defineProperty(() => 0, "toJSON", {
+      get(): never {
+        throw new Error("toJSON ran");
+      },
+    });
+    let calls = 0;
+    const counting = Object.assign(() => 0, { toJSON: () => ++calls });
+    const { out } = await fills([
+      { a: throwing, b: counting },
+      { a: throwing, b: counting },
+      { a: { inner: throwing }, b: [counting] },
+      { a: { inner: throwing }, b: [counting] },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(calls).toBe(0);
+  });
+
+  test("never runs an app's Array.prototype.toJSON while removing duplicates", async () => {
+    let calls = 0;
+    Object.defineProperty(Array.prototype, "toJSON", {
+      value: () => ++calls,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      const { out } = await fills([
+        { a: "x", b: 1 },
+        { a: "x", b: 1 },
+        { a: "y", b: 1 },
+      ]);
+      expect(out).toHaveLength(2);
+    } finally {
+      delete (Array.prototype as { toJSON?: unknown }).toJSON;
+    }
+    expect(calls).toBe(0);
+  });
+
+  test("keeps the fills a pairwise comparison keeps, over generated rows", async () => {
+    let seed = 7;
+    const next = () => (seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648;
+    const shared = { k: [1] };
+    const opaque = new Map();
+    const pool = (): unknown[] => [
+      0,
+      -0,
+      Number.NaN,
+      1,
+      "1",
+      "",
+      true,
+      false,
+      undefined,
+      null,
+      1n,
+      Symbol.for("s"),
+      { k: [1] },
+      { p: 1, q: 2 },
+      { q: 2, p: 1 },
+      shared,
+      [1],
+      [1, 2],
+      new Date(0),
+      new Date(0),
+      opaque,
+      () => 0,
+      // eslint-disable-next-line no-sparse-arrays -- holes are the case under test.
+      [, 1],
+      [5, 1],
+      [undefined, 1],
+    ];
+    const pick = () => {
+      const values = pool();
+      return values[Math.floor(next() * values.length)];
+    };
+    for (let round = 0; round < 2000; round += 1) {
+      const rows = Array.from({ length: Math.floor(next() * 10) }, () => {
+        const row: Record<string, unknown> = { a: pick() };
+        if (next() < 0.9) row.b = next() < 0.7 ? Math.floor(next() * 2) : pick();
+        return row;
+      });
+      const { out, a, b } = await fills(rows);
+      const expected: Record<symbol, unknown>[] = [];
+      for (const row of rows) {
+        if (!Object.hasOwn(row, "b")) continue;
+        const fill = { [a]: row.a, [b]: row.b };
+        if (!expected.some((prior) => structurallyEqual(prior, fill))) expected.push(fill);
+      }
+      expect(out).toHaveLength(expected.length);
+      out.forEach((frame, index) => expect(structurallyEqual(frame, expected[index])).toBe(true));
+    }
   });
 });

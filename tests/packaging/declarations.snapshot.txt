@@ -2413,6 +2413,14 @@ export declare function unifyPattern(recordValues: Record<string, unknown>, patt
 export declare function unifyOutputPattern(outcome: ActionOutcome, pattern: Mapping, frame: Frame): Frame | undefined;
 /** Match action identity, provenance, posture, input, and output for one trigger. */
 export declare function matchArguments(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol): Frame | undefined;
+/**
+ * Match a stored record as a trigger does: action, provenance, posture, and input on the
+ * record as stored, then the values matching reads on a copy taken through `seen`, so the
+ * values a match binds are the reaction's own and repeated references stay shared within one
+ * `seen`. A record this `seen` already copied is tested on that copy alone, since frames may
+ * hold values from it that equal only themselves, such as an invalid `Date`.
+ */
+export declare function matchRecordCopy(record: ActionRecord, pattern: ActionTriggerPattern, frame: Frame, recordBinding: symbol, seen: WeakMap<object, unknown>): Frame | undefined;
 /** Match one record against a posture channel, exclusions, provenance, and payload pattern. */
 export declare function matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, recordBinding: symbol, rawConceptsByInstrumented: {
     get(candidate: object): object | undefined;
@@ -2425,6 +2433,11 @@ export declare class TriggerMatcher {
     constructor(records: Pick<ActionConcept, "_getByFlow" | "_getById" | "_matchingRecord">, consumption: {
         hasConsumed(recordId: string, reaction: string): boolean;
     }, rawConceptOf: (instrumented: object) => object, assertRows?: ((flow: string, count: number) => void) | undefined);
+    /**
+     * Each action clause is tested on the record's action, provenance, posture, and stored input
+     * first, and only a record that passes is copied (a channel clause copies every candidate), so
+     * a reaction's frames hold its own copy and a rejected one copies nothing.
+     */
     match(record: ActionRecord, reaction: ExecutableReaction): [Frames<Frame>, symbol[]];
     posture(record: ActionRecord): ChannelPosture | undefined;
     matchChannel(record: ActionRecord, clause: ChannelPattern, frame: Frame, actionSymbol: symbol): Frame | undefined;
@@ -2614,6 +2627,7 @@ export declare class Reacting {
     private compileWhere;
     private applyLoweredWhere;
     private applyNow;
+    /** Bind from earlier records of the frame's flow, each matched on a copy as triggers are. */
     private applyEarlier;
     /** A flow's row-limit check; rows read together ask it without recording a breach. */
     private rowGuard;
@@ -3455,18 +3469,17 @@ export interface Frames<TFrame extends Frame = Frame> {
  */
 export declare function bindInputMapping(frame: Frame, input: Mapping): Mapping;
 /**
- * Expand one source frame by a query's result rows into the accumulator.
+ * The frame one query result row makes of `frame`, or undefined when the row does not unify.
  *
- * Each row yields a fresh frame extending `frame` with the `output` symbol
- * bindings — and bindings **unify**: a fresh variable binds the row's value,
- * while an already-bound variable is an equality test, and a row whose value
- * differs contributes nothing. This is the binding behavior used by a line
- * ("an already-bound name tests equality instead"), and the same discipline
- * trigger patterns keep. A query that returns no unifiable rows contributes
- * nothing — the source frame is dropped, giving inner-join / fan-out
- * semantics.
+ * `output` is the query's output mapping as `Object.entries`, so a caller expanding many rows
+ * takes it once. The row yields a fresh frame extending `frame` with the `output` symbol
+ * bindings, and bindings **unify**: a fresh variable binds the row's value, while an
+ * already-bound variable is an equality test, and a row whose value differs contributes
+ * nothing. This is the binding behavior used by a line ("an already-bound name tests equality
+ * instead"), and the same discipline trigger patterns keep. New bindings are collected apart
+ * and the frame is copied only for a row that unifies.
  */
-export declare function expandOutputRows(into: Frames, frame: Frame, rows: unknown[], output: Mapping): void;
+export declare function outputRow(frame: Frame, row: unknown, output: readonly (readonly [string, unknown])[]): Frame | undefined;
 export declare class Frames<TFrame extends Frame = Frame> extends Array<TFrame> {
 }
 
@@ -4528,9 +4541,14 @@ export {};
 /**
  * Equality for live values that cross the engine boundary.
  *
- * Records and arrays compare structurally. Dates compare by timestamp. Other
- * object kinds compare only by identity, which avoids guessing at the meaning
- * of maps, sets, class instances, and custom prototypes.
+ * Records and arrays compare structurally. Arrays compare by length and every
+ * index, a hole comparing as `undefined`; other array properties are ignored.
+ * Dates compare by timestamp. Other object kinds compare only by identity,
+ * which avoids guessing at the meaning of maps, sets, class instances, and
+ * custom prototypes. A pair of records or arrays met again during one
+ * comparison is taken as equal, since it is either still being compared or
+ * already found equal, so cyclic values compare by their unfolding and a shared
+ * pair is compared once.
  *
  * This is the lenient runtime equality: any pair of values is comparable and
  * symbol keys participate. For design-time comparison of serialized IR —
