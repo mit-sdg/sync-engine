@@ -689,8 +689,8 @@ describe("release source facts", () => {
     replaceSource(
       sources,
       ".github/workflows/publish.yml",
-      "      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-      "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6\n      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
+      "      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6\n      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
     );
     expect(checkRelease(sources)).toContain(
       ".github/workflows/publish.yml: publish must use checkout, setup-node, and download-artifact only",
