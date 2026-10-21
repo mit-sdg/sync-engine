@@ -49,9 +49,13 @@ Compatibility.
   getter, and one that passes reads it as often as in 1.1.0; `earlier` can read
   one that 1.1.0 skipped, because it copies the whole output where it used to
   read only the keys its pattern named. Keep getters on action outputs pure:
-  they may be read any number of times. A `Date` subclass in an action input has
-  its `getTime` called a different number of times, so one whose `getTime`
-  throws can fail a trigger it used to match.
+  they may be read any number of times. A trigger clause or `earlier` line now
+  compares a matching record's input twice, as stored and on its copy, so a
+  `Date` subclass compared there has its `getTime` called twice where 1.1.0
+  called it once; in `earlier`, only the first time a record is tested in one
+  evaluation. A `getTime` that throws or answers differently on that extra call
+  can stop a trigger or `earlier` line from matching, or fail the reaction.
+  Query inputs and cache keys call it as often as before.
 - `QueryCacheMode` gains `"since-dispatch"`. Code that switches over it
   exhaustively must handle the new member.
 - The [support policy](SUPPORT.md) says that an option marked experimental may
@@ -72,10 +76,12 @@ Compatibility.
   start.
 - The `concurrentReads: { rowsAtOnce, maxRowsAhead? }` assembly option reads
   the rows of one `where` line, and the rows of one selection, together and
-  consumes them in row order. Up to `rowsAtOnce` rows are evaluated at once; at most
-  `maxRowsAhead` rows (64 when unset) are started ahead at once across the
-  assembly; once that count is spent, rows started ahead more than the request
-  deadline ago give their places back. Answers, their order, the reported fault, and recorded row-limit
+  consumes them in row order. Up to `rowsAtOnce` rows are evaluated at once,
+  and at most `maxRowsAhead` slots (64 when unset) for rows started ahead are
+  shared across the assembly. Once every slot is taken, rows started ahead more
+  than the request deadline ago give theirs back, though their reads keep
+  running, until `maxRowsAhead` such reads are unsettled; the process log says
+  so once when that happens. Answers, their order, the reported fault, and recorded row-limit
   breaches are those of reading one row after another, provided the queries,
   computations, conditions, and custom ops that reads use have no side effects
   and no action changes the state being read meanwhile. With it, those can run
@@ -85,8 +91,8 @@ Compatibility.
   **`concurrentReads` is experimental.** `@mit-sdg/sync-engine/assembly` exports the `ConcurrentReads`
   type.
 - `registerConcept` takes `batched`, a literal list of query names the class
-  implements in list form: each such method takes a list of inputs and returns
-  one answer per input, in order. Reactions, formers, and callers of an
+  implements in list form: each such method takes one list of inputs, typed
+  `Input[]`, and returns the answers themselves, one per input, in order. Reactions, formers, and callers of an
   assembled concept still ask with one input and get one answer, and the
   vocabulary's types show such a query taking one input. Each call receives a
   frozen list of copied inputs: records, arrays, and plain dates are copied;
@@ -95,20 +101,26 @@ Compatibility.
   concept instance, across requests, into one call; it currently does so only
   when `concurrentReads.rowsAtOnce` is above 1 and `queryCache` is not
   `"none"`, collecting the reads pending when the event-loop turn ends, so
-  `batched` alone groups nothing. A group whose call throws, or whose answers
+  `batched` alone groups nothing. One call can serve several requests and runs
+  in the async context of the first read in its group, so a batched method must
+  not read request context. A group whose call throws, or whose answers
   are not one per input, is read again with each input alone, as without
   grouping, with a warning on the process log; every read in a group waits
   until its call settles. A stub or
-  spy that replaces a batched method receives the list too. `conceptSet` and
-  `assemble` reject a selected implementation whose batched method's parameter destructures one
-  flat record or is a `_` placeholder; only `sync-engine check` reliably
-  verifies from the types that it takes a list. Batched names are written as
-  one literal list in the `registerConcept(...)` call, and a wider list is
-  refused; `ConceptRegistration<C>` and `RegisteredConcept<C>` written out name
-  none. A registration that names no query under `batched` behaves as before,
-  types included.
-- `vocabulary` concept entries accept `batched`, with the same rules; it takes
-  effect through `assemble`.
+  spy that replaces a batched method receives the list too. `conceptSet`
+  rejects a registered class, and `assemble` a selected implementation, whose
+  batched method's parameter destructures one record or is a `_` placeholder;
+  only `sync-engine check` reliably verifies from the types that it takes a
+  list. Batched names are written inline in the `registerConcept(...)` call.
+  The types follow them only when the type of `batched` names one list of
+  queries for every value it admits, each a query that takes a list;
+  `conceptSet` refuses a registration whose `batched` does not, such as a list
+  held in a `string[]` variable, a list that may be `undefined`, or a name
+  chosen by a condition. `ConceptRegistration<C>` and `RegisteredConcept<C>`
+  written out name none. A registration that names no query under `batched`
+  behaves as before, types included.
+- `vocabulary` concept entries accept `batched`, with the same rules, refused
+  where the entry is written; it takes effect through `assemble`.
 - `Assembly<T, Batched>` gains a second type parameter naming each concept's
   batched queries. A written-out `Assembly<T>` types a batched query in its
   list form, so keep the inferred type of `assemble(...)`.
@@ -117,13 +129,14 @@ Compatibility.
   of one.
 - `@mit-sdg/sync-engine/assembly` exports `checkBatchedQuery`, which checks on
   sample inputs that a list form answers each input as a list of one does. It
-  compares records, arrays, dates, and binary data, and fails on any other
-  kind of object, such as a map, a set, a class instance, or a promise, unless
-  both answers hold the very same object.
+  passes copies of the samples, as the engine passes copies. It compares
+  records, arrays, and dates, and fails on any other kind of object, such as
+  binary data, a map, a set, a class instance, or a promise, unless both
+  answers hold the very same object.
 - `sync-engine check` reads a batched query's input and row shapes from its
   list form. It fails when a query takes a list of records without being named
   under `batched`, when a named query does not take a list, and when `batched`
-  is not a literal list of query names.
+  is not a list of query names written inline.
 
 ### Migration
 
@@ -139,16 +152,20 @@ Compatibility.
 - The new options are opt-in, and an application that reads fast enough needs
   none of them. To read faster, try them in this order:
   1. Requests overlap and re-read the same data: set
-     `queryCache: "since-dispatch"`. Answers read within the last request
-     deadline stay in memory.
+     `queryCache: "since-dispatch"`. Each answer stays in memory while an older
+     request is still running, for up to the request deadline, so memory can
+     hold up to a deadline's worth of answers, one per query and argument.
   2. A page reads many rows one after another, as an `each` or a many-row line
-     does: also set `concurrentReads: { rowsAtOnce: 16 }`. It is experimental,
-     it starts up to `maxRowsAhead` extra reads, some for rows never used, so
-     size the database pool for them and keep reads free of side effects.
+     does: also set `concurrentReads: { rowsAtOnce: 16 }`. It is experimental.
+     It starts reads ahead, some for rows never used: up to `maxRowsAhead` at
+     once, and up to twice that while reads hang, so size the database pool
+     for them and keep reads free of side effects.
   3. Those rows each ask one query whose storage can answer many inputs in one
      command: name it under `batched` and write its list form. It groups only
      with step 2. Give the database client timeouts, since a group waits for
-     its slowest input.
+     its slowest input; a grouped read on a stuck database fails after about
+     twice the timeout, so pick one that fits twice within the request
+     deadline.
 
   For example, `assemble({ ...options, queryCache: "since-dispatch",
 concurrentReads: { rowsAtOnce: 16 } })`.

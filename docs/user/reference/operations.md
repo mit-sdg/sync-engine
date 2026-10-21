@@ -55,16 +55,21 @@ read/write isolation. With the `concurrentReads` assembly option
 line or selection are also read together: up to `rowsAtOnce` rows of one line
 at once. A row read before the row being used is _started ahead_, and each one
 takes a slot; `maxRowsAhead` slots (64 when unset) are shared across the
-assembly. Each evaluation also reads its own next row without a slot, so the
-reads in flight are at most `maxRowsAhead` plus one per evaluation under way.
-When every slot is taken, slots held longer than the request deadline are taken
+assembly. Each evaluation also reads its own next row without a slot. When
+every slot is taken, slots held longer than the request deadline are taken
 back, so hung reads cannot slow later requests to one row at a time; those reads
 still run, and still hold their database connections, until the database
-answers. Set the database client's own timeouts so such reads end. The slots
-belong to one assembly, while a database client's connection pool is usually
-shared by the whole process: size the pool above the sum of `maxRowsAhead` over
-the process's assemblies, with room left for each request's own reads and for
-writes, so actions' writes are not queued behind reads.
+answers. Slots are taken back only while fewer than `maxRowsAhead` such reads
+are unsettled, so rows started ahead and still running are at most twice
+`maxRowsAhead`. Once that many hang, rows are read one at a time until some
+settle, and the process log says so once. Each evaluation's own read can hang
+too, so the reads in flight while the database is stuck are at most twice
+`maxRowsAhead` plus one per evaluation under way. Set the database client's own
+timeouts so such reads end. The slots belong to one assembly, while a database
+client's connection pool is usually shared by the whole process: size the pool
+above twice the sum of `maxRowsAhead` over the process's assemblies, or plan for
+reads to queue while the database is stuck, with room left for each request's
+own reads and for writes, so actions' writes are not queued behind reads.
 
 A query a registration names under `batched` answers a list of inputs at once,
 so the reads grouped for it take one database command instead of one each.
@@ -75,7 +80,11 @@ currently does so only when `concurrentReads.rowsAtOnce` is above 1 and
 group waits until its call settles, so one stuck or slow command holds every
 read grouped with it, including reads for other requests. Give the database
 client timeouts that end such a command: each input is then read again alone,
-the rest answer, and the stuck input waits up to one more timeout. `batched`
+the rest answer, and the stuck input waits up to one more timeout. When the
+whole database is stuck, every input of the group waits that one more timeout,
+so a grouped read fails after about twice the timeout, counting any retry the
+client makes, where an ungrouped read fails after one. Choose a timeout that
+fits twice within the request deadline. `batched`
 takes effect in an assembly made by `assemble`. `groupBatchedQueries: false`
 turns grouping off for the whole assembly without changing any class: every
 read then calls the batched method with a list of one. See
@@ -87,12 +96,12 @@ overlap, the more they re-read. `queryCache: "since-dispatch"` removes that
 loss. The cache keeps at most one answer per query and argument. An answer is
 kept while an open invocation, direct `form`, or direct query that began before
 it can still use it, and is dropped when the next one starts. A direct query
-stops using answers once its read has begun. No read reuses an answer past the
-request deadline (`executionLimits.maxRequestDurationMs`, or 30 seconds without
-`executionLimits`): a `form` still running then reuses only answers begun since
-the most recent start, so a read that never settles cannot keep every later
-answer in use. Answers past the deadline stay in memory, unused, until the next
-start drops them.
+stops using answers once its read has begun. No invocation keeps its older
+answers past the request deadline (`executionLimits.maxRequestDurationMs`, or 30
+seconds without `executionLimits`): after it, a `form` still running reuses only
+answers begun since the most recent start, so a read that never settles cannot
+keep every later answer in use. Answers that no read may reuse any more stay in
+memory until the next start drops them.
 
 Each action commits independently; a later refusal or fault does not roll back an
 earlier action. Put uniqueness, capacity, first-writer, and answer-once decisions

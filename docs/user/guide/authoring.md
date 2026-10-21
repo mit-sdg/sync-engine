@@ -155,10 +155,18 @@ a list. A stub or spy that replaces a batched method receives the list too.
 See [batched queries](../reference/semantics.md#batched-queries) for the
 details.
 
-Write the `batched` names literally, as a list of strings in the
-`registerConcept` call, because `sync-engine check` reads them from the source.
-Assembly rejects a batched method whose parameter destructures one flat record,
-as `({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
+Write the `batched` names inline, as string literals in the `registerConcept`
+call. TypeScript and `sync-engine check` both read them there. `sync-engine
+check` refuses a list held in a variable, even with `as const`, and TypeScript
+refuses a list that may be left out or a name chosen by a condition. To switch
+grouping off, set `groupBatchedQueries: false` instead. Type the list parameter
+as an array of the input record, `Input[]` or `readonly Input[]`, not as a tuple
+or a union of arrays. Return the answers themselves, as `return inputs.map(...)`
+after awaiting what they need, not a promise for each. One call can serve
+several requests and runs in the first one's async context, so do not read
+request context, such as a session or a tenant, inside a batched query.
+Assembly rejects a batched method whose parameter destructures one record, as
+`({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
 verifies from the types that the method takes a list. Test each batched query with
 `await checkBatchedQuery(new TrashingConcept(...), "_isTrashed", samples)`,
 giving samples that cover an input with nothing stored, one that answers several

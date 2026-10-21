@@ -444,7 +444,11 @@ with `rowsAtOnce: 1`, under `queryCache: "none"`, or with
 Otherwise the engine groups the reads pending for one batched query on one
 concept instance until the current turn of the event loop ends, then calls the
 method once with their inputs, in the order they were asked. It never waits on
-a timer to collect more. Each read keeps its own position, so equal inputs can
+a timer to collect more. The turn ends by `setImmediate` from `node:timers`,
+which test runners leave alone when they fake the global timers. One call can
+serve reads from several requests, and it runs in the async context of the
+first read in its group, so a batched method must not read request context,
+such as a session or a tenant held in `AsyncLocalStorage`. Each read keeps its own position, so equal inputs can
 appear more than once. A grouped read's reuse under `since-dispatch` is
 counted from when it was asked, though the method runs when the group is sent,
 so a read can only be reused less than an ordinary read begun at that moment.
@@ -455,9 +459,11 @@ returns an answer that throws as it is read, the engine logs a warning that
 names the query and reads each input again alone, in a list of one, all at
 once, as it would without grouping. Each read again receives the copy taken
 when it was asked, not the one the failed call received. An input whose read
-throws then fails only its own read. For a list of one, any of these makes that
-read fail with an error that names the query; an empty list is still a valid
-answer for one input. Until the group's call settles, every read in it waits,
+throws then fails only its own read. For a list of one, the read fails: with
+the method's or the answer's own error if either throws, and with an error that
+names the query if the list has the wrong length or a missing element. An empty
+list is still a valid answer for one input. A warning that throws, as in a test
+that fails on warnings, still leaves every read under way. Until the group's call settles, every read in it waits,
 including reads for other requests: a call that never settles, or settles
 slowly because of one input, holds them all, so give the database client
 timeouts that end a stuck call. The warning goes to the process log (`console.warn`,
@@ -471,9 +477,10 @@ engine cannot check this as it runs; `checkBatchedQuery` checks it on sample
 inputs. The method is still a query, so it must be side-effect-free, and its
 answer for an input may depend only on stored state and that input. Every
 selected implementation, whether from a floor or `instances`, must take the
-list form. Assembly rejects one whose parameter destructures one flat record,
-as `({ item })` does, or is a `_` placeholder; only `sync-engine check` reliably
-verifies from the types that the method takes a list.
+list form. Assembly rejects one whose parameter destructures one record, as
+`({ item })` or `({ item, page = {} })` does, or is a `_` placeholder; only
+`sync-engine check` reliably verifies from the types that the method takes a
+list.
 
 ## Views and formers
 
@@ -906,7 +913,9 @@ and uses the answers in row order:
   At most `maxRowsAhead` slots (64 when unset) are shared across the assembly.
   When no slot is free, an evaluation reads its next row when it reaches it,
   without waiting, and slots held longer than the request deadline are taken
-  back; their reads may still be running.
+  back; their reads may still be running. Slots are taken back only while fewer
+  than `maxRowsAhead` such reads are unsettled, so rows started ahead and still
+  running are at most twice `maxRowsAhead`.
 - Answers, their order, the reported fault, and recorded row-limit breaches
   are those of reading the rows one after another, given side-effect-free reads
   ([Queries](#queries)) and no action changing the state being read meanwhile.

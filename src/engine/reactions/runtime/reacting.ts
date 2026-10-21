@@ -156,9 +156,10 @@ export class Reacting {
   /**
    * Open an outside invocation's reads, before it is dispatched. Under
    * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
-   * begun from now on until the returned function closes them, and answers no
-   * open read may reuse any more are forgotten; otherwise every query cache is
-   * cleared and the returned function does nothing.
+   * begun from now on until the returned function closes them or the request
+   * deadline passes, and answers no open read may reuse any more are
+   * forgotten; otherwise every query cache is cleared and the returned function
+   * does nothing.
    */
   openReads(flow: string): () => void {
     if (this.invocationReads === undefined) {

@@ -241,7 +241,7 @@ export interface AssembleBaseOptions<
   logging?: Logging;
   /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
   retention?: RetentionPolicy;
-  /** Query evaluation policy; defaults to `"memoize"`, memoization shared by all flows and cleared at each outside dispatch and around each action. */
+  /** Query evaluation policy; defaults to `"memoize"`: answers are shared by all flows, every cache is cleared at each outside dispatch, and a concept's caches are cleared around each of its actions. */
   queryCache?: QueryCacheMode;
   /** Synchronous application-owned destination for already-redacted occurrence entries. */
   logSink?: LogSink;

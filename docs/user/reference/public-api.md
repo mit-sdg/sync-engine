@@ -158,7 +158,8 @@ nor restricts `retention`.
 
 `ConcurrentReads` is `{ rowsAtOnce, maxRowsAhead? }`, both positive integers:
 at most `rowsAtOnce` rows of one line or selection are read at once, and at
-most `maxRowsAhead` rows (64 when unset) are started ahead across the assembly
+most `maxRowsAhead` slots (64 when unset) for rows started ahead are shared
+across the assembly
 (`concurrentReads` is experimental; see the
 [support policy](../../../SUPPORT.md#stable-compatibility)). Each call of a
 batched query receives a frozen list of copied inputs: records, arrays, and plain
@@ -291,9 +292,17 @@ rejects a name given twice and a batched method whose parameter destructures
 one flat record or is a `_` placeholder, and `assemble` rejects a selected
 implementation whose batched method does so. Only `sync-engine check` reliably
 verifies from the types that the method takes a list; it also rejects a rest
-parameter. The types follow `batched` only when it is one literal tuple. Batched names are
-written in the `registerConcept(...)` call and carried by its inferred type;
-input names come from the specification. `ConceptRegistration<C>` and
+parameter. Batched names are written inline in the `registerConcept(...)` call
+and carried by its inferred type; input names come from the specification. The
+types follow `batched` only when its type names one list of queries for every
+value it admits: surely present or surely absent, one list rather than one of
+several, of fixed length, each query named once by one literal name, and each
+a query whose method takes a list. `vocabulary` refuses any other `batched`
+where it is written, and `conceptSet` refuses a registration whose `batched`
+does not, so a list held in a `string[]` variable, a list that may be
+`undefined`, and a name chosen by a condition fail to compile. To switch
+grouping off, set `groupBatchedQueries: false` rather than leaving `batched`
+out. `ConceptRegistration<C>` and
 `RegisteredConcept<C>` written out name no batched queries, so a registration
 that names some does not compile against them. `Assembly<T, Batched>` works the
 same way: its second parameter maps each concept-set key to the query names
@@ -305,11 +314,12 @@ input; a query that takes a list without being named keeps its own types.
 `checkBatchedQuery` checks a list form's law on the raw instance with sample
 inputs: each answer equals the answer for that input alone, in order, reversed,
 and with duplicates, no answer is missing, an empty list answers an empty
-list, and answers to different inputs share no objects. It passes the list
-frozen, as the engine does, and rejects with what differed. It compares
-records, arrays, dates, and binary data, and fails on any other kind of object,
-such as a map, a set, a class instance, or a promise, unless both answers hold
-the very same object. Execution semantics for batched
+list, and answers to different inputs share no objects a reader could
+change; frozen records and arrays may be shared. It passes a frozen list of
+copies of your samples, as the engine passes copies, and rejects with what
+differed. It compares records, arrays, and dates, and fails on any other kind
+of object, such as binary data, a map, a set, a class instance, or a promise,
+unless both answers hold the very same object. Execution semantics for batched
 queries are in [semantics](semantics.md#batched-queries).
 
 `conceptFloor` validates a complete implementation map and returns the supplied

@@ -298,7 +298,7 @@ export interface AssembleBaseOptions<T extends Record<string, ConceptClass>, I e
     logging?: Logging;
     /** In-memory occurrence retention; defaults to the 100 most recent settled flows. */
     retention?: RetentionPolicy;
-    /** Query evaluation policy; defaults to `"memoize"`, memoization shared by all flows and cleared at each outside dispatch and around each action. */
+    /** Query evaluation policy; defaults to `"memoize"`: answers are shared by all flows, every cache is cleared at each outside dispatch, and a concept's caches are cleared around each of its actions. */
     queryCache?: QueryCacheMode;
     /** Synchronous application-owned destination for already-redacted occurrence entries. */
     logSink?: LogSink;
@@ -2748,9 +2748,10 @@ export declare class Reacting {
     /**
      * Open an outside invocation's reads, before it is dispatched. Under
      * `queryCache: "since-dispatch"`, reads done for `flow` reuse only answers
-     * begun from now on until the returned function closes them, and answers no
-     * open read may reuse any more are forgotten; otherwise every query cache is
-     * cleared and the returned function does nothing.
+     * begun from now on until the returned function closes them or the request
+     * deadline passes, and answers no open read may reuse any more are
+     * forgotten; otherwise every query cache is cleared and the returned function
+     * does nothing.
      */
     openReads(flow: string): () => void;
     register(reactions: ReactionMap, authoredByBase?: Readonly<Record<string, AuthoredDeclarationIdentity>>): void;
