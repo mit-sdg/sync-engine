@@ -121,7 +121,7 @@ Compatibility.
   condition, or one list or another. A `RegisteredConcept` annotation wider
   than its list is refused too. The types cannot see a choice between two
   registrations of one class, as in `on ? batchedRegistration :
-plainRegistration`; switch grouping with `groupBatchedQueries` instead. `ConceptRegistration<C>` and `RegisteredConcept<C>`
+  plainRegistration`; switch grouping with `groupBatchedQueries` instead. `ConceptRegistration<C>` and `RegisteredConcept<C>`
   written out name none. A registration that names no query under `batched`
   behaves as before, types included.
 - `vocabulary` concept entries accept `batched`, with the same rules, refused
@@ -174,7 +174,7 @@ plainRegistration`; switch grouping with `groupBatchedQueries` instead. `Concept
      deadline.
 
   For example, `assemble({ ...options, queryCache: "since-dispatch",
-concurrentReads: { rowsAtOnce: 16 } })`.
+  concurrentReads: { rowsAtOnce: 16 } })`.
 
 ### Generated formats
 
