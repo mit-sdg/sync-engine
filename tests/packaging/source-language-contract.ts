@@ -490,17 +490,13 @@ function batchedFormsContract(spec: string, on: boolean, anyNames: any): void {
     // @ts-expect-error A rest element leaves the list's names open.
     Shelf: registerConcept({ class: BatchedShelf, spec, batched: rest }),
   });
-  const batchedShelf = registerConcept({ class: BatchedShelf, spec, batched: ["_book"] });
-  const plainShelf = registerConcept({ class: ListTakingShelf, spec });
-  // @ts-expect-error Choosing between registrations chooses between lists.
-  conceptSet({ Shelf: on ? batchedShelf : plainShelf });
+  // @ts-expect-error An annotation wider than the list given hides its names.
   const annotatedWide: RegisteredConcept<
     typeof BatchedShelf,
     Record<never, never>,
     readonly ("_title" | "_book")[]
   > = registerConcept({ class: BatchedShelf, spec, batched: ["_book"] });
-  // @ts-expect-error An annotation wider than the list given hides its names.
-  conceptSet({ Shelf: annotatedWide });
+  void annotatedWide;
   const leftOut = { class: BatchedShelf, spec } as ConceptRegistration<
     typeof BatchedShelf,
     Record<never, never>,
@@ -522,23 +518,20 @@ function batchedFormsContract(spec: string, on: boolean, anyNames: any): void {
   surely.Spread._book({ id: "a" });
   surely.Empty._byIds(["a"]);
   surely.None._byIds(["a"]);
-  const forward = <
-    C extends new () => object,
-    const B extends readonly [
-      Extract<keyof InstanceType<C>, `_${string}`>,
-      ...Extract<keyof InstanceType<C>, `_${string}`>[],
-    ],
-  >(
-    cls: C,
-    batched: B,
-  ) => registerConcept({ class: cls, spec, batched });
-  conceptSet({ Forwarded: forward(BatchedShelf, ["_title"]) }).concepts.Forwarded._title({
-    id: "a",
-  });
-  conceptSet({
-    // @ts-expect-error A wrapper that forwards a choice of lists is refused where the set meets it.
-    Forwarded: forward(BatchedShelf, on ? ["_title"] : ["_book"]),
-  });
+
+  // Code written for 1.1 that never batches compiles as before.
+  const setOf = <const S extends Record<string, RegisteredConcept<any>>>(registrations: S) =>
+    conceptSet(registrations);
+  setOf({ Listed: registerConcept({ class: ListTakingShelf, spec }) }).concepts.Listed._byIds([
+    "a",
+  ]);
+  const loose: Record<string, RegisteredConcept<any, any, any>> = {
+    Listed: registerConcept({ class: ListTakingShelf, spec }),
+  };
+  conceptSet(loose);
+  const logged = (registration: Parameters<typeof registerConcept>[0]) =>
+    registerConcept(registration);
+  logged({ class: ListTakingShelf, spec });
 }
 void batchedFormsContract;
 
@@ -578,6 +571,20 @@ function singleFormContract(spec: string): void {
   });
 }
 void singleFormContract;
+
+class UntypedShelf {
+  async _rows(inputs: readonly { id: string }[]): Promise<any> {
+    return inputs.map(({ id }) => [{ id }]);
+  }
+}
+
+function untypedListFormContract(spec: string): void {
+  // A list form whose answers are typed any is still a list form, asked with one input.
+  conceptSet({
+    Shelf: registerConcept({ class: UntypedShelf, spec, batched: ["_rows"] }),
+  }).concepts.Shelf._rows({ id: "a" });
+}
+void untypedListFormContract;
 
 class StaticallyBatchedShelf extends ListTakingShelf {
   static batched = ["_byIds"] as const;

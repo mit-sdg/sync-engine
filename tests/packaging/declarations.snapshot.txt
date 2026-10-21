@@ -456,23 +456,32 @@ export interface ConceptRegistration<C extends ConceptClass, F extends Record<st
     floors?: F;
 }
 declare const RegistrationBrand: unique symbol;
-export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly []> = ConceptRegistration<C, F, B> & (B extends readonly [] ? unknown : {
+export type RegisteredConcept<C extends ConceptClass, F extends Record<string, FloorFactory<C>> = Record<never, never>, B extends readonly string[] = readonly []> = ConceptRegistration<C, F, B> & (0 extends 1 & B ? unknown : [BatchedProblem<B>] extends [never] ? B extends readonly [] ? unknown : {
     readonly batched: B;
+} : {
+    readonly batched: BatchedRefusal<BatchedProblem<B> & string>;
 }) & {
     readonly [RegistrationBrand]: true;
     /** The machine-readable authored contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
 };
 export declare function validateConceptImplementation(source: string, conceptName: string, cls: ConceptClass, implementation: unknown): asserts implementation is object;
+/** Nothing when the types can follow a registration's `batched`, or a refusal saying why not. */
+type BatchedCheck<C extends ConceptClass, B> = [BatchedProblem<B>] extends [never] ? [SingleFormBatched<C, B extends readonly (infer Name)[] ? Name : never>] extends [never] ? unknown : {
+    readonly batched: SingleFormRefusal<SingleFormBatched<C, B extends readonly (infer Name)[] ? Name : never>>;
+} : {
+    readonly batched: BatchedRefusal<BatchedProblem<B> & string>;
+};
 /**
  * Register a concept class with its specification. A registration that names
- * batched queries names them surely, as literal query names; `conceptSet`
- * refuses any `batched` whose type does not say exactly which queries it names.
+ * batched queries must name them surely: one fixed list of the class's
+ * list-form queries, each named once by one literal name. Any other `batched`
+ * fails to compile here, so the types and the runtime read the same list.
  */
-export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F, readonly []>): RegisteredConcept<C, F, readonly []>;
 export declare function registerConcept<C extends ConceptClass, const B extends readonly [QueryNameOf<C>, ...QueryNameOf<C>[]], const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F, B> & {
     readonly batched: B;
-}): RegisteredConcept<C, F, B>;
+} & BatchedCheck<C, B>): RegisteredConcept<C, F, B>;
+export declare function registerConcept<C extends ConceptClass, const F extends Record<string, FloorFactory<C>> = Record<never, never>>(registration: ConceptRegistration<C, F, readonly []>): RegisteredConcept<C, F, readonly []>;
 type AnyRegistration = ConceptRegistration<ConceptClass, Record<string, FloorFactory>, readonly string[]> & {
     readonly [RegistrationBrand]: true;
     readonly specification: ConceptSpec;
@@ -483,15 +492,6 @@ type ClassOfRegistration<R> = R extends {
 } ? C : never;
 /** The type of a registration's `batched` value, `undefined` where it has none. */
 type BatchedOfRegistration<R> = R extends unknown ? "batched" extends keyof R ? R["batched" & keyof R] : undefined : never;
-/** Each registration as given, or a refusal on a `batched` the types cannot follow. */
-type CheckedRegistrations<S extends Record<string, AnyRegistration>> = {
-    [Name in keyof S]: [BatchedProblem<BatchedOfRegistration<S[Name]>>] extends [never] ? [SingleForms<S[Name]>] extends [never] ? S[Name] : S[Name] & {
-        readonly batched: SingleFormRefusal<SingleForms<S[Name]>>;
-    } : S[Name] & {
-        readonly batched: BatchedRefusal<BatchedProblem<BatchedOfRegistration<S[Name]>> & string>;
-    };
-};
-type SingleForms<R> = SingleFormBatched<ClassOfRegistration<R>, Exclude<BatchedOfRegistration<R>, undefined> extends readonly (infer Name)[] ? Name : never>;
 /** The queries each registration of a set names under `batched`. */
 export type BatchedQueriesOfSet<S extends Record<string, AnyRegistration>> = BatchedQueryNames<EntriesOf<S>>;
 type EntriesOf<S extends Record<string, AnyRegistration>> = {
@@ -530,7 +530,7 @@ export interface RegisteredConceptSet<S extends Record<string, AnyRegistration>,
 }
 /** Internal bridge from the application-facing concept set to its runtime declaration. */
 export declare function conceptSetVocabulary<S extends Record<string, AnyRegistration>, Computations extends Record<string, ComputationFn>>(set: RegisteredConceptSet<S, Computations>): VocabularyOf<S, Computations>;
-export declare function conceptSet<const S extends Record<string, AnyRegistration>, const Computations extends Record<string, ComputationFn> = Record<never, never>>(registrations: S & CheckedRegistrations<S>, computations?: Computations & CheckedComputationFns<Computations>): RegisteredConceptSet<S, Computations>;
+export declare function conceptSet<const S extends Record<string, AnyRegistration>, const Computations extends Record<string, ComputationFn> = Record<never, never>>(registrations: S, computations?: Computations & CheckedComputationFns<Computations>): RegisteredConceptSet<S, Computations>;
 export {};
 
 === dist/engine/boundary/assembly/endpoint-portability.d.ts ===
@@ -3148,9 +3148,9 @@ export interface WhenBuilderWithFunctionWhere {
  * the engine calls the method on their behalf. Only queries a registration
  * names under `batched` are read this way.
  */
-export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? F : Awaited<A> extends readonly (infer Each)[] ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each> : F : F;
+export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? F : 0 extends 1 & Awaited<A> ? (input: ListInput<Exclude<P, undefined>>) => Promise<any> : Awaited<A> extends readonly (infer Each)[] ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each> : F : F;
 /** Whether a method has the list form a batched query needs: one list of inputs in, a list out. */
-export type IsListForm<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? false : Awaited<A> extends readonly unknown[] ? true : false : false;
+export type IsListForm<F> = F extends (inputs: infer P) => infer A ? [ListInput<Exclude<P, undefined>>] extends [never] ? false : 0 extends 1 & Awaited<A> ? true : Awaited<A> extends readonly unknown[] ? true : false : false;
 /**
  * The input of a list parameter, as `sync-engine check` reads one: an array,
  * optional or with a default included, but not a tuple or a union of arrays.

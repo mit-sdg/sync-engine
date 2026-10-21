@@ -154,8 +154,15 @@ export type RegisteredConcept<
   B extends readonly string[] = readonly [],
 > = ConceptRegistration<C, F, B> &
   // A registration that batches some query surely says which, so the types and
-  // the runtime read the same list.
-  (B extends readonly [] ? unknown : { readonly batched: B }) & {
+  // the runtime read the same list; an annotation whose list names no one list
+  // of queries cannot hold a registration. `any` stays an escape hatch.
+  (0 extends 1 & B
+    ? unknown
+    : [BatchedProblem<B>] extends [never]
+      ? B extends readonly []
+        ? unknown
+        : { readonly batched: B }
+      : { readonly batched: BatchedRefusal<BatchedProblem<B> & string> }) & {
     readonly [RegistrationBrand]: true;
     /** The machine-readable authored contract extracted from the registration's specification. */
     readonly specification: ConceptSpec;
@@ -266,20 +273,34 @@ function checkRefusals(
   }
 }
 
+/** Nothing when the types can follow a registration's `batched`, or a refusal saying why not. */
+type BatchedCheck<C extends ConceptClass, B> = [BatchedProblem<B>] extends [never]
+  ? [SingleFormBatched<C, B extends readonly (infer Name)[] ? Name : never>] extends [never]
+    ? unknown
+    : {
+        readonly batched: SingleFormRefusal<
+          SingleFormBatched<C, B extends readonly (infer Name)[] ? Name : never>
+        >;
+      }
+  : { readonly batched: BatchedRefusal<BatchedProblem<B> & string> };
+
 /**
  * Register a concept class with its specification. A registration that names
- * batched queries names them surely, as literal query names; `conceptSet`
- * refuses any `batched` whose type does not say exactly which queries it names.
+ * batched queries must name them surely: one fixed list of the class's
+ * list-form queries, each named once by one literal name. Any other `batched`
+ * fails to compile here, so the types and the runtime read the same list.
  */
-export function registerConcept<
-  C extends ConceptClass,
-  const F extends Record<string, FloorFactory<C>> = Record<never, never>,
->(registration: ConceptRegistration<C, F, readonly []>): RegisteredConcept<C, F, readonly []>;
 export function registerConcept<
   C extends ConceptClass,
   const B extends readonly [QueryNameOf<C>, ...QueryNameOf<C>[]],
   const F extends Record<string, FloorFactory<C>> = Record<never, never>,
->(registration: ConceptRegistration<C, F, B> & { readonly batched: B }): RegisteredConcept<C, F, B>;
+>(
+  registration: ConceptRegistration<C, F, B> & { readonly batched: B } & BatchedCheck<C, B>,
+): RegisteredConcept<C, F, B>;
+export function registerConcept<
+  C extends ConceptClass,
+  const F extends Record<string, FloorFactory<C>> = Record<never, never>,
+>(registration: ConceptRegistration<C, F, readonly []>): RegisteredConcept<C, F, readonly []>;
 export function registerConcept(
   registration: ConceptRegistration<ConceptClass, Record<string, FloorFactory>, readonly string[]>,
 ): AnyRegistration {
@@ -337,20 +358,6 @@ type BatchedOfRegistration<R> = R extends unknown
     ? R["batched" & keyof R]
     : undefined
   : never;
-/** Each registration as given, or a refusal on a `batched` the types cannot follow. */
-type CheckedRegistrations<S extends Record<string, AnyRegistration>> = {
-  [Name in keyof S]: [BatchedProblem<BatchedOfRegistration<S[Name]>>] extends [never]
-    ? [SingleForms<S[Name]>] extends [never]
-      ? S[Name]
-      : S[Name] & { readonly batched: SingleFormRefusal<SingleForms<S[Name]>> }
-    : S[Name] & {
-        readonly batched: BatchedRefusal<BatchedProblem<BatchedOfRegistration<S[Name]>> & string>;
-      };
-};
-type SingleForms<R> = SingleFormBatched<
-  ClassOfRegistration<R>,
-  Exclude<BatchedOfRegistration<R>, undefined> extends readonly (infer Name)[] ? Name : never
->;
 /** The queries each registration of a set names under `batched`. */
 export type BatchedQueriesOfSet<S extends Record<string, AnyRegistration>> = BatchedQueryNames<
   EntriesOf<S>
@@ -455,7 +462,7 @@ export function conceptSet<
   const S extends Record<string, AnyRegistration>,
   const Computations extends Record<string, ComputationFn> = Record<never, never>,
 >(
-  registrations: S & CheckedRegistrations<S>,
+  registrations: S,
   computations: Computations & CheckedComputationFns<Computations> = {} as Computations &
     CheckedComputationFns<Computations>,
 ): RegisteredConceptSet<S, Computations> {
@@ -510,7 +517,7 @@ export function conceptSet<
       specification: registration.specification,
     });
   }
-  // The registrations' batched lists were checked where `conceptSet` was called.
+  // Each registration's batched list was checked where it was registered.
   const declared = vocabulary({
     concepts: entries as Record<string, ConceptClass>,
     computations: computations as unknown as Record<string, () => unknown>,

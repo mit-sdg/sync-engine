@@ -387,18 +387,22 @@ export interface WhenBuilderWithFunctionWhere {
 export type QueryAsAsked<F> = F extends (inputs: infer P) => infer A
   ? [ListInput<Exclude<P, undefined>>] extends [never]
     ? F
-    : Awaited<A> extends readonly (infer Each)[]
-      ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each>
-      : F
+    : 0 extends 1 & Awaited<A>
+      ? (input: ListInput<Exclude<P, undefined>>) => Promise<any>
+      : Awaited<A> extends readonly (infer Each)[]
+        ? (input: ListInput<Exclude<P, undefined>>) => Promise<Each>
+        : F
   : F;
 
 /** Whether a method has the list form a batched query needs: one list of inputs in, a list out. */
 export type IsListForm<F> = F extends (inputs: infer P) => infer A
   ? [ListInput<Exclude<P, undefined>>] extends [never]
     ? false
-    : Awaited<A> extends readonly unknown[]
+    : 0 extends 1 & Awaited<A>
       ? true
-      : false
+      : Awaited<A> extends readonly unknown[]
+        ? true
+        : false
   : false;
 
 /**
